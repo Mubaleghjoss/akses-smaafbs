@@ -21,6 +21,7 @@ use Filament\Resources\Pages\ManageRecords;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Livewire\Attributes\On;
@@ -226,11 +227,7 @@ class ManageDataSiswas extends ManageRecords
         }
 
         return [
-            Actions\Action::make('emptyStateImportDataTes')
-                ->label('Import Data Tes Siswa')
-                ->icon('heroicon-o-identification')
-                ->color('info')
-                ->action(fn () => $this->mountAction('importDataTesSiswa')),
+            $this->importDataTesSiswaAction('emptyStateImportDataTes'),
             Actions\Action::make('emptyStateDownloadTemplate')
                 ->label('Download Template Data')
                 ->icon('heroicon-o-arrow-down-tray')
@@ -321,9 +318,9 @@ class ManageDataSiswas extends ManageRecords
             });
     }
 
-    protected function importDataTesSiswaAction(): Actions\Action
+    protected function importDataTesSiswaAction(string $name = 'importDataTesSiswa'): Actions\Action
     {
-        return Actions\Action::make('importDataTesSiswa')
+        return Actions\Action::make($name)
             ->label('Import Data Tes Siswa')
             ->icon('heroicon-o-identification')
             ->color('info')
@@ -349,14 +346,15 @@ class ManageDataSiswas extends ManageRecords
                         $this->populateDataTesImportPreview($set, $state);
                     })
                     ->required(),
-                Forms\Components\Placeholder::make('preview_summary')
+                Forms\Components\Hidden::make('preview_summary'),
+                Forms\Components\Placeholder::make('preview_summary_display')
                     ->label('Ringkasan Preview')
                     ->content(fn (Get $get): HtmlString => $this->dataTesPreviewSummaryContent($get)),
                 Forms\Components\Hidden::make('preview_report_url'),
                 Forms\Components\Repeater::make('preview_rows')
                     ->label('Review Import Data Tes Siswa')
-                    ->itemLabel(fn (array $state): ?string => filled($state['source_name'] ?? null)
-                        ? (($state['source_name'] ?? '-').' - '.($state['match_status_label'] ?? '-'))
+                    ->itemLabel(fn (?array $state): ?string => filled($state['source_name'] ?? null)
+                        ? ((string) ($state['source_name'] ?? '-').' - '.(string) ($state['match_status_label'] ?? '-'))
                         : null)
                     ->schema([
                         Forms\Components\Hidden::make('row_number'),
@@ -421,6 +419,11 @@ class ManageDataSiswas extends ManageRecords
                     $result = app(DataSiswaProfileWorkbookImporter::class)->apply($previewRows);
                 } catch (Throwable $exception) {
                     report($exception);
+                    Log::error('Data Tes Siswa import action failed', [
+                        'message' => $exception->getMessage(),
+                        'file' => $exception->getFile(),
+                        'line' => $exception->getLine(),
+                    ]);
 
                     Notification::make()
                         ->title('Import data tes siswa gagal.')

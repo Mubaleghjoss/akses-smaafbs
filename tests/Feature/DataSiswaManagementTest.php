@@ -14,6 +14,7 @@ use App\Filament\Widgets\DataSiswaStatusChart;
 use App\Models\DataSiswa;
 use App\Models\User;
 use App\Support\DataSiswa\DataSiswaSupport;
+use App\Support\DataSiswa\DataSiswaProfileWorkbookImporter;
 use App\Support\DataSiswa\DataSiswaWorkbookImporter;
 use Filament\Facades\Filament;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -117,6 +118,70 @@ class DataSiswaManagementTest extends TestCase
             ->assertSee('Kelahiran')
             ->assertSee('Ringkasan Relasi')
             ->assertSee('Kolom Database Lainnya');
+    }
+
+    public function test_data_tes_siswa_import_action_can_open_without_memory_error(): void
+    {
+        $admin = User::query()->create([
+            'name' => 'Admin Data Tes',
+            'username' => 'admin-data-tes-import',
+            'password' => bcrypt('password'),
+        ]);
+        $admin->assignRole('admin');
+
+        DataSiswa::query()->create([
+            'nama' => 'Siswa Data Tes',
+            'nipd' => '2025123',
+            'nisn' => '0099887766',
+            'status' => 'aktif',
+        ]);
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::actingAs($admin)
+            ->test(ManageDataSiswas::class)
+            ->call('mountAction', 'importDataTesSiswa')
+            ->assertOk();
+    }
+
+    public function test_data_tes_siswa_importer_requires_confirmation_for_similar_names(): void
+    {
+        $student = DataSiswa::query()->create([
+            'nama' => 'ABDI FATIH BURHAN GHANI',
+            'nipd' => '242510047',
+            'nisn' => '0083273870',
+            'status' => 'aktif',
+        ]);
+
+        $path = $this->createDataSiswaWorkbook([
+            ['No', 'Nama', 'Kepribadian', 'Gaya Belajar', 'Profiling', 'MBTI'],
+            [1, 'ABDI FATIH BURHAN GANI', 'Plegmatis', 'Kinestetik', 'Physical Quotient (PQ)', 'ESFP'],
+        ]);
+
+        try {
+            $analysis = app(DataSiswaProfileWorkbookImporter::class)->analyze($path);
+        } finally {
+            @unlink($path);
+        }
+
+        $this->assertSame(1, $analysis['summary']['review']);
+        $this->assertSame('review', $analysis['rows'][0]['match_status']);
+        $this->assertStringContainsString((string) $student->id, $analysis['rows'][0]['candidate_options_json']);
+
+        $rows = $analysis['rows'];
+        $rows[0]['selected_student_id'] = $student->id;
+        $rows[0]['confirm_import'] = true;
+
+        $result = app(DataSiswaProfileWorkbookImporter::class)->apply($rows);
+
+        $this->assertSame(1, $result['updated']);
+        $this->assertDatabaseHas('data_siswa', [
+            'id' => $student->id,
+            'kepribadian' => 'PLEGMATIS',
+            'gaya_belajar' => 'KINESTETIK',
+            'profiling' => 'PHYSICAL QUOTIENT (PQ)',
+            'mbti' => 'ESFP',
+        ]);
     }
 
     public function test_data_siswa_importer_creates_and_updates_rows_by_nipd(): void
@@ -455,6 +520,10 @@ class DataSiswaManagementTest extends TestCase
             $table->date('tanggal_lahir')->nullable();
             $table->string('tempat_lahir')->nullable();
             $table->string('status')->nullable();
+            $table->string('kepribadian')->nullable();
+            $table->string('gaya_belajar')->nullable();
+            $table->string('profiling')->nullable();
+            $table->string('mbti')->nullable();
             $table->string('penerima_kps')->nullable();
             $table->string('penerima_kip')->nullable();
             $table->string('layak_pip')->nullable();
