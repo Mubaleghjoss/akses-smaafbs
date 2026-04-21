@@ -6,10 +6,18 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Schema as SchemaFacade;
+use Throwable;
 
 class Berita extends Model
 {
     protected static ?bool $tableAvailableCache = null;
+
+    protected static ?bool $updatesTableAvailableCache = null;
+
+    /**
+     * @var array<string, bool>
+     */
+    protected static array $columnAvailabilityCache = [];
 
     public const TRACKER_PHASES = [
         'persiapan' => 'Persiapan',
@@ -59,7 +67,7 @@ class Berita extends Model
 
     public static function updatesTableAvailable(): bool
     {
-        return SchemaFacade::hasTable('berita_updates');
+        return static::$updatesTableAvailableCache ??= static::schemaHasTable('berita_updates');
     }
 
     public function latestTimelineUpdate(): ?BeritaUpdate
@@ -166,41 +174,67 @@ class Berita extends Model
     public static function trackerPhaseColumnAvailable(): bool
     {
         return static::tableAvailable()
-            && SchemaFacade::hasColumn((new static)->getTable(), 'tracker_phase');
+            && static::schemaHasColumn((new static)->getTable(), 'tracker_phase');
     }
 
     public static function trackerProgressPercentColumnAvailable(): bool
     {
         return static::tableAvailable()
-            && SchemaFacade::hasColumn((new static)->getTable(), 'tracker_progress_percent');
+            && static::schemaHasColumn((new static)->getTable(), 'tracker_progress_percent');
     }
 
     public static function trackerUpdateTextColumnAvailable(): bool
     {
         return static::tableAvailable()
-            && SchemaFacade::hasColumn((new static)->getTable(), 'tracker_update_text');
+            && static::schemaHasColumn((new static)->getTable(), 'tracker_update_text');
     }
 
     public static function trackerDocumentationMediaColumnAvailable(): bool
     {
         return static::tableAvailable()
-            && SchemaFacade::hasColumn((new static)->getTable(), 'tracker_documentation_media');
+            && static::schemaHasColumn((new static)->getTable(), 'tracker_documentation_media');
     }
 
     public static function trackerLiveUrlColumnAvailable(): bool
     {
         return static::tableAvailable()
-            && SchemaFacade::hasColumn((new static)->getTable(), 'tracker_live_url');
+            && static::schemaHasColumn((new static)->getTable(), 'tracker_live_url');
     }
 
     protected static function tableAvailable(): bool
     {
-        return static::$tableAvailableCache ??= SchemaFacade::hasTable((new static)->getTable());
+        return static::$tableAvailableCache ??= static::schemaHasTable((new static)->getTable());
     }
 
     public static function flushSchemaColumnAvailabilityCache(): void
     {
         static::$tableAvailableCache = null;
+        static::$updatesTableAvailableCache = null;
+        static::$columnAvailabilityCache = [];
+    }
+
+    protected static function schemaHasTable(string $table): bool
+    {
+        try {
+            return SchemaFacade::hasTable($table);
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    protected static function schemaHasColumn(string $table, string $column): bool
+    {
+        $key = $table.'.'.$column;
+
+        if (array_key_exists($key, static::$columnAvailabilityCache)) {
+            return static::$columnAvailabilityCache[$key];
+        }
+
+        try {
+            return static::$columnAvailabilityCache[$key] = SchemaFacade::hasColumn($table, $column);
+        } catch (Throwable) {
+            return static::$columnAvailabilityCache[$key] = false;
+        }
     }
 
     public static function searchOptionLabels(string $search = '', int $limit = 50): array
