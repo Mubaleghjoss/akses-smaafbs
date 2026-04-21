@@ -184,6 +184,55 @@ class DataSiswaManagementTest extends TestCase
         ]);
     }
 
+    public function test_data_tes_siswa_review_filters_only_confirmation_rows_and_bulk_accepts_candidates(): void
+    {
+        $page = new ManageDataSiswas;
+        $rows = [
+            [
+                'row_number' => 2,
+                'source_name' => 'Siswa Siap',
+                'match_status' => 'ready',
+                'selected_student_id' => 10,
+                'confirm_import' => true,
+                'candidate_options_json' => '[]',
+            ],
+            [
+                'row_number' => 3,
+                'source_name' => 'Siswa Mirip',
+                'match_status' => 'review',
+                'selected_student_id' => null,
+                'confirm_import' => false,
+                'candidate_options_json' => json_encode([
+                    ['id' => 20, 'label' => 'Siswa Mirip Rekomendasi'],
+                ]),
+            ],
+            [
+                'row_number' => 4,
+                'source_name' => 'Siswa Tidak Ada',
+                'match_status' => 'not_found',
+                'selected_student_id' => null,
+                'confirm_import' => false,
+                'candidate_options_json' => '[]',
+            ],
+        ];
+
+        $filter = new \ReflectionMethod($page, 'filterVisibleDataTesReviewRows');
+        $filter->setAccessible(true);
+        $visibleRows = $filter->invoke($page, $rows);
+
+        $this->assertCount(1, $visibleRows);
+        $this->assertSame('Siswa Mirip', $visibleRows[0]['source_name']);
+
+        $merge = new \ReflectionMethod($page, 'mergeVisibleDataTesReviewRows');
+        $merge->setAccessible(true);
+        $mergedRows = $merge->invoke($page, $rows, $visibleRows, true);
+
+        $reviewRow = collect($mergedRows)->firstWhere('row_number', 3);
+
+        $this->assertSame(20, $reviewRow['selected_student_id']);
+        $this->assertTrue($reviewRow['confirm_import']);
+    }
+
     public function test_data_siswa_importer_creates_and_updates_rows_by_nipd(): void
     {
         $path = $this->createDataSiswaWorkbook([

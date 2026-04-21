@@ -352,8 +352,14 @@ class ManageDataSiswas extends ManageRecords
                     ->label('Ringkasan Preview')
                     ->content(fn (Get $get): HtmlString => $this->dataTesPreviewSummaryContent($get)),
                 Forms\Components\Hidden::make('preview_report_url'),
+                Forms\Components\Hidden::make('preview_rows_payload'),
+                Forms\Components\Toggle::make('bulk_accept_review')
+                    ->label('Bulk accept semua nama mirip')
+                    ->helperText('Jika aktif, semua baris "Perlu konfirmasi" akan diterima memakai kandidat pertama yang direkomendasikan sistem.')
+                    ->default(false)
+                    ->inline(false),
                 Forms\Components\Repeater::make('preview_rows')
-                    ->label('Review Import Data Tes Siswa')
+                    ->label('Review Import Data Tes Siswa - Perlu Konfirmasi')
                     ->itemLabel(fn (?array $state): ?string => filled($state['source_name'] ?? null)
                         ? ((string) ($state['source_name'] ?? '-').' - '.(string) ($state['match_status_label'] ?? '-'))
                         : null)
@@ -408,15 +414,20 @@ class ManageDataSiswas extends ManageRecords
 
                 try {
                     $previewRows = $data['preview_rows'] ?? [];
+                    $payloadRows = $this->decodeDataTesPreviewRows($data['preview_rows_payload'] ?? null);
 
-                    if (! is_array($previewRows) || $previewRows === []) {
+                    if ($payloadRows === [] && (! is_array($previewRows) || $previewRows === [])) {
                         if ($filePath !== null) {
                             $analysis = app(DataSiswaProfileWorkbookImporter::class)->analyze($filePath);
-                            $previewRows = $analysis['rows'] ?? [];
+                            $payloadRows = $analysis['rows'] ?? [];
                         }
                     }
 
-                    if (! is_array($previewRows) || $previewRows === []) {
+                    if ($payloadRows === [] && is_array($previewRows)) {
+                        $payloadRows = $previewRows;
+                    }
+
+                    if ($payloadRows === []) {
                         Notification::make()
                             ->title('Preview import belum tersedia.')
                             ->body('Upload file terlebih dahulu agar sistem bisa mengecek nama yang cocok, mirip, atau gagal.')
@@ -425,6 +436,12 @@ class ManageDataSiswas extends ManageRecords
 
                         return;
                     }
+
+                    $previewRows = $this->mergeVisibleDataTesReviewRows(
+                        $payloadRows,
+                        is_array($previewRows) ? $previewRows : [],
+                        (bool) ($data['bulk_accept_review'] ?? false),
+                    );
 
                     $selectedRows = collect($previewRows)
                         ->filter(fn (mixed $row): bool => is_array($row) && (bool) ($row['confirm_import'] ?? false));
@@ -507,6 +524,7 @@ class ManageDataSiswas extends ManageRecords
         if ($filePath === null) {
             $set('preview_summary', 'Upload file terlebih dahulu untuk melihat hasil review import.');
             $set('preview_report_url', null);
+            $set('preview_rows_payload', null);
             $set('preview_rows', []);
 
             return;
@@ -521,6 +539,7 @@ class ManageDataSiswas extends ManageRecords
                 ? 'Gagal membaca file: '.$exception->getMessage()
                 : 'Gagal membaca file data tes siswa.');
             $set('preview_report_url', null);
+            $set('preview_rows_payload', null);
             $set('preview_rows', []);
 
             return;
@@ -533,7 +552,8 @@ class ManageDataSiswas extends ManageRecords
 
         $set('preview_summary', $this->formatDataTesPreviewSummary($analysis['summary'] ?? []));
         $set('preview_report_url', DataSiswaImportReviewShareSupport::exportUrl($reviewToken));
-        $set('preview_rows', $analysis['rows'] ?? []);
+        $set('preview_rows_payload', json_encode($analysis['rows'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $set('preview_rows', $this->filterVisibleDataTesReviewRows($analysis['rows'] ?? []));
     }
 
     protected function resolveDataTesImportFilePath(mixed $state, mixed $disk): ?string
@@ -624,7 +644,7 @@ class ManageDataSiswas extends ManageRecords
             ? '<div class="mt-3"><a href="'.e($reportUrl).'" target="_blank" rel="noopener noreferrer" data-navigate="false" class="inline-flex items-center gap-1 rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-800 hover:bg-sky-100">Download Laporan Gagal / Review</a></div>'
             : '';
 
-        return new HtmlString('<div class="text-sm text-gray-700">'.$summary.$linkHtml.'</div>');
+        return new HtmlString('<div class="text-sm text-gray-700">'.$summary.'<div class="mt-2 text-xs text-gray-500">Daftar review di bawah otomatis hanya menampilkan baris yang perlu konfirmasi. Baris siap import tetap akan diproses otomatis.</div>'.$linkHtml.'</div>');
     }
 
     /**
@@ -642,6 +662,89 @@ class ManageDataSiswas extends ManageRecords
             ->filter(fn (mixed $item): bool => is_array($item) && isset($item['id'], $item['label']))
             ->mapWithKeys(fn (array $item): array => [(string) $item['id'] => (string) $item['label']])
             ->all();
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    protected function filterVisibleDataTesReviewRows(array $rows): array
+    {
+        return collect($rows)
+            ->filter(fn (mixed $row): bool => is_array($row) && ($row['match_status'] ?? null) === 'review')
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    protected function decodeDataTesPreviewRows(mixed $payload): array
+    {
+        if (is_array($payload)) {
+            return $payload;
+        }
+
+        if (! is_string($payload) || trim($payload) === '') {
+            return [];
+        }
+
+        $rows = json_decode($payload, true);
+
+        return is_array($rows) ? $rows : [];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $allRows
+     * @param  array<int, array<string, mixed>>  $visibleRows
+     * @return array<int, array<string, mixed>>
+     */
+    protected function mergeVisibleDataTesReviewRows(array $allRows, array $visibleRows, bool $bulkAcceptReview): array
+    {
+        $visibleByRowNumber = collect($visibleRows)
+            ->filter(fn (mixed $row): bool => is_array($row) && filled($row['row_number'] ?? null))
+            ->keyBy(fn (array $row): string => (string) $row['row_number']);
+
+        return collect($allRows)
+            ->filter(fn (mixed $row): bool => is_array($row))
+            ->map(function (array $row) use ($visibleByRowNumber, $bulkAcceptReview): array {
+                $rowNumber = (string) ($row['row_number'] ?? '');
+
+                if ($rowNumber !== '' && $visibleByRowNumber->has($rowNumber)) {
+                    $row = [
+                        ...$row,
+                        ...$visibleByRowNumber->get($rowNumber),
+                    ];
+                }
+
+                if ($bulkAcceptReview && ($row['match_status'] ?? null) === 'review') {
+                    $row['selected_student_id'] = filled($row['selected_student_id'] ?? null)
+                        ? $row['selected_student_id']
+                        : $this->firstDataTesCandidateId($row);
+                    $row['confirm_import'] = filled($row['selected_student_id'] ?? null);
+                }
+
+                return $row;
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    protected function firstDataTesCandidateId(array $row): ?int
+    {
+        $options = json_decode((string) ($row['candidate_options_json'] ?? '[]'), true);
+
+        if (! is_array($options)) {
+            return null;
+        }
+
+        $candidate = collect($options)
+            ->first(fn (mixed $item): bool => is_array($item) && filled($item['id'] ?? null));
+
+        return is_array($candidate) ? (int) $candidate['id'] : null;
     }
 
     /**
