@@ -1,0 +1,610 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+@theme {
+    --font-sans:
+        "Manrope", "Segoe UI", system-ui, sans-serif, "Apple Color Emoji",
+        "Segoe UI Emoji", "Segoe UI Symbol";
+}
+
+@layer base {
+    html {
+        scroll-behavior: smooth;
+    }
+
+    body {
+        @apply bg-slate-50 text-slate-900 antialiased;
+    }
+
+    h1,
+    h2,
+    h3,
+    .font-display {
+        font-family: "Fraunces", ui-serif, Georgia, serif;
+    }
+}
+
+@layer components {
+    .app-shell {
+        @apply relative min-h-screen overflow-hidden;
+    }
+
+    .card {
+        @apply rounded-2xl border border-white/70 bg-white/85 shadow-[0_24px_60px_-45px_rgba(15,23,42,0.6)];
+    }
+
+    .glass {
+        @apply bg-white/75 backdrop-blur;
+    }
+
+    .btn {
+        @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition;
+    }
+
+    .btn-primary {
+        @apply bg-slate-900 text-white shadow-lg shadow-slate-900/15 hover:bg-slate-800;
+    }
+
+    .btn-secondary {
+        @apply border border-slate-200 bg-white text-slate-700 hover:bg-slate-50;
+    }
+
+    .input {
+        @apply w-full rounded-xl border border-slate-200 bg-white/90 px-4 py-2 text-sm shadow-sm transition focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200;
+    }
+
+    .chip {
+        @apply inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600;
+    }
+
+    .nav-pill {
+        @apply rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition;
+    }
+
+    .hero-mini-card {
+        @apply space-y-3;
+    }
+
+    .hero-mini-card__head {
+        @apply flex items-start justify-between gap-3;
+    }
+
+    .hero-mini-card__body {
+        @apply flex items-center gap-3;
+    }
+
+    .hero-mini-card__bars {
+        @apply m-0 mt-1 list-none space-y-2 p-0;
+    }
+
+    .hero-mini-card__bars-head {
+        @apply mb-1 flex items-center justify-between gap-3 text-xs text-slate-600;
+    }
+
+    .hero-mini-card__bars-head span:first-child {
+        @apply truncate font-medium text-slate-800;
+    }
+
+    .hero-mini-card__bars-track {
+        @apply h-2 overflow-hidden rounded-full bg-slate-200;
+    }
+
+    .hero-mini-card__bars-fill {
+        @apply block h-full rounded-full bg-sky-500;
+    }
+
+    .hero-mini-card__chart {
+        @apply relative h-14 w-14 shrink-0 rounded-full;
+        background: conic-gradient(var(--mini-chart-primary, #2563eb) 0 var(--mini-chart-fill, 0%), var(--mini-chart-secondary, #cbd5e1) var(--mini-chart-fill, 0%) 100%);
+    }
+
+    .hero-mini-card__chart::after {
+        content: "";
+        @apply absolute inset-[8px] rounded-full bg-white;
+    }
+
+    .hero-mini-card__legend {
+        @apply min-w-0 flex-1 space-y-1 text-xs text-slate-600;
+    }
+
+    .hero-mini-card__legend > div {
+        @apply flex items-center justify-between gap-3;
+    }
+
+    .hero-mini-card__legend dt {
+        @apply inline-flex min-w-0 items-center gap-1.5 truncate;
+    }
+
+    .hero-mini-card__legend dd {
+        @apply m-0 shrink-0 font-semibold text-slate-800;
+    }
+
+    .hero-mini-card__dot {
+        @apply h-2.5 w-2.5 shrink-0 rounded-full;
+    }
+
+    .hero-mini-card__dot--primary {
+        background-color: var(--mini-chart-primary, #2563eb);
+    }
+
+    .hero-mini-card__dot--muted {
+        background-color: var(--mini-chart-secondary, #cbd5e1);
+    }
+
+    /* ─── Org-chart frame (generic scrollable tree) ─── */
+    .org-tree-frame {
+        @apply w-full overflow-x-auto;
+    }
+
+    /* ─── Board layout (leader + flat grid of branches) ─── */
+    .org-tree-flat {
+        @apply flex w-full flex-col items-center;
+    }
+
+    .org-tree--board {
+        @apply min-w-0;
+    }
+
+    /* Vertical stem from leader to the branch grid */
+    .org-tree-flat__divider {
+        @apply relative mx-auto;
+        width: 2px;
+        height: 48px;
+        background: linear-gradient(to bottom, #475569, #94a3b8);
+    }
+
+    .org-tree-flat__divider::before {
+        content: none;
+    }
+
+    .org-tree-flat__divider::after {
+        content: none;
+    }
+
+    /* Branch grid: wraps responsively instead of single row */
+    .org-tree-flat__row {
+        @apply relative m-0 w-full list-none p-0;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 32px 16px;
+        padding-top: 28px;
+        border-top: 2px solid #94a3b8;
+    }
+
+    .org-tree-flat__row::before {
+        content: none;
+    }
+
+    /* Each branch column – must not exceed its grid track */
+    .org-tree-flat__row > .org-tree__item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    /* Vertical drop from the rail into each branch */
+    .org-tree-flat__row > .org-tree__item::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        top: -28px;
+        height: 28px;
+        width: 2px;
+        background: #94a3b8;
+    }
+
+    /* ── Children inside board branches stack VERTICALLY ── */
+    .org-tree-flat__row .org-tree__children-shell {
+        position: relative;
+        margin-top: 12px;
+        padding-top: 0;
+        width: 100%;
+    }
+
+    .org-tree-flat__row .org-tree__children-shell::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 0;
+        transform: translateX(-50%);
+        width: 2px;
+        height: 14px;
+        background: #cbd5e1;
+    }
+
+    .org-tree-flat__row .org-tree__children-shell::after {
+        content: none;
+    }
+
+    .org-tree-flat__row .org-tree__children {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        margin-top: 0;
+        padding-top: 14px;
+        width: 100%;
+    }
+
+    .org-tree-flat__row .org-tree__children::before,
+    .org-tree-flat__row .org-tree__children::after {
+        content: none;
+    }
+
+    .org-tree-flat__row .org-tree__children > .org-tree__item {
+        min-width: 0;
+    }
+
+    .org-tree-flat__row .org-tree__children > .org-tree__item::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        top: -12px;
+        height: 12px;
+        width: 2px;
+        background: #cbd5e1;
+    }
+
+    /* ─── Generic tree layout: vertical hierarchy ─── */
+    .org-tree-frame {
+        @apply w-full overflow-visible pb-2;
+    }
+
+    .org-tree,
+    .org-tree ul {
+        @apply m-0 list-none p-0;
+    }
+
+    .org-tree {
+        @apply flex w-full flex-col items-center gap-6;
+    }
+
+    .org-tree__item {
+        @apply relative flex w-full min-w-0 flex-col items-center;
+    }
+
+    .org-tree__item--root {
+        @apply isolate;
+    }
+
+    .org-tree__node-wrap {
+        @apply relative flex w-full min-w-0 justify-center;
+    }
+
+    /* ─── Node cards ─── */
+    .org-tree__node {
+        @apply relative z-10 flex w-full min-w-0 max-w-[14rem] flex-col items-center rounded-xl border border-slate-200 bg-white px-2.5 py-2.5 text-center shadow-sm transition hover:-translate-y-1 hover:border-slate-300 hover:shadow-lg;
+    }
+
+    .org-tree__node--root {
+        @apply max-w-[16rem] rounded-[1.35rem] border-slate-300 bg-slate-50/90 px-3 py-3.5 shadow-md ring-1 ring-slate-200;
+    }
+
+    .org-tree__node--branch {
+        @apply max-w-[12rem];
+    }
+
+    .org-tree__node--leaf {
+        @apply max-w-[10.5rem] rounded-lg px-2 py-2;
+    }
+
+    /* ─── Avatar ─── */
+    .org-tree__avatar {
+        @apply h-11 w-11 overflow-hidden rounded-full border-2 border-slate-200 bg-slate-100;
+    }
+
+    .org-tree__node--root .org-tree__avatar {
+        @apply h-12 w-12 border-slate-300;
+    }
+
+    .org-tree__node--leaf .org-tree__avatar {
+        @apply h-9 w-9;
+    }
+
+    .org-tree__avatar--empty {
+        @apply flex items-center justify-center text-[10px] font-semibold uppercase tracking-wide text-slate-400;
+    }
+
+    .org-tree__avatar--badge {
+        @apply flex h-auto min-h-11 w-auto max-w-[8.5rem] items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 px-2 py-1.5 text-center text-[10px] font-semibold leading-tight text-amber-800;
+        overflow-wrap: anywhere;
+    }
+
+    .org-tree__node--root .org-tree__avatar--badge {
+        @apply min-h-12 max-w-[9rem] text-[11px];
+    }
+
+    .org-tree__node--leaf .org-tree__avatar--badge {
+        @apply min-h-9 max-w-[6.75rem] px-1.5 py-1 text-[9px];
+    }
+
+    /* ─── Meta ─── */
+    .org-tree__meta {
+        @apply mt-2 space-y-0.5;
+    }
+
+    .org-tree__meta--no-avatar {
+        @apply mt-0;
+    }
+
+    .org-tree__role {
+        @apply text-[8px] font-bold uppercase tracking-[0.14em] text-amber-700;
+        overflow-wrap: anywhere;
+    }
+
+    .org-tree__node--root .org-tree__role {
+        @apply text-[10px] tracking-[0.16em];
+    }
+
+    .org-tree__node--leaf .org-tree__role {
+        @apply text-[7px] tracking-[0.11em];
+    }
+
+    .org-tree__name {
+        @apply text-[12px] font-semibold leading-tight text-slate-900;
+        overflow-wrap: anywhere;
+    }
+
+    .org-tree__node--root .org-tree__name {
+        @apply text-[13px];
+    }
+
+    .org-tree__node--leaf .org-tree__name {
+        @apply text-[11px] leading-snug;
+    }
+
+    .org-tree__peer-note {
+        @apply text-[9px] font-medium text-slate-500;
+    }
+
+    .org-tree__rows {
+        @apply relative w-full;
+    }
+
+    .org-tree__rows::before {
+        content: "";
+        @apply absolute left-1/2 top-0 -translate-x-1/2;
+        width: 2px;
+        bottom: 2.5rem;
+        background: linear-gradient(to bottom, #475569, #cbd5e1);
+    }
+
+    .org-tree__rows > .org-tree__children-shell::before {
+        content: none;
+    }
+
+    .org-tree__rows > .org-tree__children-shell:first-child {
+        margin-top: 0;
+    }
+
+    /* ─── Tree connectors: one vertical spine per branch ─── */
+    .org-tree__children-shell {
+        --org-branch-drop: 3rem;
+        @apply relative mt-4 w-full;
+        padding-top: var(--org-branch-drop);
+    }
+
+    .org-tree__children-shell::before {
+        content: "";
+        @apply absolute left-1/2 top-0 -translate-x-1/2;
+        width: 2px;
+        height: calc(var(--org-branch-drop) - 0.8rem);
+        background: linear-gradient(to bottom, #475569, #94a3b8);
+    }
+
+    .org-tree__children-shell--branch::after {
+        content: "";
+        position: absolute;
+        top: calc(var(--org-branch-drop) - 1rem);
+        left: calc((100% - ((var(--org-sibling-columns, 1) - 1) * 0.75rem)) / (var(--org-sibling-columns, 1) * 2));
+        right: calc((100% - ((var(--org-sibling-columns, 1) - 1) * 0.75rem)) / (var(--org-sibling-columns, 1) * 2));
+        height: 2px;
+        background: linear-gradient(to right, #cbd5e1, #475569, #cbd5e1);
+    }
+
+    .org-tree__children-shell--root {
+        @apply mt-5;
+    }
+
+    .org-tree__children-shell--root::before {
+        background: linear-gradient(to bottom, #334155, #94a3b8);
+    }
+
+    .org-tree__group-indicator {
+        @apply relative z-10 mx-auto mb-3 inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold text-slate-600 shadow-sm;
+    }
+
+    .org-tree__children {
+        @apply relative flex w-full flex-col items-center gap-6;
+    }
+
+    .org-tree__children--branch {
+        @apply grid w-full items-start gap-3;
+        grid-template-columns: repeat(var(--org-sibling-columns, 1), minmax(0, 1fr));
+        padding-top: 1.35rem;
+        margin-inline: auto;
+    }
+
+    .org-tree__children--branch > .org-tree__item {
+        @apply w-full min-w-0;
+        justify-self: center;
+        max-width: none;
+    }
+
+    .org-tree__children::before,
+    .org-tree__children::after,
+    .org-tree__children--branch::after,
+    .org-tree__children--root::before {
+        content: none;
+    }
+
+    .org-tree__children > .org-tree__item::before {
+        content: "";
+        @apply absolute left-1/2 top-[-1.25rem] -translate-x-1/2;
+        width: 2px;
+        height: 1.25rem;
+        background: #64748b;
+    }
+
+    .org-tree__children--branch > .org-tree__item::before {
+        top: calc(var(--org-branch-drop) * -1 + 1rem);
+        height: calc(var(--org-branch-drop) - 1rem);
+    }
+
+    .org-tree__children--branch > .org-tree__item .org-tree__node-wrap {
+        @apply justify-stretch;
+    }
+
+    .org-tree__children--branch > .org-tree__item .org-tree__node {
+        @apply max-w-none px-2 py-2;
+    }
+
+    .org-tree__node-wrap--branch::after,
+    .org-tree__item--root > .org-tree__node-wrap--branch::after {
+        content: none;
+    }
+
+    .org-tree > .org-tree__item > .org-tree__rows > .org-tree__children-shell > .org-tree__children > .org-tree__item::before {
+        background: #475569;
+    }
+
+    .org-tree > .org-tree__item > .org-tree__rows > .org-tree__children-shell--branch::after {
+        background: linear-gradient(to right, #94a3b8, #475569, #94a3b8);
+    }
+
+    .org-mobile__item {
+        @apply rounded-2xl border border-slate-200 bg-white shadow-sm;
+    }
+
+    .org-mobile__details {
+        @apply block;
+    }
+
+    .org-mobile__summary {
+        @apply list-none;
+    }
+
+    .org-mobile__summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .org-mobile__node {
+        @apply flex items-center gap-3 px-4 py-4;
+    }
+
+    .org-mobile__avatar {
+        @apply h-12 w-12 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-slate-100;
+    }
+
+    .org-mobile__avatar--empty {
+        @apply flex items-center justify-center text-[10px] font-semibold uppercase tracking-wide text-slate-400;
+    }
+
+    .org-mobile__avatar--badge {
+        @apply flex h-auto min-h-12 w-auto max-w-[7rem] shrink-0 items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 px-2 py-1.5 text-center text-[10px] font-semibold leading-tight text-amber-800;
+        overflow-wrap: anywhere;
+    }
+
+    .org-mobile__role {
+        @apply text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700;
+    }
+
+    .org-mobile__name {
+        @apply mt-1 text-sm font-semibold leading-tight text-slate-900;
+    }
+
+    .org-mobile__peer-note {
+        @apply mt-1 text-[11px] text-slate-500;
+    }
+
+    .org-mobile__children {
+        @apply space-y-3 border-t border-slate-100 px-3 pb-3 pt-2;
+    }
+
+    .org-mobile__group-indicator {
+        @apply mx-1 mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-600;
+    }
+
+    .committee-period__summary {
+        @apply list-none;
+    }
+
+    .committee-period__summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .home-profile-tabs {
+        @apply space-y-4;
+    }
+
+    .home-profile-tabs__actions {
+        @apply inline-flex w-full flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-100/80 p-1;
+    }
+
+    .home-profile-tab {
+        @apply flex-1 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-white hover:text-slate-900 sm:flex-none;
+    }
+
+    .home-profile-tab.is-active {
+        @apply bg-white text-slate-900 shadow-sm;
+    }
+
+    .home-vision-content p + p {
+        @apply mt-3;
+    }
+
+    .home-vision-content ul,
+    .home-vision-content ol {
+        @apply ml-5 mt-3 list-outside space-y-2;
+    }
+
+    .home-vision-content ul {
+        @apply list-disc;
+    }
+
+    .home-vision-content ol {
+        @apply list-decimal;
+    }
+}
+
+@layer utilities {
+    .text-balance {
+        text-wrap: balance;
+    }
+
+    .reveal {
+        animation: fade-up 0.7s ease both;
+    }
+
+    .reveal-delay-1 {
+        animation-delay: 0.06s;
+    }
+
+    .reveal-delay-2 {
+        animation-delay: 0.12s;
+    }
+
+    .reveal-delay-3 {
+        animation-delay: 0.18s;
+    }
+}
+
+@keyframes fade-up {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

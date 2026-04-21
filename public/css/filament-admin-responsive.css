@@ -1,0 +1,296 @@
+/* Shared admin fix: date picker panels must float above FileUpload/FilePond items. */
+[x-cloak] {
+    display: none !important;
+}
+
+.fi-fo-date-time-picker {
+    position: relative;
+    z-index: 20;
+}
+
+.fi-fo-date-time-picker .fi-fo-date-time-picker-panel {
+    z-index: 160;
+}
+
+.fi-fo-file-upload {
+    position: relative;
+    z-index: 1;
+}
+
+.fi-sidebar-sub-group-items {
+    margin-top: 0.35rem;
+    padding-left: 0.85rem;
+    border-left: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.dark .fi-sidebar-sub-group-items {
+    border-left-color: rgba(148, 163, 184, 0.14);
+}
+
+.fi-sidebar-sub-group-items .fi-sidebar-item-btn {
+    border-radius: 0.8rem;
+}
+
+.fi-sidebar-item-has-children > .fi-sidebar-item-btn {
+    gap: 0.5rem;
+}
+
+@media (max-width: 768px) {
+    html,
+    body,
+    .fi-body,
+    .fi-layout,
+    .fi-main-ctn {
+        max-width: 100%;
+        overflow-x: clip;
+    }
+
+    .fi-main-ctn,
+    .fi-main,
+    .fi-page,
+    .fi-page-content {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .fi-sidebar,
+    .fi-sidebar-nav,
+    .fi-sidebar-nav-groups,
+    .fi-sidebar-group,
+    .fi-sidebar-group-items,
+    .fi-sidebar-item {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .fi-sidebar {
+        width: min(20rem, calc(100vw - 1rem));
+    }
+
+    .fi-sidebar-header,
+    .fi-sidebar-nav,
+    .fi-sidebar-footer {
+        padding-inline: 0.75rem;
+    }
+
+    .fi-sidebar-group-button,
+    .fi-sidebar-item-button,
+    .fi-sidebar-item > a {
+        min-height: 2.75rem;
+        white-space: normal;
+        align-items: flex-start;
+        overflow-wrap: anywhere;
+    }
+
+    .fi-sidebar-group-label,
+    .fi-sidebar-item-label {
+        overflow-wrap: anywhere;
+    }
+
+    .fi-main,
+    .fi-page,
+    .fi-page-main,
+    .fi-page-content {
+        min-width: 0;
+    }
+
+    .fi-page {
+        overflow-x: clip;
+    }
+
+    .fi-page-content,
+    .fi-main {
+        padding-inline: 0.75rem;
+    }
+
+    .fi-header {
+        gap: 0.75rem;
+    }
+
+    .fi-header-heading,
+    .fi-breadcrumbs,
+    .fi-tabs,
+    .fi-tabs-item,
+    .fi-dropdown-panel,
+    .fi-dropdown-list {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .fi-header-actions-ctn,
+    .fi-ta-actions,
+    .fi-modal-footer-actions,
+    .fi-sc-actions {
+        width: 100%;
+    }
+
+    .fi-header-actions-ctn,
+    .fi-ta-actions,
+    .fi-modal-footer-actions,
+    .fi-sc-actions,
+    .fi-ta-header-toolbar,
+    .fi-ta-filters,
+    .fi-ta-filter-indicators,
+    .fi-ta-selection-indicator,
+    .fi-section-header,
+    .fi-section-content,
+    .fi-sc-section,
+    .fi-sc-actions {
+        flex-wrap: wrap;
+        row-gap: 0.75rem;
+    }
+
+    .fi-header-actions-ctn .fi-btn,
+    .fi-ta-actions .fi-btn,
+    .fi-modal-footer-actions .fi-btn,
+    .fi-sc-actions .fi-btn,
+    .fi-ta-filters-trigger-action-ctn .fi-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .fi-modal {
+        padding: 0.75rem;
+    }
+
+    .fi-modal-window,
+    .fi-modal-slide-over,
+    .fi-ta-filters-modal,
+    .fi-ta-col-manager-modal {
+        width: min(100vw - 1rem, 42rem) !important;
+        max-width: min(100vw - 1rem, 42rem) !important;
+        margin-inline: auto;
+    }
+
+    .fi-modal-content,
+    .fi-modal-footer,
+    .fi-modal-header {
+        padding-inline: 1rem;
+    }
+
+    .fi-ta-content-ctn,
+    .fi-ta-content,
+    .fi-ta-table,
+    .fi-ta-table table {
+        max-width: 100%;
+    }
+
+    .fi-ta-cell,
+    .fi-ta-text,
+    .fi-ta-summary,
+    .fi-ta-empty-state {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .fi-ta-content-ctn {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .fi-ta-header,
+    .fi-ta-header-toolbar,
+    .fi-ta-filters-before-content,
+    .fi-ta-filters-after-content,
+    .fi-ta-selection-indicator {
+        align-items: stretch;
+    }
+
+    .fi-ta-search-field,
+    .fi-ta-grouping-settings,
+    .fi-ta-col-manager,
+    .fi-ta-filters,
+    .fi-ta-filters-dropdown {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .fi-ta-header-toolbar > *,
+    .fi-ta-filters > *,
+    .fi-ta-selection-indicator > * {
+        width: 100%;
+    }
+
+    .fi-input,
+    .fi-input-wrp,
+    .fi-fo-field-wrp,
+    .fi-fo-field-wrp-content-ctn,
+    .fi-fo-grid,
+    .fi-fo-component-ctn,
+    .fi-fo-textarea,
+    .fi-fo-file-upload,
+    .fi-sc-tabs,
+    .fi-sc-wizard,
+    .fi-sc-fieldset,
+    .fi-sc-section,
+    .fi-section {
+        max-width: 100%;
+    }
+
+    .fi-sc-tabs [role='tablist'] {
+        overflow-x: auto;
+        scrollbar-width: thin;
+    }
+
+    .fi-fo-field-content-col,
+    .fi-in-entry-content-col,
+    .fi-section-content-ctn,
+    .fi-sc-section > * {
+        min-width: 0;
+    }
+
+    .fi-fo-grid {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    .fi-modal-window,
+    .fi-modal-slide-over,
+    .fi-modal-content,
+    .fi-modal-body,
+    .fi-modal-header,
+    .fi-modal-footer {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .fi-fo-file-upload-editor-window {
+        width: min(100vw - 1rem, 40rem);
+        max-width: min(100vw - 1rem, 40rem);
+    }
+}
+
+@media (max-width: 480px) {
+    .fi-main,
+    .fi-page-content {
+        padding-inline: 0.5rem;
+    }
+
+    .fi-header-heading,
+    .fi-modal-heading {
+        overflow-wrap: anywhere;
+    }
+
+    .fi-badge,
+    .fi-ta-filter-indicators-badges-ctn,
+    .fi-ta-record-content,
+    .fi-section-header-text-ctn {
+        max-width: 100%;
+    }
+
+    .fi-sidebar {
+        width: calc(100vw - 0.5rem);
+    }
+
+    .fi-sidebar-header,
+    .fi-sidebar-nav,
+    .fi-sidebar-footer,
+    .fi-modal-content,
+    .fi-modal-header,
+    .fi-modal-footer {
+        padding-inline: 0.625rem;
+    }
+
+    .fi-modal {
+        padding: 0.5rem;
+    }
+}
