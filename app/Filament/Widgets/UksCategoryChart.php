@@ -14,6 +14,14 @@ class UksCategoryChart extends InteractiveDoughnutChartWidget
         'md' => 2,
     ];
 
+    /**
+     * @param  array<string, mixed>|object  $row
+     */
+    protected function rowValue(array|object $row, string $key): mixed
+    {
+        return data_get($row, $key);
+    }
+
     protected function getData(): array
     {
         $rows = collect(UksDashboardSupport::snapshot(auth()->user())['category_rows'] ?? []);
@@ -24,14 +32,14 @@ class UksCategoryChart extends InteractiveDoughnutChartWidget
                 'data' => $rows->pluck('total')->map(fn ($value): int => (int) $value)->all(),
                 'backgroundColor' => ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6', '#06b6d4', '#f97316', '#14b8a6'],
                 'segmentDetails' => $rows->map(fn ($row): array => [
-                    'label' => (string) $row->kategori,
-                    'count' => (int) $row->total,
-                    'countLabel' => number_format((int) $row->total, 0, ',', '.').' kasus',
+                    'label' => (string) ($this->rowValue($row, 'kategori') ?: '-'),
+                    'count' => (int) $this->rowValue($row, 'total'),
+                    'countLabel' => number_format((int) $this->rowValue($row, 'total'), 0, ',', '.').' kasus',
                     'shortDescription' => 'Klik untuk melihat daftar UKS pada kategori ini.',
                     'description' => 'Daftar UKS akan dibuka dengan filter kategori sakit yang sesuai.',
-                    'filterLabel' => 'Kategori: '.$row->kategori,
+                    'filterLabel' => 'Kategori: '.($this->rowValue($row, 'kategori') ?: '-'),
                     'url' => UksRecordResource::getUrl('index', [
-                        'chart_kategori' => $row->kategori,
+                        'chart_kategori' => $this->rowValue($row, 'kategori'),
                     ]),
                 ])->all(),
             ]],
