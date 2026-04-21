@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Throwable;
@@ -342,7 +343,7 @@ class ManageDataSiswas extends ManageRecords
                     ])
                     ->helperText('Import ini tidak membuat siswa baru. Nama yang tidak pas akan diberi alasan, dan nama yang mirip bisa Anda konfirmasi dulu.')
                     ->live()
-                    ->afterStateUpdated(function (Set $set, string|array|null $state): void {
+                    ->afterStateUpdated(function (Set $set, mixed $state): void {
                         $this->populateDataTesImportPreview($set, $state);
                     })
                     ->required(),
@@ -393,10 +394,12 @@ class ManageDataSiswas extends ManageRecords
             ->action(function (array $data): void {
                 $disk = Storage::disk('public');
                 $path = $data['berkas'] ?? null;
+                $filePath = $this->resolveDataTesImportFilePath($path, $disk);
 
-                if (! $path || ! $disk->exists($path)) {
+                if ($filePath === null) {
                     Notification::make()
-                        ->title('File profil tidak ditemukan.')
+                        ->title('File data tes tidak ditemukan.')
+                        ->body('Upload ulang file Excel, lalu tunggu sampai preview review muncul sebelum menyimpan.')
                         ->danger()
                         ->send();
 
@@ -407,10 +410,31 @@ class ManageDataSiswas extends ManageRecords
                     $previewRows = $data['preview_rows'] ?? [];
 
                     if (! is_array($previewRows) || $previewRows === []) {
+                        if ($filePath !== null) {
+                            $analysis = app(DataSiswaProfileWorkbookImporter::class)->analyze($filePath);
+                            $previewRows = $analysis['rows'] ?? [];
+                        }
+                    }
+
+                    if (! is_array($previewRows) || $previewRows === []) {
                         Notification::make()
                             ->title('Preview import belum tersedia.')
                             ->body('Upload file terlebih dahulu agar sistem bisa mengecek nama yang cocok, mirip, atau gagal.')
                             ->warning()
+                            ->send();
+
+                        return;
+                    }
+
+                    $selectedRows = collect($previewRows)
+                        ->filter(fn (mixed $row): bool => is_array($row) && (bool) ($row['confirm_import'] ?? false));
+
+                    if ($selectedRows->isEmpty()) {
+                        Notification::make()
+                            ->title('Belum ada data yang dipilih untuk diimport.')
+                            ->body('Cek bagian Review Import Data Tes Siswa. Untuk nama yang mirip, pilih siswa yang dimaksud lalu aktifkan "Masukkan ke sistem".')
+                            ->warning()
+                            ->duration(12000)
                             ->send();
 
                         return;
@@ -433,7 +457,7 @@ class ManageDataSiswas extends ManageRecords
 
                     return;
                 } finally {
-                    if ($disk->exists($path)) {
+                    if (is_string($path) && $disk->exists($path)) {
                         $disk->delete($path);
                     }
                 }
@@ -475,12 +499,12 @@ class ManageDataSiswas extends ManageRecords
             });
     }
 
-    protected function populateDataTesImportPreview(Set $set, string|array|null $state): void
+    protected function populateDataTesImportPreview(Set $set, mixed $state): void
     {
         $disk = Storage::disk('public');
-        $path = is_array($state) ? (string) collect($state)->first() : $state;
+        $filePath = $this->resolveDataTesImportFilePath($state, $disk);
 
-        if (! $path || ! $disk->exists($path)) {
+        if ($filePath === null) {
             $set('preview_summary', 'Upload file terlebih dahulu untuk melihat hasil review import.');
             $set('preview_report_url', null);
             $set('preview_rows', []);
@@ -489,7 +513,7 @@ class ManageDataSiswas extends ManageRecords
         }
 
         try {
-            $analysis = app(DataSiswaProfileWorkbookImporter::class)->analyze($disk->path($path));
+            $analysis = app(DataSiswaProfileWorkbookImporter::class)->analyze($filePath);
         } catch (Throwable $exception) {
             report($exception);
 
@@ -510,6 +534,45 @@ class ManageDataSiswas extends ManageRecords
         $set('preview_summary', $this->formatDataTesPreviewSummary($analysis['summary'] ?? []));
         $set('preview_report_url', DataSiswaImportReviewShareSupport::exportUrl($reviewToken));
         $set('preview_rows', $analysis['rows'] ?? []);
+    }
+
+    protected function resolveDataTesImportFilePath(mixed $state, mixed $disk): ?string
+    {
+        if (is_array($state)) {
+            foreach ($state as $item) {
+                $path = $this->resolveDataTesImportFilePath($item, $disk);
+
+                if ($path !== null) {
+                    return $path;
+                }
+            }
+
+            return null;
+        }
+
+        if ($state instanceof TemporaryUploadedFile) {
+            $path = $state->getRealPath();
+
+            return is_file($path) ? $path : null;
+        }
+
+        if (is_object($state) && method_exists($state, 'getRealPath')) {
+            $path = $state->getRealPath();
+
+            return is_string($path) && is_file($path) ? $path : null;
+        }
+
+        if (! is_string($state) || trim($state) === '') {
+            return null;
+        }
+
+        $path = trim($state);
+
+        if (is_file($path)) {
+            return $path;
+        }
+
+        return $disk->exists($path) ? $disk->path($path) : null;
     }
 
     /**
