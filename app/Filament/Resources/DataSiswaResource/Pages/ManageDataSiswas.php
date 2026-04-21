@@ -14,7 +14,6 @@ use App\Models\DataSiswa;
 use App\Support\DataSiswa\DataSiswaImportReviewShareSupport;
 use App\Support\DataSiswa\DataSiswaProfileWorkbookImporter;
 use App\Support\DataSiswa\DataSiswaWorkbookImporter;
-use App\Support\Security\EndpointProtectionPolicy;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Notifications\Notification;
@@ -32,7 +31,7 @@ class ManageDataSiswas extends ManageRecords
 {
     protected static string $resource = DataSiswaResource::class;
 
-    public bool $showSummaryWidgets = true;
+    public bool $showSummaryWidgets = false;
 
     #[Url(as: 'chart_status')]
     public ?string $chartStatus = null;
@@ -52,10 +51,6 @@ class ManageDataSiswas extends ManageRecords
     public function mount(): void
     {
         parent::mount();
-
-        if (EndpointProtectionPolicy::shouldSkipExpensiveAdminDashboardWidgets()) {
-            $this->showSummaryWidgets = false;
-        }
 
         $this->applyPageFiltersFromQuery();
     }
