@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\Admin\Dashboard\DashboardCacheSupport;
+use App\Support\DataSiswa\DataSiswaSupport;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -46,6 +47,13 @@ class DataSiswa extends Model
     protected static function booted(): void
     {
         static::saving(function (self $record): void {
+            $rombel = Rombel::normalizeName($record->rombel_saat_ini);
+            $record->rombel_saat_ini = $rombel !== '' ? $rombel : null;
+
+            if ($record->rombel_saat_ini !== null) {
+                Rombel::ensureFromName($record->rombel_saat_ini);
+            }
+
             foreach (['kepribadian', 'gaya_belajar', 'profiling', 'mbti'] as $attribute) {
                 $value = trim((string) ($record->{$attribute} ?? ''));
                 $record->{$attribute} = $value !== '' ? Str::upper($value) : null;
@@ -56,10 +64,23 @@ class DataSiswa extends Model
             DashboardCacheSupport::forgetModule('data_siswa');
             DashboardCacheSupport::forgetModule('prestasi');
             DashboardCacheSupport::forgetModule('uks');
+            DataSiswaSupport::flushCachedOptions();
         };
 
-        static::saved($invalidateDashboardCaches);
-        static::deleted($invalidateDashboardCaches);
+        static::saved(function (self $record) use ($invalidateDashboardCaches): void {
+            $previousRombel = $record->getOriginal('rombel_saat_ini');
+
+            $invalidateDashboardCaches($record);
+
+            if ($previousRombel !== $record->rombel_saat_ini) {
+                Rombel::deleteIfEmpty($previousRombel);
+            }
+        });
+
+        static::deleted(function (self $record) use ($invalidateDashboardCaches): void {
+            $invalidateDashboardCaches($record);
+            Rombel::deleteIfEmpty($record->rombel_saat_ini);
+        });
     }
 
     public static function statusOptions(): array
@@ -166,5 +187,10 @@ class DataSiswa extends Model
     public function prestasis(): HasMany
     {
         return $this->hasMany(Prestasi::class, 'siswa_id');
+    }
+
+    public function berkasSiswas(): HasMany
+    {
+        return $this->hasMany(BerkasSiswa::class, 'siswa_id');
     }
 }

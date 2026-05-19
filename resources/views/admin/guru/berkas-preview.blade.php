@@ -63,7 +63,7 @@
             <div class="meta">
                 <span class="eyebrow">Preview Berkas Guru</span>
                 <h1>{{ $berkasGuru->jenisBerkas?->nama_berkas ?? 'Dokumen Guru' }}</h1>
-                <div class="sub">{{ $berkasGuru->guru?->nama ?? 'Guru / Tendik' }} - {{ basename((string) $berkasGuru->file_path) }}</div>
+                <div class="sub">{{ $berkasGuru->displayFileName() }}</div>
             </div>
 
             <div class="actions">

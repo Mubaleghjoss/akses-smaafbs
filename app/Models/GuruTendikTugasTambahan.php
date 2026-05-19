@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Filament\Resources\BerkasGuruResource;
 use App\Support\Admin\Dashboard\DashboardCacheSupport;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -79,8 +80,13 @@ class GuruTendikTugasTambahan extends Model
             $this->forceFill(['berkas_guru_id' => $berkas->id])->saveQuietly();
         }
 
+        if (BerkasGuruResource::normalizeRecord($berkas)) {
+            $berkas->refresh();
+            $this->forceFill(['sk_file_path' => $berkas->file_path])->saveQuietly();
+        }
+
         if (Schema::hasTable('pengaturan')) {
-            app(GoogleDriveService::class)->queueBerkasGuruSync($berkas);
+            app(GoogleDriveService::class)->queueBerkasGuruSync($berkas->fresh());
         }
     }
 

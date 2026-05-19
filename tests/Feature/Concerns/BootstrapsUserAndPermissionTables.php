@@ -38,6 +38,11 @@ trait BootstrapsUserAndPermissionTables
             $defaultPasswordFlagsMigration->up();
         }
 
+        if (! Schema::hasTable('admin_access_change_logs')) {
+            $accessLogMigration = require database_path('migrations/2026_04_15_140000_create_admin_access_change_logs_table.php');
+            $accessLogMigration->up();
+        }
+
         $avatarMigration = require database_path('migrations/2026_04_06_110000_add_avatar_path_and_google_drive_folder_name.php');
         $avatarMigration->up();
     }

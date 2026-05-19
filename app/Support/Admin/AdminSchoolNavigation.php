@@ -3,6 +3,7 @@
 namespace App\Support\Admin;
 
 use App\Filament\Pages\DashboardProker;
+use App\Filament\Pages\SarprasStickerSettings;
 use App\Filament\Resources\BeritaResource;
 use App\Filament\Resources\BerkasGuruResource;
 use App\Filament\Resources\BerkasSiswaResource;
@@ -21,6 +22,8 @@ use App\Filament\Resources\ProkerResource;
 use App\Filament\Resources\PerpustakaanBukuResource;
 use App\Filament\Resources\PerpustakaanKategoriResource;
 use App\Filament\Resources\PerpustakaanLemariResource;
+use App\Filament\Resources\PerpustakaanLiterasiMaterialResource;
+use App\Filament\Resources\RombelResource;
 use App\Filament\Resources\SarprasActivityResource;
 use App\Filament\Resources\SarprasBospInventoryResource;
 use App\Filament\Resources\SarprasMonthlyAgendaResource;
@@ -62,6 +65,7 @@ class AdminSchoolNavigation
         SarprasRoomInventoryResource::class => 'Sarpras',
         SarprasActivityResource::class => 'Sarpras',
         SarprasMonthlyAgendaResource::class => 'Sarpras',
+        SarprasStickerSettings::class => 'Sarpras',
         CatatanBkResource::class => 'BK',
         VisiMisiResource::class => 'Kurikulum',
         SurveiResource::class => 'Kesiswaan',
@@ -74,6 +78,7 @@ class AdminSchoolNavigation
         DokumenKomiteResource::class => 'Humas',
         UksRecordResource::class => 'UKS',
         DataSiswaResource::class => 'Siswa',
+        RombelResource::class => 'Siswa',
         BerkasSiswaResource::class => 'Siswa',
         PrestasiResource::class => 'Siswa',
         GuruTendikResource::class => 'Guru',
@@ -86,6 +91,7 @@ class AdminSchoolNavigation
         PerpustakaanBukuResource::class => 'Perpustakaan',
         PerpustakaanKategoriResource::class => 'Perpustakaan',
         PerpustakaanLemariResource::class => 'Perpustakaan',
+        PerpustakaanLiterasiMaterialResource::class => 'Perpustakaan',
     ];
 
     public static function shouldClassify(string $class): bool

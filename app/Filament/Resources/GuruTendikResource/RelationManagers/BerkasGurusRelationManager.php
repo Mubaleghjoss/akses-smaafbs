@@ -22,6 +22,10 @@ class BerkasGurusRelationManager extends RelationManager
     #[On('refresh-berkas-guru-relation-manager')]
     public function refreshRelationManager(): void
     {
+        if (! isset($this->table)) {
+            return;
+        }
+
         $this->resetPage();
         $this->flushCachedTableRecords();
     }
@@ -45,7 +49,11 @@ class BerkasGurusRelationManager extends RelationManager
                     'gdrive_folder_url',
                     'gdrive_file_url',
                 ])
-                ->with(['jenisBerkas:id,nama_berkas', 'tugasTambahanHistory:id,berkas_guru_id']))
+                ->with([
+                    'guru:id,nama',
+                    'jenisBerkas:id,nama_berkas',
+                    'tugasTambahanHistory:id,berkas_guru_id,tugas_tambahan',
+                ]))
             ->recordTitleAttribute('jenisBerkas.nama_berkas')
             ->columns([
                 Tables\Columns\TextColumn::make('jenisBerkas.nama_berkas')
@@ -59,7 +67,7 @@ class BerkasGurusRelationManager extends RelationManager
                     ->color(fn (BerkasGuru $record): string => $record->tugasTambahanHistory ? 'warning' : 'gray'),
                 Tables\Columns\TextColumn::make('file_path')
                     ->label('File')
-                    ->formatStateUsing(fn (?string $state): string => $state ? basename($state) : '-')
+                    ->state(fn (BerkasGuru $record): string => $record->displayFileName())
                     ->url(fn (BerkasGuru $record): ?string => $record->resolvedFileUrl())
                     ->openUrlInNewTab()
                     ->wrap(),

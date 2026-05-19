@@ -583,6 +583,7 @@
         $quickChecklistMeta = $this->getQuickChecklistMeta();
         $recentUpdates = $summaryWidgetsVisible ? $this->getRecentUpdates() : collect();
         $attentionProkers = $summaryWidgetsVisible ? $this->getAttentionProkers() : collect();
+        $upcomingMonthProkers = $summaryWidgetsVisible ? $this->getUpcomingMonthProkers() : collect();
         $isDashboardDegraded = $this->isDegradedDashboardMode();
         $heroSummary = $summaryWidgetsVisible
             ? $this->getSummaryText()
@@ -758,6 +759,130 @@
                 </div>
             </div>
         </section>
+
+        @if ($upcomingMonthProkers->isNotEmpty())
+            <section id="target-30-hari" x-data="{ open: true }" class="rounded-[1.75rem] border border-gray-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-gray-900">
+                <div class="pd-section-head">
+                    <div>
+                        <span class="pd-section-kicker">30 hari ke depan</span>
+                        <h3 class="pd-section-title">Target Proker yang Akan Dihadapi</h3>
+                        <p class="pd-section-desc">Proker yang target selesainya berada di rentang {{ now()->translatedFormat('d M Y') }} sampai {{ now()->copy()->addMonth()->translatedFormat('d M Y') }}.</p>
+                    </div>
+                    <button
+                        type="button"
+                        x-on:click="open = ! open"
+                        class="pd-toggle-btn"
+                    >
+                        <span x-text="open ? 'Minimalkan' : 'Tampilkan'"></span>
+                    </button>
+                </div>
+
+                <div x-show="open" x-transition.opacity.duration.200ms class="mt-5 overflow-hidden rounded-[1.35rem] border-2 border-gray-300 bg-white shadow-sm shadow-gray-100/80 ring-1 ring-gray-200/70 dark:border-white/15 dark:bg-gray-950/60 dark:shadow-none dark:ring-white/10">
+                    <div class="pd-mobile-list p-4">
+                        @foreach ($upcomingMonthProkers as $proker)
+                            <article wire:key="upcoming-month-proker-mobile-{{ $proker->id }}" class="pd-mobile-card">
+                                <div class="flex flex-wrap items-start justify-between gap-3">
+                                    <div>
+                                        <a href="{{ \App\Filament\Resources\ProkerResource::getUrl('edit', ['record' => $proker]) }}" class="text-sm font-semibold text-gray-950 hover:text-amber-700 dark:text-white dark:hover:text-amber-200">
+                                            {{ $proker->nama }}
+                                        </a>
+                                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ $proker->bidang?->nama ?? '-' }} - PIC {{ $proker->penanggung_jawab ?: '-' }}</p>
+                                    </div>
+                                    <span class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] {{ $attentionLevelClasses($proker->upcoming_level ?? null) }}">
+                                        {{ $proker->target_window_label ?? '-' }}
+                                    </span>
+                                </div>
+
+                                @if ($proker->jadwal_ringkas)
+                                    <p class="mt-3 text-sm leading-6 text-gray-600 dark:text-gray-300">{{ \Illuminate\Support\Str::limit($proker->jadwal_ringkas, 120) }}</p>
+                                @endif
+
+                                <div class="pd-mobile-metrics mt-4">
+                                    <div class="pd-mobile-metric">
+                                        <span class="pd-mobile-metric-label">Target</span>
+                                        <span class="pd-mobile-metric-value">{{ $proker->target_selesai?->format('d M Y') ?? '-' }}</span>
+                                    </div>
+                                    <div class="pd-mobile-metric">
+                                        <span class="pd-mobile-metric-label">Progress</span>
+                                        <span class="pd-mobile-metric-value">{{ (int) $proker->progress_persen }}%</span>
+                                    </div>
+                                    <div class="pd-mobile-metric">
+                                        <span class="pd-mobile-metric-label">Update</span>
+                                        <span class="pd-mobile-metric-value">{{ (int) ($proker->updates_count ?? 0) }}x</span>
+                                    </div>
+                                </div>
+
+                                <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">Update terakhir: {{ $proker->last_update_label ?? 'Belum ada update' }}</span>
+                                    <x-filament::button
+                                        :href="\App\Filament\Resources\ProkerResource::getUrl('edit', ['record' => $proker])"
+                                        tag="a"
+                                        size="sm"
+                                        color="warning"
+                                        icon="heroicon-o-pencil-square"
+                                    >
+                                        Buka
+                                    </x-filament::button>
+                                </div>
+                            </article>
+                        @endforeach
+                    </div>
+
+                    <div class="pd-desktop-table w-full overflow-x-auto" style="-webkit-overflow-scrolling: touch; touch-action: pan-x;">
+                        <div class="min-w-[880px]">
+                            <table class="w-full border-separate border-spacing-0 text-sm">
+                                <thead class="bg-gradient-to-r from-gray-100 via-gray-50 to-amber-50/80 dark:from-white/[0.08] dark:via-white/[0.05] dark:to-amber-500/[0.08]">
+                                    <tr>
+                                        <th class="border-b border-r border-gray-300 px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.2em] text-gray-600 dark:border-white/10 dark:text-gray-300">Proker</th>
+                                        <th class="border-b border-r border-gray-300 px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.2em] text-gray-600 dark:border-white/10 dark:text-gray-300">Target</th>
+                                        <th class="border-b border-r border-gray-300 px-4 py-3 text-center text-[11px] font-bold uppercase tracking-[0.2em] text-gray-600 dark:border-white/10 dark:text-gray-300">Progress</th>
+                                        <th class="border-b border-r border-gray-300 px-4 py-3 text-center text-[11px] font-bold uppercase tracking-[0.2em] text-gray-600 dark:border-white/10 dark:text-gray-300">Checklist</th>
+                                        <th class="border-b border-r border-gray-300 px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.2em] text-gray-600 dark:border-white/10 dark:text-gray-300">Monitoring</th>
+                                        <th class="border-b border-gray-300 px-4 py-3 text-right text-[11px] font-bold uppercase tracking-[0.2em] text-gray-600 dark:border-white/10 dark:text-gray-300">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white dark:bg-transparent">
+                                    @foreach ($upcomingMonthProkers as $proker)
+                                        <tr wire:key="upcoming-month-proker-{{ $proker->id }}" class="border-b border-gray-200/90 transition hover:bg-amber-50/30 dark:border-white/10 dark:hover:bg-white/5 even:bg-gray-50/60 dark:even:bg-white/[0.025]">
+                                            <td class="border-r border-gray-200/80 px-4 py-4 align-top dark:border-white/10">
+                                                <a href="{{ \App\Filament\Resources\ProkerResource::getUrl('edit', ['record' => $proker]) }}" class="font-semibold text-gray-950 hover:text-amber-700 dark:text-white dark:hover:text-amber-200">
+                                                    {{ $proker->nama }}
+                                                </a>
+                                                <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ $proker->bidang?->nama ?? '-' }} - PIC {{ $proker->penanggung_jawab ?: '-' }}</div>
+                                            </td>
+                                            <td class="border-r border-gray-200/80 px-4 py-4 text-sm text-gray-600 dark:border-white/10 dark:text-gray-300">
+                                                <div>{{ $proker->target_selesai?->format('d M Y') ?? '-' }}</div>
+                                                <span class="mt-2 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] {{ $attentionLevelClasses($proker->upcoming_level ?? null) }}">
+                                                    {{ $proker->target_window_label ?? '-' }}
+                                                </span>
+                                            </td>
+                                            <td class="border-r border-gray-200/80 px-4 py-4 text-center font-semibold text-amber-700 dark:border-white/10 dark:text-amber-300">{{ (int) $proker->progress_persen }}%</td>
+                                            <td class="border-r border-gray-200/80 px-4 py-4 text-center font-semibold text-gray-700 dark:border-white/10 dark:text-gray-200">{{ (int) ($proker->checked_indikators_count ?? 0) }}/{{ (int) ($proker->indikators_count ?? 0) }}</td>
+                                            <td class="border-r border-gray-200/80 px-4 py-4 text-sm text-gray-600 dark:border-white/10 dark:text-gray-300">
+                                                <div>{{ (int) ($proker->updates_count ?? 0) }} update</div>
+                                                <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ $proker->last_update_label ?? 'Belum ada update' }}</div>
+                                            </td>
+                                            <td class="px-4 py-4 text-right">
+                                                <x-filament::button
+                                                    :href="\App\Filament\Resources\ProkerResource::getUrl('edit', ['record' => $proker])"
+                                                    tag="a"
+                                                    size="sm"
+                                                    color="warning"
+                                                    icon="heroicon-o-pencil-square"
+                                                >
+                                                    Buka
+                                                </x-filament::button>
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        @endif
+
         <div class="grid gap-6 2xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.7fr)]">
             <section id="ringkasan-keputusan" x-data="{ open: true }" class="rounded-[1.75rem] border border-gray-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-gray-900">
                 <div class="pd-section-head">

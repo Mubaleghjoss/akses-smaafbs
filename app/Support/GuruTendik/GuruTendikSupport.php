@@ -39,6 +39,20 @@ class GuruTendikSupport
         ];
     }
 
+    public static function columnHeading(string $column): string
+    {
+        return $column === 'nip' ? 'niy' : $column;
+    }
+
+    /**
+     * @param  array<int, string>  $columns
+     * @return array<int, string>
+     */
+    public static function columnHeadings(array $columns): array
+    {
+        return array_map(fn (string $column): string => self::columnHeading($column), $columns);
+    }
+
     public static function templateRows(): array
     {
         $columns = self::importableColumns();
@@ -55,7 +69,7 @@ class GuruTendikSupport
         ];
 
         return [
-            $columns,
+            self::columnHeadings($columns),
             array_map(fn (string $column): mixed => $exampleValues[$column] ?? null, $columns),
         ];
     }
@@ -65,9 +79,9 @@ class GuruTendikSupport
         return [
             ['PETUNJUK IMPORT GURU / TENDIK'],
             ['1', 'Gunakan nama kolom persis seperti sheet template.'],
-            ['2', 'Nilai jenis_ptk yang didukung hanya: Guru atau Tendik.'],
+            ['2', 'Nilai jenis_ptk yang didukung hanya: Guru, Tendik, atau Pamong.'],
             ['3', 'Nilai jk yang didukung hanya: L atau P.'],
-            ['4', 'Sistem akan mencoba mencocokkan data berdasarkan NIP, lalu NUPTK, lalu NIK.'],
+            ['4', 'Sistem akan mencoba mencocokkan data berdasarkan NIY, lalu NUPTK, lalu NIK.'],
             ['5', 'Jika ketiga identifier kosong, fallback terakhir adalah nama + tanggal_lahir.'],
             ['6', 'Format tanggal_lahir yang aman: YYYY-MM-DD.'],
             ['7', 'Baris dengan jenis_ptk atau jk tidak valid akan dilewati.'],

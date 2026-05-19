@@ -7,6 +7,8 @@ use App\Filament\Concerns\HasModulePermissions;
 use App\Filament\Concerns\HasOptimizedAdminTable;
 use App\Filament\Resources\SarprasBospInventoryResource\Pages;
 use App\Models\SarprasBospInventory;
+use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Forms;
@@ -16,6 +18,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Schema as SchemaFacade;
 
 class SarprasBospInventoryResource extends Resource
@@ -88,6 +91,10 @@ class SarprasBospInventoryResource extends Resource
                         Forms\Components\TextInput::make('lokasi_barang')
                             ->label('Lokasi Barang')
                             ->maxLength(180),
+                        Forms\Components\TextInput::make('tempat_stiker')
+                            ->label('Tempat di Stiker')
+                            ->maxLength(180)
+                            ->helperText('Opsional. Jika kosong, teks tempat pada stiker memakai Lokasi Barang. Contoh: RUANG IPS, LAB KOMPUTER, RAK TU.'),
                         Forms\Components\DatePicker::make('tanggal_datang')
                             ->label('Tanggal Datang')
                             ->native(false)
@@ -100,6 +107,8 @@ class SarprasBospInventoryResource extends Resource
                             ->inputMode('decimal'),
                         Forms\Components\Textarea::make('catatan')
                             ->label('Catatan')
+                            ->helperText('Isi instruksi peletakan barang untuk dibaca dari QR stiker. Contoh: Tempel stiker di sisi kanan barang, tempatkan di Lab Komputer rak 2, dan jangan dipindah tanpa konfirmasi Sarpras.')
+                            ->placeholder('Contoh: Barang ditempatkan di Ruang Lab Komputer, meja guru sisi kanan. Stiker ditempel di bagian belakang atas agar mudah discan.')
                             ->rows(4)
                             ->columnSpanFull(),
                     ]),
@@ -132,7 +141,7 @@ class SarprasBospInventoryResource extends Resource
                     ->sortable()
                     ->description(fn (SarprasBospInventory $record): string => collect([
                         filled($record->kode_barang) ? 'Kode '.$record->kode_barang : null,
-                        $record->lokasi_barang,
+                        filled($record->tempat_stiker) ? 'Stiker: '.$record->tempat_stiker : $record->lokasi_barang,
                     ])->filter()->implode(' | '))
                     ->wrap(),
                 Tables\Columns\TextColumn::make('quality')
@@ -177,10 +186,46 @@ class SarprasBospInventoryResource extends Resource
             ])
             ->actions([
                 EditAction::make(),
+                Action::make('downloadStickerPdf')
+                    ->label('Stiker PDF')
+                    ->icon('heroicon-o-document-arrow-down')
+                    ->color('info')
+                    ->url(fn (SarprasBospInventory $record): string => route('admin.sarpras-bosp-inventories.sticker', [
+                        'sarprasBospInventory' => $record,
+                        'format' => 'pdf',
+                    ]))
+                    ->openUrlInNewTab(),
+                Action::make('downloadStickerPng')
+                    ->label('Stiker PNG')
+                    ->icon('heroicon-o-photo')
+                    ->color('success')
+                    ->url(fn (SarprasBospInventory $record): string => route('admin.sarpras-bosp-inventories.sticker', [
+                        'sarprasBospInventory' => $record,
+                        'format' => 'png',
+                    ]))
+                    ->openUrlInNewTab(),
                 static::makeDeleteTableAction('inventaris BOSP'),
             ])
             ->bulkActions([
                 BulkActionGroup::make([
+                    BulkAction::make('downloadStickersPdf')
+                        ->label('Stiker PDF Terpilih')
+                        ->icon('heroicon-o-document-arrow-down')
+                        ->color('info')
+                        ->url(fn (Collection $records): string => route('admin.sarpras-bosp-inventories.stickers', [
+                            'selected' => implode(',', $records->modelKeys()),
+                            'format' => 'pdf',
+                        ]))
+                        ->openUrlInNewTab(),
+                    BulkAction::make('downloadStickersPng')
+                        ->label('Stiker PNG Terpilih')
+                        ->icon('heroicon-o-photo')
+                        ->color('success')
+                        ->url(fn (Collection $records): string => route('admin.sarpras-bosp-inventories.stickers', [
+                            'selected' => implode(',', $records->modelKeys()),
+                            'format' => 'png',
+                        ]))
+                        ->openUrlInNewTab(),
                     static::makeDeleteBulkTableAction(),
                 ]),
             ]);

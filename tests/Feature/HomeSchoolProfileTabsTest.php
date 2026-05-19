@@ -82,11 +82,23 @@ class HomeSchoolProfileTabsTest extends TestCase
         Prestasi::query()->create([
             'siswa_id' => $siswa->id,
             'nama_lomba' => 'Olimpiade Sains Nasional',
+            'kategori' => Prestasi::CATEGORY_AKADEMIK,
             'tanggal_prestasi' => '2026-03-10',
             'penyelenggara' => 'Pusat Prestasi Nasional',
             'juara' => 'Juara 1',
             'hadiah' => 'Medali emas',
             'keterangan' => 'Prestasi tingkat nasional bidang sains.',
+        ]);
+
+        Prestasi::query()->create([
+            'siswa_id' => $siswa->id,
+            'nama_lomba' => 'Kejuaraan Pencak Silat',
+            'kategori' => Prestasi::CATEGORY_NON_AKADEMIK,
+            'tanggal_prestasi' => '2026-03-12',
+            'penyelenggara' => 'Ikatan Pencak Silat',
+            'juara' => 'Juara 2',
+            'hadiah' => 'Piala',
+            'keterangan' => 'Prestasi tingkat provinsi bidang olahraga.',
         ]);
 
         $response = $this->get(route('home'));
@@ -116,6 +128,11 @@ class HomeSchoolProfileTabsTest extends TestCase
             ->assertSee('Ketua Komite')
             ->assertSee('Perpustakaan')
             ->assertSee('Olimpiade Sains Nasional')
+            ->assertSee('Akademik')
+            ->assertSee('Kejuaraan Pencak Silat')
+            ->assertSee('Non Akademik')
+            ->assertSee('Akademik: 1')
+            ->assertSee('Non Akademik: 1')
             ->assertSee('Anisa Prestasi')
             ->assertSee('Juara 1')
             ->assertSee('Visi dan Misi SMA AFBS')
@@ -129,6 +146,11 @@ class HomeSchoolProfileTabsTest extends TestCase
         $this->assertMatchesRegularExpression('/id="home-profile-panel-identitas-sekolah"[^>]*data-home-profile-tab-panel="identitas-sekolah"[^>]*hidden/s', $html);
         $this->assertMatchesRegularExpression('/id="home-profile-panel-prestasi-siswa"[^>]*data-home-profile-tab-panel="prestasi-siswa"[^>]*hidden/s', $html);
         $this->assertMatchesRegularExpression('/id="home-profile-panel-visi-misi"[^>]*data-home-profile-tab-panel="visi-misi"[^>]*hidden/s', $html);
+        $this->assertStringContainsString('data-achievement-filter-root', $html);
+        $this->assertStringContainsString('data-achievement-filter-trigger="'.Prestasi::CATEGORY_AKADEMIK.'"', $html);
+        $this->assertStringContainsString('data-achievement-filter-trigger="'.Prestasi::CATEGORY_NON_AKADEMIK.'"', $html);
+        $this->assertStringContainsString('data-achievement-category="'.Prestasi::CATEGORY_AKADEMIK.'"', $html);
+        $this->assertStringContainsString('data-achievement-category="'.Prestasi::CATEGORY_NON_AKADEMIK.'"', $html);
     }
 
     public function test_home_school_profile_shows_visi_misi_fallback_when_record_is_missing(): void
@@ -175,6 +197,22 @@ class HomeSchoolProfileTabsTest extends TestCase
                 if (! Schema::hasColumn('data_siswa', 'status')) {
                     $table->string('status')->nullable();
                 }
+
+                if (! Schema::hasColumn('data_siswa', 'kepribadian')) {
+                    $table->string('kepribadian', 100)->nullable();
+                }
+
+                if (! Schema::hasColumn('data_siswa', 'gaya_belajar')) {
+                    $table->string('gaya_belajar', 100)->nullable();
+                }
+
+                if (! Schema::hasColumn('data_siswa', 'profiling')) {
+                    $table->string('profiling', 150)->nullable();
+                }
+
+                if (! Schema::hasColumn('data_siswa', 'mbti')) {
+                    $table->string('mbti', 20)->nullable();
+                }
             });
 
             return;
@@ -185,6 +223,10 @@ class HomeSchoolProfileTabsTest extends TestCase
             $table->string('nama')->nullable();
             $table->string('rombel_saat_ini')->nullable();
             $table->string('status')->nullable();
+            $table->string('kepribadian', 100)->nullable();
+            $table->string('gaya_belajar', 100)->nullable();
+            $table->string('profiling', 150)->nullable();
+            $table->string('mbti', 20)->nullable();
             $table->timestamps();
         });
     }
@@ -192,6 +234,12 @@ class HomeSchoolProfileTabsTest extends TestCase
     protected function ensurePrestasiTable(): void
     {
         if (Schema::hasTable('prestasis')) {
+            Schema::table('prestasis', function (Blueprint $table): void {
+                if (! Schema::hasColumn('prestasis', 'kategori')) {
+                    $table->string('kategori', 30)->nullable();
+                }
+            });
+
             return;
         }
 
@@ -199,6 +247,7 @@ class HomeSchoolProfileTabsTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('siswa_id')->nullable();
             $table->string('nama_lomba')->nullable();
+            $table->string('kategori', 30)->nullable();
             $table->date('tanggal_prestasi')->nullable();
             $table->string('penyelenggara')->nullable();
             $table->string('juara')->nullable();

@@ -5,11 +5,13 @@ namespace Tests\Feature;
 use App\Filament\Resources\BerkasGuruResource\Pages\CreateBerkasGuru;
 use App\Filament\Resources\BerkasSiswaResource\Pages\CreateBerkasSiswa;
 use App\Filament\Resources\BerkasSiswaResource\Pages\ListBerkasSiswas;
+use App\Filament\Resources\BerkasGuruResource;
 use App\Jobs\SyncBerkasSiswaToGoogleDrive;
 use App\Models\BerkasGuru;
 use App\Models\BerkasSiswa;
 use App\Models\DataSiswa;
 use App\Models\GuruTendik;
+use App\Models\GuruTendikTugasTambahan;
 use App\Models\JenisBerkas;
 use App\Models\Pengaturan;
 use App\Models\ProfilSekolah;
@@ -86,7 +88,77 @@ class BerkasGoogleDriveSyncTest extends TestCase
         $this->assertSame(BerkasSiswa::GDRIVE_STATUS_QUEUED, $record->gdrive_upload_status);
         $this->assertSame(0, (int) $record->gdrive_upload_progress);
         $this->assertSame('Menunggu antrean upload Google Drive.', $record->gdrive_upload_message);
+        $this->assertSame('Kartu Keluarga - Ahmad Siswa - X IPA 1.pdf', basename((string) $record->file_path));
+        $this->assertSame('Kartu Keluarga - Ahmad Siswa - X IPA 1.pdf', $record->file_name);
+        $this->assertSame('Kartu Keluarga - Ahmad Siswa - X IPA 1.pdf', $record->displayFileName());
+        Storage::disk('public')->assertExists($record->file_path);
         Queue::assertPushed(SyncBerkasSiswaToGoogleDrive::class);
+    }
+
+    public function test_teacher_file_normalization_uses_document_type_and_teacher_name(): void
+    {
+        $guru = GuruTendik::query()->create([
+            'nama' => 'Fitri Nurfadhilah,S.Pd.',
+            'nip' => '1987015',
+            'jenis_ptk' => 'Guru Mapel',
+            'status' => 'aktif',
+        ]);
+
+        $jenisBerkas = JenisBerkas::query()->create([
+            'nama_berkas' => 'Ijazah',
+            'wajib' => 'ya',
+            'urutan' => 1,
+            'status' => 'aktif',
+        ]);
+
+        $path = UploadedFile::fake()
+            ->create('random.pdf', 120, 'application/pdf')
+            ->store('berkas_guru', 'public');
+
+        $record = BerkasGuru::query()->create([
+            'guru_id' => $guru->id,
+            'jenis_berkas_id' => $jenisBerkas->id,
+            'file_path' => $path,
+            'uploaded_at' => now(),
+            'has_deleted' => 0,
+        ]);
+
+        $this->assertTrue(BerkasGuruResource::normalizeRecord($record));
+
+        $record->refresh();
+
+        $this->assertSame('Ijazah - Fitri Nurfadhilah S Pd.pdf', basename((string) $record->file_path));
+        $this->assertSame('Ijazah - Fitri Nurfadhilah S Pd.pdf', $record->displayFileName());
+        Storage::disk('public')->assertExists($record->file_path);
+    }
+
+    public function test_tugas_tambahan_file_normalization_uses_task_label_and_teacher_name(): void
+    {
+        $guru = GuruTendik::query()->create([
+            'nama' => 'Fitri Nurfadhilah,S.Pd.',
+            'nip' => '1987016',
+            'jenis_ptk' => 'Guru Mapel',
+            'status' => 'aktif',
+        ]);
+
+        $path = UploadedFile::fake()
+            ->create('sk-random.pdf', 120, 'application/pdf')
+            ->store('berkas_guru', 'public');
+
+        $history = GuruTendikTugasTambahan::query()->create([
+            'guru_tendik_id' => $guru->id,
+            'tugas_tambahan' => 'WAKA KURIKULUM',
+            'no_sk' => 'SK-001/AFBS/2026',
+            'tmt' => now()->toDateString(),
+            'sk_file_path' => $path,
+        ]);
+
+        $record = $history->fresh()->berkasGuru()->with(['guru', 'jenisBerkas', 'tugasTambahanHistory'])->firstOrFail();
+
+        $this->assertSame('Tugas Tambahan - WAKA KURIKULUM - Fitri Nurfadhilah S Pd.pdf', basename((string) $record->file_path));
+        $this->assertSame($record->file_path, $history->fresh()->sk_file_path);
+        $this->assertSame('Tugas Tambahan - WAKA KURIKULUM - Fitri Nurfadhilah S Pd.pdf', $record->displayFileName());
+        Storage::disk('public')->assertExists($record->file_path);
     }
 
     public function test_manual_upload_now_recovers_teacher_file_when_remote_file_is_missing(): void

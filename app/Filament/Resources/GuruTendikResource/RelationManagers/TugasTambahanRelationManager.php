@@ -20,6 +20,10 @@ class TugasTambahanRelationManager extends RelationManager
     #[On('refresh-tugas-tambahan-relation-manager')]
     public function refreshRelationManager(): void
     {
+        if (! isset($this->table)) {
+            return;
+        }
+
         $this->resetPage();
         $this->flushCachedTableRecords();
     }

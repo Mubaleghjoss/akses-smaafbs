@@ -29,9 +29,6 @@
                     <div class="min-w-0 flex-1">
                         <div class="org-mobile__role">{{ $node->jabatan }}</div>
                         <div class="org-mobile__name">{{ $node->nama }}</div>
-                        @if($siblingCount > 1)
-                            <div class="org-mobile__peer-note">Sejajar dalam {{ $siblingCount }} posisi</div>
-                        @endif
 
                         @if($profileUrl)
                             <a href="{{ $profileUrl }}" class="mt-2 inline-flex text-xs font-semibold text-sky-700 transition hover:text-sky-900">
@@ -43,9 +40,6 @@
             </summary>
 
             <div class="org-mobile__children">
-                @if($children->count() > 1)
-                    <div class="org-mobile__group-indicator">{{ $children->count() }} posisi sejajar</div>
-                @endif
                 @foreach($children as $child)
                     @include('partials.org-mobile-node', [
                         'node' => $child,
@@ -75,9 +69,6 @@
             <div class="min-w-0 flex-1">
                 <div class="org-mobile__role">{{ $node->jabatan }}</div>
                 <div class="org-mobile__name">{{ $node->nama }}</div>
-                @if($siblingCount > 1)
-                    <div class="org-mobile__peer-note">Sejajar dalam {{ $siblingCount }} posisi</div>
-                @endif
 
                 @if($profileUrl)
                     <a href="{{ $profileUrl }}" class="mt-2 inline-flex text-xs font-semibold text-sky-700 transition hover:text-sky-900">

@@ -1,4 +1,142 @@
 (function () {
+    let livewireSessionExpiredHandled = false;
+    let livewireSessionHandlerInstalled = false;
+    let livewireSessionHandlerPoll = null;
+
+    function showAdminSessionExpiredNotice() {
+        if (!document.body || document.getElementById('admin-livewire-session-expired-notice')) {
+            return;
+        }
+
+        const notice = document.createElement('div');
+        notice.id = 'admin-livewire-session-expired-notice';
+        notice.setAttribute('role', 'alert');
+        notice.textContent = 'Sesi admin kedaluwarsa. Halaman dimuat ulang untuk mengambil token baru.';
+        notice.style.cssText = [
+            'position:fixed',
+            'z-index:2147483647',
+            'inset:auto 1rem 1rem 1rem',
+            'max-width:28rem',
+            'margin-inline:auto',
+            'border-radius:.75rem',
+            'background:#0f172a',
+            'color:#fff',
+            'box-shadow:0 20px 45px rgba(15,23,42,.24)',
+            'font:500 .875rem/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+            'padding:.875rem 1rem',
+            'text-align:center',
+        ].join(';');
+
+        document.body.appendChild(notice);
+    }
+
+    function refreshAdminSession() {
+        if (livewireSessionExpiredHandled) {
+            return;
+        }
+
+        livewireSessionExpiredHandled = true;
+        showAdminSessionExpiredNotice();
+
+        window.setTimeout(() => {
+            window.location.reload();
+        }, document.visibilityState === 'hidden' ? 100 : 900);
+    }
+
+    function isSessionExpiredPayload(payload) {
+        return Number(payload?.status ?? payload?.response?.status) === 419;
+    }
+
+    function installLivewireSessionExpiredHandler() {
+        if (livewireSessionHandlerInstalled || !window.Livewire) {
+            return livewireSessionHandlerInstalled;
+        }
+
+        if (typeof window.Livewire.interceptRequest === 'function') {
+            window.Livewire.interceptRequest(({ onError }) => {
+                onError(({ response, preventDefault }) => {
+                    if (Number(response?.status) !== 419) {
+                        return;
+                    }
+
+                    preventDefault?.();
+                    refreshAdminSession();
+                });
+            });
+
+            livewireSessionHandlerInstalled = true;
+
+            return true;
+        }
+
+        if (typeof window.Livewire.hook === 'function') {
+            window.Livewire.hook('request', ({ fail }) => {
+                if (typeof fail !== 'function') {
+                    return;
+                }
+
+                fail(({ status, preventDefault }) => {
+                    if (Number(status) !== 419) {
+                        return;
+                    }
+
+                    preventDefault?.();
+                    refreshAdminSession();
+                });
+            });
+
+            livewireSessionHandlerInstalled = true;
+
+            return true;
+        }
+
+        return false;
+    }
+
+    function stopLivewireSessionHandlerPolling() {
+        if (!livewireSessionHandlerPoll) {
+            return;
+        }
+
+        window.clearInterval(livewireSessionHandlerPoll);
+        livewireSessionHandlerPoll = null;
+    }
+
+    function startLivewireSessionHandlerPolling() {
+        if (installLivewireSessionExpiredHandler() || livewireSessionHandlerPoll) {
+            return;
+        }
+
+        let attempts = 0;
+
+        livewireSessionHandlerPoll = window.setInterval(() => {
+            attempts += 1;
+
+            if (installLivewireSessionExpiredHandler() || attempts >= 40) {
+                stopLivewireSessionHandlerPolling();
+            }
+        }, 250);
+    }
+
+    document.addEventListener('livewire:init', () => {
+        if (installLivewireSessionExpiredHandler()) {
+            stopLivewireSessionHandlerPolling();
+        }
+    });
+
+    document.addEventListener('livewire:navigated', installLivewireSessionExpiredHandler);
+
+    window.addEventListener('unhandledrejection', (event) => {
+        if (!isSessionExpiredPayload(event.reason)) {
+            return;
+        }
+
+        event.preventDefault();
+        refreshAdminSession();
+    });
+
+    startLivewireSessionHandlerPolling();
+
     function table() {
         return {
             checkboxClickController: null,

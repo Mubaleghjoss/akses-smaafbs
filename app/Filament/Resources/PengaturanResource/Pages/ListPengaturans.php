@@ -1093,7 +1093,7 @@ class ListPengaturans extends Page implements HasForms
                 'gdrive_folder_url',
                 'gdrive_file_url',
             ])
-            ->with(['guru:id,nama', 'jenisBerkas:id,nama_berkas', 'tugasTambahanHistory:id,berkas_guru_id'])
+            ->with(['guru:id,nama', 'jenisBerkas:id,nama_berkas', 'tugasTambahanHistory:id,berkas_guru_id,tugas_tambahan'])
             ->whereIn('gdrive_upload_status', $this->googleDriveQueueStatuses())
             ->orderByDesc('uploaded_at')
             ->limit(8)
@@ -1206,7 +1206,7 @@ class ListPengaturans extends Page implements HasForms
                 'gdrive_folder_url',
                 'gdrive_file_url',
             ])
-            ->with(['guru:id,nama', 'jenisBerkas:id,nama_berkas', 'tugasTambahanHistory:id,berkas_guru_id'])
+            ->with(['guru:id,nama', 'jenisBerkas:id,nama_berkas', 'tugasTambahanHistory:id,berkas_guru_id,tugas_tambahan'])
             ->where(function ($builder): void {
                 $builder
                     ->whereNull('gdrive_upload_status')
@@ -1321,7 +1321,7 @@ class ListPengaturans extends Page implements HasForms
                 'gdrive_folder_url',
                 'gdrive_file_url',
             ])
-            ->with(['guru:id,nama', 'jenisBerkas:id,nama_berkas', 'tugasTambahanHistory:id,berkas_guru_id'])
+            ->with(['guru:id,nama', 'jenisBerkas:id,nama_berkas', 'tugasTambahanHistory:id,berkas_guru_id,tugas_tambahan'])
             ->where('gdrive_upload_status', BerkasGuru::GDRIVE_STATUS_SYNCED)
             ->orderByDesc('gdrive_uploaded_at')
             ->orderByDesc('uploaded_at')
@@ -1699,7 +1699,7 @@ class ListPengaturans extends Page implements HasForms
             ? ($record->gdrive_uploaded_at ?? $record->updated_at ?? $record->uploaded_at)
             : ($record->updated_at ?? $record->uploaded_at);
         $status = $record->gdrive_upload_status;
-        $fileTitle = trim((string) ($record->file_name ?: ($record->file_path ? basename((string) $record->file_path) : 'Berkas siswa #'.$record->getKey())));
+        $fileTitle = trim((string) ($record->displayFileName() ?: ($record->file_name ?: 'Berkas siswa #'.$record->getKey())));
         $studentName = $record->siswa?->nama ?: 'Siswa tidak diketahui';
         $rombel = trim((string) ($record->siswa?->rombel_saat_ini ?? ''));
 
@@ -1742,7 +1742,7 @@ class ListPengaturans extends Page implements HasForms
             ? ($record->gdrive_uploaded_at ?? $record->uploaded_at)
             : ($record->uploaded_at ?? $record->gdrive_uploaded_at);
         $status = $record->gdrive_upload_status;
-        $fileTitle = trim((string) (($record->file_path ? basename((string) $record->file_path) : null) ?: 'Berkas guru #'.$record->getKey()));
+        $fileTitle = trim((string) ($record->displayFileName() ?: 'Berkas guru #'.$record->getKey()));
         $teacherName = $record->guru?->nama ?: 'Guru / tendik tidak diketahui';
         $sourceLabel = $record->isManagedTugasTambahanSk() ? 'History tugas tambahan' : 'Berkas guru';
 

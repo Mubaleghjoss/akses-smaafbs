@@ -80,6 +80,7 @@ class GuruTendikResource extends Resource
                             ->native(false)
                             ->required(),
                         Forms\Components\TextInput::make('nip')
+                            ->label('NIY')
                             ->maxLength(50)
                             ->default(null),
                         Forms\Components\TextInput::make('nuptk')
@@ -193,7 +194,7 @@ class GuruTendikResource extends Resource
     {
         return static::optimizeAdminTable(
             $table,
-            searchPlaceholder: 'Cari nama guru, NIP, NUPTK, NIK, mapel, atau akun login...',
+            searchPlaceholder: 'Cari nama guru, NIY, NUPTK, NIK, mapel, atau akun login...',
             emptyStateHeading: 'Belum ada data guru/tendik',
             emptyStateDescription: 'Tambahkan data guru atau sinkronkan akun agar pengelolaan dokumen lebih mudah.'
         )
@@ -217,6 +218,7 @@ class GuruTendikResource extends Resource
                     ->searchable()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('nip')
+                    ->label('NIY')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('nuptk')
                     ->searchable(),
@@ -361,11 +363,13 @@ class GuruTendikResource extends Resource
                             ['record' => $record->userAccount],
                             static::guruUserAccessRouteParams($record),
                         ))
-                        : UserResource::getUrl('create', [
-                            'preset_role' => 'guru',
-                            'link_guru_id' => $record->getKey(),
-                            ...static::guruUserAccessRouteParams($record),
-                        ]))
+                        : UserResource::getUrl('create', array_merge(
+                            static::guruUserCreateRouteParams($record),
+                            [
+                                'link_guru_id' => $record->getKey(),
+                            ],
+                            static::guruUserAccessRouteParams($record),
+                        )))
                     ->tooltip(fn (GuruTendik $record): string => AdminRoleTemplateSupport::suggestedTemplateReasonSummaryForGuruTendik($record))
                     ->visible(fn (): bool => auth()->user()?->hasRole('admin')),
                 Action::make('aksesDivisiAdmin')
@@ -699,7 +703,7 @@ class GuruTendikResource extends Resource
     {
         return parent::getEloquentQuery()
             ->with([
-                'userAccount' => fn (Builder $query): Builder => $query
+                'userAccount' => fn ($query) => $query
                     ->select([
                         'id',
                         'username',
@@ -711,7 +715,7 @@ class GuruTendikResource extends Resource
                         'default_password_reset_at',
                     ])
                     ->with('roles:id,name'),
-                'tugasTambahan:id,guru_tendik_id,tugas_tambahan,tmt',
+                'tugasTambahan:id,guru_tendik_id,tugas_tambahan,tmt,berkas_guru_id',
             ])
             ->visibleToUser(auth()->user());
     }
@@ -905,6 +909,24 @@ class GuruTendikResource extends Resource
 
         return [
             'preset_addons' => implode(',', $suggestedTemplates),
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function guruUserCreateRouteParams(GuruTendik $record): array
+    {
+        $pamongTemplate = AdminRoleTemplateSupport::pamongTemplateKeyForGuruTendik($record);
+
+        if ($pamongTemplate !== null) {
+            return [
+                'preset_template' => $pamongTemplate,
+            ];
+        }
+
+        return [
+            'preset_role' => 'guru',
         ];
     }
 

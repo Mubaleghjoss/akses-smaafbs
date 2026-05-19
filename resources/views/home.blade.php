@@ -160,8 +160,12 @@
         $tendikGenderTotal = $stats['tendik_male'] + $stats['tendik_female'];
         $tendikMalePercent = $tendikGenderTotal > 0 ? round(($stats['tendik_male'] / $tendikGenderTotal) * 100, 2) : 0;
 
+        $pamongGenderTotal = $stats['pamong_male'] + $stats['pamong_female'];
+        $pamongMalePercent = $pamongGenderTotal > 0 ? round(($stats['pamong_male'] / $pamongGenderTotal) * 100, 2) : 0;
+
         $rombelItems = collect($stats['rombel_items'] ?? []);
         $rombelMaxStudents = max(1, (int) $rombelItems->max('students'));
+        $rombelStudentTotal = (int) $rombelItems->sum('students');
 
         $prokerStatusTotal = $stats['proker_status_selesai'] + $stats['proker_status_berjalan'] + $stats['proker_status_draft'];
         $prokerSelesaiPercent = $prokerStatusTotal > 0 ? round(($stats['proker_status_selesai'] / $prokerStatusTotal) * 100, 2) : 0;
@@ -175,6 +179,11 @@
             <div class="hero-mini-card__head">
                 <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Siswa Aktif (L/P)</div>
                 <div class="text-xs text-slate-500">{{ number_format($stats['student_active_male']) }} / {{ number_format($stats['student_active_female']) }}</div>
+            </div>
+            <div class="hero-mini-card__total">
+                <span>Total</span>
+                <strong>{{ number_format($stats['active_students']) }}</strong>
+                <span>siswa aktif</span>
             </div>
             <div class="hero-mini-card__body">
                 <div class="hero-mini-card__chart" data-home-mini-chart-visual="donut"></div>
@@ -196,6 +205,11 @@
                 <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Guru (L/P)</div>
                 <div class="text-xs text-slate-500">{{ number_format($stats['guru_male']) }} / {{ number_format($stats['guru_female']) }}</div>
             </div>
+            <div class="hero-mini-card__total">
+                <span>Total</span>
+                <strong>{{ number_format($stats['guru_count']) }}</strong>
+                <span>guru</span>
+            </div>
             <div class="hero-mini-card__body">
                 <div class="hero-mini-card__chart" data-home-mini-chart-visual="donut"></div>
                 <dl class="hero-mini-card__legend">
@@ -216,6 +230,11 @@
                 <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Tendik (L/P)</div>
                 <div class="text-xs text-slate-500">{{ number_format($stats['tendik_male']) }} / {{ number_format($stats['tendik_female']) }}</div>
             </div>
+            <div class="hero-mini-card__total">
+                <span>Total</span>
+                <strong>{{ number_format($stats['tendik_count']) }}</strong>
+                <span>tendik</span>
+            </div>
             <div class="hero-mini-card__body">
                 <div class="hero-mini-card__chart" data-home-mini-chart-visual="donut"></div>
                 <dl class="hero-mini-card__legend">
@@ -231,10 +250,40 @@
             </div>
         </article>
 
+        <article class="card hero-mini-card p-4" data-home-mini-chart-card="pamong-gender" style="--mini-chart-fill: {{ $pamongMalePercent }}%; --mini-chart-primary: #059669; --mini-chart-secondary: #a855f7;">
+            <div class="hero-mini-card__head">
+                <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Pamong (L/P)</div>
+                <div class="text-xs text-slate-500">{{ number_format($stats['pamong_male']) }} / {{ number_format($stats['pamong_female']) }}</div>
+            </div>
+            <div class="hero-mini-card__total">
+                <span>Total</span>
+                <strong>{{ number_format($stats['pamong_count']) }}</strong>
+                <span>pamong</span>
+            </div>
+            <div class="hero-mini-card__body">
+                <div class="hero-mini-card__chart" data-home-mini-chart-visual="donut"></div>
+                <dl class="hero-mini-card__legend">
+                    <div>
+                        <dt><span class="hero-mini-card__dot hero-mini-card__dot--primary"></span>Laki-laki</dt>
+                        <dd>{{ number_format($stats['pamong_male']) }}</dd>
+                    </div>
+                    <div>
+                        <dt><span class="hero-mini-card__dot hero-mini-card__dot--muted"></span>Perempuan</dt>
+                        <dd>{{ number_format($stats['pamong_female']) }}</dd>
+                    </div>
+                </dl>
+            </div>
+        </article>
+
         <article class="card hero-mini-card p-4" data-home-mini-chart-card="rombel">
             <div class="hero-mini-card__head">
                 <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Rombel</div>
                 <div class="text-xs text-slate-500">Total {{ number_format($stats['rombel_count']) }}</div>
+            </div>
+            <div class="hero-mini-card__total">
+                <span>Total</span>
+                <strong>{{ number_format($stats['rombel_count']) }}</strong>
+                <span>rombel / {{ number_format($rombelStudentTotal) }} siswa</span>
             </div>
             <ul class="hero-mini-card__bars" data-home-mini-chart-visual="rombel-bars">
                 @forelse($rombelItems as $rombel)
@@ -260,6 +309,11 @@
             <div class="hero-mini-card__head">
                 <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Proker</div>
                 <div class="text-xs text-slate-500">Bidang: {{ number_format($stats['proker_bidang_count']) }}</div>
+            </div>
+            <div class="hero-mini-card__total">
+                <span>Total</span>
+                <strong>{{ number_format($stats['proker_count']) }}</strong>
+                <span>proker / {{ number_format($stats['proker_bidang_count']) }} bidang</span>
             </div>
             <div class="hero-mini-card__body">
                 <div
@@ -299,6 +353,18 @@
         </div>
 
         <div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div class="text-xs uppercase tracking-[0.2em] text-slate-700">Siswa Terdata</div>
+                <div class="mt-2 text-2xl font-semibold text-slate-900">{{ number_format($stats['students']) }}</div>
+            </div>
+            <div class="rounded-2xl border border-green-200 bg-green-50 p-4">
+                <div class="text-xs uppercase tracking-[0.2em] text-green-700">Guru</div>
+                <div class="mt-2 text-2xl font-semibold text-green-900">{{ number_format($stats['guru_count']) }}</div>
+            </div>
+            <div class="rounded-2xl border border-teal-200 bg-teal-50 p-4">
+                <div class="text-xs uppercase tracking-[0.2em] text-teal-700">Pamong</div>
+                <div class="mt-2 text-2xl font-semibold text-teal-900">{{ number_format($stats['pamong_count']) }}</div>
+            </div>
             <div class="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
                 <div class="text-xs uppercase tracking-[0.2em] text-indigo-700">Prestasi Siswa</div>
                 <div class="mt-2 text-2xl font-semibold text-indigo-900">{{ number_format($stats['achievements']) }}</div>
@@ -626,6 +692,43 @@
 
                 activateProfileTab('struktur');
             }
+
+            document.querySelectorAll('[data-achievement-filter-root]').forEach((achievementRoot) => {
+                const filterButtons = achievementRoot.querySelectorAll('[data-achievement-filter-trigger]');
+                const achievementCards = achievementRoot.querySelectorAll('[data-achievement-category]');
+                const emptyMessage = achievementRoot.querySelector('[data-achievement-filter-empty]');
+                let activeCategory = null;
+
+                const applyAchievementFilter = (category) => {
+                    activeCategory = activeCategory === category ? null : category;
+                    let visibleCount = 0;
+
+                    achievementCards.forEach((card) => {
+                        const shouldShow = !activeCategory || card.dataset.achievementCategory === activeCategory;
+                        card.hidden = !shouldShow;
+
+                        if (shouldShow) {
+                            visibleCount += 1;
+                        }
+                    });
+
+                    filterButtons.forEach((button) => {
+                        const isActive = button.dataset.achievementFilterTrigger === activeCategory;
+                        button.classList.toggle('is-active', isActive);
+                        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                    });
+
+                    if (emptyMessage) {
+                        emptyMessage.classList.toggle('hidden', visibleCount > 0 || !activeCategory);
+                    }
+                };
+
+                filterButtons.forEach((button) => {
+                    button.addEventListener('click', () => {
+                        applyAchievementFilter(button.dataset.achievementFilterTrigger);
+                    });
+                });
+            });
 
             if (!photoModal || !photoClose || !photoImage || !photoName || !photoRole) {
                 return;

@@ -69,6 +69,30 @@ class ManagedDocumentNaming
         return $base.'.'.$normalizedExtension;
     }
 
+    /**
+     * @param  array<int, mixed>  $parts
+     */
+    public static function fileNameFromParts(array $parts, ?string $extension = null): string
+    {
+        $labels = collect($parts)
+            ->map(fn (mixed $part): string => static::readableLabel(is_scalar($part) ? (string) $part : null, ''))
+            ->filter()
+            ->values();
+
+        $base = $labels->isNotEmpty() ? $labels->implode(' - ') : 'Berkas';
+        $base = (string) Str::of($base)->limit(180, '')->trim();
+
+        return $base.'.'.static::normalizeExtension($extension);
+    }
+
+    /**
+     * @param  array<int, mixed>  $parts
+     */
+    public static function storageFileNameFromParts(array $parts, ?string $extension = null): string
+    {
+        return static::fileNameFromParts($parts, $extension);
+    }
+
     public static function storageFileName(
         string $scopeSlug,
         mixed $ownerId,

@@ -11,6 +11,7 @@ trait BootstrapsUksAndPrestasiTables
     {
         $this->createUksTable();
         $this->runPrestasiMigration();
+        $this->runPrestasiKategoriMigration();
         $this->runUksMeasurementMigration();
     }
 
@@ -36,6 +37,12 @@ trait BootstrapsUksAndPrestasiTables
     protected function runPrestasiMigration(): void
     {
         $migration = require database_path('migrations/2026_03_26_171000_create_prestasi_tables.php');
+        $migration->up();
+    }
+
+    protected function runPrestasiKategoriMigration(): void
+    {
+        $migration = require database_path('migrations/2026_04_27_110000_add_kategori_to_prestasis_table.php');
         $migration->up();
     }
 

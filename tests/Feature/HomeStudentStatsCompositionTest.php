@@ -110,6 +110,12 @@ class HomeStudentStatsCompositionTest extends TestCase
     protected function ensurePrestasiTable(): void
     {
         if (Schema::hasTable('prestasis')) {
+            Schema::table('prestasis', function (Blueprint $table): void {
+                if (! Schema::hasColumn('prestasis', 'kategori')) {
+                    $table->string('kategori', 30)->nullable();
+                }
+            });
+
             return;
         }
 
@@ -117,6 +123,7 @@ class HomeStudentStatsCompositionTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('siswa_id')->index();
             $table->string('nama_lomba', 150);
+            $table->string('kategori', 30)->nullable();
             $table->date('tanggal_prestasi')->nullable()->index();
             $table->string('penyelenggara', 150)->nullable();
             $table->string('juara', 100)->nullable();

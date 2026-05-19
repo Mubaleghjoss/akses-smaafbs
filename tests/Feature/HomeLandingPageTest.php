@@ -228,7 +228,7 @@ class HomeLandingPageTest extends TestCase
 
         $this->get(route('home'))
             ->assertOk()
-            ->assertSee('Silakan ketik nama atau NISN siswa terlebih dahulu.')
+            ->assertSee('Silakan ketik minimal 2 huruf atau angka untuk mencari nama atau NISN siswa.')
             ->assertDontSee('Abdullah Karim');
     }
 
@@ -273,7 +273,7 @@ class HomeLandingPageTest extends TestCase
         $response
             ->assertOk()
             ->assertSee('Pencarian data siswa aktif dan alumni')
-            ->assertSee('Silakan ketik nama atau NISN siswa terlebih dahulu.')
+            ->assertSee('Silakan ketik minimal 2 huruf atau angka untuk mencari nama atau NISN siswa.')
             ->assertSee('Siswa Aktif (L/P)')
             ->assertSee('Guru (L/P)')
             ->assertSee('Tendik (L/P)')
@@ -282,8 +282,8 @@ class HomeLandingPageTest extends TestCase
             ->assertSee('0 / 0');
 
         $html = $response->getContent();
-        $this->assertSame(5, substr_count($html, 'data-home-mini-chart-card='));
-        $this->assertSame(3, substr_count($html, '--mini-chart-fill: 0%;'));
+        $this->assertSame(6, substr_count($html, 'data-home-mini-chart-card='));
+        $this->assertSame(4, substr_count($html, '--mini-chart-fill: 0%;'));
         $this->assertStringContainsString('Data rombel aktif belum tersedia.', $html);
     }
 
@@ -527,6 +527,24 @@ class HomeLandingPageTest extends TestCase
     protected function ensureDataSiswaTable(): void
     {
         if (Schema::hasTable('data_siswa')) {
+            Schema::table('data_siswa', function (Blueprint $table): void {
+                if (! Schema::hasColumn('data_siswa', 'kepribadian')) {
+                    $table->string('kepribadian', 100)->nullable();
+                }
+
+                if (! Schema::hasColumn('data_siswa', 'gaya_belajar')) {
+                    $table->string('gaya_belajar', 100)->nullable();
+                }
+
+                if (! Schema::hasColumn('data_siswa', 'profiling')) {
+                    $table->string('profiling', 150)->nullable();
+                }
+
+                if (! Schema::hasColumn('data_siswa', 'mbti')) {
+                    $table->string('mbti', 20)->nullable();
+                }
+            });
+
             return;
         }
 
@@ -536,6 +554,10 @@ class HomeLandingPageTest extends TestCase
             $table->string('nisn')->nullable();
             $table->string('status')->nullable();
             $table->date('tanggal_lahir')->nullable();
+            $table->string('kepribadian', 100)->nullable();
+            $table->string('gaya_belajar', 100)->nullable();
+            $table->string('profiling', 150)->nullable();
+            $table->string('mbti', 20)->nullable();
             $table->timestamps();
         });
     }

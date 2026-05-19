@@ -13,6 +13,12 @@ class EditSarprasBospInventory extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            Actions\Action::make('downloadSticker')
+                ->label('Download Stiker')
+                ->icon('heroicon-o-qr-code')
+                ->color('info')
+                ->url(fn (): string => route('admin.sarpras-bosp-inventories.sticker', $this->record))
+                ->openUrlInNewTab(),
             Actions\DeleteAction::make(),
         ];
     }

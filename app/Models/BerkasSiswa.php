@@ -99,27 +99,38 @@ class BerkasSiswa extends Model
 
     public function displayFileName(): string
     {
-        $extension = ManagedDocumentNaming::extensionFromPath((string) $this->file_path);
-
-        return ManagedDocumentNaming::displayFileName(
-            scopeLabel: 'Berkas Siswa',
-            documentType: $this->relationLoaded('jenisBerkas') ? $this->jenisBerkas?->nama_berkas : $this->jenisBerkas()->value('nama_berkas'),
-            ownerName: $this->relationLoaded('siswa') ? $this->siswa?->nama : $this->siswa()->value('nama'),
-            extension: $extension,
-            recordId: $this->getKey(),
+        return ManagedDocumentNaming::fileNameFromParts(
+            $this->documentNameParts(),
+            ManagedDocumentNaming::extensionFromPath((string) $this->file_path),
         );
+    }
+
+    /**
+     * @return array<int, ?string>
+     */
+    public function documentNameParts(): array
+    {
+        $student = $this->relationLoaded('siswa')
+            ? $this->siswa
+            : $this->siswa()->first(['id', 'nama', 'rombel_saat_ini']);
+        $documentType = $this->relationLoaded('jenisBerkas')
+            ? $this->jenisBerkas?->nama_berkas
+            : $this->jenisBerkas()->value('nama_berkas');
+
+        return [
+            $documentType,
+            $student?->nama,
+            $student?->rombel_saat_ini,
+        ];
     }
 
     private function buildGoogleDriveFileName(string $path): string
     {
-        $this->loadMissing(['siswa:id,nama', 'jenisBerkas:id,nama_berkas']);
+        $this->loadMissing(['siswa:id,nama,rombel_saat_ini', 'jenisBerkas:id,nama_berkas']);
 
-        return ManagedDocumentNaming::displayFileName(
-            scopeLabel: 'Berkas Siswa',
-            documentType: $this->jenisBerkas?->nama_berkas,
-            ownerName: $this->siswa?->nama,
-            extension: ManagedDocumentNaming::extensionFromPath($path),
-            recordId: $this->getKey(),
+        return ManagedDocumentNaming::fileNameFromParts(
+            $this->documentNameParts(),
+            ManagedDocumentNaming::extensionFromPath($path),
         );
     }
 }

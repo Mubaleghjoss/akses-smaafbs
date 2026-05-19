@@ -12,6 +12,8 @@ class DataSiswaWorkflowHelp extends Widget
 {
     protected string $view = 'filament.widgets.data-siswa-workflow-help';
 
+    protected static bool $isLazy = false;
+
     protected int|string|array $columnSpan = 'full';
 
     protected ?string $pollingInterval = null;

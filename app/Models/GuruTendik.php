@@ -14,6 +14,7 @@ class GuruTendik extends Model
     public const JENIS_PTK_OPTIONS = [
         'Guru' => 'Guru',
         'Tendik' => 'Tendik',
+        'Pamong' => 'Pamong',
     ];
 
     public const JK_OPTIONS = [

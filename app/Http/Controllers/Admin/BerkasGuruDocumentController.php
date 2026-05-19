@@ -28,7 +28,7 @@ class BerkasGuruDocumentController extends Controller
 
         abort_unless($path !== null && Storage::disk('public')->exists($path), Response::HTTP_NOT_FOUND);
 
-        return Storage::disk('public')->download($path, basename($path));
+        return Storage::disk('public')->download($path, $record->displayFileName());
     }
 
     protected function resolveAuthorizedRecord(BerkasGuru $berkasGuru): BerkasGuru
@@ -40,7 +40,7 @@ class BerkasGuruDocumentController extends Controller
 
         return BerkasGuru::query()
             ->visibleToUser($user)
-            ->with(['guru', 'jenisBerkas'])
+            ->with(['guru', 'jenisBerkas', 'tugasTambahanHistory'])
             ->whereKey($berkasGuru->getKey())
             ->firstOrFail();
     }

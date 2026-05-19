@@ -17,6 +17,7 @@ return new class extends Migration
             $table->unsignedSmallInteger('tahun_beli')->nullable();
             $table->string('kode_barang', 80)->nullable();
             $table->string('lokasi_barang', 180)->nullable();
+            $table->string('tempat_stiker', 180)->nullable();
             $table->date('tanggal_datang')->nullable();
             $table->decimal('total_harga', 15, 2)->nullable();
             $table->text('catatan')->nullable();

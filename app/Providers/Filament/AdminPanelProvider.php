@@ -67,13 +67,17 @@ class AdminPanelProvider extends PanelProvider
                         ?? $siteSettings['logo_path']
                         ?? null;
                     $themeColor = (string) ($siteSettings['theme_color'] ?? '#16a34a');
+                    $responsiveCssPath = public_path('css/filament-admin-responsive.css');
+                    $responsiveCssVersion = is_file($responsiveCssPath) ? (string) filemtime($responsiveCssPath) : '1';
                     $authCssPath = public_path('css/filament-admin-auth.css');
                     $authCssVersion = is_file($authCssPath) ? (string) filemtime($authCssPath) : '1';
+                    $fallbackJsPath = public_path('js/filament-admin-fallback.js');
+                    $fallbackJsVersion = is_file($fallbackJsPath) ? (string) filemtime($fallbackJsPath) : '1';
 
                     $headSnippets = [
-                        '<link rel="stylesheet" href="'.asset('css/filament-admin-responsive.css').'" data-navigate-track="reload">',
+                        '<link rel="stylesheet" href="'.asset('css/filament-admin-responsive.css').'?v='.e($responsiveCssVersion).'" data-navigate-track="reload">',
                         '<link rel="stylesheet" href="'.asset('css/filament-admin-auth.css').'?v='.e($authCssVersion).'" data-navigate-track="reload">',
-                        '<script src="'.asset('js/filament-admin-fallback.js').'" data-navigate-once></script>',
+                        '<script src="'.asset('js/filament-admin-fallback.js').'?v='.e($fallbackJsVersion).'" data-navigate-once></script>',
                         '<link rel="manifest" href="'.e(url('/manifest.webmanifest')).'">',
                         '<meta name="theme-color" content="'.e($themeColor).'">',
                         '<link rel="icon" href="'.e((string) $faviconUrl).'">',
@@ -221,6 +225,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->widgets([
                 Widgets\AccountWidget::class,
+                \App\Filament\Widgets\AdminAccountSummaryOverview::class,
                 ...(! $shouldSkipExpensiveDashboardWidgets ? [Widgets\FilamentInfoWidget::class] : []),
             ]);
 

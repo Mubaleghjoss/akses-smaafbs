@@ -49,6 +49,8 @@ class InitialAdminSeeder extends Seeder
             'boarding_perizinan.manage',
             'catatan_bk.view',
             'catatan_bk.manage',
+            'perpustakaan_literasi.view',
+            'perpustakaan_literasi.manage',
         ];
 
         foreach ($permissions as $permissionName) {
@@ -119,7 +121,11 @@ class InitialAdminSeeder extends Seeder
                 'berkas_guru.view',
                 'berkas_guru.manage',
             ],
-            'kepala_perpus' => [],
+            'kepala_perpus' => [
+                'perpustakaan_literasi.view',
+                'perpustakaan_literasi.manage',
+                'data_siswa.view',
+            ],
             'guru_uks' => [
                 'uks_records.view',
                 'uks_records.manage',

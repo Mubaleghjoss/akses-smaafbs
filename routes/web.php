@@ -25,6 +25,8 @@ use App\Http\Controllers\GuruTendikProfileController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LibraryController;
 use App\Http\Controllers\NewsController;
+use App\Http\Controllers\PerpustakaanLiteracyProgramController;
+use App\Http\Controllers\SarprasBospInventoryPublicController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\SurveiPublicController;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -117,6 +119,11 @@ Route::middleware('auth')->prefix('/admin/sarpras-bosp-inventories')->group(func
         ->name('admin.sarpras-bosp-inventories.pdf');
     Route::get('/export', [SarprasBospInventoryDocumentController::class, 'export'])
         ->name('admin.sarpras-bosp-inventories.export');
+    Route::get('/stickers', [SarprasBospInventoryDocumentController::class, 'stickers'])
+        ->name('admin.sarpras-bosp-inventories.stickers');
+    Route::get('/{sarprasBospInventory}/sticker', [SarprasBospInventoryDocumentController::class, 'sticker'])
+        ->whereNumber('sarprasBospInventory')
+        ->name('admin.sarpras-bosp-inventories.sticker');
 });
 
 Route::middleware('auth')->get(
@@ -308,6 +315,10 @@ Route::get('/siswa/{student}', [StudentController::class, 'show'])->whereNumber(
 Route::get('/profil/guru-tendik/{guruTendik}', GuruTendikProfileController::class)
     ->whereNumber('guruTendik')
     ->name('guru-tendik.profile');
+Route::middleware('throttle:30,1')
+    ->get('/s/b/{sarprasBospInventory}', SarprasBospInventoryPublicController::class)
+    ->whereNumber('sarprasBospInventory')
+    ->name('sarpras.bosp-inventories.show');
 
 Route::middleware('throttle:30,1')->group(function (): void {
     Route::get('/survei/{token}', [SurveiPublicController::class, 'show'])
@@ -326,7 +337,40 @@ Route::middleware('throttle:public_billing_payment_upload')
     ->post('/tagihan/bayar', [BillingController::class, 'paySubmit'])
     ->name('billing.pay.submit');
 
+Route::redirect('/perpus', '/perpustakaan/aktivitas-literasi/form');
+Route::redirect('/perpus/index.php', '/perpustakaan/aktivitas-literasi/form');
+Route::redirect('/perpus/cari_buku.php', '/perpustakaan');
+Route::redirect('/perpus/hasil_literasi.php', '/perpustakaan/hasil-literasi');
 Route::get('/perpustakaan', [LibraryController::class, 'index'])->name('library.index');
+Route::get('/perpustakaan/literacy-habituation-program', [PerpustakaanLiteracyProgramController::class, 'index'])
+    ->name('library.literacy.index');
+Route::get('/perpustakaan/literacy-habituation-program/edit', [PerpustakaanLiteracyProgramController::class, 'editLookup'])
+    ->name('library.literacy.edit.lookup');
+Route::get('/perpustakaan/literacy-habituation-program/edit/{code}', [PerpustakaanLiteracyProgramController::class, 'edit'])
+    ->where('code', '[A-Za-z0-9-]+')
+    ->name('library.literacy.edit');
+Route::post('/perpustakaan/literacy-habituation-program/edit/{code}', [PerpustakaanLiteracyProgramController::class, 'update'])
+    ->middleware('throttle:30,1')
+    ->where('code', '[A-Za-z0-9-]+')
+    ->name('library.literacy.update');
+Route::get('/perpustakaan/literacy-habituation-program/{slug}', [PerpustakaanLiteracyProgramController::class, 'show'])
+    ->name('library.literacy.show');
+Route::post('/perpustakaan/literacy-habituation-program/{slug}', [PerpustakaanLiteracyProgramController::class, 'store'])
+    ->middleware('throttle:30,1')
+    ->name('library.literacy.store');
+Route::get('/perpustakaan/aktivitas-literasi', [LibraryController::class, 'activities'])->name('library.activities');
+Route::get('/perpustakaan/aktivitas-literasi/export', [LibraryController::class, 'exportActivities'])->name('library.activities.export');
+Route::get('/perpustakaan/aktivitas-literasi/form', [LibraryController::class, 'createActivity'])->name('library.activities.create');
+Route::post('/perpustakaan/aktivitas-literasi/form', [LibraryController::class, 'storeActivity'])
+    ->middleware('throttle:30,1')
+    ->name('library.activities.store');
+Route::get('/perpustakaan/hasil-literasi', [LibraryController::class, 'result'])->name('library.activities.result');
+Route::get('/perpustakaan/hasil-literasi/lookup', [LibraryController::class, 'lookupResult'])
+    ->middleware('throttle:30,1')
+    ->name('library.activities.result.lookup');
+Route::post('/perpustakaan/hasil-literasi', [LibraryController::class, 'storeResult'])
+    ->middleware('throttle:30,1')
+    ->name('library.activities.result.store');
 Route::get('/perpustakaan/buku/{book}', [LibraryController::class, 'show'])->whereNumber('book')->name('library.show');
 Route::middleware('throttle:public_library_downloads')
     ->get('/perpustakaan/buku/{book}/download', [LibraryController::class, 'download'])

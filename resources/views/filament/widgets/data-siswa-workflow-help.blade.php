@@ -1,35 +1,32 @@
 <x-filament-widgets::widget>
-    <x-filament::section>
-        <div class="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div class="data-siswa-workflow-card">
+        <div class="data-siswa-workflow-summary">
+            <div class="data-siswa-workflow-summary__head">
                 <div>
-                    <div class="flex flex-wrap items-center gap-2">
-                        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Kelengkapan Data Tes</div>
-                        <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold {{ $completionStatus['classes'] }}">
+                    <div class="data-siswa-workflow-title-row">
+                        <div class="data-siswa-workflow-eyebrow">Kelengkapan Data Tes</div>
+                        <span class="data-siswa-workflow-status {{ $completionStatus['classes'] }}">
                             {{ $completionStatus['label'] }}
                         </span>
                     </div>
-                    <div class="mt-1 text-sm text-slate-700">
+                    <div class="data-siswa-workflow-description">
                         {{ number_format((int) ($dataTesSummary['filled'] ?? 0)) }} dari {{ number_format((int) ($dataTesSummary['total'] ?? 0)) }} siswa sudah memiliki Data Tes Siswa lengkap.
                     </div>
                 </div>
-                <div class="inline-flex items-center rounded-full border border-sky-300 bg-white px-3 py-1 text-sm font-semibold text-sky-800">
+                <div class="data-siswa-workflow-percent">
                     {{ (int) ($dataTesSummary['completion_percentage'] ?? 0) }}%
                 </div>
             </div>
 
-            <div class="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-200">
+            <div class="data-siswa-workflow-progress" aria-hidden="true">
                 <div
-                    class="h-full rounded-full bg-gradient-to-r from-sky-500 via-emerald-500 to-emerald-600 transition-all"
+                    class="data-siswa-workflow-progress__bar"
                     style="width: {{ max(0, min(100, (int) ($dataTesSummary['completion_percentage'] ?? 0))) }}%;"
                 ></div>
             </div>
 
-            <div class="mt-3 flex flex-wrap gap-2">
-                <a
-                    href="{{ $filterUrls['missing'] }}"
-                    class="inline-flex items-center rounded-xl border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-50"
-                >
+            <div class="data-siswa-workflow-actions">
+                <a href="{{ $filterUrls['missing'] }}" class="data-siswa-workflow-button data-siswa-workflow-button--warning">
                     Lihat yang Belum Ada
                 </a>
                 <a
@@ -37,85 +34,62 @@
                     target="_blank"
                     rel="noopener noreferrer"
                     data-navigate="false"
-                    class="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                    class="data-siswa-workflow-button data-siswa-workflow-button--neutral"
                 >
                     Unduh Template
                 </a>
             </div>
         </div>
 
-        <div class="mb-4 flex flex-wrap gap-2">
+        <div class="data-siswa-workflow-filters">
             <a
                 href="{{ $filterUrls['filled'] }}"
-                class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold transition {{ $currentDataTesStatus === 'filled'
-                    ? 'border-emerald-400 bg-emerald-600 text-white shadow-sm'
-                    : 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100' }}"
+                class="data-siswa-workflow-pill {{ $currentDataTesStatus === 'filled' ? 'is-active is-success' : 'is-success' }}"
             >
                 Sudah Ada Data Tes: {{ number_format((int) ($dataTesSummary['filled'] ?? 0)) }}
             </a>
             <a
                 href="{{ $filterUrls['missing'] }}"
-                class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold transition {{ $currentDataTesStatus === 'missing'
-                    ? 'border-amber-400 bg-amber-500 text-white shadow-sm'
-                    : 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100' }}"
+                class="data-siswa-workflow-pill {{ $currentDataTesStatus === 'missing' ? 'is-active is-warning' : 'is-warning' }}"
             >
                 Belum Ada Data Tes: {{ number_format((int) ($dataTesSummary['missing'] ?? 0)) }}
             </a>
             @if (filled($currentDataTesStatus))
-                <a
-                    href="{{ $filterUrls['all'] }}"
-                    class="inline-flex items-center rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
-                >
+                <a href="{{ $filterUrls['all'] }}" class="data-siswa-workflow-pill">
                     Tampilkan Semua
                 </a>
             @endif
         </div>
 
-        <div class="grid gap-4 md:grid-cols-3">
-            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Langkah 1</div>
-                <h3 class="mt-2 text-sm font-semibold text-slate-900">Unduh Template</h3>
-                <p class="mt-1 text-sm leading-6 text-slate-600">
-                    Gunakan <span class="font-semibold">Download Template Data</span> agar format data lengkap dan data tes selalu sesuai sistem.
-                </p>
-                <div class="mt-3 flex flex-wrap gap-2">
-                    <span class="inline-flex items-center rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700">
-                        TEMPLATE RESMI
-                    </span>
+        <div class="data-siswa-workflow-steps">
+            <div class="data-siswa-workflow-step">
+                <div class="data-siswa-workflow-step__number">Langkah 1</div>
+                <h3>Unduh Template</h3>
+                <p>Gunakan <strong>Download Template Data</strong> agar format data lengkap dan data tes selalu sesuai sistem.</p>
+                <div class="data-siswa-workflow-step__badges">
+                    <span>TEMPLATE RESMI</span>
                 </div>
             </div>
 
-            <div class="rounded-2xl border border-sky-200 bg-sky-50 p-4">
-                <div class="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Langkah 2</div>
-                <h3 class="mt-2 text-sm font-semibold text-sky-950">Import Sesuai Kebutuhan</h3>
-                <p class="mt-1 text-sm leading-6 text-sky-900/80">
-                    Pilih <span class="font-semibold">Import Data Lengkap</span> untuk biodata penuh, atau <span class="font-semibold">Import Data Tes Siswa</span> untuk 4 field tes saja.
-                </p>
-                <div class="mt-3 flex flex-wrap gap-2">
-                    <span class="inline-flex items-center rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700">
-                        DATA LENGKAP
-                    </span>
-                    <span class="inline-flex items-center rounded-full border border-sky-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-sky-800">
-                        DATA TES
-                    </span>
+            <div class="data-siswa-workflow-step data-siswa-workflow-step--info">
+                <div class="data-siswa-workflow-step__number">Langkah 2</div>
+                <h3>Import Sesuai Kebutuhan</h3>
+                <p>Pilih <strong>Import Data Lengkap</strong> untuk biodata penuh, atau <strong>Import Data Tes Siswa</strong> untuk 4 field tes saja.</p>
+                <div class="data-siswa-workflow-step__badges">
+                    <span>DATA LENGKAP</span>
+                    <span>DATA TES</span>
                 </div>
             </div>
 
-            <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                <div class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Langkah 3</div>
-                <h3 class="mt-2 text-sm font-semibold text-emerald-950">Review dan Filter</h3>
-                <p class="mt-1 text-sm leading-6 text-emerald-900/80">
-                    Cek hasil review import, lalu gunakan filter <span class="font-semibold">Lihat Data Tes Siswa</span> untuk memverifikasi data yang sudah masuk.
-                </p>
-                <div class="mt-3 flex flex-wrap gap-2">
-                    <span class="inline-flex items-center rounded-full border border-emerald-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-emerald-800">
-                        REVIEW
-                    </span>
-                    <span class="inline-flex items-center rounded-full border border-amber-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-amber-800">
-                        FILTER
-                    </span>
+            <div class="data-siswa-workflow-step data-siswa-workflow-step--success">
+                <div class="data-siswa-workflow-step__number">Langkah 3</div>
+                <h3>Review dan Filter</h3>
+                <p>Cek hasil review import, lalu gunakan filter <strong>Lihat Data Tes Siswa</strong> untuk memverifikasi data yang sudah masuk.</p>
+                <div class="data-siswa-workflow-step__badges">
+                    <span>REVIEW</span>
+                    <span>FILTER</span>
                 </div>
             </div>
         </div>
-    </x-filament::section>
+    </div>
 </x-filament-widgets::widget>

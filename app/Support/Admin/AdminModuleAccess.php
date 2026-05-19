@@ -3,6 +3,7 @@
 namespace App\Support\Admin;
 
 use App\Filament\Pages\DashboardProker;
+use App\Filament\Pages\SarprasStickerSettings;
 use App\Filament\Resources\BeritaResource;
 use App\Filament\Resources\BerkasGuruResource;
 use App\Filament\Resources\BerkasSiswaResource;
@@ -20,10 +21,12 @@ use App\Filament\Resources\EventTimelineResource;
 use App\Filament\Resources\GaleriResource;
 use App\Filament\Resources\GuruTendikResource;
 use App\Filament\Resources\JenisBerkasResource;
+use App\Filament\Resources\PerpustakaanLiterasiMaterialResource;
 use App\Filament\Resources\PrestasiResource;
 use App\Filament\Resources\ProfilSekolahResource;
 use App\Filament\Resources\ProkerBidangResource;
 use App\Filament\Resources\ProkerResource;
+use App\Filament\Resources\RombelResource;
 use App\Filament\Resources\SarprasActivityResource;
 use App\Filament\Resources\SarprasBospInventoryResource;
 use App\Filament\Resources\SarprasMonthlyAgendaResource;
@@ -53,6 +56,7 @@ class AdminModuleAccess
     protected const RESOURCE_MAP = [
         'users' => UserResource::class,
         'data_siswa' => DataSiswaResource::class,
+        'rombel' => RombelResource::class,
         'jenis_berkas' => JenisBerkasResource::class,
         'berkas_siswa' => BerkasSiswaResource::class,
         'guru_tendik' => GuruTendikResource::class,
@@ -79,7 +83,9 @@ class AdminModuleAccess
         'event_timelines' => EventTimelineResource::class,
         'berita' => BeritaResource::class,
         'galeri' => GaleriResource::class,
+        'perpustakaan_literasi' => PerpustakaanLiterasiMaterialResource::class,
         'sarpras_bosp_inventory' => SarprasBospInventoryResource::class,
+        'sarpras_sticker_settings' => SarprasStickerSettings::class,
         'sarpras_room_inventory' => SarprasRoomInventoryResource::class,
         'sarpras_activity' => SarprasActivityResource::class,
         'sarpras_monthly_agenda' => SarprasMonthlyAgendaResource::class,
@@ -91,6 +97,7 @@ class AdminModuleAccess
     protected const MODULE_DESCRIPTIONS = [
         'users' => 'Kelola akun admin dan pengaturan akses pengguna.',
         'data_siswa' => 'Lihat atau kelola data induk siswa.',
+        'rombel' => 'Kelola master rombel yang dipakai pada data siswa dan filter siswa.',
         'jenis_berkas' => 'Atur master jenis berkas siswa/guru.',
         'berkas_siswa' => 'Akses dokumen dan berkas siswa.',
         'guru_tendik' => 'Lihat atau kelola data profil guru dan tendik.',
@@ -117,7 +124,9 @@ class AdminModuleAccess
         'event_timelines' => 'Kelola timeline kegiatan dan tahapan acara.',
         'berita' => 'Kelola berita sekolah dan update perkembangannya.',
         'galeri' => 'Kelola galeri foto kegiatan sekolah.',
+        'perpustakaan_literasi' => 'Kelola materi, pertanyaan, jawaban, dan analisa Literacy Habituation Program.',
         'sarpras_bosp_inventory' => 'Kelola daftar inventaris barang yang dibeli dari BOSP.',
+        'sarpras_sticker_settings' => 'Atur logo, ukuran, dan teks stiker inventaris sarpras.',
         'sarpras_room_inventory' => 'Kelola inventaris barang per ruang atau gedung.',
         'sarpras_activity' => 'Kelola dokumentasi pekerjaan dan perbaikan sarpras.',
         'sarpras_monthly_agenda' => 'Kelola agenda bulanan tindak lanjut sarpras.',
@@ -307,10 +316,20 @@ class AdminModuleAccess
      */
     public static function itemClassesForLevels(array $levels): array
     {
-        return collect(self::normalizeLevels($levels))
+        $normalizedLevels = self::normalizeLevels($levels);
+
+        $classes = collect($normalizedLevels)
             ->filter(fn (string $level): bool => $level !== self::NONE)
             ->keys()
             ->map(fn (string $prefix): string => self::RESOURCE_MAP[$prefix])
+            ->values();
+
+        if (($normalizedLevels['sarpras_bosp_inventory'] ?? self::NONE) === self::MANAGE) {
+            $classes->push(SarprasStickerSettings::class);
+        }
+
+        return $classes
+            ->unique()
             ->values()
             ->all();
     }

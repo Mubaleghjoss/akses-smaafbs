@@ -84,6 +84,10 @@ class GuruTendikWorkbookImporter
             $columnLetter = Coordinate::stringFromColumnIndex($columnIndex);
             $rawHeading = $worksheet->getCell("{$columnLetter}1")->getFormattedValue();
             $heading = strtolower(trim((string) preg_replace('/\s+/', '_', $rawHeading)));
+            $heading = match ($heading) {
+                'niy', 'nomor_induk_yayasan' => 'nip',
+                default => $heading,
+            };
             $headings[$columnLetter] = $heading !== '' ? $heading : null;
         }
 
@@ -109,7 +113,12 @@ class GuruTendikWorkbookImporter
         }
 
         if ($heading === 'jenis_ptk') {
-            return strcasecmp($value, 'guru') === 0 ? 'Guru' : (strcasecmp($value, 'tendik') === 0 ? 'Tendik' : $value);
+            return match (strtolower($value)) {
+                'guru' => 'Guru',
+                'tendik' => 'Tendik',
+                'pamong' => 'Pamong',
+                default => $value,
+            };
         }
 
         if ($heading === 'jk') {

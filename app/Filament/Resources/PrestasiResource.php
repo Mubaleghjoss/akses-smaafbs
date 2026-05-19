@@ -72,6 +72,13 @@ class PrestasiResource extends Resource
                             ->label('Nama Lomba')
                             ->required()
                             ->maxLength(150),
+                        Forms\Components\Select::make('kategori')
+                            ->label('Kategori Prestasi')
+                            ->options(Prestasi::kategoriOptions())
+                            ->default(Prestasi::CATEGORY_AKADEMIK)
+                            ->required()
+                            ->native(false)
+                            ->helperText('Pilih Akademik untuk lomba jurusan/mapel/olimpiade, atau Non Akademik untuk pencak silat dan kegiatan sejenis.'),
                         Forms\Components\DatePicker::make('tanggal_prestasi')
                             ->label('Tanggal Kegiatan / Lomba')
                             ->default(now())
@@ -150,7 +157,7 @@ class PrestasiResource extends Resource
     {
         return static::optimizeAdminTable(
             $table,
-            searchPlaceholder: 'Cari murid, rombel, nama lomba, penyelenggara, atau juara...',
+            searchPlaceholder: 'Cari murid, rombel, nama lomba, kategori, penyelenggara, atau juara...',
             emptyStateHeading: 'Belum ada data prestasi',
             emptyStateDescription: 'Catat lomba, capaian juara, dan bukti pendukung agar riwayat prestasi siswa terdokumentasi.'
         )
@@ -172,6 +179,12 @@ class PrestasiResource extends Resource
                     ->label('Nama Lomba')
                     ->searchable()
                     ->wrap(),
+                Tables\Columns\TextColumn::make('kategori')
+                    ->label('Kategori')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => Prestasi::kategoriLabel($state))
+                    ->color(fn (?string $state): string => Prestasi::kategoriColor($state))
+                    ->searchable(),
                 Tables\Columns\TextColumn::make('penyelenggara')
                     ->label('Penyelenggara')
                     ->searchable()
@@ -237,6 +250,9 @@ class PrestasiResource extends Resource
                             $studentQuery->where('rombel_saat_ini', $value);
                         });
                     }),
+                Tables\Filters\SelectFilter::make('kategori')
+                    ->label('Kategori Prestasi')
+                    ->options(Prestasi::kategoriOptions()),
                 Tables\Filters\SelectFilter::make('gdrive_last_sync_mode')
                     ->label('Mode Sinkron Terakhir')
                     ->options(Prestasi::googleDriveSyncModeOptions()),

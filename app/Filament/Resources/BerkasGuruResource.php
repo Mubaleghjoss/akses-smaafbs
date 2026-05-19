@@ -25,6 +25,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
@@ -62,7 +63,7 @@ class BerkasGuruResource extends Resource
                             ->required()
                             ->searchable()
                             ->placeholder('Pilih guru / tendik')
-                            ->searchPrompt('Ketik nama, NIP, atau NIK')
+                            ->searchPrompt('Ketik nama, NIY, atau NIK')
                             ->default(fn (): ?int => request()->integer('guru_id') ?: (auth()->user()?->isGuru() ? auth()->user()?->guru_tendik_id : null))
                             ->disabled(fn (): bool => (bool) auth()->user()?->isGuru())
                             ->dehydrated()
@@ -337,13 +338,9 @@ class BerkasGuruResource extends Resource
         $teacherName = GuruTendik::query()->whereKey($data['guru_id'] ?? null)->value('nama');
         $documentType = JenisBerkas::query()->whereKey($data['jenis_berkas_id'] ?? null)->value('nama_berkas');
         $extension = ManagedDocumentNaming::extensionFromPath($path);
-        $targetFileName = ManagedDocumentNaming::storageFileName(
-            scopeSlug: 'berkas-guru',
-            ownerId: $data['guru_id'] ?? null,
-            documentType: $documentType,
-            ownerName: $teacherName,
-            extension: $extension,
-            entropySource: $path,
+        $targetFileName = ManagedDocumentNaming::storageFileNameFromParts(
+            [$documentType, $teacherName],
+            $extension,
         );
         $targetPath = 'berkas_guru/'.$targetFileName;
 
@@ -355,17 +352,44 @@ class BerkasGuruResource extends Resource
         return $data;
     }
 
+    public static function normalizeStoredRecordDocument(BerkasGuru $record): array
+    {
+        $path = trim((string) $record->file_path);
+
+        if ($path === '') {
+            return ['file_path' => $record->file_path];
+        }
+
+        $record->loadMissing([
+            'guru:id,nama',
+            'jenisBerkas:id,nama_berkas',
+            'tugasTambahanHistory:id,berkas_guru_id,tugas_tambahan',
+        ]);
+
+        $targetFileName = ManagedDocumentNaming::storageFileNameFromParts(
+            $record->documentNameParts(),
+            ManagedDocumentNaming::extensionFromPath($path),
+        );
+        $targetPath = 'berkas_guru/'.$targetFileName;
+
+        if ($path !== $targetPath) {
+            if (! Storage::disk('public')->exists($path)) {
+                return ['file_path' => $record->file_path];
+            }
+
+            $targetPath = static::moveStoredFileToNormalizedPath($path, $targetPath);
+        }
+
+        return ['file_path' => $targetPath];
+    }
+
     public static function normalizeRecord(BerkasGuru $record): bool
     {
         if (! $record->hasUploadableFiles()) {
             return false;
         }
 
-        $payload = static::normalizeStoredDocument([
-            'file_path' => $record->file_path,
-            'guru_id' => $record->guru_id,
-            'jenis_berkas_id' => $record->jenis_berkas_id,
-        ]);
+        $payload = static::normalizeStoredRecordDocument($record);
 
         $newPath = $payload['file_path'] ?? null;
 
@@ -393,7 +417,7 @@ class BerkasGuruResource extends Resource
             $directory = pathinfo($targetPath, PATHINFO_DIRNAME);
             $filename = pathinfo($targetPath, PATHINFO_FILENAME);
             $extension = pathinfo($targetPath, PATHINFO_EXTENSION);
-            $suffix = substr(md5($fromPath), 0, 6);
+            $suffix = Str::lower(Str::random(4));
             $finalPath = trim($directory !== '.' ? $directory.'/' : '', '/').'/'.$filename.'-'.$suffix.($extension !== '' ? '.'.$extension : '');
         }
 
@@ -416,7 +440,7 @@ class BerkasGuruResource extends Resource
             ->with([
                 'guru:id,nama',
                 'jenisBerkas:id,nama_berkas',
-                'tugasTambahanHistory:id,berkas_guru_id',
+                'tugasTambahanHistory:id,berkas_guru_id,tugas_tambahan',
             ])
             ->visibleToUser(auth()->user());
     }

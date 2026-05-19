@@ -1,6 +1,8 @@
 @extends('layouts.app')
 
 @section('content')
+    @include('library._nav')
+
     <div class="card p-6 reveal">
         <div class="flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -12,6 +14,14 @@
                 <button class="btn btn-primary w-full sm:w-auto" type="submit">Cari</button>
             </form>
         </div>
+
+        @if(($categories ?? collect())->isNotEmpty())
+            <div class="mt-5 flex flex-wrap gap-2">
+                @foreach($categories as $category)
+                    <a class="chip hover:border-slate-300 hover:bg-slate-50" href="{{ route('library.index', ['q' => $category->nama_kategori]) }}">{{ $category->nama_kategori }}</a>
+                @endforeach
+            </div>
+        @endif
     </div>
 
     <div class="card mt-6 overflow-hidden">
@@ -29,6 +39,8 @@
                     @forelse($items as $b)
                         @php
                             $bookTypeLabel = strtolower((string) ($b->file_type ?? 'physical')) === 'ebook' ? 'E-Book' : 'Buku Fisik';
+                            $bookLocation = trim((string) ($b->lemari?->nama_lemari ?? ''));
+                            $bookLocation = $bookLocation !== '' ? $bookLocation : '-';
                             $bookStatusLabel = match (strtolower((string) $b->status)) {
                                 'available', 'tersedia' => 'Tersedia',
                                 'borrowed', 'dipinjam' => 'Dipinjam',
@@ -40,7 +52,10 @@
                             <td class="px-4 py-3 font-semibold">
                                 <a class="hover:underline" href="{{ route('library.show', $b) }}">{{ $b->judul_buku }}</a>
                             </td>
-                            <td class="px-4 py-3">{{ $b->penulis ?? '-' }}</td>
+                            <td class="px-4 py-3">
+                                <div>{{ $b->penulis ?? '-' }}</div>
+                                <div class="text-xs text-slate-400">{{ $b->kategori?->nama_kategori ?? $bookLocation }}</div>
+                            </td>
                             <td class="px-4 py-3">{{ $bookTypeLabel }}</td>
                             <td class="px-4 py-3">
                                 <span class="chip">{{ $bookStatusLabel }}</span>

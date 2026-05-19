@@ -1,6 +1,8 @@
 @extends('layouts.app')
 
 @section('content')
+    @include('library._nav')
+
     <a class="chip" href="{{ route('library.index') }}"><- Kembali ke layanan perpustakaan</a>
 
     @php

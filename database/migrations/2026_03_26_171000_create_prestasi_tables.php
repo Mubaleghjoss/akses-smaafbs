@@ -13,6 +13,7 @@ return new class extends Migration
                 $table->id();
                 $table->unsignedBigInteger('siswa_id')->index();
                 $table->string('nama_lomba', 150);
+                $table->string('kategori', 30)->nullable()->index();
                 $table->date('tanggal_prestasi')->nullable()->index();
                 $table->string('penyelenggara', 150)->nullable();
                 $table->string('juara', 100)->nullable();

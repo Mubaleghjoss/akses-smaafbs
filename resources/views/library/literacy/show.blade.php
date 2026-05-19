@@ -1,0 +1,115 @@
+@extends('layouts.app')
+
+@section('content')
+    @include('library._nav')
+
+    <a class="chip" href="{{ route('library.literacy.index') }}"><- Kembali ke Literacy Habituation Program</a>
+
+    <div class="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <section class="space-y-6">
+            <article class="card overflow-hidden">
+                @if($material->imageUrl())
+                    <img src="{{ $material->imageUrl() }}" alt="" class="max-h-[28rem] w-full object-cover">
+                @endif
+                <div class="p-6 md:p-7">
+                    <div class="text-xs uppercase tracking-[0.2em] text-slate-400">Materi Bacaan</div>
+                    <h1 class="mt-3 text-2xl font-semibold md:text-3xl">{{ $material->title }}</h1>
+                    @if($material->google_drive_url)
+                        <a class="chip mt-4 inline-flex" href="{{ $material->google_drive_url }}" target="_blank" rel="noopener">Buka Google Drive</a>
+                    @endif
+                    @if(filled($material->reading_content))
+                        <div class="mt-5 whitespace-pre-line text-sm leading-7 text-slate-700 md:text-base">{{ $material->reading_content }}</div>
+                    @endif
+                </div>
+            </article>
+
+            <form method="post" action="{{ route('library.literacy.store', $material->slug) }}" class="card space-y-5 p-6 md:p-7">
+                @csrf
+
+                <div>
+                    <div class="text-xs uppercase tracking-[0.2em] text-slate-400">Jawaban</div>
+                    <h2 class="mt-2 text-xl font-semibold">Isi Pertanyaan Literasi</h2>
+                    <p class="mt-1 text-sm text-slate-500">Pilih nama siswa dari data master aktif. Setelah terkirim, sistem akan memberi kode unik untuk edit.</p>
+                </div>
+
+                @if($errors->any())
+                    <div class="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                        Periksa kembali isian yang ditandai.
+                    </div>
+                @endif
+
+                @if($students === [])
+                    <div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                        Data siswa aktif belum tersedia. Hubungi admin untuk melengkapi data master siswa.
+                    </div>
+                @else
+                    <div>
+                        <label class="text-sm font-semibold text-slate-700" for="student_id">Nama Siswa *</label>
+                        <select class="input mt-2" id="student_id" name="student_id" required>
+                            <option value="">Pilih siswa</option>
+                            @foreach($students as $student)
+                                <option value="{{ $student['id'] }}" @selected((string) old('student_id') === (string) $student['id'])>{{ $student['label'] }}</option>
+                            @endforeach
+                        </select>
+                        @error('student_id')
+                            <div class="mt-1 text-xs text-rose-600">{{ $message }}</div>
+                        @enderror
+                    </div>
+                @endif
+
+                @forelse($material->questions as $index => $question)
+                    @php
+                        $fieldName = 'answers.'.$question->getKey();
+                        $maxCharacters = max(1, (int) ($question->max_characters ?: 1000));
+                        $minCharacters = min($maxCharacters, max(0, (int) ($question->min_characters ?: 0)));
+                    @endphp
+                    <section class="rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="chip">Pertanyaan {{ $index + 1 }}</span>
+                            <span class="chip">Min. {{ number_format($minCharacters, 0, ',', '.') }} karakter</span>
+                            <span class="chip">Maks. {{ number_format($maxCharacters, 0, ',', '.') }} karakter</span>
+                        </div>
+                        <label class="mt-3 block text-sm font-semibold leading-6 text-slate-900" for="question-{{ $question->getKey() }}">
+                            {{ $question->prompt }}
+                        </label>
+                        @if($question->imageUrl())
+                            <img src="{{ $question->imageUrl() }}" alt="" class="mt-3 max-h-80 w-full rounded-2xl border border-slate-200 object-contain">
+                        @endif
+                        @if($question->google_drive_url)
+                            <a class="chip mt-3 inline-flex" href="{{ $question->google_drive_url }}" target="_blank" rel="noopener">Buka Lampiran</a>
+                        @endif
+                        <textarea
+                            id="question-{{ $question->getKey() }}"
+                            class="input mt-3 min-h-40"
+                            name="answers[{{ $question->getKey() }}]"
+                            minlength="{{ $minCharacters }}"
+                            maxlength="{{ $maxCharacters }}"
+                            @required($question->is_required)
+                        >{{ old('answers.'.$question->getKey()) }}</textarea>
+                        @error($fieldName)
+                            <div class="mt-2 text-xs text-rose-600">{{ $message }}</div>
+                        @enderror
+                    </section>
+                @empty
+                    <div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                        Materi ini belum memiliki pertanyaan.
+                    </div>
+                @endforelse
+
+                <button class="btn btn-primary w-full sm:w-auto" type="submit" @disabled($students === [] || $material->questions->isEmpty())>Kirim Jawaban</button>
+            </form>
+        </section>
+
+        <aside class="card h-fit p-5">
+            <h2 class="text-lg font-semibold">Catatan</h2>
+            <div class="mt-3 space-y-3 text-sm leading-6 text-slate-600">
+                <p>Jawaban hanya bisa dikirim satu kali untuk setiap siswa dan materi.</p>
+                <p>Simpan kode unik setelah mengirim. Kode itu dipakai untuk membuka kembali halaman edit.</p>
+            </div>
+        </aside>
+    </div>
+@endsection
+
+@push('scripts')
+    @include('library.literacy._mathjax')
+@endpush

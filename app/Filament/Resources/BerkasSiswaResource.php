@@ -25,6 +25,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
@@ -376,16 +377,12 @@ class BerkasSiswaResource extends Resource
             return static::enrichStoredFileMetadata($data);
         }
 
-        $studentName = DataSiswa::query()->whereKey($data['siswa_id'] ?? null)->value('nama');
+        $student = DataSiswa::query()->whereKey($data['siswa_id'] ?? null)->first(['id', 'nama', 'rombel_saat_ini']);
         $documentType = JenisBerkas::query()->whereKey($data['jenis_berkas_id'] ?? null)->value('nama_berkas');
         $extension = ManagedDocumentNaming::extensionFromPath($path);
-        $targetFileName = ManagedDocumentNaming::storageFileName(
-            scopeSlug: 'berkas-siswa',
-            ownerId: $data['siswa_id'] ?? null,
-            documentType: $documentType,
-            ownerName: $studentName,
-            extension: $extension,
-            entropySource: $path,
+        $targetFileName = ManagedDocumentNaming::storageFileNameFromParts(
+            [$documentType, $student?->nama, $student?->rombel_saat_ini],
+            $extension,
         );
         $targetPath = 'berkas_siswa/'.$targetFileName;
 
@@ -394,11 +391,9 @@ class BerkasSiswaResource extends Resource
             $data['file_path'] = $targetPath;
         }
 
-        $data['file_name'] = ManagedDocumentNaming::displayFileName(
-            scopeLabel: 'Berkas Siswa',
-            documentType: $documentType,
-            ownerName: $studentName,
-            extension: $extension,
+        $data['file_name'] = ManagedDocumentNaming::fileNameFromParts(
+            [$documentType, $student?->nama, $student?->rombel_saat_ini],
+            $extension,
         );
 
         return static::enrichStoredFileMetadata($data);
@@ -451,7 +446,7 @@ class BerkasSiswaResource extends Resource
             $directory = pathinfo($targetPath, PATHINFO_DIRNAME);
             $filename = pathinfo($targetPath, PATHINFO_FILENAME);
             $extension = pathinfo($targetPath, PATHINFO_EXTENSION);
-            $suffix = substr(md5($fromPath), 0, 6);
+            $suffix = Str::lower(Str::random(4));
             $finalPath = trim($directory !== '.' ? $directory.'/' : '', '/').'/'.$filename.'-'.$suffix.($extension !== '' ? '.'.$extension : '');
         }
 

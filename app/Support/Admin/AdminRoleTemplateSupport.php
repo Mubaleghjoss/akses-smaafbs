@@ -42,6 +42,9 @@ class AdminRoleTemplateSupport
         'uks' => ['uks', 'kesehatan', 'pmr'],
         'operator_siswa' => ['operator siswa', 'data siswa', 'dapodik siswa', 'admin siswa'],
         'operator_guru' => ['operator guru', 'kepegawaian', 'data guru', 'tendik', 'dapodik guru', 'ptk'],
+        'perpustakaan' => ['perpustakaan', 'literasi', 'library', 'pustaka', 'buku'],
+        'pamong_putra' => ['pamong putra', 'musyrif putra'],
+        'pamong_putri' => ['pamong putri', 'musyrifah putri'],
     ];
 
     /**
@@ -67,7 +70,7 @@ class AdminRoleTemplateSupport
                 'description' => 'Operator bimbingan konseling dengan akses penuh ke catatan BK dan akses baca data siswa pendukung.',
                 'roles' => ['tu'],
                 'manage' => ['catatan_bk'],
-                'view' => ['data_siswa', 'prestasi', 'berkas_siswa'],
+                'view' => ['data_siswa', 'rombel', 'prestasi', 'berkas_siswa'],
             ],
             'kurikulum' => [
                 'label' => 'Kurikulum',
@@ -81,7 +84,7 @@ class AdminRoleTemplateSupport
                 'description' => 'Operator kesiswaan untuk survei dan monitoring data siswa.',
                 'roles' => ['tu'],
                 'manage' => ['survei'],
-                'view' => ['data_siswa', 'prestasi', 'berkas_siswa'],
+                'view' => ['data_siswa', 'rombel', 'prestasi', 'berkas_siswa'],
             ],
             'proker' => [
                 'label' => 'Proker',
@@ -111,13 +114,13 @@ class AdminRoleTemplateSupport
                 'description' => 'Petugas UKS dengan akses penuh ke rekam layanan dan akses baca data siswa.',
                 'roles' => ['guru_uks'],
                 'manage' => ['uks_records'],
-                'view' => ['data_siswa'],
+                'view' => ['data_siswa', 'rombel'],
             ],
             'operator_siswa' => [
                 'label' => 'Operator Siswa',
                 'description' => 'Operator data siswa, berkas siswa, dan prestasi.',
                 'roles' => ['tu'],
-                'manage' => ['data_siswa', 'berkas_siswa', 'prestasi'],
+                'manage' => ['data_siswa', 'rombel', 'berkas_siswa', 'prestasi'],
                 'view' => [],
             ],
             'operator_guru' => [
@@ -127,12 +130,19 @@ class AdminRoleTemplateSupport
                 'manage' => ['guru_tendik', 'jenis_berkas', 'berkas_guru'],
                 'view' => [],
             ],
+            'perpustakaan' => [
+                'label' => 'Perpustakaan',
+                'description' => 'Operator perpustakaan untuk materi literasi, pertanyaan, responden, dan analisa plagiat.',
+                'roles' => ['kepala_perpus'],
+                'manage' => ['perpustakaan_literasi'],
+                'view' => ['data_siswa', 'rombel'],
+            ],
             'bendahara_boarding' => [
                 'label' => 'Bendahara Boarding',
                 'description' => 'Bendahara untuk keuangan boarding dengan akses baca rapot dan data siswa.',
                 'roles' => ['bendahara'],
                 'manage' => ['boarding_keuangan'],
-                'view' => ['boarding_rapot', 'data_siswa'],
+                'view' => ['boarding_rapot', 'data_siswa', 'rombel'],
             ],
             'pamong_putra' => [
                 'label' => 'Pamong Putra',
@@ -300,7 +310,49 @@ class AdminRoleTemplateSupport
                 ->all();
         }
 
-        return static::$suggestedTemplateReasonsForGuruCache[$cacheKey] = self::suggestedTemplateReasonsForTaskLabels($labels);
+        $reasonMap = self::suggestedTemplateReasonsForTaskLabels($labels);
+
+        $pamongTemplateKey = self::pamongTemplateKeyForGuruTendik($guruTendik);
+
+        if ($pamongTemplateKey !== null) {
+            $reasonMap[$pamongTemplateKey] ??= [];
+            array_unshift($reasonMap[$pamongTemplateKey], 'Jenis PTK Pamong');
+            $reasonMap[$pamongTemplateKey] = collect($reasonMap[$pamongTemplateKey])
+                ->unique()
+                ->values()
+                ->all();
+        }
+
+        return static::$suggestedTemplateReasonsForGuruCache[$cacheKey] = $reasonMap;
+    }
+
+    public static function pamongTemplateKeyForGuruTendik(?GuruTendik $guruTendik): ?string
+    {
+        if (strcasecmp((string) $guruTendik?->jenis_ptk, 'Pamong') !== 0) {
+            return null;
+        }
+
+        return match (strtoupper((string) $guruTendik?->jk)) {
+            'L' => 'pamong_putra',
+            'P' => 'pamong_putri',
+            default => null,
+        };
+    }
+
+    /**
+     * @param  array<int, string>  $templateKeys
+     * @return array<int, string>
+     */
+    public static function boardingPamongRoleNamesForTemplates(array $templateKeys): array
+    {
+        $templateKeys = self::normalizeTemplateKeys($templateKeys);
+
+        return collect($templateKeys)
+            ->filter(fn (string $key): bool => in_array($key, ['pamong_putra', 'pamong_putri'], true))
+            ->flatMap(fn (string $key): array => self::definitions()[$key]['roles'] ?? [])
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**

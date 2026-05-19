@@ -10,8 +10,10 @@ use App\Filament\Resources\BerkasGuruResource;
 use App\Filament\Resources\DataSiswaResource;
 use App\Filament\Resources\DataSiswaResource\Pages\ManageDataSiswas;
 use App\Filament\Resources\GuruTendikResource;
+use App\Filament\Resources\GuruTendikResource\Pages\ListGuruTendiks;
 use App\Filament\Resources\PrestasiResource;
 use App\Filament\Resources\UserResource;
+use App\Filament\Widgets\GuruTendikAccountStatsOverview;
 use App\Filament\Widgets\GuruTendikGenderChart;
 use App\Filament\Widgets\GuruTendikJenisPtkChart;
 use App\Filament\Widgets\GuruTendikStatsOverview;
@@ -28,6 +30,8 @@ use App\Models\Prestasi;
 use App\Models\UksRecord;
 use App\Models\User;
 use App\Support\Admin\AdminModuleAccess;
+use App\Support\Admin\AdminRoleTemplateSupport;
+use App\Support\GuruTendik\GuruTendikAccountProvisioner;
 use App\Support\GuruTendik\GuruTendikWorkbookImporter;
 use App\Support\Uks\UksRecordWorkbookImporter;
 use Filament\Facades\Filament;
@@ -522,6 +526,13 @@ class GuruModulesAndUksTest extends TestCase
             'status' => 'aktif',
         ]);
 
+        $pamong = GuruTendik::query()->create([
+            'nama' => 'Ustadz Pamong',
+            'jenis_ptk' => 'Pamong',
+            'jk' => 'L',
+            'status' => 'aktif',
+        ]);
+
         $guru->tugasTambahan()->create([
             'tugas_tambahan' => 'Wali Kelas X-A',
             'no_sk' => 'SK-001/AFBS/2026',
@@ -558,28 +569,64 @@ class GuruModulesAndUksTest extends TestCase
             ->mapWithKeys(fn (Stat $stat): array => [(string) $stat->getLabel() => (string) $stat->getValue()])
             ->all();
 
-        $this->assertSame('2', $stats['Total Guru/Tendik']);
+        $guruListPage = new class extends ListGuruTendiks
+        {
+            public function exposeHeaderWidgets(): array
+            {
+                return $this->getHeaderWidgets();
+            }
+        };
+
+        $this->assertSame([
+            GuruTendikAccountStatsOverview::class,
+            GuruTendikStatsOverview::class,
+        ], $guruListPage->exposeHeaderWidgets());
+
+        $this->assertSame('3', $stats['Total Guru/Tendik']);
         $this->assertSame('1', $stats['Guru']);
         $this->assertSame('1', $stats['Tendik']);
+        $this->assertSame('1', $stats['Pamong']);
+        $this->assertSame('2', $stats['Laki-laki']);
+        $this->assertSame('1', $stats['Perempuan']);
         $this->assertSame('1', $stats['Punya Tugas Aktif']);
         $this->assertStringContainsString('chart_jenis_ptk=Guru', $jenisChart->exposeData()['datasets'][0]['segmentDetails'][0]['url']);
+        $this->assertStringContainsString('chart_jenis_ptk=Pamong', $jenisChart->exposeData()['datasets'][0]['segmentDetails'][2]['url']);
         $this->assertStringContainsString('chart_jk=L', $genderChart->exposeData()['datasets'][0]['segmentDetails'][0]['url']);
+        $this->assertSame(['pamong_putra'], AdminRoleTemplateSupport::suggestedTemplatesForGuruTendik($pamong));
+
+        $provisionedPamong = app(GuruTendikAccountProvisioner::class)->provisionOrResetForGuru($pamong)['user']->fresh();
+        $this->assertTrue($provisionedPamong->hasRole('pamong_putra'));
+        $this->assertTrue($provisionedPamong->isBoardingPamong());
+
+        $manualAccessUser = User::query()->create([
+            'name' => 'Akun Akses Pamong',
+            'username' => 'akses-pamong',
+            'password' => 'secret123',
+        ]);
+        $manualAccessUser->assignRole('guru');
+        UserResource::applyDivisionTemplatesToUser($manualAccessUser, ['pamong_putri']);
+        $manualAccessUser->refresh();
+        $this->assertTrue($manualAccessUser->hasRole('pamong_putri'));
+        $this->assertTrue($manualAccessUser->canManageModule('boarding_rapot'));
 
         $export = new GuruTendikExport;
         $sheets = $export->sheets();
         $this->assertSame('guru_tendik', $sheets[0]->title());
         $this->assertSame('tugas_tambahan', $sheets[1]->title());
-        $this->assertCount(3, $sheets[0]->array());
+        $this->assertCount(4, $sheets[0]->array());
         $this->assertCount(2, $sheets[1]->array());
+        $this->assertContains('niy', $sheets[0]->array()[0]);
 
         $template = new GuruTendikImportTemplateExport;
         $this->assertSame('template_import_guru_tendik', $template->sheets()[0]->title());
         $this->assertSame('panduan', $template->sheets()[1]->title());
+        $this->assertContains('niy', $template->sheets()[0]->array()[0]);
 
         $path = $this->createWorkbook([
-            ['nama', 'nip', 'nuptk', 'nik', 'jenis_ptk', 'jk', 'tempat_lahir', 'tanggal_lahir', 'status'],
+            ['nama', 'niy', 'nuptk', 'nik', 'jenis_ptk', 'jk', 'tempat_lahir', 'tanggal_lahir', 'status'],
             ['Ustadz Fikri', '1987009', '', '', 'Guru', 'L', 'Bogor', '1987-02-01', 'aktif'],
             ['Ustadz Fikri', '1987009', '', '', 'Guru', 'L', 'Bandung', '1987-02-01', 'aktif'],
+            ['Ustadz Boarding', '1987010', '', '', 'pamong', 'L', 'Garut', '1988-02-01', 'aktif'],
         ]);
 
         try {
@@ -588,12 +635,17 @@ class GuruModulesAndUksTest extends TestCase
             @unlink($path);
         }
 
-        $this->assertSame(1, $result['created']);
+        $this->assertSame(2, $result['created']);
         $this->assertSame(1, $result['updated']);
         $this->assertDatabaseHas('guru_tendik', [
             'nama' => 'Ustadz Fikri',
             'tempat_lahir' => 'Bandung',
             'jenis_ptk' => 'Guru',
+            'jk' => 'L',
+        ]);
+        $this->assertDatabaseHas('guru_tendik', [
+            'nama' => 'Ustadz Boarding',
+            'jenis_ptk' => 'Pamong',
             'jk' => 'L',
         ]);
     }

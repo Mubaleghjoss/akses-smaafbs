@@ -3,6 +3,7 @@
 namespace App\Support\DataSiswa;
 
 use App\Models\DataSiswa;
+use App\Models\Rombel;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
@@ -277,13 +278,20 @@ class DataSiswaSupport
         return null;
     }
 
+    public static function flushCachedOptions(): void
+    {
+        Cache::increment('data_siswa_support:options_version');
+
+        static::$profileOptionCache = [];
+    }
+
     /**
      * @return array<string, string>
      */
     public static function angkatanOptions(?User $user = null): array
     {
         return Cache::remember(
-            'data_siswa_support:angkatan_options:'.self::scopeCacheKey($user),
+            'data_siswa_support:angkatan_options:v'.self::optionsCacheVersion().':'.self::scopeCacheKey($user),
             now()->addMinutes(10),
             fn (): array => self::baseQuery($user)
                 ->whereNotNull('rombel_saat_ini')
@@ -304,15 +312,42 @@ class DataSiswaSupport
     public static function rombelOptions(?User $user = null): array
     {
         return Cache::remember(
-            'data_siswa_support:rombel_options:'.self::scopeCacheKey($user),
+            'data_siswa_support:rombel_options:v'.self::optionsCacheVersion().':'.self::scopeCacheKey($user),
             now()->addMinutes(10),
-            fn (): array => self::baseQuery($user)
-                ->whereNotNull('rombel_saat_ini')
-                ->where('rombel_saat_ini', '!=', '')
-                ->orderBy('rombel_saat_ini')
-                ->pluck('rombel_saat_ini', 'rombel_saat_ini')
-                ->all(),
+            function () use ($user): array {
+                $fromStudents = self::baseQuery($user)
+                    ->whereNotNull('rombel_saat_ini')
+                    ->where('rombel_saat_ini', '!=', '')
+                    ->orderBy('rombel_saat_ini')
+                    ->pluck('rombel_saat_ini', 'rombel_saat_ini');
+
+                $fromMaster = self::canSeeMasterRombels($user)
+                    ? collect(self::masterRombelOptions())
+                    : collect();
+
+                return $fromMaster
+                    ->merge($fromStudents)
+                    ->filter()
+                    ->sortKeys()
+                    ->all();
+            },
         );
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function masterRombelOptions(bool $includeInactive = false): array
+    {
+        if (! Rombel::tableAvailable()) {
+            return [];
+        }
+
+        return Rombel::query()
+            ->when(! $includeInactive, fn (Builder $query): Builder => $query->where('is_active', true))
+            ->orderBy('nama')
+            ->pluck('nama', 'nama')
+            ->all();
     }
 
     /**
@@ -331,7 +366,7 @@ class DataSiswaSupport
             return [];
         }
 
-        $cacheKey = $column.':'.self::scopeCacheKey($user);
+        $cacheKey = $column.':v'.self::optionsCacheVersion().':'.self::scopeCacheKey($user);
 
         if (array_key_exists($cacheKey, static::$profileOptionCache)) {
             return static::$profileOptionCache[$cacheKey];
@@ -367,6 +402,24 @@ class DataSiswaSupport
     protected static function baseQuery(?User $user = null): Builder
     {
         return DataSiswa::applyVisibleScope(DataSiswa::query(), $user);
+    }
+
+    protected static function canSeeMasterRombels(?User $user = null): bool
+    {
+        if (! $user) {
+            return true;
+        }
+
+        $user->loadMissing('roles');
+
+        return $user->hasRole('admin')
+            || $user->canManageModule('data_siswa')
+            || $user->canManageModule('rombel');
+    }
+
+    protected static function optionsCacheVersion(): int
+    {
+        return (int) Cache::rememberForever('data_siswa_support:options_version', fn (): int => 1);
     }
 
     protected static function scopeCacheKey(?User $user = null): string

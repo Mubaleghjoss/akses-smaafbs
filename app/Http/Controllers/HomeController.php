@@ -73,10 +73,15 @@ class HomeController extends Controller
             'guru_tendik_female' => 0,
             'student_active_male' => 0,
             'student_active_female' => 0,
+            'guru_count' => 0,
             'guru_male' => 0,
             'guru_female' => 0,
+            'tendik_count' => 0,
             'tendik_male' => 0,
             'tendik_female' => 0,
+            'pamong_count' => 0,
+            'pamong_male' => 0,
+            'pamong_female' => 0,
             'rombel_count' => 0,
             'proker_count' => 0,
             'rombel_items' => [],
@@ -115,6 +120,18 @@ class HomeController extends Controller
         }
 
         try {
+            if ($hasGuruTendikJenisColumn) {
+                $jenisPtkCounts = DB::table($guruTendikTable)
+                    ->selectRaw('jenis_ptk, count(*) as total')
+                    ->whereIn('jenis_ptk', ['Guru', 'Tendik', 'Pamong'])
+                    ->groupBy('jenis_ptk')
+                    ->pluck('total', 'jenis_ptk');
+
+                $stats['guru_count'] = (int) ($jenisPtkCounts['Guru'] ?? 0);
+                $stats['tendik_count'] = (int) ($jenisPtkCounts['Tendik'] ?? 0);
+                $stats['pamong_count'] = (int) ($jenisPtkCounts['Pamong'] ?? 0);
+            }
+
             if ($hasGuruTendikGenderColumn) {
                 $guruTendikGenderCounts = DB::table($guruTendikTable)
                     ->selectRaw('jk, count(*) as total')
@@ -155,6 +172,16 @@ class HomeController extends Controller
 
                             if ($jk === 'P') {
                                 $stats['tendik_female'] = $total;
+                            }
+                        }
+
+                        if ($jenis === 'pamong') {
+                            if ($jk === 'L') {
+                                $stats['pamong_male'] = $total;
+                            }
+
+                            if ($jk === 'P') {
+                                $stats['pamong_female'] = $total;
                             }
                         }
                     }

@@ -52,9 +52,6 @@
             <div class="org-tree__meta {{ $fotoUrl ? '' : 'org-tree__meta--no-avatar' }}">
                 <div class="org-tree__role">{{ $node->jabatan }}</div>
                 <div class="org-tree__name">{{ $node->nama }}</div>
-                @if($siblingCount > 1)
-                    <div class="org-tree__peer-note">Sejajar dalam {{ $siblingCount }} posisi</div>
-                @endif
 
                 @if($profileUrl)
                     <a href="{{ $profileUrl }}" class="mt-2 inline-flex text-[11px] font-semibold text-sky-700 transition hover:text-sky-900">
@@ -78,21 +75,12 @@
                         $rowChildren->count() >= 5 => '0.75rem',
                         default => '1.25rem',
                     };
-                    $rowLabel = $childrenByRow->count() > 1
-                        ? 'Baris '.($rowIndex + 1).' · '.$rowChildren->count().' posisi'
-                        : $rowChildren->count().' posisi sejajar';
                 @endphp
 
                 <div
                     class="org-tree__children-shell {{ $depth === 0 ? 'org-tree__children-shell--root' : '' }} {{ $rowChildren->count() > 1 ? 'org-tree__children-shell--branch' : '' }}"
                     style="--org-branch-drop: {{ $rowDrop }}; --org-branch-rail-inset: {{ $rowRailInset }}; --org-sibling-columns: {{ $rowColumns }};"
                 >
-                    @if($childrenByRow->count() > 1 || $rowChildren->count() > 1)
-                        <div class="org-tree__group-indicator">
-                            <span>{{ $rowLabel }}</span>
-                        </div>
-                    @endif
-
                     <ul
                         class="org-tree__children {{ $depth === 0 ? 'org-tree__children--root' : '' }} {{ $rowChildren->count() > 1 ? 'org-tree__children--branch' : '' }}"
                         @if($rowChildren->count() > 1)

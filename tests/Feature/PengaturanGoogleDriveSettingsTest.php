@@ -503,6 +503,12 @@ class PengaturanGoogleDriveSettingsTest extends TestCase
     protected function ensurePrestasiTable(): void
     {
         if (Schema::hasTable('prestasis')) {
+            Schema::table('prestasis', function (Blueprint $table): void {
+                if (! Schema::hasColumn('prestasis', 'kategori')) {
+                    $table->string('kategori', 30)->nullable();
+                }
+            });
+
             return;
         }
 
@@ -510,6 +516,7 @@ class PengaturanGoogleDriveSettingsTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('siswa_id')->nullable();
             $table->string('nama_lomba')->nullable();
+            $table->string('kategori', 30)->nullable();
             $table->date('tanggal_prestasi')->nullable();
             $table->string('penyelenggara')->nullable();
             $table->string('juara')->nullable();

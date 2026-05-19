@@ -122,15 +122,44 @@ class BerkasGuru extends Model
 
     public function displayFileName(): string
     {
-        $extension = ManagedDocumentNaming::extensionFromPath((string) $this->file_path);
-
-        return ManagedDocumentNaming::displayFileName(
-            scopeLabel: 'Berkas Guru',
-            documentType: $this->relationLoaded('jenisBerkas') ? $this->jenisBerkas?->nama_berkas : $this->jenisBerkas()->value('nama_berkas'),
-            ownerName: $this->relationLoaded('guru') ? $this->guru?->nama : $this->guru()->value('nama'),
-            extension: $extension,
-            recordId: $this->getKey(),
+        return ManagedDocumentNaming::fileNameFromParts(
+            $this->documentNameParts(),
+            ManagedDocumentNaming::extensionFromPath((string) $this->file_path),
         );
+    }
+
+    /**
+     * @return array<int, ?string>
+     */
+    public function documentNameParts(): array
+    {
+        $teacherName = $this->relationLoaded('guru') ? $this->guru?->nama : $this->guru()->value('nama');
+        $documentType = $this->relationLoaded('jenisBerkas')
+            ? $this->jenisBerkas?->nama_berkas
+            : $this->jenisBerkas()->value('nama_berkas');
+        $taskLabel = $this->tugasTambahanLabel();
+
+        if (filled($taskLabel)) {
+            return [
+                'Tugas Tambahan',
+                $taskLabel,
+                $teacherName,
+            ];
+        }
+
+        return [
+            $documentType,
+            $teacherName,
+        ];
+    }
+
+    public function tugasTambahanLabel(): ?string
+    {
+        if ($this->relationLoaded('tugasTambahanHistory')) {
+            return $this->tugasTambahanHistory?->tugas_tambahan;
+        }
+
+        return $this->tugasTambahanHistory()->value('tugas_tambahan');
     }
 
     public function fileExtension(): string
@@ -157,14 +186,15 @@ class BerkasGuru extends Model
 
     private function buildGoogleDriveFileName(string $path): string
     {
-        $this->loadMissing(['guru:id,nama', 'jenisBerkas:id,nama_berkas']);
+        $this->loadMissing([
+            'guru:id,nama',
+            'jenisBerkas:id,nama_berkas',
+            'tugasTambahanHistory:id,berkas_guru_id,tugas_tambahan',
+        ]);
 
-        return ManagedDocumentNaming::displayFileName(
-            scopeLabel: 'Berkas Guru',
-            documentType: $this->jenisBerkas?->nama_berkas,
-            ownerName: $this->guru?->nama,
-            extension: ManagedDocumentNaming::extensionFromPath($path),
-            recordId: $this->getKey(),
+        return ManagedDocumentNaming::fileNameFromParts(
+            $this->documentNameParts(),
+            ManagedDocumentNaming::extensionFromPath($path),
         );
     }
 }

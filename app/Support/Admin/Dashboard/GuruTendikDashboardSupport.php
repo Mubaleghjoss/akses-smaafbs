@@ -30,11 +30,17 @@ class GuruTendikDashboardSupport
                     $join->on('guru_tendik.id', '=', 'active_tugas.guru_tendik_id');
                 })
                 ->selectRaw('count(distinct guru_tendik.id) as total')
-                ->selectRaw("sum(case when guru_tendik.jenis_ptk = 'Guru' then 1 else 0 end) as guru")
-                ->selectRaw("sum(case when guru_tendik.jenis_ptk = 'Tendik' then 1 else 0 end) as tendik")
                 ->selectRaw("sum(case when guru_tendik.status = 'aktif' then 1 else 0 end) as aktif")
                 ->selectRaw('count(distinct active_tugas.guru_tendik_id) as punya_tugas_aktif')
                 ->first();
+
+            $jenisPtkCounts = GuruTendik::visibleToUser(GuruTendik::query(), $user)
+                ->selectRaw('jenis_ptk, count(*) as total')
+                ->whereIn('jenis_ptk', array_keys(GuruTendik::jenisPtkOptions()))
+                ->groupBy('jenis_ptk')
+                ->pluck('total', 'jenis_ptk')
+                ->map(fn (mixed $count): int => (int) $count)
+                ->all();
 
             $genderCounts = GuruTendik::visibleToUser(GuruTendik::query(), $user)
                 ->selectRaw('jk, count(*) as total')
@@ -47,15 +53,13 @@ class GuruTendikDashboardSupport
             return [
                 'summary' => [
                     'total' => (int) ($summary?->total ?? 0),
-                    'guru' => (int) ($summary?->guru ?? 0),
-                    'tendik' => (int) ($summary?->tendik ?? 0),
+                    'guru' => (int) ($jenisPtkCounts['Guru'] ?? 0),
+                    'tendik' => (int) ($jenisPtkCounts['Tendik'] ?? 0),
+                    'pamong' => (int) ($jenisPtkCounts['Pamong'] ?? 0),
                     'aktif' => (int) ($summary?->aktif ?? 0),
                     'punya_tugas_aktif' => (int) ($summary?->punya_tugas_aktif ?? 0),
                 ],
-                'jenis_ptk_counts' => [
-                    'Guru' => (int) ($summary?->guru ?? 0),
-                    'Tendik' => (int) ($summary?->tendik ?? 0),
-                ],
+                'jenis_ptk_counts' => $jenisPtkCounts,
                 'gender_counts' => $genderCounts,
             ];
         });

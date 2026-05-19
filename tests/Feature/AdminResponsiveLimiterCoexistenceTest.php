@@ -67,6 +67,11 @@ class AdminResponsiveLimiterCoexistenceTest extends TestCase
         $admin = $this->createAdminUser();
 
         $this->actingAs($admin)
+            ->get('/admin')
+            ->assertOk()
+            ->assertSee('AdminAccountSummaryOverview');
+
+        $this->actingAs($admin)
             ->get('/admin/users')
             ->assertOk()
             ->assertSee('Akun Admin');
@@ -75,14 +80,32 @@ class AdminResponsiveLimiterCoexistenceTest extends TestCase
             ->get('/admin/users/create')
             ->assertOk()
             ->assertSee('Akun Pengguna Admin');
+
+        $this->actingAs($admin)
+            ->get('/admin/guru-tendiks')
+            ->assertOk()
+            ->assertSee('Guru');
+
+        $this->actingAs($admin)
+            ->get('/admin/guru-tendiks/create')
+            ->assertOk()
+            ->assertSee('NIY')
+            ->assertDontSee('NIP');
+
+        $this->actingAs($admin)
+            ->get(route('admin.guru-tendiks.import-template'))
+            ->assertOk()
+            ->assertDownload('template-import-guru-tendik-niy.xlsx');
     }
 
     protected function createAdminUser(): User
     {
+        $suffix = str()->random(8);
+
         $admin = User::query()->create([
             'name' => 'Integration Admin',
-            'username' => 'integration.admin',
-            'email' => 'integration-admin@example.test',
+            'username' => 'integration.admin.'.$suffix,
+            'email' => 'integration-admin-'.$suffix.'@example.test',
             'password' => Hash::make('secret123'),
         ]);
 

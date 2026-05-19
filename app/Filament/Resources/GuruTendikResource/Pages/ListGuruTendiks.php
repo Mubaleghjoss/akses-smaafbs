@@ -4,8 +4,6 @@ namespace App\Filament\Resources\GuruTendikResource\Pages;
 
 use App\Filament\Resources\GuruTendikResource;
 use App\Filament\Widgets\GuruTendikAccountStatsOverview;
-use App\Filament\Widgets\GuruTendikGenderChart;
-use App\Filament\Widgets\GuruTendikJenisPtkChart;
 use App\Filament\Widgets\GuruTendikStatsOverview;
 use App\Support\Admin\Dashboard\UserCredentialDashboardSupport;
 use App\Support\GuruTendik\GuruTendikWorkbookImporter;
@@ -135,7 +133,7 @@ class ListGuruTendiks extends ListRecords
                 ->form([
                     Forms\Components\Placeholder::make('download_format')
                         ->label('Download Format')
-                        ->content(new HtmlString('<a href="'.route('admin.guru-tendiks.import-template').'" target="_blank" class="text-primary-600 font-semibold underline">Download format import Guru / Tendik</a>')),
+                        ->content(new HtmlString('<a href="'.route('admin.guru-tendiks.import-template').'?v=niy" target="_blank" rel="noopener noreferrer" data-navigate="false" class="text-primary-600 font-semibold underline">Download format import Guru / Tendik (NIY)</a><div class="mt-1 text-sm text-gray-600">Gunakan kolom <strong>niy</strong>. File lama dengan kolom <strong>nip</strong> masih tetap bisa diimport.</div>')),
                     Forms\Components\FileUpload::make('berkas')
                         ->label('Kirim File')
                         ->disk('public')
@@ -194,8 +192,6 @@ class ListGuruTendiks extends ListRecords
         return [
             GuruTendikAccountStatsOverview::class,
             GuruTendikStatsOverview::class,
-            GuruTendikJenisPtkChart::class,
-            GuruTendikGenderChart::class,
         ];
     }
 
@@ -203,8 +199,7 @@ class ListGuruTendiks extends ListRecords
     {
         return [
             'default' => 1,
-            'md' => 2,
-            'xl' => 4,
+            'xl' => 2,
         ];
     }
 

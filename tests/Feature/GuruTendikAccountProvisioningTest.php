@@ -87,7 +87,7 @@ class GuruTendikAccountProvisioningTest extends TestCase
             ],
         ]);
 
-        $this->assertStringContainsString('Assalamu\'alaikum Bapak/Ibu Guru/Tendik,', $text);
+        $this->assertStringContainsString('Assalamu\'alaikum Bapak/Ibu Guru/Tendik/Pamong,', $text);
         $this->assertStringContainsString('Berikut kami sampaikan kredensial login akun sekolah:', $text);
         $this->assertStringContainsString('Ustadz Rafi', $text);
         $this->assertStringContainsString('Status: Akun baru', $text);

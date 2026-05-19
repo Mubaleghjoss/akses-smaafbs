@@ -16,6 +16,7 @@ use App\Support\Admin\AdminUserCredentialSupport;
 use App\Support\Admin\AdminUserCredentialShareSupport;
 use App\Support\DataSiswa\DataSiswaSupport;
 use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Forms;
@@ -639,7 +640,7 @@ class UserResource extends Resource
             ])
             ->bulkActions([
                 BulkActionGroup::make([
-                    Tables\Actions\BulkAction::make('bulkAssignDivisiTambahan')
+                    BulkAction::make('bulkAssignDivisiTambahan')
                         ->label('Tambah Divisi')
                         ->icon('heroicon-o-briefcase')
                         ->color('warning')
@@ -678,7 +679,7 @@ class UserResource extends Resource
                             ]));
                         })
                         ->successNotificationTitle('Akses divisi massal berhasil ditambahkan.'),
-                    Tables\Actions\BulkAction::make('bulkRevokeDivisiTambahan')
+                    BulkAction::make('bulkRevokeDivisiTambahan')
                         ->label('Cabut Divisi')
                         ->icon('heroicon-o-no-symbol')
                         ->color('danger')
@@ -717,7 +718,7 @@ class UserResource extends Resource
                             ]));
                         })
                         ->successNotificationTitle('Akses divisi massal berhasil dicabut.'),
-                    Tables\Actions\BulkAction::make('bulkResetPasswordDefault')
+                    BulkAction::make('bulkResetPasswordDefault')
                         ->label('Reset Password')
                         ->icon('heroicon-o-key')
                         ->color('warning')
@@ -890,9 +891,24 @@ class UserResource extends Resource
             $beforeLevels,
             AdminRoleTemplateSupport::mergedLevelsForTemplates($templateKeys),
         ));
+        $roleState = static::roleIdsForUser($user);
+        $pamongRoleNames = AdminRoleTemplateSupport::boardingPamongRoleNamesForTemplates($templateKeys);
+
+        if ($pamongRoleNames !== []) {
+            $pamongRoleIds = Role::query()
+                ->whereIn('name', $pamongRoleNames)
+                ->pluck('id')
+                ->all();
+
+            $roleState = collect($roleState)
+                ->merge($pamongRoleIds)
+                ->unique()
+                ->values()
+                ->all();
+        }
 
         static::syncScopedModuleConfiguration($user, [
-            'roles' => static::roleIdsForUser($user),
+            'roles' => $roleState,
             'module_access_levels' => $mergedLevels,
             'allowed_navigation_items' => $user->allowed_navigation_items ?? [],
         ]);
@@ -1124,6 +1140,12 @@ class UserResource extends Resource
     {
         $roleState = $state['roles'] ?? static::roleIdsForUser($user);
         $roleNames = static::selectedRoleNames($roleState);
+
+        if ($user->exists) {
+            $user->syncRoles($roleNames->all());
+            unset(static::$userRoleIdsCache[(int) $user->getKey()]);
+            $user->load('roles');
+        }
 
         $state = static::normalizeGuruScopedModuleState($user, $state);
 

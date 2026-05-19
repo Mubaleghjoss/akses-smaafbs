@@ -7,6 +7,7 @@ use App\Filament\Concerns\HasModulePermissions;
 use App\Filament\Concerns\HasOptimizedAdminTable;
 use App\Filament\Resources\DataSiswaResource\Pages;
 use App\Models\DataSiswa;
+use App\Models\Rombel;
 use App\Support\DataSiswa\DataSiswaSupport;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
@@ -87,7 +88,22 @@ class DataSiswaResource extends Resource
                         Forms\Components\Select::make('jk')
                             ->required()
                             ->options(['L' => 'L', 'P' => 'P']),
-                        Forms\Components\TextInput::make('rombel_saat_ini')->label('Rombel')->maxLength(50),
+                        Forms\Components\Select::make('rombel_saat_ini')
+                            ->label('Rombel')
+                            ->searchable()
+                            ->preload()
+                            ->options(fn (): array => DataSiswaSupport::rombelOptions(Auth::user()))
+                            ->createOptionForm([
+                                Forms\Components\TextInput::make('nama')
+                                    ->label('Nama Rombel')
+                                    ->required()
+                                    ->dehydrateStateUsing(fn ($state): string => Rombel::normalizeName($state))
+                                    ->maxLength(50),
+                            ])
+                            ->createOptionUsing(function (array $data): string {
+                                return Rombel::ensureFromName($data['nama'] ?? null)?->nama ?? trim((string) ($data['nama'] ?? ''));
+                            })
+                            ->rules(['nullable', 'string', 'max:50']),
                         Forms\Components\Select::make('status')
                             ->label('Status')
                             ->live()
@@ -340,6 +356,7 @@ class DataSiswaResource extends Resource
             'boarding_konseling_mts_exists',
             'boarding_keuangan_siswa_exists',
             'prestasis_exists',
+            'berkas_siswas_exists',
         ]);
 
         $hasLinkedAttributes = $linkedAttributes->every(fn (string $attribute): bool => array_key_exists($attribute, $record->getAttributes()));
@@ -356,6 +373,7 @@ class DataSiswaResource extends Resource
                 && ! $record->boardingKonselingMts()->exists()
                 && ! $record->boardingKeuanganSiswa()->exists()
                 && ! $record->prestasis()->exists()
+                && ! $record->berkasSiswas()->exists()
             ));
     }
 
@@ -369,6 +387,7 @@ class DataSiswaResource extends Resource
                 'boardingKonselingMts',
                 'boardingKeuanganSiswa',
                 'prestasis',
+                'berkasSiswas',
             ]);
     }
 

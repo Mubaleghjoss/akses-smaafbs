@@ -37,8 +37,7 @@ class GuruTendikAccountProvisioner
                 'default_password_changed_at' => null,
             ]);
 
-            Role::findOrCreate('guru', 'web');
-            $user->assignRole('guru');
+            $this->syncDefaultRoles($user, $guruTendik);
 
             return [
                 'user' => $user,
@@ -62,10 +61,7 @@ class GuruTendikAccountProvisioner
 
         $user->updateToDefaultPassword($password);
 
-        if (! $user->hasRole('guru')) {
-            Role::findOrCreate('guru', 'web');
-            $user->assignRole('guru');
-        }
+        $this->syncDefaultRoles($user, $guruTendik);
 
         return [
             'user' => $user,
@@ -164,6 +160,29 @@ class GuruTendikAccountProvisioner
             ->exists();
     }
 
+    protected function syncDefaultRoles(User $user, ?GuruTendik $guruTendik): void
+    {
+        $roles = collect(['guru']);
+
+        if (strcasecmp((string) $guruTendik?->jenis_ptk, 'Pamong') === 0) {
+            $pamongRole = match (strtoupper((string) $guruTendik?->jk)) {
+                'L' => 'pamong_putra',
+                'P' => 'pamong_putri',
+                default => null,
+            };
+
+            if ($pamongRole !== null) {
+                $roles->push($pamongRole);
+            }
+        }
+
+        $roles
+            ->unique()
+            ->each(fn (string $role): Role => Role::findOrCreate($role, 'web'));
+
+        $user->assignRole($roles->all());
+    }
+
     public static function credentialsAsSafeHtml(array $credentials): string
     {
         $rows = collect($credentials)
@@ -192,7 +211,7 @@ class GuruTendikAccountProvisioner
         }
 
         $lines = [
-            'Assalamu\'alaikum Bapak/Ibu Guru/Tendik,',
+            'Assalamu\'alaikum Bapak/Ibu Guru/Tendik/Pamong,',
             '',
             'Berikut kami sampaikan kredensial login akun sekolah:',
             '',

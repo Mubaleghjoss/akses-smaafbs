@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Filament\Resources\GuruTendikResource;
+use App\Models\GuruTendik;
 use App\Support\Admin\Dashboard\GuruTendikDashboardSupport;
 
 class GuruTendikJenisPtkChart extends InteractiveDoughnutChartWidget
@@ -16,9 +17,10 @@ class GuruTendikJenisPtkChart extends InteractiveDoughnutChartWidget
 
     protected function getData(): array
     {
-        $options = [
-            'Guru' => ['label' => 'Guru', 'color' => '#f59e0b'],
-            'Tendik' => ['label' => 'Tendik', 'color' => '#3b82f6'],
+        $palette = [
+            'Guru' => '#f59e0b',
+            'Tendik' => '#3b82f6',
+            'Pamong' => '#10b981',
         ];
 
         $counts = GuruTendikDashboardSupport::snapshot(auth()->user())['jenis_ptk_counts'] ?? [];
@@ -28,18 +30,18 @@ class GuruTendikJenisPtkChart extends InteractiveDoughnutChartWidget
         $colors = [];
         $segmentDetails = [];
 
-        foreach ($options as $value => $config) {
+        foreach (GuruTendik::jenisPtkOptions() as $value => $label) {
             $total = (int) ($counts[$value] ?? 0);
-            $labels[] = $config['label'];
+            $labels[] = $label;
             $data[] = $total;
-            $colors[] = $config['color'];
+            $colors[] = $palette[$value] ?? '#64748b';
             $segmentDetails[] = [
-                'label' => $config['label'],
+                'label' => $label,
                 'count' => $total,
                 'countLabel' => number_format($total, 0, ',', '.').' data',
                 'shortDescription' => 'Klik untuk melihat daftar guru/tendik dengan jenis PTK ini.',
                 'description' => 'Daftar akan dibuka dengan filter jenis PTK yang sama.',
-                'filterLabel' => 'Jenis PTK: '.$config['label'],
+                'filterLabel' => 'Jenis PTK: '.$label,
                 'url' => GuruTendikResource::getUrl('index', [
                     'chart_jenis_ptk' => $value,
                 ]),

@@ -73,6 +73,8 @@ class DashboardProker extends Page
 
     protected ?Collection $attentionProkersCache = null;
 
+    protected ?Collection $upcomingMonthProkersCache = null;
+
     public static function shouldRegisterNavigation(): bool
     {
         return static::hasRequiredTables() && static::userCanModule('view');
@@ -868,6 +870,76 @@ class DashboardProker extends Page
             });
     }
 
+    public function getUpcomingMonthProkers(): Collection
+    {
+        if ($this->shouldDeferDashboardData()) {
+            return collect();
+        }
+
+        if ($this->upcomingMonthProkersCache !== null) {
+            return $this->upcomingMonthProkersCache;
+        }
+
+        $today = now()->startOfDay();
+        $endDate = $today->copy()->addMonth();
+
+        return $this->upcomingMonthProkersCache = Proker::query()
+            ->select([
+                'id',
+                'bidang_id',
+                'nama',
+                'status',
+                'progress_persen',
+                'penanggung_jawab',
+                'jadwal_ringkas',
+                'target_selesai',
+                'periode_tahun',
+            ])
+            ->with(['bidang:id,nama'])
+            ->withCount('indikators')
+            ->withCount([
+                'indikators as checked_indikators_count' => fn ($query) => $query->where('is_checked', true),
+                'updates',
+            ])
+            ->withMax('updates', 'tanggal_update')
+            ->whereNotNull('target_selesai')
+            ->whereDate('target_selesai', '>=', $today->toDateString())
+            ->whereDate('target_selesai', '<=', $endDate->toDateString())
+            ->where(function (Builder $query): void {
+                $query
+                    ->whereNull('status')
+                    ->orWhere('status', '!=', 'selesai');
+            })
+            ->orderBy('target_selesai')
+            ->orderBy('progress_persen')
+            ->limit(8)
+            ->get()
+            ->map(function (Proker $proker) use ($today): Proker {
+                $targetDate = $proker->target_selesai instanceof Carbon
+                    ? $proker->target_selesai->copy()->startOfDay()
+                    : null;
+                $daysLeft = $targetDate ? (int) $today->diffInDays($targetDate) : null;
+                $lastUpdateAt = blank($proker->updates_max_tanggal_update)
+                    ? null
+                    : Carbon::parse($proker->updates_max_tanggal_update);
+
+                $proker->target_window_label = match (true) {
+                    $daysLeft === 0 => 'Hari ini',
+                    $daysLeft === 1 => 'Besok',
+                    $daysLeft !== null => $daysLeft.' hari lagi',
+                    default => '-',
+                };
+                $proker->upcoming_level = match (true) {
+                    $daysLeft !== null && $daysLeft <= 7 => 'tinggi',
+                    $daysLeft !== null && $daysLeft <= 14 => 'sedang',
+                    default => 'rendah',
+                };
+                $proker->last_update_label = $lastUpdateAt?->translatedFormat('d M Y') ?? 'Belum ada update';
+
+                return $proker;
+            });
+    }
+
     public function getSummaryText(): string
     {
         if ($this->shouldDeferDashboardData()) {
@@ -1396,6 +1468,7 @@ class DashboardProker extends Page
         $this->summaryTextCache = null;
         $this->recentUpdatesCache = null;
         $this->attentionProkersCache = null;
+        $this->upcomingMonthProkersCache = null;
         $this->indicatorSummaryRowsCache = [];
         $this->indicatorSummaryMetaCache = [];
         $this->quickChecklistMetaCache = [];

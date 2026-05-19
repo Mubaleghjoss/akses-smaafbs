@@ -15,6 +15,10 @@ class Prestasi extends Model
 {
     use HasGoogleDriveSyncState;
 
+    public const CATEGORY_AKADEMIK = 'akademik';
+
+    public const CATEGORY_NON_AKADEMIK = 'non_akademik';
+
     protected $table = 'prestasis';
 
     protected $guarded = [];
@@ -83,6 +87,28 @@ class Prestasi extends Model
         return $this->hasMany(PrestasiHistory::class, 'prestasi_id')->latest('created_at');
     }
 
+    public static function kategoriOptions(): array
+    {
+        return [
+            self::CATEGORY_AKADEMIK => 'Akademik',
+            self::CATEGORY_NON_AKADEMIK => 'Non Akademik',
+        ];
+    }
+
+    public static function kategoriLabel(?string $kategori): string
+    {
+        return self::kategoriOptions()[$kategori] ?? 'Belum dikategorikan';
+    }
+
+    public static function kategoriColor(?string $kategori): string
+    {
+        return match ($kategori) {
+            self::CATEGORY_AKADEMIK => 'primary',
+            self::CATEGORY_NON_AKADEMIK => 'success',
+            default => 'gray',
+        };
+    }
+
     public function hasUploadableFiles(): bool
     {
         return count($this->certificateFiles()) > 0 || count($this->documentationFiles()) > 0;
@@ -149,6 +175,7 @@ class Prestasi extends Model
             'judul_ringkas' => trim($this->nama_lomba.' - '.($this->juara ?: 'Prestasi diperbarui')),
             'snapshot' => [
                 'nama_lomba' => $this->nama_lomba,
+                'kategori' => $this->kategori,
                 'tanggal_prestasi' => $this->tanggal_prestasi?->format('Y-m-d'),
                 'penyelenggara' => $this->penyelenggara,
                 'juara' => $this->juara,

@@ -12,7 +12,7 @@ class GuruTendikExport implements WithMultipleSheets
     public function sheets(): array
     {
         $columns = GuruTendikSupport::exportableColumns();
-        $masterRows = [$columns];
+        $masterRows = [GuruTendikSupport::columnHeadings($columns)];
 
         $records = GuruTendik::query()
             ->with('tugasTambahan')
