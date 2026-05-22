@@ -1,0 +1,17 @@
+{
+  "E:/xampp/htdocs/akses2-laravel/resources/css/app.css": {
+    "file": "assets/app-C0e2jUck.css",
+    "src": "E:/xampp/htdocs/akses2-laravel/resources/css/app.css",
+    "isEntry": true,
+    "name": "app",
+    "names": [
+      "app.css"
+    ]
+  },
+  "E:/xampp/htdocs/akses2-laravel/resources/js/app.js": {
+    "file": "assets/app-DVGSChis.js",
+    "name": "app",
+    "src": "E:/xampp/htdocs/akses2-laravel/resources/js/app.js",
+    "isEntry": true
+  }
+}
