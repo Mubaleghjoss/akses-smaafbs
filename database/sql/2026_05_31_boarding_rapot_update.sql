@@ -1,6 +1,8 @@
 -- Manual SQL handoff for boarding target, materi boarding/MT, and rapot updates.
 -- Use this only when the server cannot run `php artisan migrate --force`.
 -- Assumption: the existing boarding base tables already exist on the server.
+-- FTP deploy flow: upload the application files and public/build first, then import this SQL.
+-- This SQL is written to be safe to re-run for the same update.
 
 SET @schema_name := DATABASE();
 
@@ -12,6 +14,29 @@ CREATE TABLE IF NOT EXISTS migrations (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET @migration_batch := COALESCE((SELECT MAX(batch) + 1 FROM migrations), 1);
+
+SET @missing_required_tables := (
+    SELECT GROUP_CONCAT(required_tables.table_name ORDER BY required_tables.table_name SEPARATOR ', ')
+    FROM (
+        SELECT 'boarding_hafalan_points' AS table_name
+        UNION ALL SELECT 'boarding_makna_progresses'
+        UNION ALL SELECT 'boarding_pencapaians'
+        UNION ALL SELECT 'boarding_rapots'
+    ) AS required_tables
+    LEFT JOIN information_schema.tables AS existing_tables
+      ON existing_tables.table_schema = @schema_name
+     AND existing_tables.table_name = required_tables.table_name
+    WHERE existing_tables.table_name IS NULL
+);
+
+SET @sql := IF(
+    @missing_required_tables IS NULL,
+    'SELECT 1',
+    CONCAT('SIGNAL SQLSTATE ''45000'' SET MESSAGE_TEXT = ''Missing required base table(s): ', @missing_required_tables, '''')
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 -- 1) Schema updates.
 SET @column_exists := (
