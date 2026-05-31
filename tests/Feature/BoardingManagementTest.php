@@ -32,6 +32,7 @@ class BoardingManagementTest extends TestCase
         $this->runPermissionMigration();
         $this->createDataSiswaTable();
         $this->runBoardingMigration();
+        $this->resetBoardingKeuanganRuntimeCaches();
     }
 
     public function test_boarding_records_stay_linked_to_data_siswa(): void
@@ -165,7 +166,7 @@ class BoardingManagementTest extends TestCase
 
     public function test_navigation_moves_boarding_resources_into_manajemen_boarding_group(): void
     {
-        $this->assertSame('Manajemen Boarding', BoardingRapotResource::getNavigationGroup());
+        $this->assertSame('Boarding', BoardingRapotResource::getNavigationGroup());
         $this->assertFalse(SppBillResource::shouldRegisterNavigation());
     }
 
@@ -717,6 +718,10 @@ class BoardingManagementTest extends TestCase
             $table->string('rombel_saat_ini')->nullable();
             $table->string('jk', 2)->nullable();
             $table->string('status')->nullable();
+            $table->string('kepribadian')->nullable();
+            $table->string('gaya_belajar')->nullable();
+            $table->string('profiling')->nullable();
+            $table->string('mbti')->nullable();
             $table->timestamps();
         });
     }
@@ -769,8 +774,41 @@ class BoardingManagementTest extends TestCase
         $hafalanMigration = require database_path('migrations/2026_04_02_120000_create_boarding_hafalan_tables.php');
         $hafalanMigration->up();
 
+        $materiMigration = require database_path('migrations/2026_05_30_210000_expand_boarding_materi_master.php');
+        $materiMigration->up();
+
+        $separateMateriMigration = require database_path('migrations/2026_05_30_213000_separate_boarding_materi_tambahan_groups.php');
+        $separateMateriMigration->up();
+
+        $consolidateMateriMigration = require database_path('migrations/2026_05_30_214000_consolidate_boarding_materi_tambahan_class.php');
+        $consolidateMateriMigration->up();
+
+        $splitMateriByClassMigration = require database_path('migrations/2026_05_30_215000_split_boarding_materi_tambahan_by_class.php');
+        $splitMateriByClassMigration->up();
+
+        $scopeMateriMigration = require database_path('migrations/2026_05_30_216000_add_scope_and_mt_materi_boarding_points.php');
+        $scopeMateriMigration->up();
+
+        $mtProgressMigration = require database_path('migrations/2026_05_30_217000_create_boarding_mt_progresses_table.php');
+        $mtProgressMigration->up();
+
         $maknaDanBacaanMigration = require database_path('migrations/2026_04_03_220000_create_boarding_makna_and_bacaan_tables.php');
         $maknaDanBacaanMigration->up();
+
+        $materiBoardingMigration = require database_path('migrations/2026_05_30_218000_expand_boarding_makna_and_materi_boarding.php');
+        $materiBoardingMigration->up();
+
+        $renameMaknaQuranMigration = require database_path('migrations/2026_05_30_219000_rename_boarding_makna_quran_targets.php');
+        $renameMaknaQuranMigration->up();
+
+        $materiRapotScopeMigration = require database_path('migrations/2026_05_31_080000_add_materi_rapot_scope_to_boarding_pencapaians.php');
+        $materiRapotScopeMigration->up();
+
+        $administrasiRapotMigration = require database_path('migrations/2026_05_31_100000_add_administrasi_items_to_boarding_rapots.php');
+        $administrasiRapotMigration->up();
+
+        $kelasBoardingOverrideMigration = require database_path('migrations/2026_05_31_101000_add_kelas_boarding_override_to_boarding_rapots.php');
+        $kelasBoardingOverrideMigration->up();
     }
 
     protected function resetBoardingKeuanganRuntimeCaches(): void

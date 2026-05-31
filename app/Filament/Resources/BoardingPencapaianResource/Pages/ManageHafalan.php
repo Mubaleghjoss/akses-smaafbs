@@ -64,28 +64,44 @@ class ManageHafalan extends Page implements HasTable
 
     protected function materiLabel(string $materiKey): string
     {
-        return match ($materiKey) {
-            'pegon_bacaan' => 'Pegon Bacaan',
-            'lambatan' => 'Lambatan',
-            'cepatan' => 'Cepatan',
-            'seleksi_saringan' => 'Seleksi Saringan',
-            default => ucfirst(str_replace('_', ' ', $materiKey)),
-        };
+        return BoardingHafalanPoint::materiLabel($materiKey);
     }
 
     protected function jenisLabel(?string $jenis): string
     {
-        return match ($jenis) {
-            'surat' => 'Surat',
-            'doa' => 'Doa',
-            'dalil' => 'Dalil',
-            default => filled($jenis) ? ucfirst((string) $jenis) : '-',
-        };
+        return BoardingHafalanPoint::jenisLabel($jenis);
+    }
+
+    protected function hafalanMateriOrderSql(string $column = 'boarding_hafalan_points.materi_key'): string
+    {
+        $orderedKeys = array_keys(BoardingHafalanPoint::MATERI_OPTIONS);
+        $materiTambahanIndex = array_search(BoardingHafalanPoint::MATERI_TAMBAHAN_HAFALAN_KEY, $orderedKeys, true);
+        $aliases = [
+            'materi_tambahan' => $materiTambahanIndex,
+            'seleksi_saringan' => $materiTambahanIndex,
+        ];
+
+        $cases = [];
+
+        foreach ($orderedKeys as $index => $materiKey) {
+            $cases[] = "WHEN {$column} = '".str_replace("'", "''", $materiKey)."' THEN {$index}";
+        }
+
+        foreach ($aliases as $materiKey => $index) {
+            if ($index === false) {
+                continue;
+            }
+
+            $cases[] = "WHEN {$column} = '".str_replace("'", "''", $materiKey)."' THEN {$index}";
+        }
+
+        return 'CASE '.implode(' ', $cases).' ELSE 999 END';
     }
 
     protected function hafalanPointBaseQuery(int|string $pencapaianId): Builder
     {
         return BoardingHafalanPoint::query()
+            ->whereIn('boarding_hafalan_points.jenis', BoardingHafalanPoint::hafalanJenis())
             ->where(function (Builder $query) use ($pencapaianId): void {
                 $query
                     ->where('boarding_hafalan_points.is_active', true)
@@ -121,6 +137,7 @@ class ManageHafalan extends Page implements HasTable
         (clone $this->hafalanPointBaseQuery($this->getRecord()->getKey()))
             ->select('materi_key', 'jenis')
             ->distinct()
+            ->orderByRaw($this->hafalanMateriOrderSql())
             ->orderBy('materi_key')
             ->orderBy('jenis')
             ->get()
@@ -218,19 +235,22 @@ class ManageHafalan extends Page implements HasTable
                     'boarding_hafalan_points.is_active',
                 ])
                 ->addSelect([
-                    'assessment_id' => DB::raw('assessments.id'),
-                    'assessment_assessed_at' => DB::raw('assessments.assessed_at'),
-                    'assessment_score' => DB::raw('assessments.score'),
-                    'assessment_reviewer_user_id' => DB::raw('assessments.reviewer_user_id'),
-                    'assessment_reviewer_name' => DB::raw('assessments.reviewer_name'),
-                    'assessment_reviewer_user_name' => DB::raw('assessment_reviewers.name'),
+                    DB::raw('assessments.id as assessment_id'),
+                    DB::raw('assessments.assessed_at as assessment_assessed_at'),
+                    DB::raw('assessments.score as assessment_score'),
+                    DB::raw('assessments.reviewer_user_id as assessment_reviewer_user_id'),
+                    DB::raw('assessments.reviewer_name as assessment_reviewer_name'),
+                    DB::raw('assessment_reviewers.name as assessment_reviewer_user_name'),
                 ]))
             ->defaultSort(fn (Builder $query): Builder => $query
+                ->orderByRaw($this->hafalanMateriOrderSql())
+                ->orderBy('boarding_hafalan_points.materi_key')
                 ->orderByRaw('CASE WHEN boarding_hafalan_points.is_active = 1 THEN 0 ELSE 1 END')
-                ->orderBy('materi_key')
                 ->orderBy('jenis')
                 ->orderBy('urutan')
                 ->orderBy('boarding_hafalan_points.id'))
+            ->defaultPaginationPageOption(200)
+            ->paginated([25, 50, 100, 200])
             ->filters([
                 Tables\Filters\SelectFilter::make('materi_key')
                     ->label('Materi')
@@ -242,9 +262,14 @@ class ManageHafalan extends Page implements HasTable
             ->groups([
                 Group::make('materi_key')
                     ->label('Materi')
+                    ->collapsible()
+                    ->orderQueryUsing(fn (Builder $query, string $direction): Builder => $query
+                        ->orderByRaw($this->hafalanMateriOrderSql()." {$direction}")
+                        ->orderBy('boarding_hafalan_points.materi_key', $direction))
                     ->getTitleFromRecordUsing(fn (BoardingHafalanPoint $record): string => $this->materiLabel((string) $record->materi_key)),
             ])
             ->defaultGroup('materi_key')
+            ->collapsedGroupsByDefault()
             ->columns([
                 Tables\Columns\TextColumn::make('nama_point')
                     ->label('Hafalan')

@@ -135,8 +135,11 @@ npm install
 copy .env.example .env
 php artisan key:generate
 php artisan migrate
-php artisan storage:link
+mkdir -p public/storage
 ```
+
+File upload publik project ini disimpan langsung di `public/storage` lewat konfigurasi disk `public`, bukan di `storage/app/public`.
+Jangan mengandalkan `php artisan storage:link` untuk project ini.
 
 Jika ingin menjalankan semua proses lokal sekaligus:
 

@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\AdminAwareVerifyCsrfToken;
 use App\Models\User;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
 use Spatie\Permission\Models\Role;
@@ -42,6 +45,12 @@ class AdminResponsiveLimiterCoexistenceTest extends TestCase
             collect($middleware)->contains(fn (string $item): bool => str_starts_with($item, 'throttle')),
             'Livewire update route should stay free from route-level throttle middleware to preserve normal Filament async behavior.'
         );
+
+        $webMiddleware = app('router')->getMiddlewareGroups()['web'] ?? [];
+
+        $this->assertContains(AdminAwareVerifyCsrfToken::class, $webMiddleware);
+        $this->assertNotContains(ValidateCsrfToken::class, $webMiddleware);
+        $this->assertNotContains(VerifyCsrfToken::class, $webMiddleware);
     }
 
     public function test_admin_login_route_has_no_route_throttle_middleware_because_throttle_is_livewire_based(): void

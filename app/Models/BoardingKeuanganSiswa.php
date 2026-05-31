@@ -258,6 +258,7 @@ class BoardingKeuanganSiswa extends Model
 
     public static function flushRuntimeSchemaCache(): void
     {
+        static::$syncedUserIds = [];
         static::$tableAvailable = null;
         static::$pamongUserColumnAvailableCache = null;
         static::$pamongNamaOptionsCache = [];

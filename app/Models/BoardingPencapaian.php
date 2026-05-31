@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToBoardingStudent;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,6 +18,15 @@ class BoardingPencapaian extends Model
         'proses' => 'Proses',
         'tercapai_sebagian' => 'Tercapai Sebagian',
         'tercapai' => 'Tercapai',
+    ];
+
+    public const MATERI_RAPOT_SCOPE_BOARDING = 'boarding';
+
+    public const MATERI_RAPOT_SCOPE_MT = 'mt';
+
+    public const MATERI_RAPOT_SCOPE_OPTIONS = [
+        self::MATERI_RAPOT_SCOPE_BOARDING => 'Materi Boarding',
+        self::MATERI_RAPOT_SCOPE_MT => 'Materi MT',
     ];
 
     public const UPDATE_CATEGORY_OPTIONS = [
@@ -78,18 +88,47 @@ class BoardingPencapaian extends Model
             if (blank($record->pamong_user_id) && auth()->user()?->isBoardingPamong()) {
                 $record->pamong_user_id = auth()->id();
             }
+
+            $record->materi_rapot_scope = self::normalizeMateriRapotScope($record->materi_rapot_scope);
         });
 
         static::saved(function (self $record): void {
+            $scopeChanged = $record->wasChanged('materi_rapot_scope');
+
             if ($record->details()->exists() || $record->updates()->exists()) {
                 $record->syncFromProgressData();
+
+                if ($scopeChanged) {
+                    $record->syncLinkedRapots(overwriteNarratives: true);
+                }
+
+                return;
             }
+
+            $record->syncLinkedRapots(overwriteNarratives: $scopeChanged);
         });
     }
 
     public static function statusOptions(): array
     {
         return self::STATUS_OPTIONS;
+    }
+
+    public static function materiRapotScopeOptions(): array
+    {
+        return self::MATERI_RAPOT_SCOPE_OPTIONS;
+    }
+
+    public static function materiRapotScopeLabel(?string $scope): string
+    {
+        return self::MATERI_RAPOT_SCOPE_OPTIONS[self::normalizeMateriRapotScope($scope)];
+    }
+
+    public static function normalizeMateriRapotScope(?string $scope): string
+    {
+        return array_key_exists((string) $scope, self::MATERI_RAPOT_SCOPE_OPTIONS)
+            ? (string) $scope
+            : self::MATERI_RAPOT_SCOPE_BOARDING;
     }
 
     public static function updateCategoryOptions(): array
@@ -153,11 +192,54 @@ class BoardingPencapaian extends Model
                     'siswa_id' => (int) $siswaId,
                     'pamong_user_id' => $pamongUserId,
                     'status_pencapaian' => 'proses',
+                    'materi_rapot_scope' => self::MATERI_RAPOT_SCOPE_BOARDING,
                     'created_at' => $now,
                     'updated_at' => $now,
                 ])
                 ->all()
         );
+    }
+
+    public function scopeWithFilledTargetData(Builder $query): Builder
+    {
+        $textColumns = [
+            'surat_quran_tuntas',
+            'hadits_tuntas',
+            'hafalan_surat',
+            'hafalan_doa',
+            'hafalan_lainnya',
+            'target_berikutnya',
+            'catatan',
+        ];
+
+        return $query->where(function (Builder $query) use ($textColumns): void {
+            $query
+                ->whereHas('details')
+                ->orWhereHas('updates')
+                ->orWhereHas('hafalanAssessments')
+                ->orWhereHas('bacaanAssessments')
+                ->orWhereHas(
+                    'maknaProgresses',
+                    fn (Builder $maknaQuery): Builder => $maknaQuery->whereIn('status', ['sebagian', 'khatam'])
+                )
+                ->orWhereHas('mtProgresses', fn (Builder $mtQuery): Builder => $mtQuery->filled())
+                ->orWhereHas('materiProgresses', fn (Builder $materiQuery): Builder => $materiQuery->filled())
+                ->orWhere('status_pencapaian', '!=', 'proses')
+                ->orWhere('target_jumlah_surat', '>', 0)
+                ->orWhere('target_jumlah_doa', '>', 0)
+                ->orWhere('target_jumlah_hadits', '>', 0)
+                ->orWhere('jumlah_surat_dihafal', '>', 0)
+                ->orWhere('jumlah_doa_dihafal', '>', 0)
+                ->orWhere('jumlah_hadits_dihafal', '>', 0);
+
+            foreach ($textColumns as $column) {
+                $query->orWhere(function (Builder $textQuery) use ($column): void {
+                    $textQuery
+                        ->whereNotNull($column)
+                        ->where($column, '!=', '');
+                });
+            }
+        });
     }
 
     public function siswa(): BelongsTo
@@ -190,6 +272,16 @@ class BoardingPencapaian extends Model
         return $this->hasMany(BoardingMaknaProgress::class, 'boarding_pencapaian_id');
     }
 
+    public function mtProgresses(): HasMany
+    {
+        return $this->hasMany(BoardingMtProgress::class, 'boarding_pencapaian_id');
+    }
+
+    public function materiProgresses(): HasMany
+    {
+        return $this->hasMany(BoardingMateriProgress::class, 'boarding_pencapaian_id');
+    }
+
     public function bacaanAssessments(): HasMany
     {
         return $this->hasMany(BoardingBacaanAssessment::class, 'boarding_pencapaian_id');
@@ -201,7 +293,8 @@ class BoardingPencapaian extends Model
         $assessments = $this->hafalanAssessments()
             ->with(['point:id,jenis,nama_point,materi_key,urutan,is_active'])
             ->get()
-            ->filter(fn (BoardingHafalanAssessment $assessment): bool => (bool) $assessment->point?->is_active)
+            ->filter(fn (BoardingHafalanAssessment $assessment): bool => (bool) $assessment->point?->is_active
+                && in_array((string) $assessment->point?->jenis, BoardingHafalanPoint::hafalanJenis(), true))
             ->sortBy(fn (BoardingHafalanAssessment $assessment): string => sprintf(
                 '%s|%05d|%05d',
                 (string) ($assessment->point?->materi_key ?? ''),
@@ -215,6 +308,7 @@ class BoardingPencapaian extends Model
         $dalilAssessments = $assessments->filter(fn (BoardingHafalanAssessment $assessment): bool => $assessment->point?->jenis === 'dalil');
         $totalActivePoints = BoardingHafalanPoint::query()
             ->where('is_active', true)
+            ->whereIn('jenis', BoardingHafalanPoint::hafalanJenis())
             ->count();
         $completedPoints = $assessments->count();
         $latestAssessmentDate = optional($assessments->sortByDesc('assessed_at')->first())->assessed_at;
@@ -373,6 +467,8 @@ class BoardingPencapaian extends Model
             $this->details()->max('tuntas_at'),
             $this->details()->max('updated_at'),
             $this->maknaProgresses()->max('updated_at'),
+            $this->mtProgresses()->filled()->max('updated_at'),
+            $this->materiProgresses()->filled()->max('updated_at'),
         ])
             ->filter()
             ->map(fn ($value): Carbon => Carbon::parse($value))
@@ -384,6 +480,34 @@ class BoardingPencapaian extends Model
         $this->forceFill([
             'tanggal_update_terakhir' => $latest?->toDateString(),
         ])->saveQuietly();
+
+        $this->syncLinkedRapots();
+    }
+
+    public function syncLinkedRapots(bool $overwriteNarratives = false): int
+    {
+        if (blank($this->siswa_id)) {
+            return 0;
+        }
+
+        $rapots = BoardingRapot::query()
+            ->where('siswa_id', $this->siswa_id)
+            ->when(
+                filled($this->pamong_user_id),
+                fn (Builder $query): Builder => $query->where(function (Builder $ownerQuery): void {
+                    $ownerQuery
+                        ->whereNull('pamong_user_id')
+                        ->orWhere('pamong_user_id', $this->pamong_user_id);
+                })
+            )
+            ->get();
+
+        $rapots->each(fn (BoardingRapot $rapot) => $rapot->syncFromSources(
+            overwriteNarratives: $overwriteNarratives,
+            overwritePencapaianSummary: true,
+        ));
+
+        return $rapots->count();
     }
 
     /**

@@ -46,10 +46,10 @@ class BoardingPencapaianResource extends Resource
     protected static ?string $permissionPrefix = 'boarding_pencapaian';
 
     protected const HAFALAN_MATERI_LABELS = [
-        'pegon_bacaan' => 'Pegon Bacaan',
-        'lambatan' => 'Lambatan',
-        'cepatan' => 'Cepatan',
-        'seleksi_saringan' => 'Seleksi Saringan',
+        'pegon_bacaan' => '1. Kelas Pegon Bacaan : Materi Hafalan',
+        'lambatan' => '2. Kelas Lambatan : Materi Hafalan',
+        'cepatan' => '3. Kelas Cepatan : Materi Hafalan',
+        'materi_tambahan_hafalan' => '4. Kelas Materi Tambahan : Materi Hafalan',
     ];
 
     protected const MAKNA_MATERI_TARGET_KEYS = [
@@ -94,6 +94,14 @@ class BoardingPencapaianResource extends Resource
                             ->default(fn (): ?int => auth()->user()?->isBoardingPamong() ? auth()->id() : null)
                             ->disabled(fn (): bool => (bool) auth()->user()?->isBoardingPamong())
                             ->dehydrated()
+                            ->required(),
+                        Forms\Components\Select::make('materi_rapot_scope')
+                            ->label('Target Materi Aktif')
+                            ->helperText('Pilih materi yang sedang diikuti murid. Rapot hanya menampilkan pilihan ini.')
+                            ->options(BoardingPencapaian::materiRapotScopeOptions())
+                            ->default(BoardingPencapaian::MATERI_RAPOT_SCOPE_BOARDING)
+                            ->native(false)
+                            ->selectablePlaceholder(false)
                             ->required(),
                         Forms\Components\DatePicker::make('tanggal_update_terakhir')
                             ->label('Tanggal Update Terakhir')
@@ -307,6 +315,14 @@ class BoardingPencapaianResource extends Resource
                     ->searchable()
                     ->description(fn (BoardingPencapaian $record): string => static::resolveMobileRecordSummary($record))
                     ->wrap(),
+                Tables\Columns\SelectColumn::make('materi_rapot_scope')
+                    ->label('Target Rapot')
+                    ->options(BoardingPencapaian::materiRapotScopeOptions())
+                    ->native(false)
+                    ->selectablePlaceholder(false)
+                    ->rules(['required', 'string', 'max:20'])
+                    ->disabled(fn (): bool => ! static::canEdit(null))
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('ketercapaian_total')
                     ->label('Ketercapaian')
                     ->badge()
@@ -336,25 +352,25 @@ class BoardingPencapaianResource extends Resource
                     ->visibleFrom('xl')
                     ->toggleable(),
             ])
-            ->recordUrl(fn (BoardingPencapaian $record): string => static::getUrl('hafalan', ['record' => $record]))
+            ->filters([
+                Tables\Filters\SelectFilter::make('materi_rapot_scope')
+                    ->label('Target Rapot')
+                    ->options(BoardingPencapaian::materiRapotScopeOptions())
+                    ->native(false),
+            ])
+            ->recordUrl(fn (BoardingPencapaian $record): string => BoardingPencapaian::normalizeMateriRapotScope($record->materi_rapot_scope) === BoardingPencapaian::MATERI_RAPOT_SCOPE_MT
+                ? static::getUrl('mt', ['record' => $record])
+                : static::getUrl('materi', ['record' => $record]))
             ->actions([
-                Action::make('hafalan')
-                    ->label('Hafalan')
-                    ->icon('heroicon-o-book-open')
-                    ->color('gray')
-                    ->url(fn (BoardingPencapaian $record): string => static::getUrl('hafalan', ['record' => $record]))
-                    ->visible(fn (): bool => static::canViewAny()),
-                Action::make('makna')
-                    ->label('Makna')
-                    ->icon('heroicon-o-document-text')
-                    ->color('warning')
-                    ->url(fn (BoardingPencapaian $record): string => static::getUrl('makna', ['record' => $record]))
-                    ->visible(fn (): bool => static::canViewAny()),
-                Action::make('bacaan')
-                    ->label('Bacaan')
-                    ->icon('heroicon-o-clipboard-document-list')
-                    ->color('info')
-                    ->url(fn (BoardingPencapaian $record): string => static::getUrl('bacaan', ['record' => $record]))
+                Action::make('materi')
+                    ->label('Materi')
+                    ->icon('heroicon-o-clipboard-document-check')
+                    ->color(fn (BoardingPencapaian $record): string => BoardingPencapaian::normalizeMateriRapotScope($record->materi_rapot_scope) === BoardingPencapaian::MATERI_RAPOT_SCOPE_MT
+                        ? 'success'
+                        : 'primary')
+                    ->url(fn (BoardingPencapaian $record): string => BoardingPencapaian::normalizeMateriRapotScope($record->materi_rapot_scope) === BoardingPencapaian::MATERI_RAPOT_SCOPE_MT
+                        ? static::getUrl('mt', ['record' => $record])
+                        : static::getUrl('materi', ['record' => $record]))
                     ->visible(fn (): bool => static::canViewAny()),
             ])
             ->bulkActions([
@@ -370,6 +386,7 @@ class BoardingPencapaianResource extends Resource
             ->join('boarding_hafalan_points', 'boarding_hafalan_points.id', '=', 'boarding_hafalan_assessments.boarding_hafalan_point_id')
             ->whereColumn('boarding_hafalan_assessments.boarding_pencapaian_id', 'boarding_pencapaians.id')
             ->where('boarding_hafalan_points.is_active', true)
+            ->whereIn('boarding_hafalan_points.jenis', BoardingHafalanPoint::hafalanJenis())
             ->when(
                 filled($jenis),
                 fn ($query) => $query->where('boarding_hafalan_points.jenis', $jenis)
@@ -393,6 +410,7 @@ class BoardingPencapaianResource extends Resource
             ->selectSub(
                 BoardingHafalanPoint::query()
                     ->where('boarding_hafalan_points.is_active', true)
+                    ->whereIn('boarding_hafalan_points.jenis', BoardingHafalanPoint::hafalanJenis())
                     ->selectRaw('count(*)'),
                 'hafalan_active_points_count'
             )
@@ -424,6 +442,7 @@ class BoardingPencapaianResource extends Resource
                     BoardingHafalanPoint::query()
                         ->where('boarding_hafalan_points.is_active', true)
                         ->where('boarding_hafalan_points.materi_key', $materiKey)
+                        ->whereIn('boarding_hafalan_points.jenis', BoardingHafalanPoint::hafalanJenis())
                         ->selectRaw('count(*)'),
                     'hafalan_'.$materiKey.'_points_count'
                 )
@@ -491,6 +510,7 @@ class BoardingPencapaianResource extends Resource
     {
         return collect([
             $record->siswa?->rombel_saat_ini ?: 'Tanpa rombel',
+            'Target '.BoardingPencapaian::materiRapotScopeLabel($record->materi_rapot_scope),
             'Total '.static::resolveOverallAchievementPercentage($record).'%',
             'H '.static::resolveHafalanSummary($record),
             'M '.static::resolveMaknaSummary($record),
@@ -636,8 +656,10 @@ class BoardingPencapaianResource extends Resource
     {
         return [
             'index' => Pages\ManageBoardingPencapaians::route('/'),
+            'materi' => Pages\ManageMateriBoarding::route('/{record}/materi'),
             'hafalan' => Pages\ManageHafalan::route('/{record}/hafalan'),
             'makna' => Pages\ManageMakna::route('/{record}/makna'),
+            'mt' => Pages\ManageMt::route('/{record}/mt'),
             'bacaan' => Pages\ManageBacaan::route('/{record}/bacaan'),
         ];
     }

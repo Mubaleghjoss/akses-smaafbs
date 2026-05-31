@@ -215,14 +215,13 @@ class ManageBacaan extends Page implements HasTable
             ->defaultSort(fn (Builder $query): Builder => $query
                 ->orderByDesc('assessed_at')
                 ->orderByDesc('id'))
-            ->defaultPaginationPageOption(10)
-            ->paginated([10, 25, 50])
+            ->paginated(false)
             ->searchPlaceholder('Cari penyimak atau catatan bacaan...')
             ->emptyStateHeading('Belum ada riwayat bacaan')
-            ->emptyStateDescription('Tambahkan penilaian bacaan pertama untuk murid ini.')
+            ->emptyStateDescription('Tambah nilai bacaan pertama.')
             ->headerActions([
                 Action::make('tambahBacaan')
-                    ->label('Tambah Penilaian Bacaan')
+                    ->label('Tambah')
                     ->icon('heroicon-o-plus')
                     ->color('primary')
                     ->modalHeading('Tambah Penilaian Bacaan')
@@ -256,37 +255,37 @@ class ManageBacaan extends Page implements HasTable
             ])
             ->columns([
                 Tables\Columns\TextColumn::make('assessed_at')
-                    ->label('Tanggal Baca')
+                    ->label('Tanggal')
                     ->date('d M Y')
                     ->sortable(),
-                Tables\Columns\TextColumn::make('nilai_ringkas')
-                    ->label('Nilai')
-                    ->state(fn (BoardingBacaanAssessment $record): string => $this->gradeSummary($record))
-                    ->wrap(),
-                Tables\Columns\TextColumn::make('pp_grade')
+                Tables\Columns\SelectColumn::make('pp_grade')
                     ->label('PP')
-                    ->badge()
-                    ->color(fn (BoardingBacaanAssessment $record): string => $this->gradeColor($record->pp_grade))
-                    ->visibleFrom('xl')
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('kl_grade')
+                    ->options(BoardingBacaanAssessment::gradeOptions())
+                    ->native(false)
+                    ->selectablePlaceholder(false)
+                    ->rules(['required', 'string', 'max:1'])
+                    ->disabled(fn (): bool => ! $this->canManageBacaan()),
+                Tables\Columns\SelectColumn::make('kl_grade')
                     ->label('KL')
-                    ->badge()
-                    ->color(fn (BoardingBacaanAssessment $record): string => $this->gradeColor($record->kl_grade))
-                    ->visibleFrom('xl')
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('tj_grade')
+                    ->options(BoardingBacaanAssessment::gradeOptions())
+                    ->native(false)
+                    ->selectablePlaceholder(false)
+                    ->rules(['required', 'string', 'max:1'])
+                    ->disabled(fn (): bool => ! $this->canManageBacaan()),
+                Tables\Columns\SelectColumn::make('tj_grade')
                     ->label('TJ')
-                    ->badge()
-                    ->color(fn (BoardingBacaanAssessment $record): string => $this->gradeColor($record->tj_grade))
-                    ->visibleFrom('xl')
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('mj_grade')
+                    ->options(BoardingBacaanAssessment::gradeOptions())
+                    ->native(false)
+                    ->selectablePlaceholder(false)
+                    ->rules(['required', 'string', 'max:1'])
+                    ->disabled(fn (): bool => ! $this->canManageBacaan()),
+                Tables\Columns\SelectColumn::make('mj_grade')
                     ->label('MJ')
-                    ->badge()
-                    ->color(fn (BoardingBacaanAssessment $record): string => $this->gradeColor($record->mj_grade))
-                    ->visibleFrom('xl')
-                    ->toggleable(),
+                    ->options(BoardingBacaanAssessment::gradeOptions())
+                    ->native(false)
+                    ->selectablePlaceholder(false)
+                    ->rules(['required', 'string', 'max:1'])
+                    ->disabled(fn (): bool => ! $this->canManageBacaan()),
                 Tables\Columns\TextColumn::make('reviewer')
                     ->label('Penyimak')
                     ->state(fn (BoardingBacaanAssessment $record): string => $this->reviewerLabel($record))
@@ -297,13 +296,13 @@ class ManageBacaan extends Page implements HasTable
                                 ->orWhereHas('reviewerUser', fn (Builder $userQuery): Builder => $userQuery->where('name', 'like', "%{$search}%"));
                         });
                     })
-                    ->wrap(),
-                Tables\Columns\TextColumn::make('notes')
-                    ->label('Catatan')
-                    ->searchable()
                     ->wrap()
-                    ->limit(80)
-                    ->toggleable(),
+                    ->visibleFrom('md'),
+                Tables\Columns\TextInputColumn::make('notes')
+                    ->label('Catatan')
+                    ->placeholder('-')
+                    ->rules(['nullable', 'string', 'max:65535'])
+                    ->disabled(fn (): bool => ! $this->canManageBacaan()),
             ])
             ->actions([
                 Action::make('detail')

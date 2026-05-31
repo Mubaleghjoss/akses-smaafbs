@@ -15,8 +15,8 @@ class BoardingMaknaProgress extends Model
     ];
 
     public const GROUP_OPTIONS = [
-        'quran' => 'Makna Al-Quran',
-        'hadits_materi' => 'Makna Himpunan Hadits & Materi',
+        'quran' => "Materi Qur'an : Makna Qur'an",
+        'hadits_materi' => 'Makna Hadits',
     ];
 
     protected $table = 'boarding_makna_progresses';
@@ -27,6 +27,7 @@ class BoardingMaknaProgress extends Model
         'boarding_pencapaian_id' => 'integer',
         'urutan' => 'integer',
         'remaining_pages' => 'integer',
+        'total_pages' => 'integer',
         'updated_by_user_id' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
@@ -37,6 +38,7 @@ class BoardingMaknaProgress extends Model
         static::saving(function (self $progress): void {
             if ($progress->status !== 'sebagian') {
                 $progress->remaining_pages = null;
+                $progress->total_pages = null;
             }
 
             if (auth()->id()) {
@@ -84,7 +86,7 @@ class BoardingMaknaProgress extends Model
             $targets[] = [
                 'target_key' => 'quran_juz_'.$juz,
                 'target_group' => 'quran',
-                'target_name' => 'Makna Al-Quran Juz '.$juz,
+                'target_name' => "Makna Qur'an Juz ".$juz,
                 'urutan' => $juz,
             ];
         }

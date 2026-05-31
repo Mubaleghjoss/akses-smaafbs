@@ -183,6 +183,38 @@ npm run build
 
 Jika `npm` tidak dikenali, aktifkan Node.js dari cPanel. Pilih Node.js 22 jika tersedia.
 
+### Catatan penting aset dan file upload
+
+Di project ini file upload admin tidak memakai folder default Laravel `storage/app/public`.
+Konfigurasi `disk public` diarahkan ke:
+
+```text
+public/storage
+```
+
+Artinya:
+
+- Foto, dokumen, PDF, logo, favicon, lampiran, bukti pembayaran, dan upload Filament disimpan di `public/storage`.
+- `storage/app/public` bukan folder utama upload untuk project ini.
+- Database menyimpan path relatif seperti `news/xxx.jpg`, `site-branding/logo/xxx.png`, atau `berkas_guru/xxx.pdf`, jadi backup harus selalu mencakup database dan folder `public/storage`.
+- Jangan upload file `public/hot` ke server production. File itu hanya untuk Vite dev server lokal.
+
+Asset frontend hasil build ada di:
+
+```text
+public/build
+```
+
+Folder/folder asset statis lain yang tetap perlu ada di server:
+
+```text
+public/css
+public/js
+public/vendor
+public/fonts
+public/storage
+```
+
 ## 9. Generate key dan siapkan Laravel
 
 Jalankan:
@@ -190,7 +222,7 @@ Jalankan:
 ```bash
 php artisan key:generate --force
 php artisan migrate --force
-php artisan storage:link
+mkdir -p public/storage
 php artisan optimize:clear
 php artisan config:cache
 php artisan route:cache
@@ -202,8 +234,8 @@ Jangan jalankan `php artisan key:generate` lagi setelah website sudah dipakai, k
 Atur permission jika ada error menulis cache/log:
 
 ```bash
-mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
-chmod -R 775 storage bootstrap/cache
+mkdir -p public/storage storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
+chmod -R 775 public/storage storage bootstrap/cache
 ```
 
 ## 10. Cek website
@@ -286,8 +318,12 @@ php artisan view:cache
 Jika storage gambar/file tidak muncul:
 
 ```bash
-php artisan storage:link
+ls -lah public/storage
+chmod -R 775 public/storage
+php artisan optimize:clear
 ```
+
+Catatan: untuk project ini jangan mengandalkan `php artisan storage:link`, karena `config/filesystems.php` mengarahkan disk public langsung ke `public/storage`.
 
 Jika database belum ada tabel:
 
@@ -300,5 +336,5 @@ php artisan migrate --force
 Sebelum update besar, backup dulu:
 
 1. Backup database dari cPanel phpMyAdmin atau fitur Backup.
-2. Backup folder `storage/app/public` jika berisi file upload penting.
+2. Backup folder `public/storage` karena folder ini berisi file upload penting.
 3. Setelah backup, baru jalankan update server.

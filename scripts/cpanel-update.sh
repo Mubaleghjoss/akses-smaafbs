@@ -20,20 +20,18 @@ echo "==> Install/build asset frontend"
 if command -v npm >/dev/null 2>&1; then
     npm ci
     npm run build
+    rm -f public/hot
 else
     echo "ERROR: npm tidak ditemukan. Aktifkan Node.js 20.19+ atau Node.js 22 di cPanel."
     exit 1
 fi
 
 echo "==> Siapkan storage dan cache folder"
-mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
-chmod -R 775 storage bootstrap/cache
+mkdir -p public/storage storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
+chmod -R 775 public/storage storage bootstrap/cache
 
 echo "==> Jalankan migrasi database"
 php artisan migrate --force
-
-echo "==> Pastikan storage link tersedia"
-php artisan storage:link || true
 
 echo "==> Refresh cache Laravel"
 php artisan optimize:clear

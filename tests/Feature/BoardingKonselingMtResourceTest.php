@@ -106,5 +106,8 @@ class BoardingKonselingMtResourceTest extends TestCase
 
         $ownerMigration = require database_path('migrations/2026_03_26_090000_add_boarding_detail_and_pamong_owner_fields.php');
         $ownerMigration->up();
+
+        $materiRapotScopeMigration = require database_path('migrations/2026_05_31_080000_add_materi_rapot_scope_to_boarding_pencapaians.php');
+        $materiRapotScopeMigration->up();
     }
 }

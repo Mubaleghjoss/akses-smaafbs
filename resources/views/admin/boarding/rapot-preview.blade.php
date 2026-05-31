@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rapot Boarding - {{ $payload['siswa']['nama'] ?? 'Murid' }}</title>
+    <title>Rekap Data Rapot Boarding - {{ $payload['siswa']['nama'] ?? 'Murid' }}</title>
     <style>
         :root {
             --ink: #0f172a;
@@ -219,6 +219,28 @@
             background: #f8fafc;
             font-weight: 700;
         }
+        .sheet-grid {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            font-size: 13px;
+        }
+        .sheet-grid th,
+        .sheet-grid td {
+            border: 1px solid #000;
+            padding: 4px 7px;
+            text-align: center;
+            vertical-align: middle;
+            line-height: 1.25;
+        }
+        .sheet-grid th {
+            background: #0097a7;
+            color: #fff;
+            font-weight: 700;
+        }
+        .sheet-grid .w-small { width: 16%; }
+        .sheet-grid .w-mid { width: 24%; }
+        .sheet-grid .w-wide { width: 60%; }
         .two-col {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -285,9 +307,15 @@
     </style>
 </head>
 <body>
+    @php
+        $letterheadContact = ($letterhead['contact'] ?? collect([$letterhead['phone'] ?? null, $letterhead['email'] ?? null])->filter()->implode(' | ')) ?: 'Kontak sekolah belum diatur.';
+        $administrasiItems = \App\Models\BoardingRapot::normalizeAdministrasiRapotItems($payload['rapot']['administrasi_items'] ?? $rapot->administrasi_rapot_items ?? []);
+    @endphp
+
     <div class="page">
         <div class="toolbar">
             @unless($printMode)
+                <a class="button secondary" href="{{ route('admin.boarding-rapots.preview', $rapot) }}" target="_blank" rel="noreferrer">Preview Rapot</a>
                 <a class="button secondary" href="{{ route('admin.boarding-rapots.export', $rapot) }}" target="_blank" rel="noreferrer">Export Excel</a>
                 <a class="button secondary" href="{{ route('admin.boarding-rapots.print', $rapot) }}" target="_blank" rel="noreferrer">Mode Cetak</a>
             @endunless
@@ -302,10 +330,10 @@
             </div>
             <div class="letterhead-copy">
                 <h1>{{ strtoupper((string) ($letterhead['site_name'] ?? $payload['school']['nama'] ?? 'SMA AFBS')) }}</h1>
-                <h2>{{ strtoupper((string) ($payload['school']['boarding_label'] ?? 'BOARDING SCHOOL')) }}</h2>
+                <h2>{{ strtoupper((string) ($letterhead['subtitle'] ?? $payload['school']['boarding_label'] ?? 'BOARDING SCHOOL')) }}</h2>
                 <p>{{ $letterhead['address'] ?? $payload['school']['alamat'] ?? 'Alamat sekolah belum diatur.' }}</p>
                 <p>
-                    {{ collect([$letterhead['phone'] ?? null, $letterhead['email'] ?? null])->filter()->implode(' | ') ?: 'Kontak sekolah belum diatur.' }}
+                    {{ $letterheadContact }}
                 </p>
             </div>
         </header>
@@ -326,8 +354,8 @@
         </div>
 
         <section class="title-block">
-            <h3>RAPOT BOARDING</h3>
-            <p>Dokumen rekap perkembangan boarding murid per periode belajar</p>
+            <h3>REKAP DATA RAPOT BOARDING</h3>
+            <p>Track record lengkap sumber data rapot. Halaman ini untuk pemeriksaan internal, bukan format rapot final.</p>
         </section>
 
         <div class="meta-grid">
@@ -346,8 +374,11 @@
                     <tr><td>Periode</td><td>{{ $payload['rapot']['periode_tahun'] ?? '-' }}</td></tr>
                     <tr><td>Semester</td><td>{{ $payload['rapot']['semester'] ?? '-' }}</td></tr>
                     <tr><td>Tanggal Rapot</td><td>{{ $payload['rapot']['tanggal_rapot'] ?? '-' }}</td></tr>
-                    <tr><td>Predikat Boarding</td><td>{{ $payload['rapot']['predikat_boarding'] ?? '-' }}</td></tr>
+                    <tr><td>Kelas Boarding</td><td>{{ $payload['rapot']['kelas_boarding'] ?? '-' }}</td></tr>
                     <tr><td>Sinkron Terakhir</td><td>{{ $rapot->generated_at?->translatedFormat('d M Y H:i') ?? 'Belum ada' }}</td></tr>
+                    @foreach($administrasiItems as $item)
+                        <tr><td>{{ $item['question'] }}</td><td>{!! nl2br(e($item['answer'])) !!}</td></tr>
+                    @endforeach
                 </table>
             </section>
         </div>
@@ -428,6 +459,322 @@ Doa:
             @empty
                 <div class="summary-box">Belum ada detail target boarding yang tercatat untuk murid ini.</div>
             @endforelse
+        </section>
+
+        @php
+            $hafalanGroups = $payload['pencapaian']['hafalan_detail'] ?? [];
+            $makna = $payload['pencapaian']['makna'] ?? [];
+            $materiBoarding = $payload['pencapaian']['materi_boarding'] ?? [];
+            $mt = $payload['pencapaian']['mt'] ?? [];
+            $bacaan = $payload['pencapaian']['bacaan'] ?? [];
+            $activeMateriScope = \App\Models\BoardingPencapaian::normalizeMateriRapotScope($payload['pencapaian']['materi_rapot_scope'] ?? null);
+            $activeMateriLabel = \App\Models\BoardingPencapaian::materiRapotScopeLabel($activeMateriScope);
+            $materiBoardingSheetRows = \App\Support\Boarding\BoardingRapotSheetRows::materiBoardingRows($payload);
+            $mtSheetRows = \App\Support\Boarding\BoardingRapotSheetRows::mtRows($payload);
+            $materiBoardingCatatanGroup = collect($materiBoarding['manual_groups'] ?? [])->firstWhere('group', 'catatan_saran');
+            $mtCatatanGroup = collect($mt['groups'] ?? [])->firstWhere('group', 'catatan_saran');
+            $materiBoardingCatatanRows = is_array($materiBoardingCatatanGroup) ? ($materiBoardingCatatanGroup['rows'] ?? []) : [];
+            $mtCatatanRows = is_array($mtCatatanGroup) ? ($mtCatatanGroup['rows'] ?? []) : [];
+        @endphp
+
+        <section class="section">
+            <h4 class="section-title">Detail {{ $activeMateriLabel }}</h4>
+
+            <div class="summary-box">
+                <strong>Target Materi Rapot Aktif</strong>
+{{ $activeMateriLabel }}
+
+@if($activeMateriScope === \App\Models\BoardingPencapaian::MATERI_RAPOT_SCOPE_BOARDING)
+                <strong>Makna</strong>
+{{ $makna['summary_label'] ?? 'Belum ada progres makna.' }}
+
+                <strong>Bacaan</strong>
+{{ $bacaan['summary_label'] ?? 'Belum ada riwayat bacaan.' }}
+@else
+                <strong>Materi MT</strong>
+{{ $mt['summary_label'] ?? 'Belum ada progres materi MT.' }}
+@endif
+            </div>
+
+            @if($activeMateriScope === \App\Models\BoardingPencapaian::MATERI_RAPOT_SCOPE_BOARDING)
+            <div class="group-title">Halaman 1 - Materi Boarding</div>
+            <div style="overflow-x:auto;">
+                <table class="sheet-grid">
+                    <thead>
+                        <tr>
+                            <th colspan="2">Materi</th>
+                            <th>Keterangan</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="w-small" rowspan="2">{{ $materiBoardingSheetRows[1][0] }}</td>
+                            <td class="w-mid">{{ $materiBoardingSheetRows[1][1] }}</td>
+                            <td class="w-wide">{{ $materiBoardingSheetRows[1][2] }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ $materiBoardingSheetRows[2][1] }}</td>
+                            <td>{{ $materiBoardingSheetRows[2][2] }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ $materiBoardingSheetRows[3][0] }}</td>
+                            <td>{{ $materiBoardingSheetRows[3][1] }}</td>
+                            <td>{{ $materiBoardingSheetRows[3][2] }}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">{{ $materiBoardingSheetRows[4][0] }}</td>
+                            <td>{{ $materiBoardingSheetRows[4][2] }}</td>
+                        </tr>
+                        <tr>
+                            <td rowspan="4">{{ $materiBoardingSheetRows[5][0] }}</td>
+                            <td>{{ $materiBoardingSheetRows[5][1] }}</td>
+                            <td>{{ $materiBoardingSheetRows[5][2] }}</td>
+                        </tr>
+                        @foreach(array_slice($materiBoardingSheetRows, 6, 3) as $row)
+                            <tr>
+                                <td>{{ $row[1] }}</td>
+                                <td>{{ $row[2] }}</td>
+                            </tr>
+                        @endforeach
+                        @foreach(array_slice($materiBoardingSheetRows, 9, 4) as $row)
+                            <tr>
+                                <td colspan="2">{{ $row[0] }}</td>
+                                <td>{{ $row[2] }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            @else
+            <div class="group-title">Halaman 2 - Rapot MT</div>
+            <div style="overflow-x:auto;">
+                <table class="sheet-grid">
+                    <thead>
+                        <tr>
+                            <th style="width: 44%;">Materi</th>
+                            <th>Keterangan</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach(array_slice($mtSheetRows, 1) as $row)
+                            <tr>
+                                <td>{{ $row[0] }}</td>
+                                <td>{{ $row[1] }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            @endif
+
+            <div class="group-title">Catatan dan Saran {{ $activeMateriLabel }}</div>
+            @if($activeMateriScope === \App\Models\BoardingPencapaian::MATERI_RAPOT_SCOPE_BOARDING)
+            <div>
+                <div class="summary-box"><strong>Materi Boarding</strong><br>
+                    @forelse($materiBoardingCatatanRows as $row)
+                        {{ $row['target_name'] ?? '-' }}: {{ $row['grade'] ?? '-' }}@if(filled($row['notes'] ?? null)) - {{ $row['notes'] }}@endif<br>
+                    @empty
+                        Belum ada Catatan dan Saran Materi Boarding yang tersinkron.
+                    @endforelse
+                </div>
+            </div>
+            @else
+            <div>
+                <div class="summary-box"><strong>Materi MT</strong><br>
+                    @forelse($mtCatatanRows as $row)
+                        {{ $row['target_name'] ?? '-' }}: {{ $row['grade'] ?? $row['capaian'] ?? '-' }}@if(filled($row['notes'] ?? null)) - {{ $row['notes'] }}@endif<br>
+                    @empty
+                        Belum ada Catatan dan Saran Materi MT yang tersinkron.
+                    @endforelse
+                </div>
+            </div>
+            @endif
+
+            @if($activeMateriScope === \App\Models\BoardingPencapaian::MATERI_RAPOT_SCOPE_BOARDING)
+            @foreach($hafalanGroups as $group)
+                <div class="group-title">Hafalan - {{ $group['judul'] ?? '-' }}</div>
+                <div style="overflow-x:auto;">
+                    <table class="grid">
+                        <thead>
+                            <tr>
+                                <th>Hafalan</th>
+                                <th>Jenis</th>
+                                <th>Nilai</th>
+                                <th>Tanggal</th>
+                                <th>Penyimak</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach(($group['rows'] ?? []) as $row)
+                                <tr>
+                                    <td>{{ $row['nama_point'] ?? '-' }}</td>
+                                    <td>{{ $row['jenis'] ?? '-' }}</td>
+                                    <td>{{ $row['score'] ?? '-' }}</td>
+                                    <td>{{ $row['assessed_at'] ?? '-' }}</td>
+                                    <td>{{ $row['reviewer'] ?? '-' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endforeach
+
+            @foreach(($makna['groups'] ?? []) as $group)
+                <div class="group-title">{{ $group['judul'] ?? '-' }}</div>
+                <div style="overflow-x:auto;">
+                    <table class="grid">
+                        <thead>
+                            <tr>
+                                <th>Target Makna</th>
+                                <th>Status</th>
+                                <th>Kurang</th>
+                                <th>Update</th>
+                                <th>Diupdate Oleh</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach(($group['rows'] ?? []) as $row)
+                                <tr>
+                                    <td>{{ $row['target_name'] ?? '-' }}</td>
+                                    <td>{{ $row['status'] ?? '-' }}</td>
+                                    <td>{{ filled($row['remaining_pages'] ?? null) ? ($row['remaining_pages'].' dari '.($row['total_pages'] ?? '-').' lembar') : '-' }}</td>
+                                    <td>{{ $row['updated_at'] ?? '-' }}</td>
+                                    <td>{{ $row['updated_by'] ?? '-' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endforeach
+
+            <div class="group-title">Rekap Materi Boarding</div>
+            <div class="summary-box">
+                <strong>Ringkasan</strong>
+{{ $materiBoarding['summary_label'] ?? 'Belum ada progres materi boarding.' }}
+
+                <strong>Bacaan Qur'an</strong>
+{{ $materiBoarding['bacaan_quran']['summary_label'] ?? '-' }}
+
+                <strong>Makna Qur'an</strong>
+{{ $materiBoarding['makna_quran']['summary_label'] ?? '-' }}
+
+                <strong>Makna Hadits</strong>
+{{ $materiBoarding['makna_hadits']['summary_label'] ?? '-' }}
+            </div>
+
+            @if(($materiBoarding['hafalan'] ?? []) !== [])
+                <div style="overflow-x:auto;">
+                    <table class="grid">
+                        <thead>
+                            <tr>
+                                <th>Kelas Hafalan</th>
+                                <th>Nilai</th>
+                                <th>Dinilai</th>
+                                <th>Total Materi</th>
+                                <th>Rata-rata</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach(($materiBoarding['hafalan'] ?? []) as $row)
+                                <tr>
+                                    <td>{{ $row['judul'] ?? '-' }}</td>
+                                    <td>{{ $row['grade_label'] ?? '-' }}</td>
+                                    <td>{{ $row['assessed'] ?? 0 }}</td>
+                                    <td>{{ $row['total'] ?? 0 }}</td>
+                                    <td>{{ $row['average'] ?? '-' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+
+            @foreach(($materiBoarding['manual_groups'] ?? []) as $group)
+                <div class="group-title">{{ $group['judul'] ?? '-' }}</div>
+                <div style="overflow-x:auto;">
+                    <table class="grid">
+                        <thead>
+                            <tr>
+                                <th>Materi</th>
+                                <th>Nilai</th>
+                                <th>Keterangan</th>
+                                <th>Update</th>
+                                <th>Diupdate Oleh</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach(($group['rows'] ?? []) as $row)
+                                <tr>
+                                    <td>{{ $row['target_name'] ?? '-' }}</td>
+                                    <td>{{ $row['grade'] ?? '-' }}</td>
+                                    <td>{{ $row['notes'] ?? '-' }}</td>
+                                    <td>{{ $row['updated_at'] ?? '-' }}</td>
+                                    <td>{{ $row['updated_by'] ?? '-' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endforeach
+            @endif
+
+            @if($activeMateriScope === \App\Models\BoardingPencapaian::MATERI_RAPOT_SCOPE_MT)
+            @foreach(($mt['groups'] ?? []) as $group)
+                <div class="group-title">{{ $group['judul'] ?? '-' }}</div>
+                <div style="overflow-x:auto;">
+                    <table class="grid">
+                        <thead>
+                            <tr>
+                                <th>Materi MT</th>
+                                <th>Capaian</th>
+                                <th>Catatan</th>
+                                <th>Update</th>
+                                <th>Diupdate Oleh</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach(($group['rows'] ?? []) as $row)
+                                <tr>
+                                    <td>{{ $row['target_name'] ?? '-' }}</td>
+                                    <td>{{ $row['capaian'] ?? '-' }}</td>
+                                    <td>{{ $row['notes'] ?? '-' }}</td>
+                                    <td>{{ $row['updated_at'] ?? '-' }}</td>
+                                    <td>{{ $row['updated_by'] ?? '-' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endforeach
+            @endif
+
+            @if($activeMateriScope === \App\Models\BoardingPencapaian::MATERI_RAPOT_SCOPE_BOARDING)
+            @if(($bacaan['rows'] ?? []) !== [])
+                <div class="group-title">Riwayat Bacaan</div>
+                <div style="overflow-x:auto;">
+                    <table class="grid">
+                        <thead>
+                            <tr>
+                                <th>Tanggal Baca</th>
+                                <th>Nilai</th>
+                                <th>Penyimak</th>
+                                <th>Catatan</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach(($bacaan['rows'] ?? []) as $row)
+                                <tr>
+                                    <td>{{ $row['tanggal'] ?? '-' }}</td>
+                                    <td>{{ $row['nilai'] ?? '-' }}</td>
+                                    <td>{{ $row['reviewer'] ?? '-' }}</td>
+                                    <td>{{ $row['notes'] ?? '-' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+            @endif
         </section>
 
         <section class="section">
@@ -520,15 +867,15 @@ Doa:
             <p class="muted">{{ $payload['school']['kota'] ?? ($rapot->tempat_cetak ?? '-') }}, {{ $payload['rapot']['tanggal_rapot'] ?? '-' }}</p>
             <div class="signature-grid">
                 <div class="signature-box">
-                    <div>Wali Pamong</div>
+                    <div>{{ $payload['signatures']['wali_pamong_label'] ?? 'Wali Pamong' }}</div>
                     <div class="name">{{ $payload['signatures']['wali_pamong_nama'] ?? '-' }}</div>
                 </div>
                 <div class="signature-box">
-                    <div>Kepala Boarding</div>
+                    <div>{{ $payload['signatures']['kepala_boarding_label'] ?? 'Kepala Boarding' }}</div>
                     <div class="name">{{ $payload['signatures']['kepala_boarding_nama'] ?? '-' }}</div>
                 </div>
                 <div class="signature-box">
-                    <div>Mudir Asrama</div>
+                    <div>{{ $payload['signatures']['mudir_asrama_label'] ?? 'Mudir Asrama' }}</div>
                     <div class="name">{{ $payload['signatures']['mudir_asrama_nama'] ?? '-' }}</div>
                 </div>
             </div>

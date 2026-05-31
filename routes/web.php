@@ -97,8 +97,14 @@ Route::middleware('auth')->get(
 )->name('admin.uks-records.export');
 
 Route::middleware('auth')->prefix('/admin/boarding-rapots/{boardingRapot}')->group(function (): void {
+    Route::get('/manual-edit', [BoardingRapotDocumentController::class, 'editManual'])
+        ->name('admin.boarding-rapots.manual-edit');
+    Route::post('/manual-update', [BoardingRapotDocumentController::class, 'updateManual'])
+        ->name('admin.boarding-rapots.manual-update');
     Route::get('/preview', [BoardingRapotDocumentController::class, 'preview'])
         ->name('admin.boarding-rapots.preview');
+    Route::get('/rekap', [BoardingRapotDocumentController::class, 'rekap'])
+        ->name('admin.boarding-rapots.rekap');
     Route::get('/print', [BoardingRapotDocumentController::class, 'print'])
         ->name('admin.boarding-rapots.print');
     Route::get('/export', [BoardingRapotDocumentController::class, 'export'])
@@ -203,7 +209,7 @@ Route::get('/manifest.webmanifest', function () {
 
 Route::get('/service-worker.js', function () {
     $script = <<<'JS'
-const CACHE_NAME = 'akses-public-shell-v2';
+const CACHE_NAME = 'akses-public-shell-v3';
 const NETWORK_ONLY_PREFIXES = [
     '/admin',
     '/livewire',
@@ -240,6 +246,14 @@ const shouldBypassCache = (request, url) => {
     return false;
 };
 
+const fetchNetworkOnly = (request) => {
+    if (request.method === 'GET') {
+        return fetch(request, { cache: 'no-store' });
+    }
+
+    return fetch(request);
+};
+
 self.addEventListener('install', (event) => {
     self.skipWaiting();
 
@@ -265,6 +279,8 @@ self.addEventListener('fetch', (event) => {
     }
 
     if (shouldBypassCache(request, url)) {
+        event.respondWith(fetchNetworkOnly(request));
+
         return;
     }
 

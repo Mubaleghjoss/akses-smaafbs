@@ -3,21 +3,25 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Concerns\HasModulePermissions;
+use App\Filament\Concerns\HasOptimizedAdminTable;
 use App\Filament\Resources\BoardingHafalanPointResource\Pages;
 use App\Models\BoardingHafalanPoint;
-use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables;
+use Filament\Tables\Enums\FiltersLayout;
+use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
 class BoardingHafalanPointResource extends Resource
 {
     use HasModulePermissions;
+    use HasOptimizedAdminTable;
 
     protected static ?string $model = BoardingHafalanPoint::class;
 
@@ -25,11 +29,11 @@ class BoardingHafalanPointResource extends Resource
 
     protected static string|\UnitEnum|null $navigationGroup = 'Boarding';
 
-    protected static ?string $navigationLabel = 'Master Hafalan';
+    protected static ?string $navigationLabel = 'Materi Boarding';
 
-    protected static ?string $modelLabel = 'master hafalan';
+    protected static ?string $modelLabel = 'materi boarding';
 
-    protected static ?string $pluralModelLabel = 'Master Hafalan';
+    protected static ?string $pluralModelLabel = 'Materi Boarding';
 
     protected static ?int $navigationSort = 25;
 
@@ -54,26 +58,30 @@ class BoardingHafalanPointResource extends Resource
     {
         return $schema
             ->schema([
-                Section::make('Master Hafalan')
+                Section::make('Materi Boarding')
+                    ->description('Kelola materi hafalan, makna Quran, dan hadits untuk modul pencapaian boarding.')
                     ->columns(['default' => 1, 'md' => 2])
                     ->schema([
-                        Forms\Components\Select::make('materi_key')
-                            ->label('Materi Key')
+                        Forms\Components\Select::make('materi_scope')
+                            ->label('Pilihan Materi')
                             ->required()
                             ->native(false)
-                            ->options(BoardingHafalanPoint::MATERI_OPTIONS)
-                            ->helperText('Pilih materi hafalan sesuai daftar master.'),
+                            ->live()
+                            ->default('boarding')
+                            ->options(BoardingHafalanPoint::scopeOptions()),
+                        Forms\Components\Select::make('materi_key')
+                            ->label('Kelompok Materi')
+                            ->required()
+                            ->native(false)
+                            ->options(fn (Get $get): array => BoardingHafalanPoint::materiOptionsForScope($get('materi_scope')))
+                            ->helperText('Pilih kelas materi sesuai pilihan Materi Boarding atau Materi MT.'),
                         Forms\Components\Select::make('jenis')
-                            ->label('Jenis')
-                            ->options([
-                                'surat' => 'Surat',
-                                'doa' => 'Doa',
-                                'dalil' => 'Dalil',
-                            ])
+                            ->label('Jenis Materi')
+                            ->options(BoardingHafalanPoint::jenisOptions())
                             ->native(false)
                             ->required(),
                         Forms\Components\TextInput::make('nama_point')
-                            ->label('Nama Point')
+                            ->label('Nama Materi')
                             ->required()
                             ->maxLength(191)
                             ->columnSpanFull(),
@@ -92,57 +100,100 @@ class BoardingHafalanPointResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table
+        return static::optimizeAdminTable(
+            $table,
+            searchPlaceholder: 'Cari materi hafalan, makna Quran, atau hadits...',
+            emptyStateHeading: 'Belum ada materi boarding',
+            emptyStateDescription: "Tambahkan materi sesuai Qur'an Bacaan, Qur'an Makna, Hadits Makna, Pengetesan Makna, atau Hafalan."
+        )
             ->defaultSort(fn (Builder $query): Builder => $query
-                ->orderBy('materi_key')
+                ->orderByRaw(BoardingHafalanPoint::materiOrderSql())
+                ->orderByRaw("CASE jenis WHEN 'bacaan_quran' THEN 10 WHEN 'makna_quran' THEN 20 WHEN 'makna_hadits' THEN 30 WHEN 'pengetesan_makna' THEN 40 WHEN 'surat' THEN 50 WHEN 'doa' THEN 60 WHEN 'dalil' THEN 70 ELSE 99 END")
                 ->orderBy('urutan')
                 ->orderBy('id'))
+            ->defaultPaginationPageOption(50)
+            ->paginated([25, 50, 100, 200])
             ->reorderable('urutan', condition: function ($livewire): bool {
                 $materiKey = data_get($livewire, 'tableFilters.materi_key.value');
 
                 return filled($materiKey);
             })
             ->authorizeReorder(fn (): bool => static::canEdit(null))
+            ->groups([
+                Group::make('materi_key')
+                    ->label('Materi :')
+                    ->orderQueryUsing(fn (Builder $query, string $direction): Builder => $query
+                        ->orderByRaw(BoardingHafalanPoint::materiOrderSql()." {$direction}")
+                        ->orderBy('materi_key', $direction))
+                    ->getTitleFromRecordUsing(fn (BoardingHafalanPoint $record): string => BoardingHafalanPoint::materiLabel($record->materi_key)),
+            ])
+            ->defaultGroup('materi_key')
+            ->filtersLayout(FiltersLayout::AboveContent)
             ->columns([
-                Tables\Columns\TextColumn::make('materi_key')
+                Tables\Columns\SelectColumn::make('materi_key')
                     ->label('Materi')
+                    ->options(BoardingHafalanPoint::allMateriOptions())
+                    ->native(false)
+                    ->selectablePlaceholder(false)
+                    ->rules(['required', 'string', 'max:191'])
+                    ->disabled(fn (): bool => ! static::canEdit(null))
                     ->searchable()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('jenis')
-                    ->label('Jenis')
-                    ->badge()
+                Tables\Columns\SelectColumn::make('jenis')
+                    ->label('Jenis Materi')
+                    ->options(BoardingHafalanPoint::jenisOptions())
+                    ->native(false)
+                    ->selectablePlaceholder(false)
+                    ->rules(['required', 'string', 'max:191'])
+                    ->disabled(fn (): bool => ! static::canEdit(null))
                     ->searchable()
-                    ->sortable(),
-                Tables\Columns\TextColumn::make('nama_point')
-                    ->label('Nama Point')
-                    ->wrap()
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('urutan')
+                    ->sortable()
+                    ->visibleFrom('md'),
+                Tables\Columns\TextInputColumn::make('nama_point')
+                    ->label('Nama Materi')
+                    ->rules(['required', 'string', 'max:191'])
+                    ->disabled(fn (): bool => ! static::canEdit(null))
+                    ->searchable()
+                    ->tooltip(function (BoardingHafalanPoint $record): string {
+                        return collect([
+                            BoardingHafalanPoint::jenisLabel($record->jenis),
+                            'Urutan '.(int) $record->urutan,
+                            $record->is_active ? 'Aktif' : 'Nonaktif',
+                        ])->implode(' | ');
+                    }),
+                Tables\Columns\TextInputColumn::make('urutan')
                     ->label('Urutan')
-                    ->sortable(),
-                Tables\Columns\IconColumn::make('is_active')
+                    ->type('number')
+                    ->rules(['required', 'integer', 'min:0'])
+                    ->extraInputAttributes(['min' => 0, 'inputmode' => 'numeric'])
+                    ->disabled(fn (): bool => ! static::canEdit(null))
+                    ->sortable()
+                    ->alignCenter()
+                    ->visibleFrom('md'),
+                Tables\Columns\ToggleColumn::make('is_active')
                     ->label('Aktif')
-                    ->boolean(),
+                    ->disabled(fn (): bool => ! static::canEdit(null))
+                    ->alignCenter()
+                    ->visibleFrom('md'),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('materi_key')
-                    ->label('Materi')
-                    ->options(BoardingHafalanPoint::materiKeyOptions()),
+                    ->label('Materi :')
+                    ->placeholder('Semua materi')
+                    ->native(false)
+                    ->searchable()
+                    ->options(function ($livewire): array {
+                        $activeTab = data_get($livewire, 'activeTab', 'boarding');
+
+                        return BoardingHafalanPoint::materiOptionsForScope($activeTab === 'mt' ? 'mt' : 'boarding');
+                    }),
+                Tables\Filters\SelectFilter::make('jenis')
+                    ->label('Jenis Materi')
+                    ->options(BoardingHafalanPoint::jenisOptions()),
                 Tables\Filters\TernaryFilter::make('is_active')
                     ->label('Status Aktif'),
             ])
             ->actions([
-                Action::make('toggle_active')
-                    ->label(fn (BoardingHafalanPoint $record): string => $record->is_active ? 'Nonaktifkan' : 'Aktifkan')
-                    ->icon(fn (BoardingHafalanPoint $record): string => $record->is_active ? 'heroicon-o-x-circle' : 'heroicon-o-check-circle')
-                    ->color(fn (BoardingHafalanPoint $record): string => $record->is_active ? 'warning' : 'success')
-                    ->requiresConfirmation()
-                    ->modalHeading(fn (BoardingHafalanPoint $record): string => $record->is_active ? 'Nonaktifkan point hafalan?' : 'Aktifkan point hafalan?')
-                    ->modalDescription('Point hafalan tidak akan dihapus. Status aktif bisa diubah kembali kapan saja.')
-                    ->action(function (BoardingHafalanPoint $record): void {
-                        $record->update(['is_active' => ! $record->is_active]);
-                    })
-                    ->visible(fn (): bool => static::canEdit(null)),
                 EditAction::make(),
             ]);
     }

@@ -68,6 +68,11 @@ class Pengaturan extends Model
         return $resolvedDefaults;
     }
 
+    public static function flushRuntimeSchemaCache(): void
+    {
+        static::$tableAvailable = null;
+    }
+
     protected static function tableAvailable(): bool
     {
         return static::$tableAvailable ??= Schema::hasTable('pengaturan');

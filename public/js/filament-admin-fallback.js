@@ -30,6 +30,158 @@
         document.body.appendChild(notice);
     }
 
+    function reloadAdminWithFreshSessionUrl() {
+        const url = new URL(window.location.href);
+
+        url.searchParams.set('_admin_session_refresh', Date.now().toString());
+
+        window.location.replace(url.toString());
+    }
+
+    function readCookie(name) {
+        const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const match = document.cookie.match(new RegExp('(?:^|; )' + escapedName + '=([^;]*)'));
+
+        return match ? decodeURIComponent(match[1]) : null;
+    }
+
+    function currentCsrfToken() {
+        return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+            || document.querySelector('[data-csrf]')?.getAttribute('data-csrf')
+            || window.livewireScriptConfig?.csrf
+            || null;
+    }
+
+    function currentRequestCsrfToken() {
+        return currentCsrfToken();
+    }
+
+    function hasHeader(headers, name) {
+        if (!headers) {
+            return false;
+        }
+
+        if (typeof Headers !== 'undefined' && headers instanceof Headers) {
+            return headers.has(name);
+        }
+
+        if (Array.isArray(headers)) {
+            return headers.some(([key]) => String(key).toLowerCase() === name.toLowerCase());
+        }
+
+        return Object.keys(headers).some((key) => key.toLowerCase() === name.toLowerCase());
+    }
+
+    function setHeader(headers, name, value) {
+        if (typeof Headers !== 'undefined' && headers instanceof Headers) {
+            headers.set(name, value);
+
+            return headers;
+        }
+
+        if (Array.isArray(headers)) {
+            const existing = headers.find(([key]) => String(key).toLowerCase() === name.toLowerCase());
+
+            if (existing) {
+                existing[1] = value;
+            } else {
+                headers.push([name, value]);
+            }
+
+            return headers;
+        }
+
+        headers[name] = value;
+
+        return headers;
+    }
+
+    function attachCsrfHeaders(options) {
+        if (!options) {
+            return;
+        }
+
+        options.headers = options.headers || {};
+
+        const csrfToken = currentRequestCsrfToken();
+        const xsrfToken = readCookie('XSRF-TOKEN');
+
+        if (csrfToken && !hasHeader(options.headers, 'X-CSRF-TOKEN')) {
+            options.headers = setHeader(options.headers, 'X-CSRF-TOKEN', csrfToken);
+        }
+
+        if (xsrfToken && !hasHeader(options.headers, 'X-XSRF-TOKEN')) {
+            options.headers = setHeader(options.headers, 'X-XSRF-TOKEN', xsrfToken);
+        }
+    }
+
+    function updateLivewirePayloadToken(payload) {
+        const csrfToken = currentRequestCsrfToken();
+
+        if (!csrfToken || !payload || typeof payload !== 'object') {
+            return false;
+        }
+
+        if (!('_token' in payload) && !('components' in payload)) {
+            return false;
+        }
+
+        payload._token = csrfToken;
+
+        return true;
+    }
+
+    function refreshBodyCsrfToken(options) {
+        if (!options?.body) {
+            return;
+        }
+
+        if (typeof FormData !== 'undefined' && options.body instanceof FormData) {
+            const csrfToken = currentRequestCsrfToken();
+
+            if (csrfToken && options.body.has('_token')) {
+                options.body.set('_token', csrfToken);
+            }
+
+            return;
+        }
+
+        if (typeof URLSearchParams !== 'undefined' && options.body instanceof URLSearchParams) {
+            const csrfToken = currentRequestCsrfToken();
+
+            if (csrfToken && options.body.has('_token')) {
+                options.body.set('_token', csrfToken);
+            }
+
+            return;
+        }
+
+        if (typeof options.body !== 'string') {
+            return;
+        }
+
+        try {
+            const payload = JSON.parse(options.body);
+
+            if (updateLivewirePayloadToken(payload)) {
+                options.body = JSON.stringify(payload);
+            }
+        } catch (error) {
+            // Non-JSON request bodies are left untouched.
+        }
+    }
+
+    function prepareLivewireRequest(request, options = null) {
+        const requestOptions = options || request?.options || request;
+
+        if (request?.payload) {
+            updateLivewirePayloadToken(request.payload);
+        }
+
+        attachCsrfHeaders(requestOptions);
+        refreshBodyCsrfToken(requestOptions);
+    }
+
     function refreshAdminSession() {
         if (livewireSessionExpiredHandled) {
             return;
@@ -38,9 +190,7 @@
         livewireSessionExpiredHandled = true;
         showAdminSessionExpiredNotice();
 
-        window.setTimeout(() => {
-            window.location.reload();
-        }, document.visibilityState === 'hidden' ? 100 : 900);
+        window.setTimeout(reloadAdminWithFreshSessionUrl, document.visibilityState === 'hidden' ? 100 : 900);
     }
 
     function isSessionExpiredPayload(payload) {
@@ -53,7 +203,9 @@
         }
 
         if (typeof window.Livewire.interceptRequest === 'function') {
-            window.Livewire.interceptRequest(({ onError }) => {
+            window.Livewire.interceptRequest(({ request, onError }) => {
+                prepareLivewireRequest(request);
+
                 onError(({ response, preventDefault }) => {
                     if (Number(response?.status) !== 419) {
                         return;
@@ -70,7 +222,9 @@
         }
 
         if (typeof window.Livewire.hook === 'function') {
-            window.Livewire.hook('request', ({ fail }) => {
+            window.Livewire.hook('request', ({ options, fail }) => {
+                prepareLivewireRequest(null, options);
+
                 if (typeof fail !== 'function') {
                     return;
                 }

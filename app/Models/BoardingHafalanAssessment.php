@@ -38,4 +38,9 @@ class BoardingHafalanAssessment extends Model
     {
         return $this->belongsTo(BoardingPencapaian::class, 'boarding_pencapaian_id');
     }
+
+    public function reviewerUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewer_user_id');
+    }
 }

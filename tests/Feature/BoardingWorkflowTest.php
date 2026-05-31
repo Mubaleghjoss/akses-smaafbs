@@ -6,15 +6,24 @@ use App\Filament\Resources\BoardingKeuanganSiswaResource;
 use App\Filament\Resources\BoardingPencapaianResource;
 use App\Filament\Resources\DataSiswaResource;
 use App\Filament\Resources\UserResource;
+use App\Models\BoardingBacaanAssessment;
+use App\Models\BoardingHafalanAssessment;
+use App\Models\BoardingHafalanPoint;
 use App\Models\BoardingKeuanganSiswa;
 use App\Models\BoardingKonselingMt;
+use App\Models\BoardingMaknaProgress;
+use App\Models\BoardingMateriProgress;
+use App\Models\BoardingMtProgress;
 use App\Models\BoardingPencapaian;
 use App\Models\BoardingRapot;
 use App\Models\DataSiswa;
+use App\Models\Pengaturan;
 use App\Models\User;
+use App\Support\Boarding\BoardingRapotSheetRows;
 use Database\Seeders\InitialAdminSeeder;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
@@ -26,8 +35,11 @@ class BoardingWorkflowTest extends TestCase
 
         $this->runUserMigrations();
         $this->runPermissionMigration();
+        $this->createPengaturanTable();
         $this->createDataSiswaTable();
         $this->runBoardingMigrations();
+        BoardingKeuanganSiswa::flushRuntimeSchemaCache();
+        BoardingRapot::flushDocumentSettingSnapshot();
         (new InitialAdminSeeder)->run();
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
@@ -141,7 +153,7 @@ class BoardingWorkflowTest extends TestCase
         $this->assertSame(['Putra Milik Pamong Lain', 'Putra Scope', 'Putra Scope Kelas Dua'], $visibleStudents);
         $this->assertSame(['Putra Scope', 'Putra Scope Kelas Dua'], $visiblePencapaian);
         $this->assertSame(['Putra Scope', 'Putra Scope Kelas Dua'], $visibleKeuangan);
-        $this->assertContains('Manajemen Boarding', $pamong->resolvedNavigationGroups());
+        $this->assertContains('Boarding', $pamong->resolvedNavigationGroups());
         $this->assertFalse(DataSiswaResource::canViewAny());
         $this->assertFalse(UserResource::canViewAny());
     }
@@ -365,6 +377,21 @@ class BoardingWorkflowTest extends TestCase
             ],
         ]);
 
+        $lambatanPoint = BoardingHafalanPoint::query()
+            ->where('is_active', true)
+            ->where('materi_key', 'lambatan')
+            ->whereIn('jenis', BoardingHafalanPoint::hafalanJenis())
+            ->orderBy('urutan')
+            ->firstOrFail();
+
+        BoardingHafalanAssessment::query()->create([
+            'boarding_pencapaian_id' => $pencapaian->getKey(),
+            'boarding_hafalan_point_id' => $lambatanPoint->getKey(),
+            'assessed_at' => '2026-03-24',
+            'score' => 82,
+            'reviewer_user_id' => $pamong->id,
+        ]);
+
         BoardingKonselingMt::query()->create([
             'siswa_id' => $siswa->id,
             'pamong_user_id' => $pamong->id,
@@ -424,6 +451,32 @@ class BoardingWorkflowTest extends TestCase
             'status_rapot' => 'review',
             'tanggal_rapot' => '2026-03-25',
             'predikat_boarding' => 'jayyid',
+            'administrasi_rapot_items' => [
+                [
+                    'question' => 'Status Administrasi',
+                    'answer' => 'Sudah diverifikasi manual.',
+                ],
+            ],
+        ]);
+
+        Storage::fake('public');
+        Storage::disk('public')->put(
+            'boarding-rapot/logo/rapot-test.svg',
+            '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><rect width="24" height="24" fill="#0f766e"/></svg>'
+        );
+
+        BoardingRapot::saveDocumentSettings([
+            BoardingRapot::SETTING_LOGO_PATH => 'boarding-rapot/logo/rapot-test.svg',
+            BoardingRapot::SETTING_KOP_SITE_NAME => 'Kop Rapot Boarding Test',
+            BoardingRapot::SETTING_KOP_SUBTITLE => 'Laporan Boarding Santri',
+            BoardingRapot::SETTING_KOP_CONTACT => '0812-0000-0000 | boarding.test@example.test',
+            BoardingRapot::SETTING_PROLOG => 'Prolog khusus rapot boarding untuk orang tua santri.',
+            BoardingRapot::SETTING_WALI_LABEL => 'Pembimbing Asrama',
+            BoardingRapot::SETTING_KEPALA_LABEL => 'Penanggung Jawab Boarding',
+            BoardingRapot::SETTING_MUDIR_LABEL => 'Pengesah Asrama',
+            BoardingRapot::SETTING_KEPALA_NAME => 'Kepala Boarding Test',
+            BoardingRapot::SETTING_MUDIR_NAME => 'Mudir Asrama Test',
+            BoardingRapot::SETTING_KOTA => 'Bandung',
         ]);
 
         $rapot->syncFromSources();
@@ -432,6 +485,13 @@ class BoardingWorkflowTest extends TestCase
         $this->assertNotNull($rapot->generated_at);
         $this->assertStringContainsString('RB/', (string) $rapot->nomor_dokumen);
         $this->assertSame('Abiel Shahreza', $rapot->rekap_payload['siswa']['nama']);
+        $this->assertSame('Kelas Lambatan', $rapot->rekap_payload['rapot']['kelas_boarding']);
+        $this->assertSame('Kelas Lambatan', $rapot->rekap_payload['rapot']['kelas_boarding_auto']);
+        $this->assertNull($rapot->rekap_payload['rapot']['kelas_boarding_override_key']);
+        $this->assertSame('Status Administrasi', $rapot->rekap_payload['rapot']['administrasi_items'][0]['question']);
+        $this->assertSame('Sudah diverifikasi manual.', $rapot->rekap_payload['rapot']['administrasi_items'][0]['answer']);
+        $this->assertSame('Prolog khusus rapot boarding untuk orang tua santri.', $rapot->rekap_payload['document']['prolog']);
+        $this->assertSame('Pembimbing Asrama', $rapot->rekap_payload['signatures']['wali_pamong_label']);
         $this->assertSame(150000, $rapot->rekap_payload['keuangan']['saldo_tersisa']);
         $this->assertSame(300000, $rapot->rekap_payload['keuangan']['total_titipan']);
         $this->assertSame(300000, $rapot->rekap_payload['keuangan']['titipan_masuk']);
@@ -443,6 +503,15 @@ class BoardingWorkflowTest extends TestCase
         $this->assertCount(3, $rapot->rekap_payload['pencapaian']['detail_kelompok']);
         $this->assertCount(1, $rapot->rekap_payload['konseling']);
         $this->assertSame('Motivasi', $rapot->rekap_payload['konseling'][0]['kategori']);
+
+        $rapot->update(['kelas_boarding_override' => 'cepatan']);
+        $rapot->syncFromSources();
+        $rapot->refresh();
+
+        $this->assertSame('Kelas Cepatan', $rapot->rekap_payload['rapot']['kelas_boarding']);
+        $this->assertSame('Kelas Lambatan', $rapot->rekap_payload['rapot']['kelas_boarding_auto']);
+        $this->assertSame('cepatan', $rapot->rekap_payload['rapot']['kelas_boarding_override_key']);
+        $this->assertSame('Kelas Cepatan', $rapot->rekap_payload['rapot']['kelas_boarding_override']);
 
         $rapot->update([
             'catatan_pamong' => 'Catatan final dari pamong untuk dicetak.',
@@ -461,8 +530,33 @@ class BoardingWorkflowTest extends TestCase
         $this->get(route('admin.boarding-rapots.preview', $rapot))
             ->assertOk()
             ->assertSee('RAPOT BOARDING')
+            ->assertSee('Target Materi Rapot Aktif')
+            ->assertSee('Materi Boarding')
+            ->assertSee('Halaman 1 - Materi Boarding')
+            ->assertSee('KOP RAPOT BOARDING TEST')
+            ->assertSee('LAPORAN BOARDING SANTRI')
+            ->assertSee('Prolog khusus rapot boarding untuk orang tua santri.')
+            ->assertSee('Kelas Boarding')
+            ->assertSee('Kelas Cepatan')
+            ->assertSee('src="data:', false)
+            ->assertSee('Status Administrasi')
+            ->assertSee('Sudah diverifikasi manual.')
+            ->assertSee('Pembimbing Asrama')
+            ->assertSee('Kepala Boarding Test')
+            ->assertDontSee('Halaman 2 - Rapot MT')
+            ->assertDontSee('Detail Target Boarding')
+            ->assertDontSee('Riwayat Konseling Terbaru')
+            ->assertDontSee('Predikat')
+            ->assertSee('Pengetesan Makna')
             ->assertSee('Abiel Shahreza')
             ->assertSee('Pamong X');
+
+        $this->get(route('admin.boarding-rapots.rekap', $rapot))
+            ->assertOk()
+            ->assertSee('REKAP DATA RAPOT BOARDING')
+            ->assertSee('Detail Target Boarding')
+            ->assertSee('Riwayat Konseling Terbaru')
+            ->assertSee('Motivasi');
 
         $rapot->refresh();
 
@@ -472,6 +566,370 @@ class BoardingWorkflowTest extends TestCase
         $this->get(route('admin.boarding-rapots.export', $rapot))
             ->assertOk()
             ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    }
+
+    public function test_boarding_rapot_document_signature_settings_override_stale_record_values(): void
+    {
+        $siswa = DataSiswa::query()->create([
+            'nama' => 'Santri Tanda Tangan',
+            'rombel_saat_ini' => 'XI.I / 2025-2026',
+            'jk' => 'L',
+            'status' => 'aktif',
+        ]);
+
+        $pamong = User::query()->create([
+            'name' => 'Rizki',
+            'username' => 'pamong-signature-settings',
+            'password' => 'secret123',
+            'boarding_rombel_scope' => ['XI.I / 2025-2026'],
+        ]);
+
+        $rapot = BoardingRapot::query()->create([
+            'siswa_id' => $siswa->id,
+            'pamong_user_id' => $pamong->id,
+            'periode_tahun' => '2025/2026',
+            'semester' => 'genap',
+            'status_rapot' => 'review',
+            'tanggal_rapot' => '2026-05-30',
+            'wali_pamong_nama' => 'Rizki',
+            'kepala_boarding_nama' => ':',
+            'mudir_asrama_nama' => ':',
+            'tempat_cetak' => 'Bogor',
+        ]);
+
+        BoardingRapot::saveDocumentSettings([
+            BoardingRapot::SETTING_KOTA => 'Tangerang',
+            BoardingRapot::SETTING_WALI_LABEL => 'Kepala Sekolah',
+            BoardingRapot::SETTING_WALI_NAME => 'H. Toharyono, S.Si.',
+            BoardingRapot::SETTING_KEPALA_LABEL => 'Kepala Boarding',
+            BoardingRapot::SETTING_KEPALA_NAME => 'Yusuf Choirii',
+            BoardingRapot::SETTING_MUDIR_LABEL => 'Pamong',
+            BoardingRapot::SETTING_MUDIR_NAME => 'Ustadz Pamong Tiga',
+        ]);
+
+        $rapot->syncFromSources();
+        $rapot->refresh();
+
+        $this->assertSame('Tangerang', $rapot->rekap_payload['school']['kota']);
+        $this->assertSame('Kepala Sekolah', $rapot->rekap_payload['signatures']['wali_pamong_label']);
+        $this->assertSame('H. Toharyono, S.Si.', $rapot->rekap_payload['signatures']['wali_pamong_nama']);
+        $this->assertSame('Kepala Boarding', $rapot->rekap_payload['signatures']['kepala_boarding_label']);
+        $this->assertSame('Yusuf Choirii', $rapot->rekap_payload['signatures']['kepala_boarding_nama']);
+        $this->assertSame('Pamong', $rapot->rekap_payload['signatures']['mudir_asrama_label']);
+        $this->assertSame('Ustadz Pamong Tiga', $rapot->rekap_payload['signatures']['mudir_asrama_nama']);
+    }
+
+    public function test_boarding_rapots_are_created_and_refreshed_from_filled_pencapaian_targets(): void
+    {
+        $filledStudent = DataSiswa::query()->create([
+            'nama' => 'Santri Terisi',
+            'rombel_saat_ini' => 'XI.I / 2025-2026',
+            'jk' => 'L',
+            'status' => 'aktif',
+        ]);
+
+        $blankStudent = DataSiswa::query()->create([
+            'nama' => 'Santri Kosong',
+            'rombel_saat_ini' => 'XI.I / 2025-2026',
+            'jk' => 'L',
+            'status' => 'aktif',
+        ]);
+
+        $pamong = User::query()->create([
+            'name' => 'Pamong Auto Rapot',
+            'username' => 'pamong-auto-rapot',
+            'password' => 'secret123',
+            'boarding_rombel_scope' => ['XI.I / 2025-2026'],
+        ]);
+        $pamong->assignRole('pamong_putra');
+
+        $admin = User::query()->create([
+            'name' => 'Admin Auto Rapot',
+            'username' => 'admin-auto-rapot',
+            'password' => 'secret123',
+        ]);
+        $admin->assignRole('admin');
+
+        $filledPencapaian = BoardingPencapaian::query()->create([
+            'siswa_id' => $filledStudent->id,
+            'pamong_user_id' => $pamong->id,
+            'status_pencapaian' => 'proses',
+        ]);
+
+        BoardingPencapaian::query()->create([
+            'siswa_id' => $blankStudent->id,
+            'pamong_user_id' => $pamong->id,
+            'status_pencapaian' => 'proses',
+        ]);
+
+        $detail = $filledPencapaian->details()->create([
+            'kategori_detail' => 'hafalan_surat',
+            'nama_target' => 'Al-Fill',
+            'target_nilai' => 2,
+            'capaian_nilai' => 1,
+            'satuan' => 'surat',
+            'status_detail' => 'proses',
+        ]);
+
+        $point = BoardingHafalanPoint::query()
+            ->where('is_active', true)
+            ->where('materi_key', 'pegon_bacaan')
+            ->whereIn('jenis', BoardingHafalanPoint::hafalanJenis())
+            ->orderBy('urutan')
+            ->firstOrFail();
+
+        BoardingHafalanAssessment::query()->create([
+            'boarding_pencapaian_id' => $filledPencapaian->getKey(),
+            'boarding_hafalan_point_id' => $point->getKey(),
+            'assessed_at' => '2026-05-29',
+            'score' => 86,
+            'reviewer_user_id' => $admin->id,
+        ]);
+
+        BoardingMaknaProgress::ensureDefaultsForPencapaian($filledPencapaian);
+        BoardingMaknaProgress::query()
+            ->where('boarding_pencapaian_id', $filledPencapaian->getKey())
+            ->where('target_key', 'quran_juz_1')
+            ->firstOrFail()
+            ->update(['status' => 'khatam']);
+
+        BoardingMtProgress::ensureDefaultsForPencapaian($filledPencapaian);
+        BoardingMtProgress::query()
+            ->where('boarding_pencapaian_id', $filledPencapaian->getKey())
+            ->where('target_key', 'muslim_jilid_1')
+            ->firstOrFail()
+            ->update([
+                'progress_value' => 12,
+                'target_total' => 20,
+                'notes' => 'Sudah khatam sebagian.',
+            ]);
+        BoardingMtProgress::query()
+            ->where('boarding_pencapaian_id', $filledPencapaian->getKey())
+            ->where('target_key', 'kesemangatan')
+            ->firstOrFail()
+            ->update([
+                'grade' => 'baik',
+                'notes' => 'Semangat setor meningkat.',
+            ]);
+
+        BoardingMateriProgress::ensureDefaultsForPencapaian($filledPencapaian);
+        BoardingMateriProgress::query()
+            ->where('boarding_pencapaian_id', $filledPencapaian->getKey())
+            ->where('target_key', 'pengetesan_makna')
+            ->firstOrFail()
+            ->update([
+                'grade' => 'baik',
+                'notes' => 'Pengetesan makna baik.',
+            ]);
+        BoardingMateriProgress::query()
+            ->where('boarding_pencapaian_id', $filledPencapaian->getKey())
+            ->where('target_key', 'kedisiplinan')
+            ->firstOrFail()
+            ->update([
+                'grade' => 'cukup',
+                'notes' => 'Perlu datang tepat waktu.',
+            ]);
+
+        BoardingBacaanAssessment::query()->create([
+            'boarding_pencapaian_id' => $filledPencapaian->getKey(),
+            'assessed_at' => '2026-05-30',
+            'pp_grade' => 'A',
+            'kl_grade' => 'B',
+            'tj_grade' => 'A',
+            'mj_grade' => 'B',
+            'reviewer_user_id' => $admin->id,
+            'notes' => 'Bacaan lancar.',
+        ]);
+
+        $result = BoardingRapot::syncFromFilledPencapaians(
+            user: $admin,
+            periodeTahun: '2025/2026',
+            semester: 'genap',
+            tanggalRapot: '2026-05-30',
+            overwriteNarratives: true,
+        );
+
+        $this->assertSame(['created' => 1, 'updated' => 0, 'total' => 1], $result);
+        $this->assertDatabaseHas('boarding_rapots', [
+            'siswa_id' => $filledStudent->id,
+            'periode_tahun' => '2025/2026',
+            'semester' => 'genap',
+            'pamong_user_id' => $pamong->id,
+        ]);
+        $this->assertDatabaseMissing('boarding_rapots', [
+            'siswa_id' => $blankStudent->id,
+        ]);
+
+        $rapot = BoardingRapot::query()->where('siswa_id', $filledStudent->id)->firstOrFail();
+
+        $this->assertSame(1, $rapot->rekap_payload['pencapaian']['realisasi']['surat']);
+        $this->assertSame('boarding', $rapot->rekap_payload['pencapaian']['materi_rapot_scope']);
+        $this->assertNotEmpty($rapot->rekap_payload['pencapaian']['hafalan_detail']);
+        $this->assertSame(1, $rapot->rekap_payload['pencapaian']['makna']['filled_count']);
+        $this->assertSame(2, $rapot->rekap_payload['pencapaian']['materi_boarding']['filled_manual_count']);
+        $this->assertFalse($rapot->rekap_payload['pencapaian']['mt']['is_active']);
+        $this->assertStringContainsString('Materi Boarding: 2 pengetesan/catatan terisi', (string) $rapot->ringkasan_pencapaian);
+        $this->assertStringNotContainsString('Materi MT:', (string) $rapot->ringkasan_pencapaian);
+        $this->assertSame(1, $rapot->rekap_payload['pencapaian']['bacaan']['total_sessions']);
+        $this->assertStringContainsString('Catatan dan Saran Boarding: Kedisiplinan: Cukup - Perlu datang tepat waktu.', (string) $rapot->catatan_pamong);
+        $this->assertStringNotContainsString('Catatan dan Saran MT:', (string) $rapot->catatan_pamong);
+
+        $materiBoardingSheetRows = BoardingRapotSheetRows::materiBoardingRows($rapot->rekap_payload);
+
+        $this->assertSame('Belum Tuntas - sudah hafal 1 materi dari 24 materi', $materiBoardingSheetRows[5][2]);
+        $this->assertSame('Cukup - Perlu datang tepat waktu.', $materiBoardingSheetRows[9][2]);
+
+        $filledPencapaian->update(['materi_rapot_scope' => 'mt']);
+        $rapot->refresh();
+
+        $this->assertSame('mt', $rapot->rekap_payload['pencapaian']['materi_rapot_scope']);
+        $this->assertFalse($rapot->rekap_payload['pencapaian']['materi_boarding']['is_active']);
+        $this->assertSame(2, $rapot->rekap_payload['pencapaian']['mt']['filled_count']);
+        $this->assertStringContainsString('Materi MT: 2 dari 11 target MT terisi', (string) $rapot->ringkasan_pencapaian);
+        $this->assertStringNotContainsString('Materi Boarding:', (string) $rapot->ringkasan_pencapaian);
+        $this->assertStringContainsString('Catatan dan Saran MT: Kesemangatan: Baik - Semangat setor meningkat.', (string) $rapot->catatan_pamong);
+        $this->assertStringNotContainsString('Catatan dan Saran Boarding:', (string) $rapot->catatan_pamong);
+
+        $mtSheetRows = BoardingRapotSheetRows::mtRows($rapot->rekap_payload);
+
+        $this->assertSame('Baik - Semangat setor meningkat.', collect($mtSheetRows)->firstWhere(0, 'Kesemangatan')[1] ?? null);
+
+        $detail->update([
+            'capaian_nilai' => 2,
+            'status_detail' => 'tuntas',
+            'tuntas_at' => '2026-05-30',
+        ]);
+
+        $rapot->refresh();
+
+        $this->assertSame(2, $rapot->rekap_payload['pencapaian']['realisasi']['surat']);
+        $this->assertStringContainsString('Realisasi surat/doa/hadits: 2 / 0 / 0', (string) $rapot->ringkasan_pencapaian);
+
+        BoardingMtProgress::query()
+            ->where('boarding_pencapaian_id', $filledPencapaian->getKey())
+            ->where('target_key', 'tugas_praktek')
+            ->firstOrFail()
+            ->update(['grade' => 'cukup']);
+
+        $rapot->refresh();
+
+        $this->assertSame(3, $rapot->rekap_payload['pencapaian']['mt']['filled_count']);
+        $this->assertStringContainsString('Materi MT: 3 dari 11 target MT terisi', (string) $rapot->ringkasan_pencapaian);
+    }
+
+    public function test_boarding_rapot_index_page_renders_without_mass_sync_on_open(): void
+    {
+        $admin = User::query()->create([
+            'name' => 'Admin Rapot Index',
+            'username' => 'admin-rapot-index',
+            'password' => 'secret123',
+        ]);
+        $admin->assignRole('admin');
+
+        $this->actingAs($admin)
+            ->get(route('filament.admin.resources.boarding-rapots.index'))
+            ->assertOk()
+            ->assertSee('Rapot Boarding');
+    }
+
+    public function test_boarding_rapot_create_and_edit_pages_render_as_full_pages(): void
+    {
+        $admin = User::query()->create([
+            'name' => 'Admin Rapot Full Page',
+            'username' => 'admin-rapot-full-page',
+            'password' => 'secret123',
+        ]);
+        $admin->assignRole('admin');
+
+        $siswa = DataSiswa::query()->create([
+            'nama' => 'Siswa Rapot Full Page',
+            'rombel_saat_ini' => 'X.1 / 2025-2026',
+            'jk' => 'L',
+            'status' => 'aktif',
+        ]);
+
+        $rapot = BoardingRapot::query()->create([
+            'siswa_id' => $siswa->id,
+            'pamong_user_id' => $admin->id,
+            'periode_tahun' => '2025/2026',
+            'semester' => 'genap',
+            'status_rapot' => 'draft',
+            'tanggal_rapot' => '2026-05-31',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('filament.admin.resources.boarding-rapots.create'))
+            ->assertOk()
+            ->assertSee('Data Rapot Boarding');
+
+        $this->actingAs($admin)
+            ->get(route('filament.admin.resources.boarding-rapots.edit', $rapot))
+            ->assertOk()
+            ->assertSee('Data Rapot Boarding')
+            ->assertSee('Kembali ke daftar rapot');
+    }
+
+    public function test_boarding_rapot_manual_edit_updates_without_livewire_page(): void
+    {
+        $admin = User::query()->create([
+            'name' => 'Admin Rapot Manual',
+            'username' => 'admin-rapot-manual',
+            'password' => 'secret123',
+        ]);
+        $admin->assignRole('admin');
+
+        $siswa = DataSiswa::query()->create([
+            'nama' => 'Siswa Rapot Manual',
+            'rombel_saat_ini' => 'X.2 / 2025-2026',
+            'jk' => 'L',
+            'status' => 'aktif',
+        ]);
+
+        $rapot = BoardingRapot::query()->create([
+            'siswa_id' => $siswa->id,
+            'pamong_user_id' => $admin->id,
+            'periode_tahun' => '2025/2026',
+            'semester' => 'genap',
+            'status_rapot' => 'draft',
+            'tanggal_rapot' => '2026-05-31',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.boarding-rapots.manual-edit', $rapot))
+            ->assertOk()
+            ->assertSee('Edit Manual Rapot Boarding')
+            ->assertDontSee('/livewire-');
+
+        $this->actingAs($admin)
+            ->from(route('admin.boarding-rapots.manual-edit', $rapot))
+            ->post(route('admin.boarding-rapots.manual-update', $rapot), [
+                'pamong_user_id' => $admin->id,
+                'periode_tahun' => '2025/2026',
+                'semester' => 'genap',
+                'tanggal_rapot' => '2026-06-01',
+                'status_rapot' => 'review',
+                'nomor_dokumen' => 'RB/MANUAL/001',
+                'kelas_boarding_override' => 'cepatan',
+                'wali_pamong_nama' => 'Kepala Manual',
+                'kepala_boarding_nama' => 'Boarding Manual',
+                'mudir_asrama_nama' => 'Pamong Manual',
+                'tempat_cetak' => 'Tangerang',
+                'ringkasan_pencapaian' => 'Ringkasan manual tersimpan.',
+                'catatan_pamong' => 'Catatan manual tersimpan.',
+                'rekomendasi_tindak_lanjut' => 'Rekomendasi manual tersimpan.',
+                'administrasi_questions' => ['Kelas Boarding'],
+                'administrasi_answers' => ['Kelas Cepatan'],
+            ])
+            ->assertRedirect(route('admin.boarding-rapots.manual-edit', $rapot))
+            ->assertSessionHas('status');
+
+        $rapot->refresh();
+
+        $this->assertSame('review', $rapot->status_rapot);
+        $this->assertSame('RB/MANUAL/001', $rapot->nomor_dokumen);
+        $this->assertSame('cepatan', $rapot->kelas_boarding_override);
+        $this->assertSame('Kelas Boarding', $rapot->administrasi_rapot_items[0]['question']);
+        $this->assertSame('Kelas Cepatan', $rapot->administrasi_rapot_items[0]['answer']);
     }
 
     protected function runUserMigrations(): void
@@ -503,6 +961,19 @@ class BoardingWorkflowTest extends TestCase
         $migration->up();
     }
 
+    protected function createPengaturanTable(): void
+    {
+        if (! Schema::hasTable('pengaturan')) {
+            Schema::create('pengaturan', function (Blueprint $table): void {
+                $table->id();
+                $table->string('nama_pengaturan')->unique();
+                $table->longText('nilai_pengaturan')->nullable();
+            });
+        }
+
+        Pengaturan::flushRuntimeSchemaCache();
+    }
+
     protected function createDataSiswaTable(): void
     {
         if (Schema::hasTable('data_siswa')) {
@@ -517,6 +988,10 @@ class BoardingWorkflowTest extends TestCase
             $table->string('status')->nullable();
             $table->string('kategori_non_aktif')->nullable();
             $table->text('alasan_non_aktif')->nullable();
+            $table->string('kepribadian')->nullable();
+            $table->string('gaya_belajar')->nullable();
+            $table->string('profiling')->nullable();
+            $table->string('mbti')->nullable();
             $table->timestamps();
         });
     }
@@ -546,7 +1021,40 @@ class BoardingWorkflowTest extends TestCase
         $hafalanMigration = require database_path('migrations/2026_04_02_120000_create_boarding_hafalan_tables.php');
         $hafalanMigration->up();
 
+        $materiMigration = require database_path('migrations/2026_05_30_210000_expand_boarding_materi_master.php');
+        $materiMigration->up();
+
+        $separateMateriMigration = require database_path('migrations/2026_05_30_213000_separate_boarding_materi_tambahan_groups.php');
+        $separateMateriMigration->up();
+
+        $consolidateMateriMigration = require database_path('migrations/2026_05_30_214000_consolidate_boarding_materi_tambahan_class.php');
+        $consolidateMateriMigration->up();
+
+        $splitMateriByClassMigration = require database_path('migrations/2026_05_30_215000_split_boarding_materi_tambahan_by_class.php');
+        $splitMateriByClassMigration->up();
+
+        $scopeMateriMigration = require database_path('migrations/2026_05_30_216000_add_scope_and_mt_materi_boarding_points.php');
+        $scopeMateriMigration->up();
+
+        $mtProgressMigration = require database_path('migrations/2026_05_30_217000_create_boarding_mt_progresses_table.php');
+        $mtProgressMigration->up();
+
         $maknaDanBacaanMigration = require database_path('migrations/2026_04_03_220000_create_boarding_makna_and_bacaan_tables.php');
         $maknaDanBacaanMigration->up();
+
+        $materiBoardingMigration = require database_path('migrations/2026_05_30_218000_expand_boarding_makna_and_materi_boarding.php');
+        $materiBoardingMigration->up();
+
+        $renameMaknaQuranMigration = require database_path('migrations/2026_05_30_219000_rename_boarding_makna_quran_targets.php');
+        $renameMaknaQuranMigration->up();
+
+        $materiRapotScopeMigration = require database_path('migrations/2026_05_31_080000_add_materi_rapot_scope_to_boarding_pencapaians.php');
+        $materiRapotScopeMigration->up();
+
+        $administrasiRapotMigration = require database_path('migrations/2026_05_31_100000_add_administrasi_items_to_boarding_rapots.php');
+        $administrasiRapotMigration->up();
+
+        $kelasBoardingOverrideMigration = require database_path('migrations/2026_05_31_101000_add_kelas_boarding_override_to_boarding_rapots.php');
+        $kelasBoardingOverrideMigration->up();
     }
 }

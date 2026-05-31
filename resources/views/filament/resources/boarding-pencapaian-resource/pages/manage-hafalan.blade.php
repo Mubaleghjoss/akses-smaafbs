@@ -18,6 +18,11 @@
             </div>
         </section>
 
+        @include('filament.resources.boarding-pencapaian-resource.partials.boarding-menu', [
+            'record' => $this->getRecord(),
+            'active' => 'hafalan',
+        ])
+
         <section class="rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-gray-900">
             <div class="w-full overflow-x-auto">
                 {{ $this->getTable()->render() }}
