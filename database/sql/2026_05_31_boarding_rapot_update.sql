@@ -3,6 +3,14 @@
 -- Assumption: the existing boarding base tables already exist on the server.
 
 SET @schema_name := DATABASE();
+
+CREATE TABLE IF NOT EXISTS migrations (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    migration VARCHAR(255) NOT NULL,
+    batch INT NOT NULL,
+    PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET @migration_batch := COALESCE((SELECT MAX(batch) + 1 FROM migrations), 1);
 
 -- 1) Schema updates.
