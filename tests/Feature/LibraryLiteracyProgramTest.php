@@ -99,7 +99,10 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertOk()
             ->assertSee('Materi Jawaban Literasi')
             ->assertSee('Codex Literasi Siswa A - XII IPA')
-            ->assertSee('Tuliskan ringkasan bacaan.');
+            ->assertSee('Tuliskan ringkasan bacaan.')
+            ->assertSee('Ketik nama atau kelas siswa')
+            ->assertSee('data-literacy-student-combobox', false)
+            ->assertSee('data-literacy-answer-count', false);
 
         $this->post(route('library.literacy.store', $material->slug), [
             'student_id' => $student->getKey(),
@@ -122,7 +125,8 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->get(route('library.literacy.edit', $response->shortEditCode()))
             ->assertOk()
             ->assertSee($response->edit_code)
-            ->assertSee('Saya memahami isi bacaan');
+            ->assertSee('Saya memahami isi bacaan')
+            ->assertSee('data-literacy-answer-count', false);
 
         $this->post(route('library.literacy.update', $response->shortEditCode()), [
             'answers' => [

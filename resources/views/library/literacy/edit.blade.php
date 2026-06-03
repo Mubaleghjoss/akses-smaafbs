@@ -6,7 +6,7 @@
     <a class="chip" href="{{ route('library.literacy.index') }}"><- Kembali ke Literacy Habituation Program</a>
 
     <div class="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <form method="post" action="{{ route('library.literacy.update', $response->shortEditCode()) }}" class="card space-y-5 p-6 md:p-7">
+        <form method="post" action="{{ route('library.literacy.update', $response->shortEditCode()) }}" class="card space-y-5 p-6 md:p-7" data-literacy-answer-form>
             @csrf
 
             <div>
@@ -58,8 +58,18 @@
                         name="answers[{{ $question->getKey() }}]"
                         minlength="{{ $minCharacters }}"
                         maxlength="{{ $maxCharacters }}"
+                        data-literacy-answer-input
+                        data-min-characters="{{ $minCharacters }}"
+                        data-max-characters="{{ $maxCharacters }}"
                         @required($question->is_required)
                     >{{ old('answers.'.$question->getKey(), $savedAnswer) }}</textarea>
+                    <div class="mt-2 flex flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between">
+                        <div class="text-slate-500" data-literacy-answer-status></div>
+                        <div class="font-semibold text-slate-700" data-literacy-answer-count></div>
+                    </div>
+                    <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                        <div class="h-full rounded-full bg-slate-400 transition-all" style="width: 0%" data-literacy-answer-bar></div>
+                    </div>
                     @error($fieldName)
                         <div class="mt-2 text-xs text-rose-600">{{ $message }}</div>
                     @enderror
@@ -100,4 +110,5 @@
 
 @push('scripts')
     @include('library.literacy._mathjax')
+    @include('library.literacy._answer_tools')
 @endpush

@@ -23,7 +23,7 @@
                 </div>
             </article>
 
-            <form method="post" action="{{ route('library.literacy.store', $material->slug) }}" class="card space-y-5 p-6 md:p-7">
+            <form method="post" action="{{ route('library.literacy.store', $material->slug) }}" class="card space-y-5 p-6 md:p-7" data-literacy-answer-form>
                 @csrf
 
                 <div>
@@ -43,14 +43,45 @@
                         Data siswa aktif belum tersedia. Hubungi admin untuk melengkapi data master siswa.
                     </div>
                 @else
+                    @php
+                        $oldStudentId = (string) old('student_id', '');
+                        $selectedStudent = collect($students)->first(fn (array $student): bool => (string) $student['id'] === $oldStudentId);
+                    @endphp
                     <div>
-                        <label class="text-sm font-semibold text-slate-700" for="student_id">Nama Siswa *</label>
-                        <select class="input mt-2" id="student_id" name="student_id" required>
-                            <option value="">Pilih siswa</option>
-                            @foreach($students as $student)
-                                <option value="{{ $student['id'] }}" @selected((string) old('student_id') === (string) $student['id'])>{{ $student['label'] }}</option>
-                            @endforeach
-                        </select>
+                        <label class="text-sm font-semibold text-slate-700" for="student_search">Nama Siswa *</label>
+                        <div class="relative" data-literacy-student-combobox>
+                            <input
+                                class="input mt-2"
+                                id="student_search"
+                                name="student_search"
+                                type="search"
+                                value="{{ old('student_search', $selectedStudent['label'] ?? '') }}"
+                                placeholder="Ketik nama atau kelas siswa"
+                                autocomplete="off"
+                                role="combobox"
+                                aria-expanded="false"
+                                aria-controls="student-search-results"
+                                aria-autocomplete="list"
+                                data-student-search
+                                required
+                            >
+                            <input type="hidden" id="student_id" name="student_id" value="{{ $oldStudentId }}" data-student-id>
+                            <div
+                                id="student-search-results"
+                                class="absolute left-0 right-0 z-20 mt-2 hidden max-h-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl"
+                                role="listbox"
+                                data-student-results
+                            ></div>
+                        </div>
+                        <div class="mt-1 text-xs text-slate-500">Ketik nama atau kelas, lalu pilih siswa dari daftar yang muncul.</div>
+                        <div @class([
+                            'mt-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700',
+                            'hidden' => ! $selectedStudent,
+                        ]) data-student-selected>
+                            @if($selectedStudent)
+                                Terpilih: {{ $selectedStudent['label'] }}
+                            @endif
+                        </div>
                         @error('student_id')
                             <div class="mt-1 text-xs text-rose-600">{{ $message }}</div>
                         @enderror
@@ -84,8 +115,18 @@
                             name="answers[{{ $question->getKey() }}]"
                             minlength="{{ $minCharacters }}"
                             maxlength="{{ $maxCharacters }}"
+                            data-literacy-answer-input
+                            data-min-characters="{{ $minCharacters }}"
+                            data-max-characters="{{ $maxCharacters }}"
                             @required($question->is_required)
                         >{{ old('answers.'.$question->getKey()) }}</textarea>
+                        <div class="mt-2 flex flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between">
+                            <div class="text-slate-500" data-literacy-answer-status></div>
+                            <div class="font-semibold text-slate-700" data-literacy-answer-count></div>
+                        </div>
+                        <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                            <div class="h-full rounded-full bg-slate-400 transition-all" style="width: 0%" data-literacy-answer-bar></div>
+                        </div>
                         @error($fieldName)
                             <div class="mt-2 text-xs text-rose-600">{{ $message }}</div>
                         @enderror
@@ -112,4 +153,5 @@
 
 @push('scripts')
     @include('library.literacy._mathjax')
+    @include('library.literacy._answer_tools', ['students' => $students])
 @endpush
