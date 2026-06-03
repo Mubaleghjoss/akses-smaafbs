@@ -44,7 +44,7 @@ class BerkasGuru extends Model
 
     public function scopeVisibleToUser(Builder $query, mixed $user): Builder
     {
-        if (! $user instanceof User || $user->hasRole('admin')) {
+        if (! $user instanceof User || $user->hasFullAdminAccess()) {
             return $query;
         }
 

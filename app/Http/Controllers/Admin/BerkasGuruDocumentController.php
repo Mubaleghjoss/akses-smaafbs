@@ -36,7 +36,7 @@ class BerkasGuruDocumentController extends Controller
         $user = auth()->user();
 
         abort_unless($user instanceof User, Response::HTTP_FORBIDDEN);
-        abort_unless($user->hasRole('admin') || $user->canViewModule('berkas_guru'), Response::HTTP_FORBIDDEN);
+        abort_unless($user->hasFullAdminAccess() || $user->canViewModule('berkas_guru'), Response::HTTP_FORBIDDEN);
 
         return BerkasGuru::query()
             ->visibleToUser($user)

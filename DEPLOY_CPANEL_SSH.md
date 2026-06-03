@@ -64,7 +64,9 @@ Catatan:
 
 - Kalau `git commit` menulis `nothing to commit`, artinya belum ada perubahan baru.
 - Kalau `git push` gagal login, login dulu ke GitHub dari Git Credential Manager atau gunakan token GitHub.
-- File `.env`, `vendor`, `node_modules`, dan `public/build` memang tidak ikut GitHub.
+- File `.env`, `vendor`, dan `node_modules` memang tidak ikut GitHub.
+- `public/build` bisa ikut GitHub untuk alur deploy FTP/GitHub agar server tidak perlu menjalankan `npm run build`.
+- `public/storage` tetap harus diperlakukan sebagai data upload. Repo hanya membuka aset logo/branding yang di-whitelist; dokumen siswa/guru tetap dibackup atau diupload terpisah.
 
 ## 4. Setup pertama di cPanel
 

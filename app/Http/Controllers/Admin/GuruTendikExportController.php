@@ -17,7 +17,7 @@ class GuruTendikExportController extends Controller
         $user = auth()->user();
 
         abort_unless($user instanceof User, Response::HTTP_FORBIDDEN);
-        abort_unless($user->hasRole('admin') || $user->canViewModule('guru_tendik'), Response::HTTP_FORBIDDEN);
+        abort_unless($user->hasFullAdminAccess() || $user->canViewModule('guru_tendik'), Response::HTTP_FORBIDDEN);
         abort_unless(GuruTendik::query()->exists(), Response::HTTP_NOT_FOUND);
 
         return Excel::download(new GuruTendikExport, 'data-guru-tendik-niy.xlsx', null, [

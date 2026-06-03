@@ -80,6 +80,10 @@ class BoardingHafalanPoint extends Model
             if (blank($model->updated_by) && auth()->id()) {
                 $model->updated_by = auth()->id();
             }
+
+            if ((int) ($model->urutan ?? 0) <= 0) {
+                $model->urutan = static::nextUrutanFor($model);
+            }
         });
 
         static::saving(function (self $model): void {
@@ -173,6 +177,16 @@ class BoardingHafalanPoint extends Model
     public static function hafalanJenis(): array
     {
         return self::HAFALAN_JENIS;
+    }
+
+    public static function nextUrutanFor(self $model): int
+    {
+        $max = static::query()
+            ->where('materi_scope', $model->materi_scope ?: 'boarding')
+            ->where('materi_key', $model->materi_key ?: '')
+            ->max('urutan');
+
+        return ((int) $max) + 1;
     }
 
     public static function materiTambahanKeyForJenis(?string $jenis): string

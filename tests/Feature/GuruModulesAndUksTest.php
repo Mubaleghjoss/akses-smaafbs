@@ -124,6 +124,70 @@ class GuruModulesAndUksTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_guru_admin_role_gets_full_admin_access_without_teacher_scope(): void
+    {
+        $guruSendiri = GuruTendik::query()->create([
+            'nama' => 'Ustadz Full Admin',
+            'nip' => '1987011',
+            'jenis_ptk' => 'Guru Mapel',
+            'status' => 'aktif',
+        ]);
+
+        $guruLain = GuruTendik::query()->create([
+            'nama' => 'Ustadz Lain',
+            'nip' => '1987012',
+            'jenis_ptk' => 'Guru Mapel',
+            'status' => 'aktif',
+        ]);
+
+        $siswaPutra = DataSiswa::query()->create([
+            'nama' => 'Santri Putra',
+            'rombel_saat_ini' => 'X.I / 2025-2026',
+            'jk' => 'L',
+            'status' => 'aktif',
+        ]);
+
+        $siswaPutri = DataSiswa::query()->create([
+            'nama' => 'Santri Putri',
+            'rombel_saat_ini' => 'X.A / 2025-2026',
+            'jk' => 'P',
+            'status' => 'aktif',
+        ]);
+
+        $guruAdmin = User::query()->create([
+            'name' => 'Guru Admin',
+            'username' => 'guru-admin',
+            'password' => 'secret123',
+            'guru_tendik_id' => $guruSendiri->id,
+            'guru_walas_scope' => ['X.I / 2025-2026'],
+        ]);
+        $guruAdmin->assignRole(['guru', 'guru_admin']);
+
+        $this->actingAs($guruAdmin);
+        $guruAdmin->refresh()->loadMissing('roles');
+
+        $this->assertTrue($guruAdmin->hasFullAdminAccess());
+        $this->assertSame(array_keys(User::navigationGroupOptions()), $guruAdmin->resolvedNavigationGroups());
+        $this->assertSame([], $guruAdmin->resolvedNavigationItems());
+        $this->assertSame(AdminModuleAccess::MANAGE, $guruAdmin->moduleAccessLevel('users'));
+        $this->assertTrue(UserResource::canViewAny());
+        $this->assertTrue(GuruTendikResource::canCreate());
+        $this->assertTrue(BerkasGuruResource::canCreate());
+
+        $visibleGuruIds = GuruTendikResource::getEloquentQuery()->pluck('id')->all();
+        sort($visibleGuruIds);
+        $expectedGuruIds = [$guruSendiri->id, $guruLain->id];
+        sort($expectedGuruIds);
+
+        $visibleSiswaIds = DataSiswa::applyVisibleScope(DataSiswa::query(), $guruAdmin)->pluck('id')->all();
+        sort($visibleSiswaIds);
+        $expectedSiswaIds = [$siswaPutra->id, $siswaPutri->id];
+        sort($expectedSiswaIds);
+
+        $this->assertSame($expectedGuruIds, $visibleGuruIds);
+        $this->assertSame($expectedSiswaIds, $visibleSiswaIds);
+    }
+
     public function test_guru_walas_preset_permission_syncs_student_modules_and_scope_automatically(): void
     {
         $guru = GuruTendik::query()->create([

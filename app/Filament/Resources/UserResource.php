@@ -422,7 +422,7 @@ class UserResource extends Resource
                 Tables\Columns\TextColumn::make('allowed_navigation_groups')
                     ->label('Menu')
                     ->state(function (User $record): string {
-                        if ($record->hasRole('admin')) {
+                        if ($record->hasFullAdminAccess()) {
                             return 'Semua Menu';
                         }
 
@@ -434,7 +434,7 @@ class UserResource extends Resource
                 Tables\Columns\TextColumn::make('allowed_navigation_items')
                     ->label('Sub Menu')
                     ->state(function (User $record): string {
-                        if ($record->hasRole('admin')) {
+                        if ($record->hasFullAdminAccess()) {
                             return 'Semua Sub Menu';
                         }
 
@@ -528,7 +528,7 @@ class UserResource extends Resource
                     ->label('Copy Akses Guru')
                     ->icon('heroicon-o-document-duplicate')
                     ->color('info')
-                    ->visible(fn (User $record): bool => auth()->user()?->hasRole('admin') && $record->hasRole('guru'))
+                    ->visible(fn (User $record): bool => auth()->user()?->hasFullAdminAccess() && $record->isGuru())
                     ->schema([
                         Forms\Components\Select::make('target_user_id')
                             ->label('Salin ke akun guru')
@@ -559,7 +559,7 @@ class UserResource extends Resource
                     ->label('Tugas Tambahan')
                     ->icon('heroicon-o-briefcase')
                     ->color('warning')
-                    ->visible(fn (User $record): bool => auth()->user()?->hasRole('admin') && $record->hasRole('guru'))
+                    ->visible(fn (User $record): bool => auth()->user()?->hasFullAdminAccess() && $record->isGuru())
                     ->schema([
                         Forms\Components\CheckboxList::make('template_keys')
                             ->label('Tambahkan akses divisi')
@@ -581,7 +581,7 @@ class UserResource extends Resource
                     ->label('Cabut Divisi')
                     ->icon('heroicon-o-no-symbol')
                     ->color('danger')
-                    ->visible(fn (User $record): bool => auth()->user()?->hasRole('admin') && $record->hasRole('guru'))
+                    ->visible(fn (User $record): bool => auth()->user()?->hasFullAdminAccess() && $record->isGuru())
                     ->fillForm(fn (User $record): array => [
                         'template_keys' => AdminRoleTemplateSupport::matchedTemplateKeysForUser($record),
                     ])
@@ -606,7 +606,7 @@ class UserResource extends Resource
                     ->label('Reset Password')
                     ->icon('heroicon-o-key')
                     ->color('warning')
-                    ->visible(fn (User $record): bool => auth()->user()?->hasRole('admin') && (int) $record->getKey() !== (int) auth()->id())
+                    ->visible(fn (User $record): bool => auth()->user()?->hasFullAdminAccess() && (int) $record->getKey() !== (int) auth()->id())
                     ->requiresConfirmation()
                     ->modalHeading('Reset password default akun ini?')
                     ->modalDescription('Sistem akan membuat password default baru lalu menampilkan username dan password baru untuk dibagikan.')
@@ -644,7 +644,7 @@ class UserResource extends Resource
                         ->label('Tambah Divisi')
                         ->icon('heroicon-o-briefcase')
                         ->color('warning')
-                        ->visible(fn (): bool => auth()->user()?->hasRole('admin'))
+                        ->visible(fn (): bool => auth()->user()?->hasFullAdminAccess())
                         ->schema([
                             Forms\Components\CheckboxList::make('template_keys')
                                 ->label('Tambahkan akses divisi')
@@ -683,7 +683,7 @@ class UserResource extends Resource
                         ->label('Cabut Divisi')
                         ->icon('heroicon-o-no-symbol')
                         ->color('danger')
-                        ->visible(fn (): bool => auth()->user()?->hasRole('admin'))
+                        ->visible(fn (): bool => auth()->user()?->hasFullAdminAccess())
                         ->schema([
                             Forms\Components\CheckboxList::make('template_keys')
                                 ->label('Cabut akses divisi')
@@ -722,7 +722,7 @@ class UserResource extends Resource
                         ->label('Reset Password')
                         ->icon('heroicon-o-key')
                         ->color('warning')
-                        ->visible(fn (): bool => auth()->user()?->hasRole('admin'))
+                        ->visible(fn (): bool => auth()->user()?->hasFullAdminAccess())
                         ->requiresConfirmation()
                         ->modalHeading('Reset password default akun terpilih?')
                         ->modalDescription('Sistem akan membuat password default baru untuk semua akun terpilih, lalu menampilkan username dan password baru masing-masing akun.')

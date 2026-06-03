@@ -2,6 +2,7 @@
 
 use App\Contracts\SiteSettingsAccessor;
 use App\Http\Controllers\Admin\BerkasGuruDocumentController;
+use App\Http\Controllers\Admin\BoardingBacaanAssessmentExportController;
 use App\Http\Controllers\Admin\BoardingRapotDocumentController;
 use App\Http\Controllers\Admin\AdminUserCredentialDocumentController;
 use App\Http\Controllers\Admin\DataSiswaExportController;
@@ -95,6 +96,11 @@ Route::middleware('auth')->get(
     '/admin/uks-records/export',
     UksRecordExportController::class
 )->name('admin.uks-records.export');
+
+Route::middleware('auth')->get(
+    '/admin/boarding-pencapaians/{boardingPencapaian}/bacaan/export',
+    BoardingBacaanAssessmentExportController::class
+)->name('admin.boarding-pencapaians.bacaan.export');
 
 Route::middleware('auth')->prefix('/admin/boarding-rapots/{boardingRapot}')->group(function (): void {
     Route::get('/manual-edit', [BoardingRapotDocumentController::class, 'editManual'])

@@ -17,7 +17,7 @@ class DataSiswaExportController extends Controller
         $user = auth()->user();
 
         abort_unless($user instanceof User, Response::HTTP_FORBIDDEN);
-        abort_unless($user->hasRole('admin') || $user->canViewModule('data_siswa'), Response::HTTP_FORBIDDEN);
+        abort_unless($user->hasFullAdminAccess() || $user->canViewModule('data_siswa'), Response::HTTP_FORBIDDEN);
         abort_unless(DataSiswa::applyVisibleScope(DataSiswa::query(), $user)->exists(), 404);
 
         return Excel::download(

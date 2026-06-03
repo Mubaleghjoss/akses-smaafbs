@@ -20,7 +20,7 @@ trait AuthorizesSarprasDocuments
 
         abort_unless($user instanceof User, Response::HTTP_FORBIDDEN);
         abort_unless(
-            $user->hasRole('admin') || $user->canViewModule($prefix),
+            $user->hasFullAdminAccess() || $user->canViewModule($prefix),
             Response::HTTP_FORBIDDEN,
         );
 

@@ -6,6 +6,9 @@ use App\Filament\Concerns\HasModulePermissions;
 use App\Filament\Concerns\HasOptimizedAdminTable;
 use App\Filament\Resources\BoardingHafalanPointResource\Pages;
 use App\Models\BoardingHafalanPoint;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms;
 use Filament\Resources\Resource;
@@ -85,12 +88,6 @@ class BoardingHafalanPointResource extends Resource
                             ->required()
                             ->maxLength(191)
                             ->columnSpanFull(),
-                        Forms\Components\TextInput::make('urutan')
-                            ->label('Urutan')
-                            ->numeric()
-                            ->minValue(0)
-                            ->default(0)
-                            ->required(),
                         Forms\Components\Toggle::make('is_active')
                             ->label('Aktif')
                             ->default(true),
@@ -157,19 +154,9 @@ class BoardingHafalanPointResource extends Resource
                     ->tooltip(function (BoardingHafalanPoint $record): string {
                         return collect([
                             BoardingHafalanPoint::jenisLabel($record->jenis),
-                            'Urutan '.(int) $record->urutan,
                             $record->is_active ? 'Aktif' : 'Nonaktif',
                         ])->implode(' | ');
                     }),
-                Tables\Columns\TextInputColumn::make('urutan')
-                    ->label('Urutan')
-                    ->type('number')
-                    ->rules(['required', 'integer', 'min:0'])
-                    ->extraInputAttributes(['min' => 0, 'inputmode' => 'numeric'])
-                    ->disabled(fn (): bool => ! static::canEdit(null))
-                    ->sortable()
-                    ->alignCenter()
-                    ->visibleFrom('md'),
                 Tables\Columns\ToggleColumn::make('is_active')
                     ->label('Aktif')
                     ->disabled(fn (): bool => ! static::canEdit(null))
@@ -195,6 +182,12 @@ class BoardingHafalanPointResource extends Resource
             ])
             ->actions([
                 EditAction::make(),
+                DeleteAction::make(),
+            ])
+            ->bulkActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                ]),
             ]);
     }
 

@@ -59,6 +59,7 @@ class InitialAdminSeeder extends Seeder
 
         $rolePermissions = [
             'admin' => $permissions,
+            'guru_admin' => $permissions,
             'tu' => [
                 'data_siswa.view',
                 'data_siswa.manage',

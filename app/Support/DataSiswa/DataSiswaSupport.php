@@ -412,7 +412,7 @@ class DataSiswaSupport
 
         $user->loadMissing('roles');
 
-        return $user->hasRole('admin')
+        return $user->hasFullAdminAccess()
             || $user->canManageModule('data_siswa')
             || $user->canManageModule('rombel');
     }

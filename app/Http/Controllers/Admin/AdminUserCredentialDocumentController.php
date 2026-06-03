@@ -39,7 +39,7 @@ class AdminUserCredentialDocumentController extends Controller
 
     protected function resolvePayload(string $token): array
     {
-        abort_unless(auth()->check() && auth()->user()?->hasRole('admin'), Response::HTTP_FORBIDDEN);
+        abort_unless(auth()->check() && auth()->user()?->hasFullAdminAccess(), Response::HTTP_FORBIDDEN);
 
         $payload = AdminUserCredentialShareSupport::payload($token);
 

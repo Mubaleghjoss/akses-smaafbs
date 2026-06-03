@@ -15,10 +15,14 @@
             --paper: #ffffff;
             --bg: #f1f5f9;
         }
-        * { box-sizing: border-box; }
+        * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
         @page {
             size: A4 portrait;
-            margin: 8mm;
+            margin: 0;
         }
         body {
             margin: 0;
@@ -64,8 +68,9 @@
             color: var(--ink);
         }
         .letterhead {
+            position: relative;
             display: grid;
-            grid-template-columns: 58px 1fr;
+            grid-template-columns: var(--letterhead-logo-size, 58px) 1fr var(--letterhead-logo-size, 58px);
             gap: 14px;
             align-items: center;
             border-bottom: 2px solid var(--ink);
@@ -73,13 +78,15 @@
             margin-bottom: 8px;
         }
         .logo-box {
-            width: 58px;
-            height: 58px;
-            border: 1px solid var(--soft-line);
+            width: var(--letterhead-logo-size, 58px);
+            height: var(--letterhead-logo-size, 58px);
             display: flex;
             align-items: center;
             justify-content: center;
-            overflow: hidden;
+            overflow: visible;
+            position: relative;
+            z-index: 2;
+            background: transparent;
         }
         .logo-box img {
             width: 100%;
@@ -87,6 +94,8 @@
             object-fit: contain;
         }
         .letterhead-copy {
+            position: relative;
+            z-index: 1;
             text-align: center;
         }
         .letterhead-copy h1,
@@ -95,18 +104,18 @@
             margin: 0;
         }
         .letterhead-copy h1 {
-            font-size: 18px;
+            font-size: var(--letterhead-title-size, 18px);
             letter-spacing: 0.05em;
         }
         .letterhead-copy h2 {
             margin-top: 2px;
-            font-size: 13px;
+            font-size: var(--letterhead-subtitle-size, 13px);
             font-weight: 700;
         }
         .letterhead-copy p {
             margin-top: 3px;
             color: var(--muted);
-            font-size: 10.5px;
+            font-size: var(--letterhead-info-size, 10.5px);
         }
         .title-block {
             text-align: center;
@@ -161,7 +170,7 @@
         .section-title {
             margin: 0 0 6px;
             padding: 5px 8px;
-            background: var(--ink);
+            background: #0f172a;
             color: #fff;
             font-size: 11.5px;
             text-transform: uppercase;
@@ -189,13 +198,15 @@
             line-height: 1.25;
         }
         .sheet-grid th {
-            background: var(--accent);
+            background: #0097a7;
             color: #fff;
             font-weight: 700;
         }
-        .sheet-grid .w-small { width: 16%; }
-        .sheet-grid .w-mid { width: 25%; }
-        .sheet-grid .w-wide { width: 59%; }
+        .sheet-grid .col-main { width: 18%; }
+        .sheet-grid .col-sub { width: 22%; }
+        .sheet-grid .col-info { width: 60%; }
+        .sheet-grid .col-mt-materi { width: 36%; }
+        .sheet-grid .col-mt-info { width: 64%; }
         .signature-section {
             margin-top: 11px;
         }
@@ -213,14 +224,14 @@
             font-size: 11.2px;
         }
         .signature-box {
-            min-height: 76px;
+            min-height: calc(var(--signature-name-gap, 42px) + 34px);
         }
         .signature-box .name {
-            margin-top: 42px;
+            margin-top: var(--signature-name-gap, 42px);
             font-weight: 700;
             text-decoration: underline;
         }
-        @media (max-width: 768px) {
+        @media screen and (max-width: 768px) {
             body { padding: 10px; }
             .page { padding: 14px; }
             .letterhead,
@@ -245,17 +256,46 @@
             body {
                 padding: 0;
                 background: #fff;
+                width: 210mm;
             }
             .page {
-                max-width: none;
+                width: 210mm;
+                min-height: 297mm;
+                max-width: 210mm;
                 box-shadow: none;
-                padding: 0;
+                padding: 10mm;
+            }
+            .letterhead {
+                grid-template-columns: var(--letterhead-logo-size, 58px) 1fr var(--letterhead-logo-size, 58px);
+                text-align: initial;
+            }
+            .logo-box {
+                margin: 0;
+            }
+            .meta-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .signature-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+            .sheet-scroll {
+                overflow: visible;
             }
             .toolbar {
                 display: none;
             }
             .sheet-grid {
                 font-size: 10.5px;
+                min-width: 0;
+                width: 100%;
+            }
+            .section-title {
+                background: #0f172a !important;
+                color: #fff !important;
+            }
+            .sheet-grid th {
+                background: #0097a7 !important;
+                color: #fff !important;
             }
         }
     </style>
@@ -270,6 +310,11 @@
         $prolog = $payload['document']['prolog'] ?? \App\Models\BoardingRapot::DEFAULT_PROLOG;
         $administrasiItems = \App\Models\BoardingRapot::normalizeAdministrasiRapotItems($payload['rapot']['administrasi_items'] ?? $rapot->administrasi_rapot_items ?? []);
         $letterheadContact = ($letterhead['contact'] ?? collect([$letterhead['phone'] ?? null, $letterhead['email'] ?? null])->filter()->implode(' | ')) ?: 'Kontak sekolah belum diatur.';
+        $letterheadLogoSize = (float) ($letterhead['logo_size'] ?? 58);
+        $letterheadTitleSize = (float) ($letterhead['site_name_font_size'] ?? 18);
+        $letterheadSubtitleSize = (float) ($letterhead['subtitle_font_size'] ?? 13);
+        $letterheadInfoSize = (float) ($letterhead['info_font_size'] ?? 10.5);
+        $signatureNameGap = (float) ($letterhead['signature_name_gap'] ?? 42);
     @endphp
 
     <div class="page">
@@ -282,7 +327,7 @@
             <button class="button" type="button" onclick="window.print()">Print / Simpan PDF</button>
         </div>
 
-        <header class="letterhead">
+        <header class="letterhead" style="--letterhead-logo-size: {{ $letterheadLogoSize }}px; --letterhead-title-size: {{ $letterheadTitleSize }}px; --letterhead-subtitle-size: {{ $letterheadSubtitleSize }}px; --letterhead-info-size: {{ $letterheadInfoSize }}px;">
             <div class="logo-box">
                 @if(!empty($letterhead['logo_src']))
                     <img src="{{ $letterhead['logo_src'] }}" alt="Logo sekolah">
@@ -294,11 +339,15 @@
                 <p>{{ $letterhead['address'] ?? $payload['school']['alamat'] ?? 'Alamat sekolah belum diatur.' }}</p>
                 <p>{{ $letterheadContact }}</p>
             </div>
+            <div class="logo-box">
+                @if(!empty($letterhead['right_logo_src']))
+                    <img src="{{ $letterhead['right_logo_src'] }}" alt="Logo yayasan">
+                @endif
+            </div>
         </header>
 
         <section class="title-block">
             <h3>RAPOT BOARDING</h3>
-            <p>Format ringkas A4 berdasarkan target materi rapot aktif</p>
         </section>
 
         <section class="intro-text">
@@ -332,14 +381,16 @@
         </div>
 
         <section>
-            <h4 class="section-title">{{ $activeMateriScope === \App\Models\BoardingPencapaian::MATERI_RAPOT_SCOPE_MT ? 'Rapot MT' : 'Halaman 1 - Materi Boarding' }}</h4>
-            <div class="scope-note">
-                <strong>Target Materi Rapot Aktif:</strong> {{ $activeMateriLabel }}
-            </div>
+            <h4 class="section-title">{{ $activeMateriScope === \App\Models\BoardingPencapaian::MATERI_RAPOT_SCOPE_MT ? 'Pencapaian Target Materi MT' : 'Pencapaian Target Materi Boarding' }}</h4>
 
             @if($activeMateriScope === \App\Models\BoardingPencapaian::MATERI_RAPOT_SCOPE_BOARDING)
                 <div class="sheet-scroll">
                     <table class="sheet-grid">
+                        <colgroup>
+                            <col class="col-main">
+                            <col class="col-sub">
+                            <col class="col-info">
+                        </colgroup>
                         <thead>
                             <tr>
                                 <th colspan="2">Materi</th>
@@ -348,9 +399,9 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td class="w-small" rowspan="2">{{ $materiBoardingSheetRows[1][0] }}</td>
-                                <td class="w-mid">{{ $materiBoardingSheetRows[1][1] }}</td>
-                                <td class="w-wide">{{ $materiBoardingSheetRows[1][2] }}</td>
+                                <td rowspan="2">{{ $materiBoardingSheetRows[1][0] }}</td>
+                                <td>{{ $materiBoardingSheetRows[1][1] }}</td>
+                                <td>{{ $materiBoardingSheetRows[1][2] }}</td>
                             </tr>
                             <tr>
                                 <td>{{ $materiBoardingSheetRows[2][1] }}</td>
@@ -388,9 +439,13 @@
             @else
                 <div class="sheet-scroll">
                     <table class="sheet-grid">
+                        <colgroup>
+                            <col class="col-mt-materi">
+                            <col class="col-mt-info">
+                        </colgroup>
                         <thead>
                             <tr>
-                                <th style="width: 44%;">Materi</th>
+                                <th>Materi</th>
                                 <th>Keterangan</th>
                             </tr>
                         </thead>
@@ -407,7 +462,7 @@
             @endif
         </section>
 
-        <section class="signature-section">
+        <section class="signature-section" style="--signature-name-gap: {{ $signatureNameGap }}px;">
             <h4 class="section-title">Pengesahan</h4>
             <p class="signature-place">{{ $payload['school']['kota'] ?? ($rapot->tempat_cetak ?? '-') }}, {{ $payload['rapot']['tanggal_rapot'] ?? '-' }}</p>
             <div class="signature-grid">

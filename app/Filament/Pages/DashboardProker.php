@@ -1147,7 +1147,7 @@ class DashboardProker extends Page
 
         $user->loadMissing('roles');
 
-        if ($user->hasRole('admin')) {
+        if ($user->hasFullAdminAccess()) {
             return true;
         }
 

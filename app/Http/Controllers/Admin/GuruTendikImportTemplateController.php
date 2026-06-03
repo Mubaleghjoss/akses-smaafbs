@@ -16,7 +16,7 @@ class GuruTendikImportTemplateController extends Controller
         $user = auth()->user();
 
         abort_unless($user instanceof User, Response::HTTP_FORBIDDEN);
-        abort_unless($user->hasRole('admin') || $user->canViewModule('guru_tendik'), Response::HTTP_FORBIDDEN);
+        abort_unless($user->hasFullAdminAccess() || $user->canViewModule('guru_tendik'), Response::HTTP_FORBIDDEN);
 
         return Excel::download(new GuruTendikImportTemplateExport, 'template-import-guru-tendik-niy.xlsx', null, [
             'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',

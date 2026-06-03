@@ -371,7 +371,7 @@ class GuruTendikResource extends Resource
                             static::guruUserAccessRouteParams($record),
                         )))
                     ->tooltip(fn (GuruTendik $record): string => AdminRoleTemplateSupport::suggestedTemplateReasonSummaryForGuruTendik($record))
-                    ->visible(fn (): bool => auth()->user()?->hasRole('admin')),
+                    ->visible(fn (): bool => auth()->user()?->hasFullAdminAccess()),
                 Action::make('aksesDivisiAdmin')
                     ->label('Akses Divisi')
                     ->icon('heroicon-o-briefcase')
@@ -379,7 +379,7 @@ class GuruTendikResource extends Resource
                     ->tooltip(fn (GuruTendik $record): string => $record->userAccount
                         ? AdminRoleTemplateSupport::suggestedTemplateReasonSummaryForGuruTendik($record)
                         : 'Buat akun login guru terlebih dahulu sebelum menambahkan akses divisi admin.')
-                    ->visible(fn (): bool => auth()->user()?->hasRole('admin'))
+                    ->visible(fn (): bool => auth()->user()?->hasFullAdminAccess())
                     ->fillForm(fn (GuruTendik $record): array => [
                         'template_keys' => static::suggestedAdminAccessTemplates($record),
                     ])
@@ -440,7 +440,7 @@ class GuruTendikResource extends Resource
                     ->tooltip(fn (GuruTendik $record): string => $record->userAccount
                         ? 'Cabut akses divisi dari akun guru yang terhubung.'
                         : 'Belum ada akun login yang bisa dicabut akses divisinya.')
-                    ->visible(fn (): bool => auth()->user()?->hasRole('admin'))
+                    ->visible(fn (): bool => auth()->user()?->hasFullAdminAccess())
                     ->fillForm(fn (GuruTendik $record): array => [
                         'template_keys' => $record->userAccount
                             ? AdminRoleTemplateSupport::matchedTemplateKeysForUser($record->userAccount)
@@ -485,7 +485,7 @@ class GuruTendikResource extends Resource
                     ->modalHeading('Reset password akun ini?')
                     ->modalDescription('Sistem akan membuat password default baru untuk akun guru/tendik ini. Setelah reset, salin kredensial dan kirimkan ke yang bersangkutan.')
                     ->modalSubmitActionLabel('Reset sekarang')
-                    ->visible(fn (GuruTendik $record): bool => auth()->user()?->hasRole('admin') && (bool) $record->userAccount)
+                    ->visible(fn (GuruTendik $record): bool => auth()->user()?->hasFullAdminAccess() && (bool) $record->userAccount)
                     ->action(function (GuruTendik $record): void {
                         $record->loadMissing('userAccount');
 
@@ -533,7 +533,7 @@ class GuruTendikResource extends Resource
                         ->label('Buat/Reset Akun Login')
                         ->icon('heroicon-o-user-plus')
                         ->color('info')
-                        ->visible(fn (): bool => auth()->user()?->hasRole('admin'))
+                        ->visible(fn (): bool => auth()->user()?->hasFullAdminAccess())
                         ->requiresConfirmation()
                         ->modalHeading('Buat/reset akun login guru/tendik terpilih?')
                         ->modalDescription('Data yang belum punya akun akan dibuatkan akun guru. Data yang sudah punya akun akan direset ke password default baru.')
@@ -569,7 +569,7 @@ class GuruTendikResource extends Resource
                         ->label('Tambah Akses Divisi')
                         ->icon('heroicon-o-briefcase')
                         ->color('warning')
-                        ->visible(fn (): bool => auth()->user()?->hasRole('admin'))
+                        ->visible(fn (): bool => auth()->user()?->hasFullAdminAccess())
                         ->schema([
                             Forms\Components\CheckboxList::make('template_keys')
                                 ->label('Template Divisi')
@@ -622,7 +622,7 @@ class GuruTendikResource extends Resource
                         ->label('Cabut Akses Divisi')
                         ->icon('heroicon-o-no-symbol')
                         ->color('danger')
-                        ->visible(fn (): bool => auth()->user()?->hasRole('admin'))
+                        ->visible(fn (): bool => auth()->user()?->hasFullAdminAccess())
                         ->schema([
                             Forms\Components\CheckboxList::make('template_keys')
                                 ->label('Cabut akses divisi')
@@ -686,17 +686,17 @@ class GuruTendikResource extends Resource
 
     public static function canCreate(): bool
     {
-        return static::userCanModule('manage') && ! auth()->user()?->isGuru();
+        return static::userCanModule('manage') && ! auth()->user()?->usesGuruPersonalScope();
     }
 
     public static function canDelete($record): bool
     {
-        return static::userCanModule('manage') && ! auth()->user()?->isGuru();
+        return static::userCanModule('manage') && ! auth()->user()?->usesGuruPersonalScope();
     }
 
     public static function canDeleteAny(): bool
     {
-        return static::userCanModule('manage') && ! auth()->user()?->isGuru();
+        return static::userCanModule('manage') && ! auth()->user()?->usesGuruPersonalScope();
     }
 
     public static function getEloquentQuery(): Builder

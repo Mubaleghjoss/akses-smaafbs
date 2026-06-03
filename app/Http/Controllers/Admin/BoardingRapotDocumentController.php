@@ -67,7 +67,9 @@ class BoardingRapotDocumentController extends Controller
             'tanggal_rapot' => ['nullable', 'date'],
             'status_rapot' => ['required', Rule::in(array_keys(BoardingRapot::statusOptions()))],
             'nomor_dokumen' => ['nullable', 'string', 'max:50'],
-            'kelas_boarding_override' => ['nullable', Rule::in(array_keys(BoardingRapot::boardingClassOptions()))],
+            'kelas_boarding_override' => SchemaFacade::hasColumn('boarding_rapots', 'kelas_boarding_override')
+                ? ['required', Rule::in(array_keys(BoardingRapot::boardingClassOptions()))]
+                : ['nullable'],
             'wali_pamong_nama' => ['nullable', 'string', 'max:100'],
             'kepala_boarding_nama' => ['nullable', 'string', 'max:100'],
             'mudir_asrama_nama' => ['nullable', 'string', 'max:100'],
@@ -188,7 +190,7 @@ class BoardingRapotDocumentController extends Controller
 
         abort_unless($user instanceof User, Response::HTTP_FORBIDDEN);
         abort_unless(
-            $user->hasRole('admin') || $user->canViewModule('boarding_rapot'),
+            $user->hasFullAdminAccess() || $user->canViewModule('boarding_rapot'),
             Response::HTTP_FORBIDDEN,
         );
 
@@ -243,7 +245,7 @@ class BoardingRapotDocumentController extends Controller
 
         abort_unless($user instanceof User, Response::HTTP_FORBIDDEN);
         abort_unless(
-            $user->hasRole('admin') || $user->canManageModule('boarding_rapot'),
+            $user->hasFullAdminAccess() || $user->canManageModule('boarding_rapot'),
             Response::HTTP_FORBIDDEN,
         );
 
@@ -295,7 +297,9 @@ class BoardingRapotDocumentController extends Controller
         $base = $this->schoolLetterhead();
         $settings = BoardingRapot::documentSettings();
         $logoPath = trim((string) ($settings[BoardingRapot::SETTING_LOGO_PATH] ?? ''));
+        $rightLogoPath = trim((string) ($settings[BoardingRapot::SETTING_RIGHT_LOGO_PATH] ?? ''));
         $logoSource = $this->boardingRapotLogoSource($logoPath);
+        $rightLogoSource = $this->boardingRapotLogoSource($rightLogoPath);
         $fallbackLogoSource = $this->boardingRapotLogoSource($base['logo_src'] ?? null);
 
         $fallbackContact = collect([$base['phone'] ?? null, $base['email'] ?? null])
@@ -309,7 +313,22 @@ class BoardingRapotDocumentController extends Controller
             'address' => $settings[BoardingRapot::SETTING_KOP_ADDRESS] ?: $base['address'],
             'contact' => $settings[BoardingRapot::SETTING_KOP_CONTACT] ?: ($fallbackContact ?: null),
             'logo_src' => $logoSource ?: $fallbackLogoSource,
+            'right_logo_src' => $rightLogoSource,
+            'logo_size' => $this->numericLetterheadSetting($settings[BoardingRapot::SETTING_LOGO_SIZE] ?? null, 58, 34, 150),
+            'site_name_font_size' => $this->numericLetterheadSetting($settings[BoardingRapot::SETTING_KOP_SITE_NAME_FONT_SIZE] ?? null, 18, 12, 50),
+            'subtitle_font_size' => $this->numericLetterheadSetting($settings[BoardingRapot::SETTING_KOP_SUBTITLE_FONT_SIZE] ?? null, 13, 9, 22),
+            'info_font_size' => $this->numericLetterheadSetting($settings[BoardingRapot::SETTING_KOP_INFO_FONT_SIZE] ?? null, 10.5, 8, 16),
+            'signature_name_gap' => $this->numericLetterheadSetting($settings[BoardingRapot::SETTING_SIGNATURE_NAME_GAP] ?? null, 42, 18, 120),
         ];
+    }
+
+    protected function numericLetterheadSetting(mixed $value, float $default, float $min, float $max): float
+    {
+        if (! is_numeric($value)) {
+            return $default;
+        }
+
+        return min($max, max($min, (float) $value));
     }
 
     protected function boardingRapotLogoSource(?string $value): ?string

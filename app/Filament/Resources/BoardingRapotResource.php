@@ -125,35 +125,21 @@ class BoardingRapotResource extends Resource
                             ->maxLength(50)
                             ->placeholder('Contoh: RB/BOARDING/2026/001'),
                         Forms\Components\Placeholder::make('kelas_boarding_view')
-                            ->label('Kelas Boarding Otomatis')
+                            ->label('Referensi Kelas dari Hafalan')
                             ->content(fn (?BoardingRapot $record): string => static::kelasBoardingAutoLabel($record)),
                         Forms\Components\Select::make('kelas_boarding_override')
-                            ->label('Kelas Boarding Manual')
-                            ->placeholder('Ikuti otomatis')
+                            ->label('Kelas Boarding')
+                            ->placeholder('Pilih kelas boarding')
                             ->options(BoardingRapot::boardingClassOptions())
+                            ->native(false)
+                            ->selectablePlaceholder(false)
+                            ->required(fn (): bool => static::rapotColumnAvailable('kelas_boarding_override'))
                             ->dehydrated(fn (): bool => static::rapotColumnAvailable('kelas_boarding_override'))
                             ->helperText(fn (?BoardingRapot $record, Get $get): HtmlString => static::kelasBoardingManualHelper(
                                 $record,
                                 BoardingRapot::normalizeBoardingClassKey($get('kelas_boarding_override')),
                             ))
                             ->visible(fn (): bool => static::rapotColumnAvailable('kelas_boarding_override')),
-                        Forms\Components\Checkbox::make('konfirmasi_kelas_boarding_manual')
-                            ->label(fn (?BoardingRapot $record, Get $get): string => static::kelasBoardingConfirmationLabel(
-                                BoardingRapot::normalizeBoardingClassKey($get('kelas_boarding_override')),
-                            ))
-                            ->dehydrated(false)
-                            ->rules(fn (?BoardingRapot $record, Get $get): array => static::kelasBoardingOverrideChanged(
-                                $record,
-                                BoardingRapot::normalizeBoardingClassKey($get('kelas_boarding_override')),
-                            ) ? ['accepted'] : [])
-                            ->validationMessages([
-                                'accepted' => 'Konfirmasi perubahan kelas boarding wajib dicentang.',
-                            ])
-                            ->visible(fn (?BoardingRapot $record, Get $get): bool => static::kelasBoardingOverrideChanged(
-                                $record,
-                                BoardingRapot::normalizeBoardingClassKey($get('kelas_boarding_override')),
-                            ))
-                            ->columnSpanFull(),
                         Forms\Components\Placeholder::make('generated_at_view')
                             ->label('Sinkron Terakhir')
                             ->content(fn (?BoardingRapot $record): string => $record?->generated_at?->translatedFormat('d M Y H:i') ?? 'Belum pernah disinkronkan'),
@@ -276,10 +262,13 @@ class BoardingRapotResource extends Resource
                     ->searchable()
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->wrap(),
-                Tables\Columns\TextColumn::make('kelas_boarding')
+                Tables\Columns\SelectColumn::make('kelas_boarding_override')
                     ->label('Kelas Boarding')
-                    ->state(fn (BoardingRapot $record): string => static::kelasBoardingLabel($record))
-                    ->description(fn (BoardingRapot $record): ?string => static::kelasBoardingDescription($record))
+                    ->options(BoardingRapot::boardingClassOptions())
+                    ->native(false)
+                    ->selectablePlaceholder(false)
+                    ->rules(['required', Rule::in(array_keys(BoardingRapot::boardingClassOptions()))])
+                    ->disabled(fn (): bool => ! static::canEdit(null))
                     ->visibleFrom('lg'),
                 Tables\Columns\TextColumn::make('status_rapot')
                     ->label('Status')
@@ -498,30 +487,14 @@ class BoardingRapotResource extends Resource
     {
         $payload = static::rapotPayload($record);
 
-        return filled($payload['rapot']['kelas_boarding_override_key'] ?? null) ? 'Manual' : 'Otomatis';
-    }
-
-    protected static function kelasBoardingOverrideChanged(?BoardingRapot $record, ?string $selectedKey): bool
-    {
-        if (! $record?->exists) {
-            return filled($selectedKey);
-        }
-
-        return BoardingRapot::normalizeBoardingClassKey($record->kelas_boarding_override ?? null) !== $selectedKey;
-    }
-
-    protected static function kelasBoardingConfirmationLabel(?string $selectedKey): string
-    {
-        $targetLabel = $selectedKey ? (BoardingRapot::boardingClassOptions()[$selectedKey] ?? $selectedKey) : 'kelas otomatis';
-
-        return 'Saya yakin merubah menjadi '.$targetLabel.', sebab ada materi kelas yang belum sesuai pada kelasnya.';
+        return filled($payload['rapot']['kelas_boarding_override_key'] ?? null) ? 'Manual' : 'Belum diisi manual';
     }
 
     protected static function kelasBoardingManualHelper(?BoardingRapot $record, ?string $selectedKey): HtmlString
     {
         $payload = static::rapotPayload($record);
         $autoLabel = $payload['rapot']['kelas_boarding_auto'] ?? $payload['rapot']['kelas_boarding'] ?? 'Kelas Pegon Bacaan';
-        $finalLabel = $selectedKey ? (BoardingRapot::boardingClassOptions()[$selectedKey] ?? $selectedKey) : $autoLabel;
+        $finalLabel = $selectedKey ? (BoardingRapot::boardingClassOptions()[$selectedKey] ?? $selectedKey) : 'Belum Diisi';
         $rows = collect($payload['pencapaian']['materi_boarding']['hafalan'] ?? [])
             ->map(function (array $row): string {
                 $judul = e((string) ($row['judul'] ?? '-'));
@@ -537,7 +510,7 @@ class BoardingRapotResource extends Resource
 
         return new HtmlString(
             '<div class="space-y-2 text-sm">'
-            .'<div>Kelas otomatis dari hafalan: <strong>'.e((string) $autoLabel).'</strong>.</div>'
+            .'<div>Referensi kelas dari hafalan: <strong>'.e((string) $autoLabel).'</strong>.</div>'
             .'<div>Kelas yang akan tampil di rapot: <strong>'.e((string) $finalLabel).'</strong>.</div>'
             .'<div>Materi hafalan yang sudah terisi:</div>'
             .$rows

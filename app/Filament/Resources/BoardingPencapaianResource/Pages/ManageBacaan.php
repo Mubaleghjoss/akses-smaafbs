@@ -79,6 +79,7 @@ class ManageBacaan extends Page implements HasTable
                     'kl_grade',
                     'tj_grade',
                     'mj_grade',
+                    'kelas_bacaan',
                     'reviewer_user_id',
                     'reviewer_name',
                 ])
@@ -92,6 +93,7 @@ class ManageBacaan extends Page implements HasTable
                 'latest_date' => filled($summary?->latest_assessed_at) ? Carbon::parse($summary->latest_assessed_at)->translatedFormat('d M Y') : '-',
                 'latest_reviewer' => $latest ? $this->reviewerLabel($latest) : '-',
                 'latest_grades' => $latest ? $this->gradeSummary($latest) : 'Belum ada riwayat',
+                'latest_class' => BoardingBacaanAssessment::classLabel($latest?->kelas_bacaan),
             ];
         }
 
@@ -145,6 +147,12 @@ class ManageBacaan extends Page implements HasTable
             Forms\Components\DatePicker::make('assessed_at')
                 ->label('Tanggal Baca')
                 ->default(now()->toDateString())
+                ->required(),
+            Forms\Components\Select::make('kelas_bacaan')
+                ->label("Kelas Bacaan Qur'an")
+                ->options(BoardingBacaanAssessment::classOptions())
+                ->native(false)
+                ->selectablePlaceholder(false)
                 ->required(),
             Grid::make(['default' => 1, 'md' => 2])
                 ->schema([
@@ -207,6 +215,7 @@ class ManageBacaan extends Page implements HasTable
                     'kl_grade',
                     'tj_grade',
                     'mj_grade',
+                    'kelas_bacaan',
                     'reviewer_user_id',
                     'reviewer_name',
                     'notes',
@@ -220,6 +229,12 @@ class ManageBacaan extends Page implements HasTable
             ->emptyStateHeading('Belum ada riwayat bacaan')
             ->emptyStateDescription('Tambah nilai bacaan pertama.')
             ->headerActions([
+                Action::make('exportBacaan')
+                    ->label('Export Excel')
+                    ->icon('heroicon-o-document-arrow-down')
+                    ->color('success')
+                    ->url(fn (): string => route('admin.boarding-pencapaians.bacaan.export', $this->getRecord()))
+                    ->openUrlInNewTab(),
                 Action::make('tambahBacaan')
                     ->label('Tambah')
                     ->icon('heroicon-o-plus')
@@ -239,6 +254,7 @@ class ManageBacaan extends Page implements HasTable
                             'kl_grade' => $data['kl_grade'],
                             'tj_grade' => $data['tj_grade'],
                             'mj_grade' => $data['mj_grade'],
+                            'kelas_bacaan' => $data['kelas_bacaan'],
                             'reviewer_user_id' => $reviewerPayload['reviewer_user_id'],
                             'reviewer_name' => $reviewerPayload['reviewer_name'],
                             'notes' => filled($data['notes'] ?? null) ? trim((string) $data['notes']) : null,
@@ -258,6 +274,13 @@ class ManageBacaan extends Page implements HasTable
                     ->label('Tanggal')
                     ->date('d M Y')
                     ->sortable(),
+                Tables\Columns\SelectColumn::make('kelas_bacaan')
+                    ->label('Kelas')
+                    ->options(BoardingBacaanAssessment::classOptions())
+                    ->native(false)
+                    ->selectablePlaceholder(false)
+                    ->rules(['required', 'string', 'max:10'])
+                    ->disabled(fn (): bool => ! $this->canManageBacaan()),
                 Tables\Columns\SelectColumn::make('pp_grade')
                     ->label('PP')
                     ->options(BoardingBacaanAssessment::gradeOptions())
@@ -323,6 +346,9 @@ class ManageBacaan extends Page implements HasTable
                                 Forms\Components\Placeholder::make('penyimak')
                                     ->label('Penyimak')
                                     ->content(fn (BoardingBacaanAssessment $record): string => $this->reviewerLabel($record)),
+                                Forms\Components\Placeholder::make('kelas_bacaan')
+                                    ->label("Kelas Bacaan Qur'an")
+                                    ->content(fn (BoardingBacaanAssessment $record): string => BoardingBacaanAssessment::classLabel($record->kelas_bacaan)),
                                 Forms\Components\Placeholder::make('pp')
                                     ->label('Panjang Pendek (PP)')
                                     ->content(fn (BoardingBacaanAssessment $record): string => BoardingBacaanAssessment::gradeLabel($record->pp_grade)),
@@ -354,6 +380,7 @@ class ManageBacaan extends Page implements HasTable
                         'kl_grade' => $record->kl_grade,
                         'tj_grade' => $record->tj_grade,
                         'mj_grade' => $record->mj_grade,
+                        'kelas_bacaan' => $record->kelas_bacaan,
                         'reviewer_mode' => filled($record->reviewer_name) && blank($record->reviewer_user_id) ? 'name' : 'user',
                         'reviewer_user_id' => $record->reviewer_user_id,
                         'reviewer_name' => $record->reviewer_name,
@@ -370,6 +397,7 @@ class ManageBacaan extends Page implements HasTable
                             'kl_grade' => $data['kl_grade'],
                             'tj_grade' => $data['tj_grade'],
                             'mj_grade' => $data['mj_grade'],
+                            'kelas_bacaan' => $data['kelas_bacaan'],
                             'reviewer_user_id' => $reviewerPayload['reviewer_user_id'],
                             'reviewer_name' => $reviewerPayload['reviewer_name'],
                             'notes' => filled($data['notes'] ?? null) ? trim((string) $data['notes']) : null,

@@ -51,7 +51,7 @@ class SarprasStickerSettings extends Page implements HasForms
         return SchemaFacade::hasTable('pengaturan')
             && $user instanceof User
             && (
-                $user->hasRole('admin')
+                $user->hasFullAdminAccess()
                 || $user->canManageModule('sarpras_bosp_inventory')
                 || $user->canManageModule('sarpras_sticker_settings')
             );

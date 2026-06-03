@@ -31,7 +31,7 @@ class ManageBoardingRapots extends ManageRecords
                         ->columns(['default' => 1, 'md' => 2])
                         ->schema([
                             Forms\Components\FileUpload::make(BoardingRapot::SETTING_LOGO_PATH)
-                                ->label('Logo Kop Surat')
+                                ->label('Logo Kiri / Sekolah')
                                 ->disk('public')
                                 ->directory('boarding-rapot/logo')
                                 ->acceptedFileTypes([
@@ -44,18 +44,65 @@ class ManageBoardingRapots extends ManageRecords
                                 ->downloadable()
                                 ->openable()
                                 ->helperText('Jika kosong, rapot memakai logo situs utama.'),
+                            Forms\Components\FileUpload::make(BoardingRapot::SETTING_RIGHT_LOGO_PATH)
+                                ->label('Logo Kanan / Yayasan')
+                                ->disk('public')
+                                ->directory('boarding-rapot/logo')
+                                ->acceptedFileTypes([
+                                    'image/png',
+                                    'image/jpeg',
+                                    'image/webp',
+                                    'image/svg+xml',
+                                ])
+                                ->maxSize(4096)
+                                ->downloadable()
+                                ->openable()
+                                ->helperText('Logo ini tampil di sisi kanan kop surat.'),
+                            Forms\Components\TextInput::make(BoardingRapot::SETTING_LOGO_SIZE)
+                                ->label('Ukuran Logo Kiri dan Kanan')
+                                ->numeric()
+                                ->minValue(34)
+                                ->maxValue(150)
+                                ->step(1)
+                                ->suffix('px')
+                                ->default(58)
+                                ->helperText('Satu ukuran dipakai sama untuk logo kiri dan logo kanan.'),
                             Forms\Components\TextInput::make(BoardingRapot::SETTING_KOP_SITE_NAME)
                                 ->label('Nama Kop Surat')
                                 ->maxLength(160)
                                 ->placeholder('SMA Al Furqon Boarding School'),
+                            Forms\Components\TextInput::make(BoardingRapot::SETTING_KOP_SITE_NAME_FONT_SIZE)
+                                ->label('Ukuran Teks Nama Kop')
+                                ->numeric()
+                                ->minValue(12)
+                                ->maxValue(50)
+                                ->step(0.5)
+                                ->suffix('px')
+                                ->default(18),
                             Forms\Components\TextInput::make(BoardingRapot::SETTING_KOP_SUBTITLE)
                                 ->label('Teks Baris Kedua')
                                 ->maxLength(160)
                                 ->placeholder('Boarding School'),
+                            Forms\Components\TextInput::make(BoardingRapot::SETTING_KOP_SUBTITLE_FONT_SIZE)
+                                ->label('Ukuran Teks Baris Kedua')
+                                ->numeric()
+                                ->minValue(9)
+                                ->maxValue(22)
+                                ->step(0.5)
+                                ->suffix('px')
+                                ->default(13),
                             Forms\Components\TextInput::make(BoardingRapot::SETTING_KOP_CONTACT)
                                 ->label('Kontak Kop Surat')
                                 ->maxLength(220)
                                 ->placeholder('Telepon | Email | Website'),
+                            Forms\Components\TextInput::make(BoardingRapot::SETTING_KOP_INFO_FONT_SIZE)
+                                ->label('Ukuran Teks Alamat dan Kontak')
+                                ->numeric()
+                                ->minValue(8)
+                                ->maxValue(16)
+                                ->step(0.5)
+                                ->suffix('px')
+                                ->default(10.5),
                             Forms\Components\Textarea::make(BoardingRapot::SETTING_KOP_ADDRESS)
                                 ->label('Alamat Kop Surat')
                                 ->rows(3)
@@ -99,6 +146,15 @@ class ManageBoardingRapots extends ManageRecords
                                 ->label('Nama Tanda Tangan 3')
                                 ->helperText('Untuk Pamong, isi di sini. Jika dikosongkan, sistem memakai pamong penanggung jawab rapot.')
                                 ->maxLength(100),
+                            Forms\Components\TextInput::make(BoardingRapot::SETTING_SIGNATURE_NAME_GAP)
+                                ->label('Jarak Nama Tanda Tangan')
+                                ->numeric()
+                                ->minValue(18)
+                                ->maxValue(120)
+                                ->step(1)
+                                ->suffix('px')
+                                ->default(42)
+                                ->helperText('Atur jarak vertikal antara label jabatan dan nama tanda tangan.'),
                         ]),
                 ])
                 ->action(function (array $data): void {

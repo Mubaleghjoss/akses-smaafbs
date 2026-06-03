@@ -12,6 +12,11 @@ use Illuminate\Support\Str;
 
 class DataSiswa extends Model
 {
+    public const JK_OPTIONS = [
+        'L' => 'Laki-laki',
+        'P' => 'Perempuan',
+    ];
+
     public const STATUS_OPTIONS = [
         'aktif' => 'Aktif',
         'alumni' => 'Alumni',
@@ -86,6 +91,18 @@ class DataSiswa extends Model
     public static function statusOptions(): array
     {
         return self::STATUS_OPTIONS;
+    }
+
+    public static function jkOptions(): array
+    {
+        return self::JK_OPTIONS;
+    }
+
+    public static function jkLabel(?string $jk): string
+    {
+        $normalized = strtoupper(trim((string) $jk));
+
+        return self::JK_OPTIONS[$normalized] ?? ($jk ?: '-');
     }
 
     public static function nonActiveStatuses(): array

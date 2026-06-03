@@ -256,7 +256,7 @@
                         <div class="readonly">{{ $rapot->siswa?->rombel_saat_ini ?? '-' }}</div>
                     </label>
                     <label>
-                        Kelas Boarding Otomatis
+                        Referensi Kelas dari Hafalan
                         <div class="readonly">{{ $currentKelasAuto }}</div>
                     </label>
                     <label>
@@ -302,12 +302,13 @@
                         <input name="nomor_dokumen" value="{{ old('nomor_dokumen', $rapot->nomor_dokumen) }}" maxlength="50">
                     </label>
                     @if ($kelasOverrideColumnAvailable)
+                        @php($selectedKelasBoarding = old('kelas_boarding_override', $rapot->kelas_boarding_override))
                         <label>
-                            Kelas Boarding Manual
-                            <select name="kelas_boarding_override">
-                                <option value="">Ikuti otomatis</option>
+                            Kelas Boarding
+                            <select name="kelas_boarding_override" required>
+                                <option value="" disabled @selected(blank($selectedKelasBoarding))>Pilih kelas boarding</option>
                                 @foreach ($boardingClassOptions as $value => $label)
-                                    <option value="{{ $value }}" @selected(old('kelas_boarding_override', $rapot->kelas_boarding_override) === $value)>{{ $label }}</option>
+                                    <option value="{{ $value }}" @selected($selectedKelasBoarding === $value)>{{ $label }}</option>
                                 @endforeach
                             </select>
                         </label>

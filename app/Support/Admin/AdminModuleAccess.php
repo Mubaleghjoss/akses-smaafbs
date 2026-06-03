@@ -194,7 +194,7 @@ class AdminModuleAccess
 
     public static function resolveEffectiveLevel(User $user, string $prefix): string
     {
-        if ($user->hasRole('admin')) {
+        if ($user->hasFullAdminAccess()) {
             return self::MANAGE;
         }
 
@@ -224,7 +224,7 @@ class AdminModuleAccess
      */
     public static function effectiveLevels(User $user): array
     {
-        if ($user->hasRole('admin')) {
+        if ($user->hasFullAdminAccess()) {
             return array_fill_keys(self::prefixes(), self::MANAGE);
         }
 

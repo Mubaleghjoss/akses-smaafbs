@@ -14,7 +14,15 @@
             --paper: #ffffff;
             --bg: #f1f5f9;
         }
-        * { box-sizing: border-box; }
+        * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        @page {
+            size: A4 portrait;
+            margin: 0;
+        }
         body {
             margin: 0;
             background: var(--bg);
@@ -55,8 +63,9 @@
             color: var(--ink);
         }
         .letterhead {
+            position: relative;
             display: grid;
-            grid-template-columns: auto 1fr;
+            grid-template-columns: var(--letterhead-logo-size, 84px) 1fr var(--letterhead-logo-size, 84px);
             gap: 18px;
             align-items: center;
             border-bottom: 3px solid var(--ink);
@@ -64,14 +73,15 @@
             margin-bottom: 18px;
         }
         .logo-box {
-            width: 84px;
-            height: 84px;
-            border: 1px solid var(--line);
+            width: var(--letterhead-logo-size, 84px);
+            height: var(--letterhead-logo-size, 84px);
             display: flex;
             align-items: center;
             justify-content: center;
             background: var(--paper);
-            overflow: hidden;
+            overflow: visible;
+            position: relative;
+            z-index: 2;
         }
         .logo-box img {
             width: 100%;
@@ -79,6 +89,8 @@
             object-fit: contain;
         }
         .letterhead-copy {
+            position: relative;
+            z-index: 1;
             text-align: center;
         }
         .letterhead-copy h1,
@@ -87,18 +99,18 @@
             margin: 0;
         }
         .letterhead-copy h1 {
-            font-size: 24px;
+            font-size: var(--letterhead-title-size, 24px);
             letter-spacing: 0.08em;
         }
         .letterhead-copy h2 {
             margin-top: 4px;
-            font-size: 17px;
+            font-size: var(--letterhead-subtitle-size, 17px);
             font-weight: 700;
         }
         .letterhead-copy p {
             margin-top: 7px;
             color: var(--muted);
-            font-size: 13px;
+            font-size: var(--letterhead-info-size, 13px);
         }
         .doc-strip {
             display: grid;
@@ -189,7 +201,7 @@
         .section-title {
             margin: 0 0 10px;
             padding: 8px 12px;
-            background: var(--ink);
+            background: #0f172a;
             color: #fff;
             font-size: 14px;
             text-transform: uppercase;
@@ -238,9 +250,11 @@
             color: #fff;
             font-weight: 700;
         }
-        .sheet-grid .w-small { width: 16%; }
-        .sheet-grid .w-mid { width: 24%; }
-        .sheet-grid .w-wide { width: 60%; }
+        .sheet-grid .col-main { width: 18%; }
+        .sheet-grid .col-sub { width: 22%; }
+        .sheet-grid .col-info { width: 60%; }
+        .sheet-grid .col-mt-materi { width: 36%; }
+        .sheet-grid .col-mt-info { width: 64%; }
         .two-col {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -261,10 +275,10 @@
             font-size: 13px;
         }
         .signature-box {
-            min-height: 140px;
+            min-height: calc(var(--signature-name-gap, 72px) + 68px);
         }
         .signature-box .name {
-            margin-top: 72px;
+            margin-top: var(--signature-name-gap, 72px);
             font-weight: 700;
             text-decoration: underline;
         }
@@ -272,7 +286,7 @@
             color: var(--muted);
         }
         .center { text-align: center; }
-        @media (max-width: 768px) {
+        @media screen and (max-width: 768px) {
             body { padding: 10px; }
             .page { padding: 16px; }
             .letterhead,
@@ -294,14 +308,43 @@
             body {
                 padding: 0;
                 background: #fff;
+                width: 210mm;
             }
             .page {
-                max-width: none;
+                width: 210mm;
+                min-height: 297mm;
+                max-width: 210mm;
                 box-shadow: none;
-                padding: 0;
+                padding: 10mm;
+            }
+            .letterhead {
+                grid-template-columns: var(--letterhead-logo-size, 84px) 1fr var(--letterhead-logo-size, 84px);
+                text-align: initial;
+            }
+            .logo-box {
+                margin: 0;
+            }
+            .meta-grid,
+            .two-col {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .stats {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+            .doc-strip,
+            .signature-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
             }
             .toolbar {
                 display: none;
+            }
+            .section-title {
+                background: #0f172a !important;
+                color: #fff !important;
+            }
+            .sheet-grid th {
+                background: #0097a7 !important;
+                color: #fff !important;
             }
         }
     </style>
@@ -310,6 +353,11 @@
     @php
         $letterheadContact = ($letterhead['contact'] ?? collect([$letterhead['phone'] ?? null, $letterhead['email'] ?? null])->filter()->implode(' | ')) ?: 'Kontak sekolah belum diatur.';
         $administrasiItems = \App\Models\BoardingRapot::normalizeAdministrasiRapotItems($payload['rapot']['administrasi_items'] ?? $rapot->administrasi_rapot_items ?? []);
+        $letterheadLogoSize = (float) ($letterhead['logo_size'] ?? 84);
+        $letterheadTitleSize = (float) ($letterhead['site_name_font_size'] ?? 24);
+        $letterheadSubtitleSize = (float) ($letterhead['subtitle_font_size'] ?? 17);
+        $letterheadInfoSize = (float) ($letterhead['info_font_size'] ?? 13);
+        $signatureNameGap = (float) ($letterhead['signature_name_gap'] ?? 72);
     @endphp
 
     <div class="page">
@@ -322,7 +370,7 @@
             <button class="button" type="button" onclick="window.print()">Print / Simpan PDF</button>
         </div>
 
-        <header class="letterhead">
+        <header class="letterhead" style="--letterhead-logo-size: {{ $letterheadLogoSize }}px; --letterhead-title-size: {{ $letterheadTitleSize }}px; --letterhead-subtitle-size: {{ $letterheadSubtitleSize }}px; --letterhead-info-size: {{ $letterheadInfoSize }}px;">
             <div class="logo-box">
                 @if(!empty($letterhead['logo_src']))
                     <img src="{{ $letterhead['logo_src'] }}" alt="Logo sekolah">
@@ -335,6 +383,11 @@
                 <p>
                     {{ $letterheadContact }}
                 </p>
+            </div>
+            <div class="logo-box">
+                @if(!empty($letterhead['right_logo_src']))
+                    <img src="{{ $letterhead['right_logo_src'] }}" alt="Logo yayasan">
+                @endif
             </div>
         </header>
 
@@ -424,7 +477,7 @@ Doa:
             </div>
         </section>
 
-        <section class="section">
+        <section class="section" style="--signature-name-gap: {{ $signatureNameGap }}px;">
             <h4 class="section-title">Detail Target Boarding</h4>
             @forelse(($payload['pencapaian']['detail_kelompok'] ?? []) as $group)
                 <div class="group-title">{{ $group['judul'] ?? '-' }}</div>
@@ -497,9 +550,14 @@ Doa:
             </div>
 
             @if($activeMateriScope === \App\Models\BoardingPencapaian::MATERI_RAPOT_SCOPE_BOARDING)
-            <div class="group-title">Halaman 1 - Materi Boarding</div>
+            <div class="group-title">Pencapaian Target Materi Boarding</div>
             <div style="overflow-x:auto;">
                 <table class="sheet-grid">
+                    <colgroup>
+                        <col class="col-main">
+                        <col class="col-sub">
+                        <col class="col-info">
+                    </colgroup>
                     <thead>
                         <tr>
                             <th colspan="2">Materi</th>
@@ -508,9 +566,9 @@ Doa:
                     </thead>
                     <tbody>
                         <tr>
-                            <td class="w-small" rowspan="2">{{ $materiBoardingSheetRows[1][0] }}</td>
-                            <td class="w-mid">{{ $materiBoardingSheetRows[1][1] }}</td>
-                            <td class="w-wide">{{ $materiBoardingSheetRows[1][2] }}</td>
+                            <td rowspan="2">{{ $materiBoardingSheetRows[1][0] }}</td>
+                            <td>{{ $materiBoardingSheetRows[1][1] }}</td>
+                            <td>{{ $materiBoardingSheetRows[1][2] }}</td>
                         </tr>
                         <tr>
                             <td>{{ $materiBoardingSheetRows[2][1] }}</td>
@@ -546,12 +604,16 @@ Doa:
                 </table>
             </div>
             @else
-            <div class="group-title">Halaman 2 - Rapot MT</div>
+            <div class="group-title">Pencapaian Target Materi MT</div>
             <div style="overflow-x:auto;">
                 <table class="sheet-grid">
+                    <colgroup>
+                        <col class="col-mt-materi">
+                        <col class="col-mt-info">
+                    </colgroup>
                     <thead>
                         <tr>
-                            <th style="width: 44%;">Materi</th>
+                            <th>Materi</th>
                             <th>Keterangan</th>
                         </tr>
                     </thead>

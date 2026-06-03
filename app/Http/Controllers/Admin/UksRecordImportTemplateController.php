@@ -16,7 +16,7 @@ class UksRecordImportTemplateController extends Controller
         $user = auth()->user();
 
         abort_unless($user instanceof User, Response::HTTP_FORBIDDEN);
-        abort_unless($user->hasRole('admin') || $user->canViewModule('uks_records'), Response::HTTP_FORBIDDEN);
+        abort_unless($user->hasFullAdminAccess() || $user->canViewModule('uks_records'), Response::HTTP_FORBIDDEN);
 
         return Excel::download(new UksRecordImportTemplateExport, 'template-import-uks-records.xlsx');
     }

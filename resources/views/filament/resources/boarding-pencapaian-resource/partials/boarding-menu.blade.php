@@ -7,48 +7,52 @@
     $items = [
         'bacaan' => [
             'number' => '1',
-            'title' => "Materi Qur'an",
-            'subtitle' => 'Bacaan',
+            'title' => "Materi Qur'an Bacaan",
+            'subtitle' => "Input hasil bacaan Qur'an",
             'url' => \App\Filament\Resources\BoardingPencapaianResource::getUrl('bacaan', ['record' => $record]),
             'activeFor' => ['bacaan'],
         ],
         'makna_quran' => [
             'number' => '2',
-            'title' => "Materi Qur'an",
-            'subtitle' => 'Makna',
+            'title' => "Materi Qur'an Makna",
+            'subtitle' => "Progress makna Qur'an",
             'url' => \App\Filament\Resources\BoardingPencapaianResource::getUrl('makna', ['record' => $record]),
             'activeFor' => ['makna', 'makna_quran'],
         ],
         'makna_hadits' => [
             'number' => '3',
-            'title' => 'Materi Hadits',
-            'subtitle' => 'Makna',
+            'title' => 'Materi Hadits Makna',
+            'subtitle' => 'Progress makna hadits',
             'url' => \App\Filament\Resources\BoardingPencapaianResource::getUrl('makna', ['record' => $record]),
-            'activeFor' => ['makna', 'makna_hadits'],
+            'activeFor' => ['makna_hadits'],
         ],
         'pengetesan_makna' => [
             'number' => '4',
-            'title' => 'Pengetesan',
-            'subtitle' => 'Makna',
+            'title' => 'Pengetesan Makna',
+            'subtitle' => 'Nilai dan keterangan',
             'url' => \App\Filament\Resources\BoardingPencapaianResource::getUrl('materi', ['record' => $record]).'#materi-boarding-editor',
             'activeFor' => ['materi', 'pengetesan_makna'],
         ],
         'hafalan' => [
             'number' => '5',
-            'title' => 'Materi',
-            'subtitle' => 'Hafalan',
+            'title' => 'Materi Hafalan',
+            'subtitle' => 'Nilai hafalan per kelas',
             'url' => \App\Filament\Resources\BoardingPencapaianResource::getUrl('hafalan', ['record' => $record]),
             'activeFor' => ['hafalan'],
         ],
     ];
 @endphp
 
-<section class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-gray-900">
-    <div class="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-        <h3 class="text-base font-semibold text-gray-900 dark:text-white">Menu Materi Boarding</h3>
+<section class="boarding-material-menu">
+    <div class="boarding-material-menu__head">
+        <div>
+            <span class="boarding-material-menu__eyebrow">Menu Materi</span>
+            <h3>Menu Materi Boarding</h3>
+        </div>
+        <p>Pilih bagian materi yang akan diisi untuk murid ini.</p>
     </div>
 
-    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <div class="boarding-material-menu__grid">
         @foreach ($items as $key => $item)
             @php
                 $isActive = in_array($active, $item['activeFor'], true);
@@ -57,24 +61,25 @@
             <a
                 href="{{ $item['url'] }}"
                 @class([
-                    'group flex h-full min-h-20 items-start gap-3 rounded-xl border bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-green-400 hover:bg-green-50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:bg-white dark:hover:bg-green-50',
-                    'border-green-500 ring-2 ring-green-500 ring-offset-1' => $isActive,
-                    'border-gray-200 dark:border-white/20' => ! $isActive,
+                    'boarding-material-card',
+                    'boarding-material-card--active' => $isActive,
                 ])
                 @if ($isActive) aria-current="page" @endif
             >
-                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-green-100 text-sm font-bold text-green-700 transition group-hover:bg-green-200">
+                <span class="boarding-material-card__number">
                     {{ $item['number'] }}
                 </span>
 
-                <span class="min-w-0">
-                    <span class="block text-sm font-semibold leading-5 text-green-800">
+                <span class="boarding-material-card__body">
+                    <span class="boarding-material-card__title">
                         {{ $item['title'] }}
                     </span>
-                    <span class="mt-1 block text-xs font-medium uppercase tracking-wide text-gray-500">
+                    <span class="boarding-material-card__subtitle">
                         {{ $item['subtitle'] }}
                     </span>
                 </span>
+
+                <span class="boarding-material-card__arrow" aria-hidden="true">&rsaquo;</span>
             </a>
         @endforeach
     </div>

@@ -54,7 +54,7 @@ class GuruTendik extends Model
             return $query;
         }
 
-        if ($user->hasRole('admin')) {
+        if ($user->hasFullAdminAccess()) {
             return $query;
         }
 

@@ -68,7 +68,7 @@ class Prestasi extends Model
 
     public function scopeVisibleToUser(Builder $query, mixed $user): Builder
     {
-        if (! $user instanceof User || (! $user->isBoardingPamong() && ! $user->isGuru())) {
+        if (! $user instanceof User || $user->hasFullAdminAccess() || (! $user->isBoardingPamong() && ! $user->isGuru())) {
             return $query;
         }
 
