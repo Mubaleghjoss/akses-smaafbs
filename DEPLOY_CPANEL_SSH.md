@@ -155,6 +155,21 @@ QUEUE_CONNECTION=database
 FILESYSTEM_DISK=public
 ```
 
+Jika document root hosting bukan folder `public` di repo ini, atau URL `/storage/...` sebenarnya dibaca dari folder lain seperti:
+
+```text
+/home/CPANEL_USER/public_html/web/app/storage
+```
+
+tambahkan root upload publik di `.env` server:
+
+```env
+FILESYSTEM_PUBLIC_ROOT=/home/CPANEL_USER/public_html/web/app/storage
+FILESYSTEM_PUBLIC_URL=/storage
+```
+
+Setelah mengubah nilai ini, jalankan `php artisan optimize:clear`. Tanpa itu, Laravel bisa tetap memakai konfigurasi cache lama dan upload tersimpan ke folder yang berbeda dari folder yang dibaca browser.
+
 Simpan di nano:
 
 ```text
