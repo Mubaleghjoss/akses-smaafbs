@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class PerpustakaanLiterasiMaterial extends Model
@@ -75,14 +74,53 @@ class PerpustakaanLiterasiMaterial extends Model
 
     public function imageUrl(): ?string
     {
-        $path = trim((string) $this->image_path);
+        $path = static::normalizeImagePath($this->image_path, 'literasi/materials');
 
-        return $path !== '' ? Storage::disk('public')->url($path) : null;
+        if ($path === null) {
+            return null;
+        }
+
+        if (Str::startsWith($path, ['http://', 'https://', '/storage/'])) {
+            return $path;
+        }
+
+        if (Str::startsWith($path, 'storage/')) {
+            return asset($path);
+        }
+
+        return asset('storage/'.$path);
     }
 
     public function publicUrl(): string
     {
         return route('library.literacy.show', $this->slug);
+    }
+
+    public static function normalizeImagePath(mixed $value, string $defaultDirectory): ?string
+    {
+        $path = trim((string) $value);
+
+        if ($path === '') {
+            return null;
+        }
+
+        if (Str::startsWith($path, ['http://', 'https://', '/storage/', 'storage/'])) {
+            return $path;
+        }
+
+        $path = ltrim($path, '/');
+
+        foreach (['public/storage/', 'storage/'] as $prefix) {
+            if (Str::startsWith($path, $prefix)) {
+                $path = Str::after($path, $prefix);
+            }
+        }
+
+        if (! str_contains($path, '/') && $defaultDirectory !== '') {
+            $path = trim($defaultDirectory, '/').'/'.$path;
+        }
+
+        return $path;
     }
 
     public static function uniqueSlug(?string $title, ?string $currentSlug = null, ?int $ignoreId = null): string

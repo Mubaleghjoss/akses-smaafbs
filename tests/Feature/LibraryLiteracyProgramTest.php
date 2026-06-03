@@ -61,6 +61,29 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertDontSee('Materi Masa Depan');
     }
 
+    public function test_public_literacy_images_normalize_legacy_filename_only_paths(): void
+    {
+        $this->createStudent('Codex Literasi Siswa Gambar', 'X IPA');
+        $material = $this->createMaterial('Materi Gambar Legacy', [
+            'image_path' => 'legacy-material.png',
+        ]);
+        $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Jelaskan gambar pada pertanyaan.',
+            'image_path' => 'legacy-question.png',
+            'max_characters' => 500,
+        ]);
+
+        $this->get(route('library.literacy.index'))
+            ->assertOk()
+            ->assertSee('/storage/literasi/materials/legacy-material.png', false);
+
+        $this->get(route('library.literacy.show', $material->slug))
+            ->assertOk()
+            ->assertSee('/storage/literasi/materials/legacy-material.png', false)
+            ->assertSee('/storage/literasi/questions/legacy-question.png', false);
+    }
+
     public function test_student_can_submit_and_edit_literacy_answers_with_unique_code(): void
     {
         $student = $this->createStudent('Codex Literasi Siswa A', 'XII IPA');

@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\Storage;
 
 class PerpustakaanLiterasiQuestion extends Model
 {
@@ -33,8 +32,20 @@ class PerpustakaanLiterasiQuestion extends Model
 
     public function imageUrl(): ?string
     {
-        $path = trim((string) $this->image_path);
+        $path = PerpustakaanLiterasiMaterial::normalizeImagePath($this->image_path, 'literasi/questions');
 
-        return $path !== '' ? Storage::disk('public')->url($path) : null;
+        if ($path === null) {
+            return null;
+        }
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, '/storage/')) {
+            return $path;
+        }
+
+        if (str_starts_with($path, 'storage/')) {
+            return asset($path);
+        }
+
+        return asset('storage/'.$path);
     }
 }
