@@ -14,10 +14,16 @@ class BoardingRapot extends Model
 {
     use BelongsToBoardingStudent;
 
+    public const STATUS_DRAFT = 'draft';
+
+    public const STATUS_REVIEW = 'review';
+
+    public const STATUS_READY_PRINT = 'siap_export';
+
     public const STATUS_OPTIONS = [
-        'draft' => 'Draft',
-        'review' => 'Review',
-        'siap_export' => 'Siap Export',
+        self::STATUS_DRAFT => 'Draft',
+        self::STATUS_REVIEW => 'Review',
+        self::STATUS_READY_PRINT => 'Siap Cetak',
     ];
 
     public const PREDIKAT_OPTIONS = [
@@ -106,10 +112,6 @@ class BoardingRapot extends Model
         static::saving(function (self $record): void {
             if (blank($record->pamong_user_id) && auth()->user()?->isBoardingPamong()) {
                 $record->pamong_user_id = auth()->id();
-            }
-
-            if ($record->pamong_user_id && blank($record->wali_pamong_nama)) {
-                $record->wali_pamong_nama = User::query()->whereKey($record->pamong_user_id)->value('name');
             }
 
             if (Schema::hasColumn($record->getTable(), 'administrasi_rapot_items')) {
@@ -499,9 +501,6 @@ class BoardingRapot extends Model
             'rekomendasi_tindak_lanjut' => $overwriteNarratives || blank($this->rekomendasi_tindak_lanjut)
                 ? implode(PHP_EOL, $rekomendasi)
                 : $this->rekomendasi_tindak_lanjut,
-            'wali_pamong_nama' => $this->wali_pamong_nama ?: $signatureProfile['wali_pamong_nama'],
-            'kepala_boarding_nama' => $this->kepala_boarding_nama ?: $signatureProfile['kepala_boarding_nama'],
-            'mudir_asrama_nama' => $this->mudir_asrama_nama ?: $signatureProfile['mudir_asrama_nama'],
             'tempat_cetak' => $this->tempat_cetak ?: ($payload['school']['kota'] ?? null),
         ])->saveQuietly();
     }
@@ -888,29 +887,33 @@ class BoardingRapot extends Model
         $slot1Label = static::normalizeSignatureText($settings[self::SETTING_WALI_LABEL] ?? null) ?? 'Kepala Sekolah';
         $slot2Label = static::normalizeSignatureText($settings[self::SETTING_KEPALA_LABEL] ?? null) ?? 'Kepala Boarding';
         $slot3Label = static::normalizeSignatureText($settings[self::SETTING_MUDIR_LABEL] ?? null) ?? 'Pamong';
-        $pamongName = static::normalizeSignatureText($this->pamongUser?->name);
-        $legacyPamongName = static::normalizeSignatureText($this->wali_pamong_nama);
-        $slot1RecordName = static::recordSignatureFallback($this->wali_pamong_nama, $pamongName, $slot1Label);
+        $pamongName = static::normalizeSignatureText(
+            $this->pamong_user_id
+                ? User::query()->whereKey($this->pamong_user_id)->value('name')
+                : $this->pamongUser?->name
+        );
+        $slot1SettingName = static::normalizeSignatureText($settings[self::SETTING_WALI_NAME] ?? null);
+        $slot2SettingName = static::normalizeSignatureText($settings[self::SETTING_KEPALA_NAME] ?? null);
+        $slot3SettingName = static::normalizeSignatureText($settings[self::SETTING_MUDIR_NAME] ?? null);
         $slot2RecordName = static::normalizeSignatureText($this->kepala_boarding_nama);
-        $slot3ManualName = static::normalizeSignatureText($this->mudir_asrama_nama);
-        $slot3FallbackName = static::signatureLabelUsesPamongFallback($slot3Label)
-            ? ($pamongName ?? $legacyPamongName)
-            : null;
+        $slot3RecordName = static::normalizeSignatureText($this->mudir_asrama_nama);
+        $slot1Name = static::signatureLabelUsesPamongFallback($slot1Label)
+            ? ($slot1SettingName ?? $pamongName ?? static::normalizeSignatureText($this->wali_pamong_nama))
+            : $slot1SettingName;
+        $slot2Name = static::signatureLabelUsesPamongFallback($slot2Label)
+            ? ($slot2SettingName ?? $pamongName ?? $slot2RecordName)
+            : ($slot2SettingName ?? $slot2RecordName);
+        $slot3Name = static::signatureLabelUsesPamongFallback($slot3Label)
+            ? ($slot3SettingName ?? $pamongName ?? $slot3RecordName)
+            : ($slot3SettingName ?? $slot3RecordName);
 
         return [
             'wali_pamong_label' => $slot1Label,
             'kepala_boarding_label' => $slot2Label,
             'mudir_asrama_label' => $slot3Label,
-            'wali_pamong_nama' => $slot1RecordName
-                ?? static::normalizeSignatureText($settings[self::SETTING_WALI_NAME] ?? null)
-                ?? '-',
-            'kepala_boarding_nama' => $slot2RecordName
-                ?? static::normalizeSignatureText($settings[self::SETTING_KEPALA_NAME] ?? null)
-                ?? '-',
-            'mudir_asrama_nama' => $slot3ManualName
-                ?? static::normalizeSignatureText($settings[self::SETTING_MUDIR_NAME] ?? null)
-                ?? $slot3FallbackName
-                ?? '-',
+            'wali_pamong_nama' => $slot1Name ?? '-',
+            'kepala_boarding_nama' => $slot2Name ?? '-',
+            'mudir_asrama_nama' => $slot3Name ?? '-',
         ];
     }
 
@@ -947,25 +950,6 @@ class BoardingRapot extends Model
             ->filter()
             ->values()
             ->all();
-    }
-
-    protected static function recordSignatureFallback(mixed $value, ?string $pamongName, string $label): ?string
-    {
-        $text = static::normalizeSignatureText($value);
-
-        if ($text === null) {
-            return static::signatureLabelUsesPamongFallback($label) ? $pamongName : null;
-        }
-
-        if (
-            ! static::signatureLabelUsesPamongFallback($label)
-            && $pamongName !== null
-            && strcasecmp($text, $pamongName) === 0
-        ) {
-            return null;
-        }
-
-        return $text;
     }
 
     protected static function signatureLabelUsesPamongFallback(string $label): bool

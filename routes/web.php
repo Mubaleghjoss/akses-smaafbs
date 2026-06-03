@@ -102,11 +102,12 @@ Route::middleware('auth')->get(
     BoardingBacaanAssessmentExportController::class
 )->name('admin.boarding-pencapaians.bacaan.export');
 
+Route::middleware('auth')->get(
+    '/admin/boarding-rapots/print-all',
+    [BoardingRapotDocumentController::class, 'printAllReady']
+)->name('admin.boarding-rapots.print-all');
+
 Route::middleware('auth')->prefix('/admin/boarding-rapots/{boardingRapot}')->group(function (): void {
-    Route::get('/manual-edit', [BoardingRapotDocumentController::class, 'editManual'])
-        ->name('admin.boarding-rapots.manual-edit');
-    Route::post('/manual-update', [BoardingRapotDocumentController::class, 'updateManual'])
-        ->name('admin.boarding-rapots.manual-update');
     Route::get('/preview', [BoardingRapotDocumentController::class, 'preview'])
         ->name('admin.boarding-rapots.preview');
     Route::get('/rekap', [BoardingRapotDocumentController::class, 'rekap'])

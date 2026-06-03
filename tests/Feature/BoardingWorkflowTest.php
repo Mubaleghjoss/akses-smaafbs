@@ -984,17 +984,17 @@ class BoardingWorkflowTest extends TestCase
             ->assertSee('Kembali ke daftar rapot');
     }
 
-    public function test_boarding_rapot_manual_edit_updates_without_livewire_page(): void
+    public function test_boarding_rapot_signature_uses_latest_pamong_profile_without_reusing_it_as_kepala_sekolah(): void
     {
-        $admin = User::query()->create([
-            'name' => 'Admin Rapot Manual',
-            'username' => 'admin-rapot-manual',
+        $pamong = User::query()->create([
+            'name' => 'Pamong Lama',
+            'username' => 'pamong-rapot-profile',
             'password' => 'secret123',
         ]);
-        $admin->assignRole('admin');
+        $pamong->assignRole('pamong_putra');
 
         $siswa = DataSiswa::query()->create([
-            'nama' => 'Siswa Rapot Manual',
+            'nama' => 'Siswa Rapot Profil',
             'rombel_saat_ini' => 'X.2 / 2025-2026',
             'jk' => 'L',
             'status' => 'aktif',
@@ -1002,61 +1002,102 @@ class BoardingWorkflowTest extends TestCase
 
         $rapot = BoardingRapot::query()->create([
             'siswa_id' => $siswa->id,
-            'pamong_user_id' => $admin->id,
+            'pamong_user_id' => $pamong->id,
             'periode_tahun' => '2025/2026',
             'semester' => 'genap',
             'status_rapot' => 'draft',
             'tanggal_rapot' => '2026-05-31',
+            'wali_pamong_nama' => 'Pamong Lama',
+            'mudir_asrama_nama' => 'Pamong Lama',
         ]);
 
-        $this->actingAs($admin)
-            ->get(route('admin.boarding-rapots.manual-edit', $rapot))
-            ->assertOk()
-            ->assertSee('Edit Manual Rapot Boarding')
-            ->assertDontSee('/livewire-');
+        BoardingRapot::saveDocumentSettings([
+            BoardingRapot::SETTING_WALI_LABEL => 'Kepala Sekolah',
+            BoardingRapot::SETTING_WALI_NAME => '',
+            BoardingRapot::SETTING_KEPALA_LABEL => 'Kepala Boarding',
+            BoardingRapot::SETTING_MUDIR_LABEL => 'Pamong',
+            BoardingRapot::SETTING_MUDIR_NAME => '',
+        ]);
 
-        $this->actingAs($admin)
-            ->from(route('admin.boarding-rapots.manual-edit', $rapot))
-            ->post(route('admin.boarding-rapots.manual-update', $rapot), [
-                'pamong_user_id' => $admin->id,
-                'periode_tahun' => '2025/2026',
-                'semester' => 'genap',
-                'tanggal_rapot' => '2026-06-01',
-                'status_rapot' => 'review',
-                'nomor_dokumen' => 'RB/MANUAL/001',
-                'kelas_boarding_override' => 'cepatan',
-                'wali_pamong_nama' => 'Kepala Manual',
-                'kepala_boarding_nama' => 'Boarding Manual',
-                'mudir_asrama_nama' => 'Pamong Manual',
-                'tempat_cetak' => 'Tangerang',
-                'ringkasan_pencapaian' => 'Ringkasan manual tersimpan.',
-                'catatan_pamong' => 'Catatan manual tersimpan.',
-                'rekomendasi_tindak_lanjut' => 'Rekomendasi manual tersimpan.',
-                'administrasi_questions' => ['Kelas Boarding'],
-                'administrasi_answers' => ['Kelas Cepatan'],
-            ])
-            ->assertRedirect(route('admin.boarding-rapots.manual-edit', $rapot))
-            ->assertSessionHas('status');
-
+        $rapot->syncFromSources();
         $rapot->refresh();
 
-        $this->assertSame('review', $rapot->status_rapot);
-        $this->assertSame('RB/MANUAL/001', $rapot->nomor_dokumen);
-        $this->assertSame('cepatan', $rapot->kelas_boarding_override);
-        $this->assertSame('Kelas Boarding', $rapot->administrasi_rapot_items[0]['question']);
-        $this->assertSame('Kelas Cepatan', $rapot->administrasi_rapot_items[0]['answer']);
-        $this->assertSame('Tangerang', $rapot->rekap_payload['school']['kota']);
-        $this->assertSame('Kepala Manual', $rapot->rekap_payload['signatures']['wali_pamong_nama']);
-        $this->assertSame('Boarding Manual', $rapot->rekap_payload['signatures']['kepala_boarding_nama']);
-        $this->assertSame('Pamong Manual', $rapot->rekap_payload['signatures']['mudir_asrama_nama']);
+        $this->assertSame('Kepala Sekolah', $rapot->rekap_payload['signatures']['wali_pamong_label']);
+        $this->assertSame('-', $rapot->rekap_payload['signatures']['wali_pamong_nama']);
+        $this->assertSame('Pamong Lama', $rapot->rekap_payload['signatures']['mudir_asrama_nama']);
+
+        $pamong->update(['name' => 'Pamong Baru']);
+
+        $rapot->syncFromSources();
+        $rapot->refresh();
+
+        $this->assertSame('-', $rapot->rekap_payload['signatures']['wali_pamong_nama']);
+        $this->assertSame('Pamong Baru', $rapot->rekap_payload['signatures']['mudir_asrama_nama']);
+    }
+
+    public function test_boarding_rapot_print_all_requires_ready_status_and_outputs_ready_rapots(): void
+    {
+        $admin = User::query()->create([
+            'name' => 'Admin Rapot Bulk Print',
+            'username' => 'admin-rapot-bulk-print',
+            'password' => 'secret123',
+        ]);
+        $admin->assignRole('admin');
+
+        $siswaReady = DataSiswa::query()->create([
+            'nama' => 'Siswa Siap Cetak',
+            'rombel_saat_ini' => 'X.2 / 2025-2026',
+            'jk' => 'L',
+            'status' => 'aktif',
+        ]);
+
+        $siswaDraft = DataSiswa::query()->create([
+            'nama' => 'Siswa Masih Draft',
+            'rombel_saat_ini' => 'X.2 / 2025-2026',
+            'jk' => 'P',
+            'status' => 'aktif',
+        ]);
+
+        BoardingRapot::query()->create([
+            'siswa_id' => $siswaReady->id,
+            'pamong_user_id' => $admin->id,
+            'periode_tahun' => '2025/2026',
+            'semester' => 'genap',
+            'status_rapot' => BoardingRapot::STATUS_READY_PRINT,
+            'tanggal_rapot' => '2026-05-31',
+            'kelas_boarding_override' => 'cepatan',
+        ]);
+
+        $draftRapot = BoardingRapot::query()->create([
+            'siswa_id' => $siswaDraft->id,
+            'pamong_user_id' => $admin->id,
+            'periode_tahun' => '2025/2026',
+            'semester' => 'genap',
+            'status_rapot' => BoardingRapot::STATUS_DRAFT,
+            'tanggal_rapot' => '2026-05-31',
+            'kelas_boarding_override' => 'cepatan',
+        ]);
+
+        $params = [
+            'periode_tahun' => '2025/2026',
+            'semester' => 'genap',
+            'rombel' => 'X.2 / 2025-2026',
+            'jenis_kelamin' => 'all',
+        ];
 
         $this->actingAs($admin)
-            ->get(route('admin.boarding-rapots.preview', $rapot))
+            ->get(route('admin.boarding-rapots.print-all', $params))
+            ->assertStatus(409);
+
+        $draftRapot->update(['status_rapot' => BoardingRapot::STATUS_READY_PRINT]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.boarding-rapots.print-all', $params))
             ->assertOk()
-            ->assertSee('Tangerang')
-            ->assertSee('Kepala Manual')
-            ->assertSee('Boarding Manual')
-            ->assertSee('Pamong Manual');
+            ->assertSee('Print Semua Rapot Boarding')
+            ->assertSee('Siswa Siap Cetak')
+            ->assertSee('Siswa Masih Draft')
+            ->assertSee('Siap Cetak');
     }
 
     protected function runUserMigrations(): void

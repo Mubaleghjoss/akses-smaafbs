@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rapot Boarding - {{ $payload['siswa']['nama'] ?? 'Murid' }}</title>
+    <title>{{ ! empty($bulkPrint ?? false) ? 'Print Semua Rapot Boarding' : 'Rapot Boarding - '.($payload['siswa']['nama'] ?? 'Murid') }}</title>
     <style>
         :root {
             --ink: #0f172a;
@@ -40,6 +40,9 @@
             background: var(--paper);
             padding: 10mm;
             box-shadow: 0 18px 48px rgba(15, 23, 42, 0.10);
+        }
+        .page + .page {
+            margin-top: 18px;
         }
         .toolbar {
             display: flex;
@@ -265,6 +268,10 @@
                 box-shadow: none;
                 padding: 10mm;
             }
+            .page + .page {
+                margin-top: 0;
+                page-break-before: always;
+            }
             .letterhead {
                 grid-template-columns: var(--letterhead-logo-size, 58px) 1fr var(--letterhead-logo-size, 58px);
                 text-align: initial;
@@ -302,13 +309,7 @@
 </head>
 <body>
     @php
-        $activeMateriScope = \App\Models\BoardingPencapaian::normalizeMateriRapotScope($payload['pencapaian']['materi_rapot_scope'] ?? null);
-        $activeMateriLabel = \App\Models\BoardingPencapaian::materiRapotScopeLabel($activeMateriScope);
-        $materiBoardingSheetRows = \App\Support\Boarding\BoardingRapotSheetRows::materiBoardingRows($payload);
-        $mtSheetRows = \App\Support\Boarding\BoardingRapotSheetRows::mtRows($payload);
-        $statusLabel = \App\Models\BoardingRapot::statusOptions()[$rapot->status_rapot] ?? ($payload['rapot']['status_rapot'] ?? '-');
-        $prolog = $payload['document']['prolog'] ?? \App\Models\BoardingRapot::DEFAULT_PROLOG;
-        $administrasiItems = \App\Models\BoardingRapot::normalizeAdministrasiRapotItems($payload['rapot']['administrasi_items'] ?? $rapot->administrasi_rapot_items ?? []);
+        $printItems = $printItems ?? [['rapot' => $rapot, 'payload' => $payload]];
         $letterheadContact = ($letterhead['contact'] ?? collect([$letterhead['phone'] ?? null, $letterhead['email'] ?? null])->filter()->implode(' | ')) ?: 'Kontak sekolah belum diatur.';
         $letterheadLogoSize = (float) ($letterhead['logo_size'] ?? 58);
         $letterheadTitleSize = (float) ($letterhead['site_name_font_size'] ?? 18);
@@ -317,14 +318,28 @@
         $signatureNameGap = (float) ($letterhead['signature_name_gap'] ?? 42);
     @endphp
 
+    @foreach($printItems as $printItem)
+        @php
+            $rapot = $printItem['rapot'];
+            $payload = $printItem['payload'];
+            $activeMateriScope = \App\Models\BoardingPencapaian::normalizeMateriRapotScope($payload['pencapaian']['materi_rapot_scope'] ?? null);
+            $materiBoardingSheetRows = \App\Support\Boarding\BoardingRapotSheetRows::materiBoardingRows($payload);
+            $mtSheetRows = \App\Support\Boarding\BoardingRapotSheetRows::mtRows($payload);
+            $statusLabel = \App\Models\BoardingRapot::statusOptions()[$rapot->status_rapot] ?? ($payload['rapot']['status_rapot'] ?? '-');
+            $prolog = $payload['document']['prolog'] ?? \App\Models\BoardingRapot::DEFAULT_PROLOG;
+            $administrasiItems = \App\Models\BoardingRapot::normalizeAdministrasiRapotItems($payload['rapot']['administrasi_items'] ?? $rapot->administrasi_rapot_items ?? []);
+        @endphp
+
     <div class="page">
         <div class="toolbar">
-            @unless($printMode)
+            @unless($printMode || ! $loop->first)
                 <a class="button secondary" href="{{ route('admin.boarding-rapots.rekap', $rapot) }}" target="_blank" rel="noreferrer">Rekap Data</a>
                 <a class="button secondary" href="{{ route('admin.boarding-rapots.export', $rapot) }}" target="_blank" rel="noreferrer">Export Excel</a>
                 <a class="button secondary" href="{{ route('admin.boarding-rapots.print', $rapot) }}" target="_blank" rel="noreferrer">Mode Cetak</a>
             @endunless
-            <button class="button" type="button" onclick="window.print()">Print / Simpan PDF</button>
+            @if($loop->first)
+                <button class="button" type="button" onclick="window.print()">Print / Simpan PDF</button>
+            @endif
         </div>
 
         <header class="letterhead" style="--letterhead-logo-size: {{ $letterheadLogoSize }}px; --letterhead-title-size: {{ $letterheadTitleSize }}px; --letterhead-subtitle-size: {{ $letterheadSubtitleSize }}px; --letterhead-info-size: {{ $letterheadInfoSize }}px;">
@@ -481,6 +496,7 @@
             </div>
         </section>
     </div>
+    @endforeach
 
     @if($printMode)
         <script>

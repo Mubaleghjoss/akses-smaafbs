@@ -4,6 +4,8 @@ namespace App\Filament\Resources\BoardingRapotResource\Pages;
 
 use App\Filament\Resources\BoardingRapotResource;
 use App\Models\BoardingRapot;
+use App\Models\DataSiswa;
+use App\Support\DataSiswa\DataSiswaSupport;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Notifications\Notification;
@@ -218,6 +220,49 @@ class ManageBoardingRapots extends ManageRecords
                         ->body($result['created'].' rapot dibuat, '.$result['updated'].' rapot diperbarui.')
                         ->success()
                         ->send();
+                }),
+            Actions\Action::make('printSemuaSiapCetak')
+                ->label('Print Semua Siap Cetak')
+                ->icon('heroicon-o-printer')
+                ->color('success')
+                ->modalHeading('Print semua rapot siap cetak')
+                ->modalDescription('Cetak gabungan hanya berjalan jika semua rapot pada filter yang dipilih sudah berstatus Siap Cetak.')
+                ->modalSubmitActionLabel('Buka Mode Cetak')
+                ->modalWidth('lg')
+                ->form([
+                    Forms\Components\TextInput::make('periode_tahun')
+                        ->label('Periode Tahun')
+                        ->default(fn (): string => BoardingRapot::defaultPeriodeTahun())
+                        ->required()
+                        ->maxLength(20),
+                    Forms\Components\Select::make('semester')
+                        ->label('Semester')
+                        ->default(fn (): string => BoardingRapot::defaultSemester())
+                        ->options([
+                            'ganjil' => 'Ganjil',
+                            'genap' => 'Genap',
+                        ])
+                        ->required(),
+                    Forms\Components\Select::make('rombel')
+                        ->label('Kelas / Rombel')
+                        ->placeholder('Semua kelas dalam scope')
+                        ->options(fn (): array => DataSiswaSupport::rombelOptions(auth()->user()))
+                        ->searchable()
+                        ->native(false),
+                    Forms\Components\Select::make('jenis_kelamin')
+                        ->label('Jenis Kelamin')
+                        ->default('all')
+                        ->options(['all' => 'Semua Jenis Kelamin'] + DataSiswa::jkOptions())
+                        ->native(false)
+                        ->visible(fn (): bool => (bool) auth()->user()?->hasFullAdminAccess()),
+                ])
+                ->action(function (array $data) {
+                    return redirect()->route('admin.boarding-rapots.print-all', [
+                        'periode_tahun' => $data['periode_tahun'] ?? BoardingRapot::defaultPeriodeTahun(),
+                        'semester' => $data['semester'] ?? BoardingRapot::defaultSemester(),
+                        'rombel' => $data['rombel'] ?? null,
+                        'jenis_kelamin' => $data['jenis_kelamin'] ?? 'all',
+                    ]);
                 }),
             Actions\Action::make('createRapotManual')
                 ->label('New rapot boarding')

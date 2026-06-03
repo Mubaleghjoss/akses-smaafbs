@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Concerns\HasModulePermissions;
 use App\Filament\Concerns\HasOptimizedAdminTable;
 use App\Filament\Resources\BoardingRapotResource\Pages;
+use App\Filament\Resources\UserResource;
 use App\Models\BoardingPencapaian;
 use App\Models\BoardingRapot;
 use App\Models\DataSiswa;
@@ -270,10 +271,13 @@ class BoardingRapotResource extends Resource
                     ->rules(['required', Rule::in(array_keys(BoardingRapot::boardingClassOptions()))])
                     ->disabled(fn (): bool => ! static::canEdit(null))
                     ->visibleFrom('lg'),
-                Tables\Columns\TextColumn::make('status_rapot')
+                Tables\Columns\SelectColumn::make('status_rapot')
                     ->label('Status')
-                    ->badge()
-                    ->formatStateUsing(fn (?string $state): string => BoardingRapot::statusOptions()[$state] ?? ($state ?: '-')),
+                    ->options(BoardingRapot::statusOptions())
+                    ->native(false)
+                    ->selectablePlaceholder(false)
+                    ->rules(['required', Rule::in(array_keys(BoardingRapot::statusOptions()))])
+                    ->disabled(fn (): bool => ! static::canEdit(null)),
                 Tables\Columns\TextColumn::make('generated_at')
                     ->label('Sinkron')
                     ->since()
@@ -310,11 +314,12 @@ class BoardingRapotResource extends Resource
                     ->visible(fn (): bool => ! auth()->user()?->isBoardingPamong()),
             ])
             ->actions([
-                Action::make('edit_rapot')
-                    ->label('Edit')
-                    ->icon('heroicon-o-pencil-square')
+                Action::make('edit_pamong')
+                    ->label('Edit Pamong')
+                    ->icon('heroicon-o-user-circle')
                     ->color('primary')
-                    ->url(fn (BoardingRapot $record): string => route('admin.boarding-rapots.manual-edit', $record)),
+                    ->visible(fn (BoardingRapot $record): bool => filled($record->pamong_user_id) && static::canManageUsers())
+                    ->url(fn (BoardingRapot $record): string => UserResource::getUrl('edit', ['record' => $record->pamong_user_id])),
                 ActionGroup::make([
                     Action::make('sinkronkan')
                         ->label('Sinkronkan Data')
@@ -521,6 +526,13 @@ class BoardingRapotResource extends Resource
     protected static function rapotColumnAvailable(string $column): bool
     {
         return SchemaFacade::hasTable('boarding_rapots') && SchemaFacade::hasColumn('boarding_rapots', $column);
+    }
+
+    protected static function canManageUsers(): bool
+    {
+        $user = auth()->user();
+
+        return $user instanceof User && ($user->hasFullAdminAccess() || $user->canManageModule('users'));
     }
 
     protected static function catatanSaranValue(array $row): string
