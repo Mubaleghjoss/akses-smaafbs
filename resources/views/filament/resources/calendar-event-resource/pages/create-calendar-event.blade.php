@@ -110,18 +110,61 @@
                 </div>
 
                 <div class="p-4">
-                    <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                        <button type="button" x-on:click="openPreset(0, 1)" class="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
-                            Hari ini
+                    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <button
+                            type="button"
+                            x-on:click="openPreset(0, 1)"
+                            class="group flex min-h-28 w-full items-start gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary-300 hover:bg-white hover:shadow-md dark:border-gray-800 dark:bg-gray-950/40 dark:hover:border-primary-500/50 dark:hover:bg-gray-900"
+                        >
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-sm font-bold text-primary-700 group-hover:bg-primary-600 group-hover:text-white dark:bg-primary-500/15 dark:text-primary-200">
+                                H
+                            </span>
+                            <span class="min-w-0">
+                                <span class="block text-sm font-semibold text-gray-900 dark:text-white">Hari ini</span>
+                                <span class="mt-1 block text-xs leading-5 text-gray-500 dark:text-gray-400">Buka modal untuk agenda tanggal hari ini.</span>
+                            </span>
                         </button>
-                        <button type="button" x-on:click="openPreset(1, 1)" class="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
-                            Besok
+
+                        <button
+                            type="button"
+                            x-on:click="openPreset(1, 1)"
+                            class="group flex min-h-28 w-full items-start gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary-300 hover:bg-white hover:shadow-md dark:border-gray-800 dark:bg-gray-950/40 dark:hover:border-primary-500/50 dark:hover:bg-gray-900"
+                        >
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-sm font-bold text-primary-700 group-hover:bg-primary-600 group-hover:text-white dark:bg-primary-500/15 dark:text-primary-200">
+                                B
+                            </span>
+                            <span class="min-w-0">
+                                <span class="block text-sm font-semibold text-gray-900 dark:text-white">Besok</span>
+                                <span class="mt-1 block text-xs leading-5 text-gray-500 dark:text-gray-400">Siapkan kegiatan untuk tanggal besok.</span>
+                            </span>
                         </button>
-                        <button type="button" x-on:click="openWeekRange()" class="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
-                            Sisa minggu ini
+
+                        <button
+                            type="button"
+                            x-on:click="openWeekRange()"
+                            class="group flex min-h-28 w-full items-start gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary-300 hover:bg-white hover:shadow-md dark:border-gray-800 dark:bg-gray-950/40 dark:hover:border-primary-500/50 dark:hover:bg-gray-900"
+                        >
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-xs font-bold text-primary-700 group-hover:bg-primary-600 group-hover:text-white dark:bg-primary-500/15 dark:text-primary-200">
+                                MG
+                            </span>
+                            <span class="min-w-0">
+                                <span class="block text-sm font-semibold text-gray-900 dark:text-white">Sisa minggu ini</span>
+                                <span class="mt-1 block text-xs leading-5 text-gray-500 dark:text-gray-400">Buat agenda rentang hari sampai akhir minggu.</span>
+                            </span>
                         </button>
-                        <button type="button" x-on:click="openMonthRange()" class="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
-                            Sampai akhir bulan
+
+                        <button
+                            type="button"
+                            x-on:click="openMonthRange()"
+                            class="group flex min-h-28 w-full items-start gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary-300 hover:bg-white hover:shadow-md dark:border-gray-800 dark:bg-gray-950/40 dark:hover:border-primary-500/50 dark:hover:bg-gray-900"
+                        >
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-xs font-bold text-primary-700 group-hover:bg-primary-600 group-hover:text-white dark:bg-primary-500/15 dark:text-primary-200">
+                                BL
+                            </span>
+                            <span class="min-w-0">
+                                <span class="block text-sm font-semibold text-gray-900 dark:text-white">Sampai akhir bulan</span>
+                                <span class="mt-1 block text-xs leading-5 text-gray-500 dark:text-gray-400">Buat agenda rentang hari sampai akhir bulan.</span>
+                            </span>
                         </button>
                     </div>
 
