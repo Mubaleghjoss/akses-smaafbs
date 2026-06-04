@@ -232,12 +232,6 @@ class BoardingRapotResource extends Resource
                     ->label('Murid')
                     ->searchable()
                     ->sortable()
-                    ->description(fn (BoardingRapot $record): string => collect([
-                        $record->siswa?->rombel_saat_ini ?: 'Tanpa rombel',
-                        $record->pamongUser?->name ? 'Pamong '.$record->pamongUser->name : null,
-                        trim(($record->periode_tahun ?: '-').' / '.ucfirst((string) $record->semester)),
-                        BoardingRapot::statusOptions()[$record->status_rapot] ?? $record->status_rapot,
-                    ])->filter()->implode(' | '))
                     ->wrap(),
                 Tables\Columns\TextColumn::make('siswa.rombel_saat_ini')
                     ->label('Rombel')

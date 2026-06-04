@@ -228,12 +228,14 @@ class ManageBoardingRapots extends ManageRecords
                 ->label('Print Semua Siap Cetak')
                 ->icon('heroicon-o-printer')
                 ->color('success')
-                ->requiresConfirmation(fn (): bool => $this->shouldConfirmDefaultBulkPrint())
-                ->modalHeading(fn (): string => $this->shouldConfirmDefaultBulkPrint()
+                ->requiresConfirmation(fn (): bool => ! $this->shouldShowBulkPrintForm() && $this->shouldConfirmDefaultBulkPrint())
+                ->modalHeading(fn (): string => $this->shouldShowBulkPrintForm()
+                    ? 'Print rapot siap cetak per kelas'
+                    : ($this->shouldConfirmDefaultBulkPrint()
                     ? 'Konfirmasi print rapot belum lengkap'
-                    : 'Print semua rapot siap cetak')
+                    : 'Print semua rapot siap cetak'))
                 ->modalDescription(fn (): string => $this->defaultBulkPrintModalDescription())
-                ->modalSubmitActionLabel(fn (): string => $this->shouldConfirmDefaultBulkPrint()
+                ->modalSubmitActionLabel(fn (): string => ! $this->shouldShowBulkPrintForm() && $this->shouldConfirmDefaultBulkPrint()
                     ? 'Ya, cetak yang siap'
                     : 'Buka Mode Cetak')
                 ->modalWidth('lg')
@@ -277,9 +279,59 @@ class ManageBoardingRapots extends ManageRecords
      */
     protected function bulkPrintActionForm(): array
     {
-        if (! auth()->user()?->hasFullAdminAccess()) {
+        $user = auth()->user();
+
+        if (! $user) {
             return [];
         }
+
+        if ($user->hasFullAdminAccess()) {
+            return [
+                Forms\Components\TextInput::make('periode_tahun')
+                    ->label('Periode Tahun')
+                    ->default(fn (): string => BoardingRapot::defaultPeriodeTahun())
+                    ->live()
+                    ->required()
+                    ->maxLength(20),
+                Forms\Components\Select::make('semester')
+                    ->label('Semester')
+                    ->default(fn (): string => BoardingRapot::defaultSemester())
+                    ->options([
+                        'ganjil' => 'Ganjil',
+                        'genap' => 'Genap',
+                    ])
+                    ->live()
+                    ->required(),
+                Forms\Components\Select::make('rombel')
+                    ->label('Kelas / Rombel')
+                    ->placeholder('Semua kelas dalam scope')
+                    ->options(fn (): array => DataSiswaSupport::rombelOptions(auth()->user()))
+                    ->searchable()
+                    ->native(false)
+                    ->live(),
+                Forms\Components\Select::make('jenis_kelamin')
+                    ->label('Jenis Kelamin')
+                    ->default('all')
+                    ->options(['all' => 'Semua Jenis Kelamin'] + DataSiswa::jkOptions())
+                    ->native(false)
+                    ->live(),
+                Forms\Components\Placeholder::make('print_summary')
+                    ->label('Kesiapan print gabungan')
+                    ->content(fn (Get $get): HtmlString => $this->bulkPrintSummaryHtml(
+                        periodeTahun: (string) ($get('periode_tahun') ?: BoardingRapot::defaultPeriodeTahun()),
+                        semester: (string) ($get('semester') ?: BoardingRapot::defaultSemester()),
+                        rombel: $get('rombel') ?: null,
+                        jenisKelamin: (string) ($get('jenis_kelamin') ?: 'all'),
+                    )),
+            ];
+        }
+
+        if (! $this->shouldShowBulkPrintForm()) {
+            return [];
+        }
+
+        $jenisKelamin = BoardingRapotBulkPrintSupport::effectiveJenisKelamin($user, 'all');
+        $jenisKelaminLabel = BoardingRapotBulkPrintSupport::jenisKelaminLabel($jenisKelamin) ?: 'semua jenis kelamin';
 
         return [
             Forms\Components\TextInput::make('periode_tahun')
@@ -299,17 +351,16 @@ class ManageBoardingRapots extends ManageRecords
                 ->required(),
             Forms\Components\Select::make('rombel')
                 ->label('Kelas / Rombel')
-                ->placeholder('Semua kelas dalam scope')
+                ->placeholder('Pilih kelas dalam scope pamong')
+                ->default(fn (): ?string => $this->defaultBulkPrintRombel())
                 ->options(fn (): array => DataSiswaSupport::rombelOptions(auth()->user()))
                 ->searchable()
                 ->native(false)
+                ->required()
                 ->live(),
-            Forms\Components\Select::make('jenis_kelamin')
+            Forms\Components\Placeholder::make('jenis_kelamin_scope')
                 ->label('Jenis Kelamin')
-                ->default('all')
-                ->options(['all' => 'Semua Jenis Kelamin'] + DataSiswa::jkOptions())
-                ->native(false)
-                ->live(),
+                ->content(new HtmlString('<span class="text-sm">'.e(ucfirst($jenisKelaminLabel)).' dari role pamong.</span>')),
             Forms\Components\Placeholder::make('print_summary')
                 ->label('Kesiapan print gabungan')
                 ->content(fn (Get $get): HtmlString => $this->bulkPrintSummaryHtml(
@@ -327,12 +378,47 @@ class ManageBoardingRapots extends ManageRecords
      */
     protected function bulkPrintFilters(array $data): array
     {
+        $user = auth()->user();
+        $rombel = filled($data['rombel'] ?? null) ? (string) $data['rombel'] : null;
+        $jenisKelamin = (string) ($data['jenis_kelamin'] ?? 'all');
+
+        if ($user && ! $user->hasFullAdminAccess()) {
+            $rombel ??= $this->defaultBulkPrintRombel();
+            $jenisKelamin = BoardingRapotBulkPrintSupport::effectiveJenisKelamin($user, $jenisKelamin);
+        }
+
         return [
             'periode_tahun' => (string) ($data['periode_tahun'] ?? BoardingRapot::defaultPeriodeTahun()),
             'semester' => (string) ($data['semester'] ?? BoardingRapot::defaultSemester()),
-            'rombel' => filled($data['rombel'] ?? null) ? (string) $data['rombel'] : null,
-            'jenis_kelamin' => (string) ($data['jenis_kelamin'] ?? 'all'),
+            'rombel' => $rombel,
+            'jenis_kelamin' => $jenisKelamin,
         ];
+    }
+
+    protected function shouldShowBulkPrintForm(): bool
+    {
+        $user = auth()->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->hasFullAdminAccess()) {
+            return true;
+        }
+
+        return count(DataSiswaSupport::rombelOptions($user)) > 1;
+    }
+
+    protected function defaultBulkPrintRombel(): ?string
+    {
+        $user = auth()->user();
+
+        if (! $user) {
+            return null;
+        }
+
+        return BoardingRapotBulkPrintSupport::defaultRombel($user);
     }
 
     protected function shouldConfirmDefaultBulkPrint(): bool
@@ -354,6 +440,13 @@ class ManageBoardingRapots extends ManageRecords
 
         if (! $user || $user->hasFullAdminAccess()) {
             return 'Pilih periode, semester, kelas, dan jenis kelamin untuk membuka PDF gabungan rapot siap cetak.';
+        }
+
+        if ($this->shouldShowBulkPrintForm()) {
+            $jenisKelamin = BoardingRapotBulkPrintSupport::effectiveJenisKelamin($user, 'all');
+            $jenisKelaminLabel = BoardingRapotBulkPrintSupport::jenisKelaminLabel($jenisKelamin) ?: 'semua jenis kelamin';
+
+            return 'Pilih kelas dalam scope pamong. Jenis kelamin otomatis mengikuti role pamong: '.ucfirst($jenisKelaminLabel).'.';
         }
 
         $summary = $this->bulkPrintSummary();
@@ -404,6 +497,11 @@ class ManageBoardingRapots extends ManageRecords
                 'not_ready_rapots' => 0,
                 'missing_rapots' => 0,
             ];
+        }
+
+        if (! $user->hasFullAdminAccess()) {
+            $rombel = filled($rombel) ? $rombel : $this->defaultBulkPrintRombel();
+            $jenisKelamin = BoardingRapotBulkPrintSupport::effectiveJenisKelamin($user, $jenisKelamin);
         }
 
         return BoardingRapotBulkPrintSupport::summary(

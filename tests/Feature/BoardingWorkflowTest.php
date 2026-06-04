@@ -1111,7 +1111,7 @@ class BoardingWorkflowTest extends TestCase
             'name' => 'Pamong Bulk Print',
             'username' => 'pamong-bulk-print',
             'password' => 'secret123',
-            'boarding_rombel_scope' => ['X.3 / 2025-2026'],
+            'boarding_rombel_scope' => ['X.3 / 2025-2026', 'XI.3 / 2025-2026'],
         ]);
         $pamong->assignRole('pamong_putra');
 
@@ -1143,6 +1143,13 @@ class BoardingWorkflowTest extends TestCase
             'status' => 'aktif',
         ]);
 
+        $siswaKelasLain = DataSiswa::query()->create([
+            'nama' => 'Putra Kelas Lain',
+            'rombel_saat_ini' => 'XI.3 / 2025-2026',
+            'jk' => 'L',
+            'status' => 'aktif',
+        ]);
+
         BoardingRapot::query()->create([
             'siswa_id' => $siswaReady->id,
             'pamong_user_id' => $pamong->id,
@@ -1161,6 +1168,15 @@ class BoardingWorkflowTest extends TestCase
             'tanggal_rapot' => '2026-05-31',
         ]);
 
+        BoardingRapot::query()->create([
+            'siswa_id' => $siswaKelasLain->id,
+            'pamong_user_id' => $pamong->id,
+            'periode_tahun' => '2025/2026',
+            'semester' => 'genap',
+            'status_rapot' => BoardingRapot::STATUS_READY_PRINT,
+            'tanggal_rapot' => '2026-05-31',
+        ]);
+
         $summary = BoardingRapotBulkPrintSupport::summary(
             user: $pamong,
             periodeTahun: '2025/2026',
@@ -1174,10 +1190,21 @@ class BoardingWorkflowTest extends TestCase
         $this->assertSame(1, $summary['missing_rapots']);
         $this->assertFalse($summary['is_complete']);
         $this->assertStringContainsString('scope pamong', $summary['scope_label']);
+        $this->assertStringContainsString('kelas X.3 / 2025-2026', $summary['scope_label']);
+        $this->assertStringContainsString('putra', $summary['scope_label']);
         $this->assertStringContainsString(
             'Baru 1 dari 3 murid',
             BoardingRapotBulkPrintSupport::incompleteConfirmationText($summary),
         );
+
+        $this->actingAs($pamong)
+            ->get(route('admin.boarding-rapots.print-all', [
+                'periode_tahun' => '2025/2026',
+                'semester' => 'genap',
+            ]))
+            ->assertOk()
+            ->assertSee('Putra Siap')
+            ->assertDontSee('Putra Kelas Lain');
     }
 
     protected function runUserMigrations(): void

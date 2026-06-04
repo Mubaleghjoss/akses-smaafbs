@@ -22,7 +22,8 @@ class BoardingRapotBulkPrintSupport
     ): array {
         $periodeTahun = filled($periodeTahun) ? $periodeTahun : BoardingRapot::defaultPeriodeTahun();
         $semester = filled($semester) ? $semester : BoardingRapot::defaultSemester();
-        $jenisKelamin = $jenisKelamin ?: 'all';
+        $rombel = static::effectiveRombel($user, $rombel);
+        $jenisKelamin = static::effectiveJenisKelamin($user, $jenisKelamin);
 
         $totalStudents = static::studentQuery($user, $rombel, $jenisKelamin)->count();
         $totalRapots = static::rapotQuery($user, $periodeTahun, $semester, $rombel, $jenisKelamin)->count();
@@ -58,6 +59,9 @@ class BoardingRapotBulkPrintSupport
         ?string $jenisKelamin = 'all',
         ?array $columns = null,
     ): Builder {
+        $rombel = static::effectiveRombel($user, $rombel);
+        $jenisKelamin = static::effectiveJenisKelamin($user, $jenisKelamin);
+
         $query = BoardingRapot::query()
             ->forDocument($user)
             ->whereHas('siswa', function (Builder $query) use ($user, $rombel, $jenisKelamin): void {
@@ -75,7 +79,63 @@ class BoardingRapotBulkPrintSupport
 
     public static function studentQuery(User $user, ?string $rombel = null, ?string $jenisKelamin = 'all'): Builder
     {
+        $rombel = static::effectiveRombel($user, $rombel);
+        $jenisKelamin = static::effectiveJenisKelamin($user, $jenisKelamin);
+
         return static::applyStudentScope(DataSiswa::query(), $user, $rombel, $jenisKelamin);
+    }
+
+    public static function effectiveRombel(User $user, ?string $rombel = null): ?string
+    {
+        if (filled($rombel)) {
+            return $rombel;
+        }
+
+        if ($user->isBoardingPamong() && ! $user->hasFullAdminAccess()) {
+            return static::defaultRombel($user);
+        }
+
+        return null;
+    }
+
+    public static function defaultRombel(User $user): ?string
+    {
+        $rombelScopes = $user->boardingRombelScopes();
+
+        if ($rombelScopes !== []) {
+            return $rombelScopes[0];
+        }
+
+        $query = DataSiswa::query();
+        DataSiswa::applyVisibleScope($query, $user);
+
+        if (SchemaFacade::hasColumn('data_siswa', 'status')) {
+            $query->where('status', 'aktif');
+        }
+
+        return $query
+            ->whereNotNull('rombel_saat_ini')
+            ->where('rombel_saat_ini', '!=', '')
+            ->orderBy('rombel_saat_ini')
+            ->value('rombel_saat_ini');
+    }
+
+    public static function effectiveJenisKelamin(User $user, ?string $jenisKelamin = 'all'): string
+    {
+        if ($user->isBoardingPamong() && ! $user->hasFullAdminAccess()) {
+            return $user->boardingGenderScope() ?: 'all';
+        }
+
+        return in_array($jenisKelamin, ['L', 'P'], true) ? $jenisKelamin : 'all';
+    }
+
+    public static function jenisKelaminLabel(?string $jenisKelamin): ?string
+    {
+        return match ($jenisKelamin) {
+            'L' => 'putra',
+            'P' => 'putri',
+            default => null,
+        };
     }
 
     /**
@@ -154,6 +214,7 @@ class BoardingRapotBulkPrintSupport
     protected static function scopeLabel(User $user, ?string $rombel, ?string $jenisKelamin): string
     {
         $parts = [];
+        $jenisKelamin = static::effectiveJenisKelamin($user, $jenisKelamin);
 
         if ($user->isBoardingPamong() && ! $user->hasFullAdminAccess()) {
             $parts[] = 'scope pamong';
@@ -165,8 +226,8 @@ class BoardingRapotBulkPrintSupport
             $parts[] = 'kelas '.$rombel;
         }
 
-        if ($user->hasFullAdminAccess() && in_array($jenisKelamin, ['L', 'P'], true)) {
-            $parts[] = $jenisKelamin === 'L' ? 'putra' : 'putri';
+        if ($jenisKelaminLabel = static::jenisKelaminLabel($jenisKelamin)) {
+            $parts[] = $jenisKelaminLabel;
         }
 
         return implode(' ', $parts);

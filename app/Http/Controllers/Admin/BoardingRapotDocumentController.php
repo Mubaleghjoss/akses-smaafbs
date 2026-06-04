@@ -91,6 +91,11 @@ class BoardingRapotDocumentController extends Controller
             'jenis_kelamin' => ['nullable', Rule::in(['all', 'L', 'P'])],
         ]);
 
+        if (! $user->hasFullAdminAccess()) {
+            $validated['rombel'] = BoardingRapotBulkPrintSupport::effectiveRombel($user, $validated['rombel'] ?? null);
+            $validated['jenis_kelamin'] = BoardingRapotBulkPrintSupport::effectiveJenisKelamin($user, $validated['jenis_kelamin'] ?? 'all');
+        }
+
         $baseQuery = BoardingRapotBulkPrintSupport::rapotQuery(
             user: $user,
             periodeTahun: $validated['periode_tahun'] ?? null,
