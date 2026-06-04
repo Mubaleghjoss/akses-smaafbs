@@ -6,11 +6,14 @@ use App\Filament\Resources\BoardingRapotResource;
 use App\Models\BoardingRapot;
 use App\Models\DataSiswa;
 use App\Support\DataSiswa\DataSiswaSupport;
+use App\Support\Boarding\BoardingRapotBulkPrintSupport;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ManageRecords;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
+use Illuminate\Support\HtmlString;
 
 class ManageBoardingRapots extends ManageRecords
 {
@@ -225,43 +228,40 @@ class ManageBoardingRapots extends ManageRecords
                 ->label('Print Semua Siap Cetak')
                 ->icon('heroicon-o-printer')
                 ->color('success')
-                ->modalHeading('Print semua rapot siap cetak')
-                ->modalDescription('Cetak gabungan hanya berjalan jika semua rapot pada filter yang dipilih sudah berstatus Siap Cetak.')
-                ->modalSubmitActionLabel('Buka Mode Cetak')
+                ->requiresConfirmation(fn (): bool => $this->shouldConfirmDefaultBulkPrint())
+                ->modalHeading(fn (): string => $this->shouldConfirmDefaultBulkPrint()
+                    ? 'Konfirmasi print rapot belum lengkap'
+                    : 'Print semua rapot siap cetak')
+                ->modalDescription(fn (): string => $this->defaultBulkPrintModalDescription())
+                ->modalSubmitActionLabel(fn (): string => $this->shouldConfirmDefaultBulkPrint()
+                    ? 'Ya, cetak yang siap'
+                    : 'Buka Mode Cetak')
                 ->modalWidth('lg')
-                ->form([
-                    Forms\Components\TextInput::make('periode_tahun')
-                        ->label('Periode Tahun')
-                        ->default(fn (): string => BoardingRapot::defaultPeriodeTahun())
-                        ->required()
-                        ->maxLength(20),
-                    Forms\Components\Select::make('semester')
-                        ->label('Semester')
-                        ->default(fn (): string => BoardingRapot::defaultSemester())
-                        ->options([
-                            'ganjil' => 'Ganjil',
-                            'genap' => 'Genap',
-                        ])
-                        ->required(),
-                    Forms\Components\Select::make('rombel')
-                        ->label('Kelas / Rombel')
-                        ->placeholder('Semua kelas dalam scope')
-                        ->options(fn (): array => DataSiswaSupport::rombelOptions(auth()->user()))
-                        ->searchable()
-                        ->native(false),
-                    Forms\Components\Select::make('jenis_kelamin')
-                        ->label('Jenis Kelamin')
-                        ->default('all')
-                        ->options(['all' => 'Semua Jenis Kelamin'] + DataSiswa::jkOptions())
-                        ->native(false)
-                        ->visible(fn (): bool => (bool) auth()->user()?->hasFullAdminAccess()),
-                ])
+                ->form(fn (): array => $this->bulkPrintActionForm())
                 ->action(function (array $data) {
+                    $filters = $this->bulkPrintFilters($data);
+                    $summary = $this->bulkPrintSummary(
+                        periodeTahun: $filters['periode_tahun'],
+                        semester: $filters['semester'],
+                        rombel: $filters['rombel'],
+                        jenisKelamin: $filters['jenis_kelamin'],
+                    );
+
+                    if ((int) $summary['ready_rapots'] === 0) {
+                        Notification::make()
+                            ->title('Belum ada rapot siap cetak.')
+                            ->body('Ubah minimal satu rapot pada scope ini menjadi Siap Cetak sebelum print gabungan.')
+                            ->warning()
+                            ->send();
+
+                        return null;
+                    }
+
                     return redirect()->route('admin.boarding-rapots.print-all', [
-                        'periode_tahun' => $data['periode_tahun'] ?? BoardingRapot::defaultPeriodeTahun(),
-                        'semester' => $data['semester'] ?? BoardingRapot::defaultSemester(),
-                        'rombel' => $data['rombel'] ?? null,
-                        'jenis_kelamin' => $data['jenis_kelamin'] ?? 'all',
+                        'periode_tahun' => $filters['periode_tahun'],
+                        'semester' => $filters['semester'],
+                        'rombel' => $filters['rombel'],
+                        'jenis_kelamin' => $filters['jenis_kelamin'],
                     ]);
                 }),
             Actions\Action::make('createRapotManual')
@@ -270,5 +270,148 @@ class ManageBoardingRapots extends ManageRecords
                 ->color('gray')
                 ->url(fn (): string => BoardingRapotResource::getUrl('create')),
         ];
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    protected function bulkPrintActionForm(): array
+    {
+        if (! auth()->user()?->hasFullAdminAccess()) {
+            return [];
+        }
+
+        return [
+            Forms\Components\TextInput::make('periode_tahun')
+                ->label('Periode Tahun')
+                ->default(fn (): string => BoardingRapot::defaultPeriodeTahun())
+                ->live()
+                ->required()
+                ->maxLength(20),
+            Forms\Components\Select::make('semester')
+                ->label('Semester')
+                ->default(fn (): string => BoardingRapot::defaultSemester())
+                ->options([
+                    'ganjil' => 'Ganjil',
+                    'genap' => 'Genap',
+                ])
+                ->live()
+                ->required(),
+            Forms\Components\Select::make('rombel')
+                ->label('Kelas / Rombel')
+                ->placeholder('Semua kelas dalam scope')
+                ->options(fn (): array => DataSiswaSupport::rombelOptions(auth()->user()))
+                ->searchable()
+                ->native(false)
+                ->live(),
+            Forms\Components\Select::make('jenis_kelamin')
+                ->label('Jenis Kelamin')
+                ->default('all')
+                ->options(['all' => 'Semua Jenis Kelamin'] + DataSiswa::jkOptions())
+                ->native(false)
+                ->live(),
+            Forms\Components\Placeholder::make('print_summary')
+                ->label('Kesiapan print gabungan')
+                ->content(fn (Get $get): HtmlString => $this->bulkPrintSummaryHtml(
+                    periodeTahun: (string) ($get('periode_tahun') ?: BoardingRapot::defaultPeriodeTahun()),
+                    semester: (string) ($get('semester') ?: BoardingRapot::defaultSemester()),
+                    rombel: $get('rombel') ?: null,
+                    jenisKelamin: (string) ($get('jenis_kelamin') ?: 'all'),
+                )),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array{periode_tahun:string,semester:string,rombel:?string,jenis_kelamin:string}
+     */
+    protected function bulkPrintFilters(array $data): array
+    {
+        return [
+            'periode_tahun' => (string) ($data['periode_tahun'] ?? BoardingRapot::defaultPeriodeTahun()),
+            'semester' => (string) ($data['semester'] ?? BoardingRapot::defaultSemester()),
+            'rombel' => filled($data['rombel'] ?? null) ? (string) $data['rombel'] : null,
+            'jenis_kelamin' => (string) ($data['jenis_kelamin'] ?? 'all'),
+        ];
+    }
+
+    protected function shouldConfirmDefaultBulkPrint(): bool
+    {
+        $user = auth()->user();
+
+        if (! $user || $user->hasFullAdminAccess()) {
+            return false;
+        }
+
+        $summary = $this->bulkPrintSummary();
+
+        return ! (bool) $summary['is_complete'];
+    }
+
+    protected function defaultBulkPrintModalDescription(): string
+    {
+        $user = auth()->user();
+
+        if (! $user || $user->hasFullAdminAccess()) {
+            return 'Pilih periode, semester, kelas, dan jenis kelamin untuk membuka PDF gabungan rapot siap cetak.';
+        }
+
+        $summary = $this->bulkPrintSummary();
+
+        if ((bool) $summary['is_complete']) {
+            return 'Semua murid dalam scope pamong sudah siap cetak. PDF gabungan akan langsung dibuka.';
+        }
+
+        return BoardingRapotBulkPrintSupport::incompleteConfirmationText($summary);
+    }
+
+    protected function bulkPrintSummaryHtml(
+        ?string $periodeTahun = null,
+        ?string $semester = null,
+        ?string $rombel = null,
+        ?string $jenisKelamin = 'all',
+    ): HtmlString {
+        $summary = $this->bulkPrintSummary($periodeTahun, $semester, $rombel, $jenisKelamin);
+        $ready = number_format((int) $summary['ready_rapots'], 0, ',', '.');
+        $total = number_format((int) $summary['total_students'], 0, ',', '.');
+
+        if ((bool) $summary['is_complete']) {
+            return new HtmlString('<div class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Semua '.$total.' murid pada filter ini sudah siap cetak. PDF gabungan akan berisi '.$ready.' rapot.</div>');
+        }
+
+        $message = BoardingRapotBulkPrintSupport::incompleteConfirmationText($summary);
+
+        return new HtmlString('<div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">'.e($message).'</div>');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function bulkPrintSummary(
+        ?string $periodeTahun = null,
+        ?string $semester = null,
+        ?string $rombel = null,
+        ?string $jenisKelamin = 'all',
+    ): array {
+        $user = auth()->user();
+
+        if (! $user) {
+            return [
+                'ready_rapots' => 0,
+                'total_students' => 0,
+                'is_complete' => false,
+                'scope_label' => 'scope ini',
+                'not_ready_rapots' => 0,
+                'missing_rapots' => 0,
+            ];
+        }
+
+        return BoardingRapotBulkPrintSupport::summary(
+            user: $user,
+            periodeTahun: $periodeTahun,
+            semester: $semester,
+            rombel: $rombel,
+            jenisKelamin: $jenisKelamin,
+        );
     }
 }

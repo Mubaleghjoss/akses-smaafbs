@@ -20,6 +20,7 @@ use App\Models\BoardingRapot;
 use App\Models\DataSiswa;
 use App\Models\Pengaturan;
 use App\Models\User;
+use App\Support\Boarding\BoardingRapotBulkPrintSupport;
 use App\Support\Boarding\BoardingRapotSheetRows;
 use Database\Seeders\InitialAdminSeeder;
 use Illuminate\Database\Schema\Blueprint;
@@ -1035,7 +1036,7 @@ class BoardingWorkflowTest extends TestCase
         $this->assertSame('Pamong Baru', $rapot->rekap_payload['signatures']['mudir_asrama_nama']);
     }
 
-    public function test_boarding_rapot_print_all_requires_ready_status_and_outputs_ready_rapots(): void
+    public function test_boarding_rapot_print_all_outputs_ready_rapots_when_scope_is_incomplete(): void
     {
         $admin = User::query()->create([
             'name' => 'Admin Rapot Bulk Print',
@@ -1087,7 +1088,11 @@ class BoardingWorkflowTest extends TestCase
 
         $this->actingAs($admin)
             ->get(route('admin.boarding-rapots.print-all', $params))
-            ->assertStatus(409);
+            ->assertOk()
+            ->assertSee('Print Semua Rapot Boarding')
+            ->assertSee('Siswa Siap Cetak')
+            ->assertDontSee('Siswa Masih Draft')
+            ->assertSee('Siap Cetak');
 
         $draftRapot->update(['status_rapot' => BoardingRapot::STATUS_READY_PRINT]);
 
@@ -1098,6 +1103,81 @@ class BoardingWorkflowTest extends TestCase
             ->assertSee('Siswa Siap Cetak')
             ->assertSee('Siswa Masih Draft')
             ->assertSee('Siap Cetak');
+    }
+
+    public function test_boarding_rapot_bulk_print_summary_uses_pamong_scope_and_counts_incomplete_students(): void
+    {
+        $pamong = User::query()->create([
+            'name' => 'Pamong Bulk Print',
+            'username' => 'pamong-bulk-print',
+            'password' => 'secret123',
+            'boarding_rombel_scope' => ['X.3 / 2025-2026'],
+        ]);
+        $pamong->assignRole('pamong_putra');
+
+        $siswaReady = DataSiswa::query()->create([
+            'nama' => 'Putra Siap',
+            'rombel_saat_ini' => 'X.3 / 2025-2026',
+            'jk' => 'L',
+            'status' => 'aktif',
+        ]);
+
+        $siswaDraft = DataSiswa::query()->create([
+            'nama' => 'Putra Draft',
+            'rombel_saat_ini' => 'X.3 / 2025-2026',
+            'jk' => 'L',
+            'status' => 'aktif',
+        ]);
+
+        DataSiswa::query()->create([
+            'nama' => 'Putra Belum Ada Rapot',
+            'rombel_saat_ini' => 'X.3 / 2025-2026',
+            'jk' => 'L',
+            'status' => 'aktif',
+        ]);
+
+        DataSiswa::query()->create([
+            'nama' => 'Putri Di Luar Scope',
+            'rombel_saat_ini' => 'X.3 / 2025-2026',
+            'jk' => 'P',
+            'status' => 'aktif',
+        ]);
+
+        BoardingRapot::query()->create([
+            'siswa_id' => $siswaReady->id,
+            'pamong_user_id' => $pamong->id,
+            'periode_tahun' => '2025/2026',
+            'semester' => 'genap',
+            'status_rapot' => BoardingRapot::STATUS_READY_PRINT,
+            'tanggal_rapot' => '2026-05-31',
+        ]);
+
+        BoardingRapot::query()->create([
+            'siswa_id' => $siswaDraft->id,
+            'pamong_user_id' => $pamong->id,
+            'periode_tahun' => '2025/2026',
+            'semester' => 'genap',
+            'status_rapot' => BoardingRapot::STATUS_DRAFT,
+            'tanggal_rapot' => '2026-05-31',
+        ]);
+
+        $summary = BoardingRapotBulkPrintSupport::summary(
+            user: $pamong,
+            periodeTahun: '2025/2026',
+            semester: 'genap',
+        );
+
+        $this->assertSame(3, $summary['total_students']);
+        $this->assertSame(2, $summary['total_rapots']);
+        $this->assertSame(1, $summary['ready_rapots']);
+        $this->assertSame(1, $summary['not_ready_rapots']);
+        $this->assertSame(1, $summary['missing_rapots']);
+        $this->assertFalse($summary['is_complete']);
+        $this->assertStringContainsString('scope pamong', $summary['scope_label']);
+        $this->assertStringContainsString(
+            'Baru 1 dari 3 murid',
+            BoardingRapotBulkPrintSupport::incompleteConfirmationText($summary),
+        );
     }
 
     protected function runUserMigrations(): void

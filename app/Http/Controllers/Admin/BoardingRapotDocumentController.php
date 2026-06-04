@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\Concerns\ResolvesSchoolLetterhead;
 use App\Models\BoardingRapot;
 use App\Models\DataSiswa;
 use App\Models\User;
+use App\Support\Boarding\BoardingRapotBulkPrintSupport;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -90,21 +91,14 @@ class BoardingRapotDocumentController extends Controller
             'jenis_kelamin' => ['nullable', Rule::in(['all', 'L', 'P'])],
         ]);
 
-        $baseQuery = $this->bulkRapotQuery(
+        $baseQuery = BoardingRapotBulkPrintSupport::rapotQuery(
             user: $user,
             periodeTahun: $validated['periode_tahun'] ?? null,
             semester: $validated['semester'] ?? null,
             rombel: $validated['rombel'] ?? null,
             jenisKelamin: $validated['jenis_kelamin'] ?? 'all',
+            columns: BoardingRapotBulkPrintSupport::documentColumns(),
         );
-
-        $total = (clone $baseQuery)->count();
-        $notReady = (clone $baseQuery)
-            ->where('status_rapot', '!=', BoardingRapot::STATUS_READY_PRINT)
-            ->count();
-
-        abort_if($total === 0, Response::HTTP_NOT_FOUND, 'Tidak ada rapot pada filter ini.');
-        abort_if($notReady > 0, Response::HTTP_CONFLICT, 'Semua rapot pada filter ini harus berstatus Siap Cetak sebelum print gabungan.');
 
         $rapots = (clone $baseQuery)
             ->where('status_rapot', BoardingRapot::STATUS_READY_PRINT)
@@ -116,6 +110,8 @@ class BoardingRapotDocumentController extends Controller
                 (string) ($rapot->siswa?->nama ?? ''),
             ))
             ->values();
+
+        abort_if($rapots->isEmpty(), Response::HTTP_NOT_FOUND, 'Belum ada rapot berstatus Siap Cetak pada filter ini.');
 
         $printItems = $rapots
             ->map(function (BoardingRapot $rapot): array {
@@ -197,57 +193,6 @@ class BoardingRapotDocumentController extends Controller
         ]);
 
         return $record;
-    }
-
-    protected function bulkRapotQuery(User $user, ?string $periodeTahun, ?string $semester, ?string $rombel, ?string $jenisKelamin)
-    {
-        $columns = [
-            'id',
-            'siswa_id',
-            'pamong_user_id',
-            'periode_tahun',
-            'semester',
-            'nomor_dokumen',
-            'predikat_boarding',
-            'status_rapot',
-            'tanggal_rapot',
-            'generated_at',
-            'rekap_payload',
-            'ringkasan_pencapaian',
-            'catatan_pamong',
-            'rekomendasi_tindak_lanjut',
-            'wali_pamong_nama',
-            'kepala_boarding_nama',
-            'mudir_asrama_nama',
-            'tempat_cetak',
-        ];
-
-        foreach (['administrasi_rapot_items', 'kelas_boarding_override'] as $column) {
-            if (SchemaFacade::hasColumn('boarding_rapots', $column)) {
-                $columns[] = $column;
-            }
-        }
-
-        return BoardingRapot::query()
-            ->select($columns)
-            ->forDocument($user)
-            ->whereHas('siswa', function ($query) use ($user, $rombel, $jenisKelamin): void {
-                DataSiswa::applyVisibleScope($query, $user);
-
-                if (filled($rombel)) {
-                    $query->where('rombel_saat_ini', $rombel);
-                }
-
-                if ($user->hasFullAdminAccess() && in_array($jenisKelamin, ['L', 'P'], true)) {
-                    $query->where('jk', $jenisKelamin);
-                }
-            })
-            ->when(filled($periodeTahun), fn ($query) => $query->where('periode_tahun', $periodeTahun))
-            ->when(filled($semester), fn ($query) => $query->where('semester', $semester))
-            ->with([
-                'siswa:id,nama,rombel_saat_ini,jk,status',
-                'pamongUser:id,name',
-            ]);
     }
 
     protected function boardingRapotLetterhead(): array
