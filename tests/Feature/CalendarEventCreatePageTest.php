@@ -79,6 +79,120 @@ class CalendarEventCreatePageTest extends TestCase
         ]);
     }
 
+    public function test_new_calendar_event_replaces_existing_event_on_same_schedule_and_visibility(): void
+    {
+        $admin = $this->createAdminUser();
+
+        $existingPublic = CalendarEvent::query()->create([
+            'title' => 'Agenda lama',
+            'description' => 'Data lama',
+            'visibility' => 'external',
+            'all_day' => true,
+            'start' => '2026-04-20 00:00:00',
+            'end' => null,
+        ]);
+
+        $existingInternal = CalendarEvent::query()->create([
+            'title' => 'Agenda internal lama',
+            'description' => 'Tetap tersimpan',
+            'visibility' => 'internal',
+            'all_day' => true,
+            'start' => '2026-04-20 00:00:00',
+            'end' => null,
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CreateCalendarEvent::class)
+            ->call('createEvent', [
+                'title' => 'Agenda pengganti',
+                'description' => 'Data baru',
+                'start' => '2026-04-20',
+                'end' => null,
+                'visibility' => 'external',
+            ])
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseMissing('calendar_events', [
+            'id' => $existingPublic->id,
+        ]);
+
+        $this->assertDatabaseHas('calendar_events', [
+            'title' => 'Agenda pengganti',
+            'description' => 'Data baru',
+            'visibility' => 'external',
+        ]);
+
+        $this->assertDatabaseHas('calendar_events', [
+            'id' => $existingInternal->id,
+            'title' => 'Agenda internal lama',
+            'visibility' => 'internal',
+        ]);
+
+        $this->assertSame(
+            1,
+            CalendarEvent::query()
+                ->where('visibility', 'external')
+                ->whereDate('start', '2026-04-20')
+                ->count()
+        );
+    }
+
+    public function test_import_replaces_existing_events_for_imported_dates_without_dropping_new_items(): void
+    {
+        $admin = $this->createAdminUser();
+
+        $singleDay = CalendarEvent::query()->create([
+            'title' => 'Agenda publik lama',
+            'description' => null,
+            'visibility' => 'external',
+            'all_day' => true,
+            'start' => '2026-05-05 00:00:00',
+            'end' => null,
+        ]);
+
+        $dateRange = CalendarEvent::query()->create([
+            'title' => 'Rentang lama',
+            'description' => null,
+            'visibility' => 'external',
+            'all_day' => true,
+            'start' => '2026-05-05 00:00:00',
+            'end' => '2026-05-06 00:00:00',
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CreateCalendarEvent::class)
+            ->set('importVisibility', 'external')
+            ->set('importText', "Agenda Kegiatan Mei 2026\n5 Mei 2026\n1. KBM semester 2\n2. Apel pagi")
+            ->call('importFromText')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseMissing('calendar_events', [
+            'id' => $singleDay->id,
+        ]);
+
+        $this->assertDatabaseMissing('calendar_events', [
+            'id' => $dateRange->id,
+        ]);
+
+        $this->assertDatabaseHas('calendar_events', [
+            'title' => 'KBM semester 2',
+            'visibility' => 'external',
+        ]);
+
+        $this->assertDatabaseHas('calendar_events', [
+            'title' => 'Apel pagi',
+            'visibility' => 'external',
+        ]);
+
+        $this->assertSame(
+            2,
+            CalendarEvent::query()
+                ->where('visibility', 'external')
+                ->whereDate('start', '2026-05-05')
+                ->count()
+        );
+    }
+
     public function test_admin_can_update_calendar_event_visibility_and_range(): void
     {
         $admin = $this->createAdminUser();

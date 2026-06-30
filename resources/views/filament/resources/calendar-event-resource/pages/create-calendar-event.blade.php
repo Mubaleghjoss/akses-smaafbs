@@ -450,6 +450,27 @@
                         this.queueLayoutUpdate();
                     });
 
+                    window.addEventListener('calendar-events-replaced', (event) => {
+                        const ids = event.detail && event.detail.calendarEventIds ? event.detail.calendarEventIds : [];
+                        const items = event.detail && event.detail.calendarEvents ? event.detail.calendarEvents : [];
+
+                        if (Array.isArray(ids)) {
+                            ids.forEach((id) => {
+                                const existing = this.calendar.getEventById(String(id));
+                                if (existing) {
+                                    existing.remove();
+                                }
+                            });
+                        }
+
+                        if (Array.isArray(items)) {
+                            items.forEach((item) => this.upsertEvent(item));
+                        }
+
+                        this.close();
+                        this.queueLayoutUpdate();
+                    });
+
                     window.addEventListener('calendar-events-deleted-bulk', (event) => {
                         const ids = event.detail && event.detail.calendarEventIds ? event.detail.calendarEventIds : [];
                         if (!Array.isArray(ids)) {

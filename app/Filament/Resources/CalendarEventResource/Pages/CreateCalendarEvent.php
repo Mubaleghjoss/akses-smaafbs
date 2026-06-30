@@ -8,6 +8,7 @@ use Filament\Actions;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Page;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class CreateCalendarEvent extends Page
 {
@@ -69,28 +70,21 @@ class CreateCalendarEvent extends Page
             'visibility' => ['required', 'in:external,internal'],
         ])->validate();
 
-        $start = Carbon::parse($validated['start'])->startOfDay();
-        $end = isset($validated['end']) && $validated['end'] !== ''
-            ? Carbon::parse($validated['end'])->startOfDay()
-            : null;
+        [$start, $end] = $this->normalizeDateRange($validated['start'], $validated['end'] ?? null);
 
-        if ($end && $end->isSameDay($start)) {
-            $end = null;
-        }
-
-        $event = CalendarEvent::query()->create([
+        [$events, $replacedIds] = $this->replaceCalendarEvents([[
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
             'start' => $start,
             'end' => $end,
-            'all_day' => true,
             'visibility' => $validated['visibility'],
-        ]);
+        ]]);
 
-        $this->dispatch('calendar-event-created', calendarEvent: $this->formatCalendarEvent($event));
+        $this->dispatchCalendarEventsReplaced($events, $replacedIds);
 
         Notification::make()
             ->title('Agenda tersimpan')
+            ->body($this->buildReplacementMessage($replacedIds))
             ->success()
             ->send();
     }
@@ -121,34 +115,26 @@ class CreateCalendarEvent extends Page
             return;
         }
 
-        $start = Carbon::parse($validated['start'])->startOfDay();
-        $end = isset($validated['end']) && $validated['end'] !== ''
-            ? Carbon::parse($validated['end'])->startOfDay()
-            : null;
+        [$start, $end] = $this->normalizeDateRange($validated['start'], $validated['end'] ?? null);
 
-        if ($end && $end->isSameDay($start)) {
-            $end = null;
-        }
-
-        $created = [];
+        $items = [];
         foreach ($titles as $title) {
-            $created[] = CalendarEvent::query()->create([
+            $items[] = [
                 'title' => $title,
                 'description' => $validated['description'] ?? null,
                 'start' => $start,
                 'end' => $end,
-                'all_day' => true,
                 'visibility' => $validated['visibility'],
-            ]);
+            ];
         }
 
-        $payloads = array_map(fn (CalendarEvent $event) => $this->formatCalendarEvent($event), $created);
+        [$created, $replacedIds] = $this->replaceCalendarEvents($items);
 
-        $this->dispatch('calendar-events-imported', calendarEvents: $payloads);
+        $this->dispatchCalendarEventsReplaced($created, $replacedIds);
 
         Notification::make()
             ->title('Agenda tersimpan')
-            ->body('Total '.count($created).' agenda ditambahkan.')
+            ->body($this->buildReplacementMessage($replacedIds, 'Total '.count($created).' agenda disimpan.'))
             ->success()
             ->send();
     }
@@ -172,9 +158,9 @@ class CreateCalendarEvent extends Page
             return;
         }
 
-        [$items, $skipped] = $this->parseImportText($text);
+        [$parsedItems, $skipped] = $this->parseImportText($text);
 
-        if (count($items) === 0) {
+        if (count($parsedItems) === 0) {
             Notification::make()
                 ->title('Format teks belum dikenali')
                 ->body('Pastikan ada baris tanggal dan daftar kegiatan.')
@@ -184,25 +170,27 @@ class CreateCalendarEvent extends Page
             return;
         }
 
-        $created = [];
-        foreach ($items as $item) {
-            $created[] = CalendarEvent::query()->create([
+        $items = [];
+        foreach ($parsedItems as $item) {
+            $items[] = [
                 'title' => $item['title'],
                 'description' => $item['description'],
                 'start' => $item['start'],
                 'end' => $item['end'],
-                'all_day' => true,
                 'visibility' => $visibility,
-            ]);
+            ];
         }
 
-        $payloads = array_map(fn (CalendarEvent $event) => $this->formatCalendarEvent($event), $created);
+        [$created, $replacedIds] = $this->replaceCalendarEvents($items);
 
-        $this->dispatch('calendar-events-imported', calendarEvents: $payloads);
+        $this->dispatchCalendarEventsReplaced($created, $replacedIds);
 
         $this->importText = '';
 
         $message = 'Agenda berhasil diimpor ('.count($created).' kegiatan).';
+        if (count($replacedIds) > 0) {
+            $message .= ' '.count($replacedIds).' agenda lama pada tanggal yang sama diganti.';
+        }
         if ($skipped > 0) {
             $message .= ' Ada '.$skipped.' baris yang dilewati.';
         }
@@ -284,14 +272,13 @@ class CreateCalendarEvent extends Page
             'visibility' => ['required', 'in:external,internal'],
         ])->validate();
 
-        $start = Carbon::parse($validated['start'])->startOfDay();
-        $end = isset($validated['end']) && $validated['end'] !== ''
-            ? Carbon::parse($validated['end'])->startOfDay()
-            : null;
+        [$start, $end] = $this->normalizeDateRange($validated['start'], $validated['end'] ?? null);
 
-        if ($end && $end->isSameDay($start)) {
-            $end = null;
-        }
+        $replacedIds = $this->deleteOverlappingCalendarEvents([[
+            'start' => $start,
+            'end' => $end,
+            'visibility' => $validated['visibility'],
+        ]], $event->id);
 
         $event->update([
             'title' => $validated['title'],
@@ -303,9 +290,13 @@ class CreateCalendarEvent extends Page
         ]);
 
         $this->dispatch('calendar-event-updated', calendarEvent: $this->formatCalendarEvent($event));
+        if ($replacedIds !== []) {
+            $this->dispatch('calendar-events-deleted-bulk', calendarEventIds: $replacedIds);
+        }
 
         Notification::make()
             ->title('Agenda diperbarui')
+            ->body($this->buildReplacementMessage($replacedIds))
             ->success()
             ->send();
     }
@@ -363,6 +354,140 @@ class CreateCalendarEvent extends Page
         }
 
         return $payload;
+    }
+
+    protected function normalizeDateRange(string $startValue, $endValue = null): array
+    {
+        $start = Carbon::parse($startValue)->startOfDay();
+        $end = isset($endValue) && $endValue !== ''
+            ? Carbon::parse($endValue)->startOfDay()
+            : null;
+
+        if ($end && $end->isSameDay($start)) {
+            $end = null;
+        }
+
+        return [$start, $end];
+    }
+
+    protected function replaceCalendarEvents(array $items): array
+    {
+        return DB::transaction(function () use ($items): array {
+            $replacedIds = $this->deleteOverlappingCalendarEvents($this->uniqueReplacementRanges($items));
+            $created = [];
+
+            foreach ($items as $item) {
+                $created[] = CalendarEvent::query()->create([
+                    'title' => $item['title'],
+                    'description' => $item['description'] ?? null,
+                    'start' => $item['start'],
+                    'end' => $item['end'],
+                    'all_day' => true,
+                    'visibility' => $item['visibility'],
+                ]);
+            }
+
+            return [$created, $replacedIds];
+        });
+    }
+
+    protected function uniqueReplacementRanges(array $items): array
+    {
+        $ranges = [];
+
+        foreach ($items as $item) {
+            $start = $item['start'];
+            $end = $item['end'] ?? null;
+            $visibility = (string) ($item['visibility'] ?? 'external');
+            $key = implode('|', [
+                $start instanceof Carbon ? $start->toDateString() : (string) $start,
+                $end instanceof Carbon ? $end->toDateString() : (string) ($end ?? ''),
+                $visibility,
+            ]);
+
+            $ranges[$key] = [
+                'start' => $start,
+                'end' => $end,
+                'visibility' => $visibility,
+            ];
+        }
+
+        return array_values($ranges);
+    }
+
+    protected function deleteOverlappingCalendarEvents(array $ranges, ?int $exceptId = null): array
+    {
+        if ($ranges === []) {
+            return [];
+        }
+
+        $query = CalendarEvent::query()
+            ->when($exceptId !== null, fn ($query) => $query->whereKeyNot($exceptId))
+            ->where(function ($query) use ($ranges) {
+                foreach ($ranges as $range) {
+                    $start = $range['start'] instanceof Carbon
+                        ? $range['start']->copy()->startOfDay()
+                        : Carbon::parse($range['start'])->startOfDay();
+                    $end = ($range['end'] ?? null) instanceof Carbon
+                        ? $range['end']->copy()->endOfDay()
+                        : ($range['end'] ? Carbon::parse($range['end'])->endOfDay() : $start->copy()->endOfDay());
+                    $visibility = (string) ($range['visibility'] ?? 'external');
+
+                    $query->orWhere(function ($query) use ($start, $end, $visibility) {
+                        $query
+                            ->where(function ($query) use ($visibility) {
+                                if ($visibility === 'external') {
+                                    $query->where('visibility', 'external')->orWhereNull('visibility');
+
+                                    return;
+                                }
+
+                                $query->where('visibility', $visibility);
+                            })
+                            ->where('start', '<=', $end)
+                            ->where(function ($query) use ($start) {
+                                $query
+                                    ->where('end', '>=', $start)
+                                    ->orWhere(function ($query) use ($start) {
+                                        $query->whereNull('end')->where('start', '>=', $start);
+                                    });
+                            });
+                    });
+                }
+            });
+
+        $ids = $query->pluck('id')->map(fn ($id): int => (int) $id)->all();
+        if ($ids === []) {
+            return [];
+        }
+
+        abort_unless(static::getResource()::canDeleteAny(), 403);
+
+        CalendarEvent::query()->whereIn('id', $ids)->delete();
+
+        return $ids;
+    }
+
+    protected function dispatchCalendarEventsReplaced(array $events, array $replacedIds): void
+    {
+        $payloads = array_map(fn (CalendarEvent $event) => $this->formatCalendarEvent($event), $events);
+
+        $this->dispatch(
+            'calendar-events-replaced',
+            calendarEvents: $payloads,
+            calendarEventIds: $replacedIds,
+        );
+    }
+
+    protected function buildReplacementMessage(array $replacedIds, ?string $prefix = null): ?string
+    {
+        if ($replacedIds === []) {
+            return $prefix;
+        }
+
+        $message = count($replacedIds).' agenda lama pada tanggal yang sama diganti.';
+
+        return $prefix ? $prefix.' '.$message : $message;
     }
 
     protected function parseImportText(string $text): array
