@@ -18,7 +18,7 @@
         </div>
         <div>
             <span>Materi</span>
-            <strong>{{ $response->material?->title ?: '-' }}</strong>
+            <strong>{{ $response->material?->title ?: 'Materi tidak ditemukan' }}</strong>
         </div>
         <div>
             <span>Dikirim</span>

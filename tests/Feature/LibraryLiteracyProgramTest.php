@@ -17,6 +17,7 @@ use App\Support\Admin\AdminModuleAccess;
 use App\Support\Perpustakaan\LiterasiAnalytics;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 use Tests\Feature\Concerns\BootstrapsAdminFeatureTables;
@@ -903,6 +904,60 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertFalse(PerpustakaanLiterasiAnswer::withTrashed()->findOrFail($answerA->getKey())->trashed());
         $this->assertFalse(PerpustakaanLiterasiAnswer::withTrashed()->findOrFail($answerB->getKey())->trashed());
         $this->assertFalse(PerpustakaanLiterasiSimilarityMatch::withTrashed()->findOrFail($match->getKey())->trashed());
+    }
+
+    public function test_orphaned_literacy_history_can_be_soft_deleted_and_restored(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $admin = User::query()->create([
+            'name' => 'Admin History Orphan',
+            'username' => 'admin-history-orphan',
+            'password' => bcrypt('password'),
+        ]);
+        $admin->assignRole('admin');
+
+        $student = $this->createStudent('Codex Orphan Student', 'X Orphan');
+        $material = $this->createMaterial('Materi Lama Hilang');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Soal materi lama hilang.',
+            'max_characters' => 500,
+        ]);
+        $response = $this->createResponseWithAnswer($material, $student, $question, 'Jawaban pada materi yang hilang.');
+        $answer = $response->answers()->firstOrFail();
+
+        DB::table('perpustakaan_literasi_materials')
+            ->where('id', $material->getKey())
+            ->delete();
+
+        $this->assertNull(PerpustakaanLiterasiMaterial::withTrashed()->find($material->getKey()));
+        $this->assertSame(1, PerpustakaanLiterasiResponse::query()->doesntHave('material')->count());
+        $this->assertSame(0, PerpustakaanLiterasiResponse::onlyTrashed()->count());
+
+        $this->actingAs($admin)
+            ->get(PerpustakaanLiterasiMaterialResource::getUrl('student-history'))
+            ->assertOk()
+            ->assertSee('History Tanpa Materi')
+            ->assertSee('Hapus History Tanpa Materi');
+
+        Livewire::actingAs($admin)
+            ->test(StudentHistoryPerpustakaanLiterasi::class)
+            ->call('deleteOrphanedHistories');
+
+        $this->assertSoftDeleted('perpustakaan_literasi_responses', ['id' => $response->getKey()]);
+        $this->assertSoftDeleted('perpustakaan_literasi_answers', ['id' => $answer->getKey()]);
+        $this->assertSame(0, PerpustakaanLiterasiResponse::query()->doesntHave('material')->count());
+        $this->assertSame(1, PerpustakaanLiterasiResponse::onlyTrashed()->doesntHave('material')->count());
+
+        Livewire::actingAs($admin)
+            ->test(StudentHistoryPerpustakaanLiterasi::class)
+            ->call('restoreHistoryResponse', $response->getKey());
+
+        $this->assertFalse(PerpustakaanLiterasiResponse::withTrashed()->findOrFail($response->getKey())->trashed());
+        $this->assertFalse(PerpustakaanLiterasiAnswer::withTrashed()->findOrFail($answer->getKey())->trashed());
+        $this->assertNull(PerpustakaanLiterasiMaterial::withTrashed()->find($material->getKey()));
+        $this->assertSame(1, PerpustakaanLiterasiResponse::query()->doesntHave('material')->count());
     }
 
     protected function runLiteracyProgramMigration(): void

@@ -8,6 +8,8 @@ use App\Models\PerpustakaanLiterasiMaterial;
 use App\Models\PerpustakaanLiterasiResponse;
 use App\Models\PerpustakaanLiterasiSimilarityMatch;
 use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
+use Filament\Actions\BulkActionGroup;
 use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Page;
@@ -40,6 +42,19 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('deleteOrphanedHistoryAction')
+                ->label('Hapus History Tanpa Materi')
+                ->icon('heroicon-o-trash')
+                ->color('danger')
+                ->visible(fn (): bool => static::getResource()::canCreate()
+                    && $this->orphanedResponsesQuery()->exists())
+                ->requiresConfirmation()
+                ->modalHeading('Hapus history yang materinya tidak ditemukan?')
+                ->modalDescription('History ini berasal dari data lama yang materinya sudah terhapus permanen sebelum migrasi. History, jawaban, dan data plagiasi akan masuk History Terhapus dan masih bisa direstore sebagai history.')
+                ->modalSubmitActionLabel('Hapus sementara')
+                ->action(function (): void {
+                    $this->deleteOrphanedHistories();
+                }),
             Action::make('restoreDeletedMaterialAction')
                 ->label('Restore Materi Terhapus')
                 ->icon('heroicon-o-arrow-uturn-left')
@@ -73,6 +88,7 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
                 'students' => (clone $responses)->distinct('data_siswa_id')->count('data_siswa_id'),
                 'responses' => (clone $responses)->count(),
                 'deleted_responses' => (clone $deletedResponses)->count(),
+                'orphaned_responses' => (clone $responses)->doesntHave('material')->count(),
                 'deleted_materials' => PerpustakaanLiterasiMaterial::onlyTrashed()->count(),
                 'graded_responses' => (clone $responses)
                     ->whereHas('answers')
@@ -129,16 +145,31 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
                     ->wrap(),
                 Tables\Columns\TextColumn::make('material.title')
                     ->label('Materi')
+                    ->state(fn (PerpustakaanLiterasiResponse $record): string => $record->material?->title ?: 'Materi tidak ditemukan')
+                    ->description(fn (PerpustakaanLiterasiResponse $record): ?string => $record->material instanceof PerpustakaanLiterasiMaterial
+                        ? null
+                        : 'Data lama: materi sudah terhapus permanen')
+                    ->color(fn (PerpustakaanLiterasiResponse $record): string => $record->material instanceof PerpustakaanLiterasiMaterial ? 'gray' : 'warning')
                     ->searchable()
                     ->wrap(),
                 Tables\Columns\TextColumn::make('deleted_at')
                     ->label('Status')
-                    ->state(fn (PerpustakaanLiterasiResponse $record): string => $record->trashed() ? 'Terhapus' : 'Aktif')
+                    ->state(fn (PerpustakaanLiterasiResponse $record): string => match (true) {
+                        $record->trashed() => 'Terhapus',
+                        ! $record->material instanceof PerpustakaanLiterasiMaterial => 'Tanpa Materi',
+                        default => 'Aktif',
+                    })
                     ->description(fn (PerpustakaanLiterasiResponse $record): ?string => $record->trashed()
                         ? 'Dihapus '.$record->deleted_at?->format('d/m/Y H:i')
-                        : null)
+                        : (! $record->material instanceof PerpustakaanLiterasiMaterial
+                            ? 'Materi asal tidak ditemukan'
+                            : null))
                     ->badge()
-                    ->color(fn (PerpustakaanLiterasiResponse $record): string => $record->trashed() ? 'danger' : 'success'),
+                    ->color(fn (PerpustakaanLiterasiResponse $record): string => match (true) {
+                        $record->trashed() => 'danger',
+                        ! $record->material instanceof PerpustakaanLiterasiMaterial => 'warning',
+                        default => 'success',
+                    }),
                 Tables\Columns\TextColumn::make('submitted_at')
                     ->label('Dikirim')
                     ->dateTime('d/m/Y H:i')
@@ -177,6 +208,15 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
                         ->orderBy('title')
                         ->pluck('title', 'id')
                         ->all()),
+                Tables\Filters\TernaryFilter::make('material_exists')
+                    ->label('Kondisi Materi')
+                    ->placeholder('Semua')
+                    ->trueLabel('Materi tersedia')
+                    ->falseLabel('Materi hilang')
+                    ->queries(
+                        true: fn (Builder $query): Builder => $query->whereHas('material'),
+                        false: fn (Builder $query): Builder => $query->doesntHave('material'),
+                    ),
                 Tables\Filters\SelectFilter::make('student_class_snapshot')
                     ->label('Kelas')
                     ->options(fn (): array => PerpustakaanLiterasiResponse::withTrashed()
@@ -226,6 +266,74 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
 
                         $this->saveGrades($record, $data);
                     }),
+                Action::make('deleteHistory')
+                    ->label('Hapus History')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    ->visible(fn (PerpustakaanLiterasiResponse $record): bool => static::getResource()::canCreate()
+                        && ! $record->trashed())
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (PerpustakaanLiterasiResponse $record): string => 'Hapus history '.$record->student_name_snapshot.'?')
+                    ->modalDescription('History akan dipindahkan ke History Terhapus. Jawaban dan data plagiasi terkait ikut disembunyikan dan bisa direstore.')
+                    ->modalSubmitActionLabel('Hapus sementara')
+                    ->action(function (PerpustakaanLiterasiResponse $record): void {
+                        $this->deleteHistoryResponse((int) $record->getKey());
+                    }),
+                Action::make('restoreHistory')
+                    ->label('Restore History')
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->color('warning')
+                    ->visible(fn (PerpustakaanLiterasiResponse $record): bool => static::getResource()::canCreate()
+                        && $record->trashed())
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (PerpustakaanLiterasiResponse $record): string => 'Restore history '.$record->student_name_snapshot.'?')
+                    ->modalDescription('History, jawaban, dan data plagiasi terkait akan aktif kembali. Jika materi asal sudah terhapus permanen, status tetap Tanpa Materi.')
+                    ->modalSubmitActionLabel('Restore History')
+                    ->action(function (PerpustakaanLiterasiResponse $record): void {
+                        $this->restoreHistoryResponse((int) $record->getKey());
+                    }),
+            ])
+            ->bulkActions([
+                BulkActionGroup::make([
+                    BulkAction::make('deleteSelectedHistories')
+                        ->label('Hapus History Terpilih')
+                        ->icon('heroicon-o-trash')
+                        ->color('danger')
+                        ->visible(fn (): bool => static::getResource()::canCreate())
+                        ->requiresConfirmation()
+                        ->modalHeading('Hapus history terpilih?')
+                        ->modalDescription('History aktif yang dipilih akan masuk History Terhapus. History yang sudah terhapus akan dilewati.')
+                        ->modalSubmitActionLabel('Hapus sementara')
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (iterable $records): void {
+                            $deleted = $this->deleteHistoryRecords($records);
+
+                            $this->notifyHistoryBulkAction(
+                                'Hapus history selesai',
+                                "History dipindahkan ke History Terhapus: {$deleted}.",
+                                $deleted,
+                            );
+                        }),
+                    BulkAction::make('restoreSelectedHistories')
+                        ->label('Restore History Terpilih')
+                        ->icon('heroicon-o-arrow-uturn-left')
+                        ->color('warning')
+                        ->visible(fn (): bool => static::getResource()::canCreate())
+                        ->requiresConfirmation()
+                        ->modalHeading('Restore history terpilih?')
+                        ->modalDescription('History terhapus yang dipilih akan aktif kembali. History aktif akan dilewati.')
+                        ->modalSubmitActionLabel('Restore History')
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (iterable $records): void {
+                            $restored = $this->restoreHistoryRecords($records);
+
+                            $this->notifyHistoryBulkAction(
+                                'Restore history selesai',
+                                "History aktif kembali: {$restored}.",
+                                $restored,
+                            );
+                        }),
+                ]),
             ]);
     }
 
@@ -239,6 +347,120 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
 
         return $record->material instanceof PerpustakaanLiterasiMaterial
             && static::getResource()::canEdit($record->material);
+    }
+
+    protected function orphanedResponsesQuery(): Builder
+    {
+        return PerpustakaanLiterasiResponse::query()->doesntHave('material');
+    }
+
+    public function deleteOrphanedHistories(): void
+    {
+        abort_unless(static::getResource()::canCreate(), 403);
+
+        $records = $this->orphanedResponsesQuery()->get();
+        $deleted = $this->deleteHistoryRecords($records);
+
+        $this->notifyHistoryBulkAction(
+            'Hapus history tanpa materi selesai',
+            "History tanpa materi dipindahkan ke History Terhapus: {$deleted}.",
+            $deleted,
+        );
+    }
+
+    public function deleteHistoryResponse(int $responseId): void
+    {
+        abort_unless(static::getResource()::canCreate(), 403);
+
+        $response = PerpustakaanLiterasiResponse::withTrashed()->findOrFail($responseId);
+        $deleted = $this->deleteHistoryRecords([$response]);
+
+        $this->notifyHistoryBulkAction(
+            'Hapus history selesai',
+            "History dipindahkan ke History Terhapus: {$deleted}.",
+            $deleted,
+        );
+    }
+
+    public function restoreHistoryResponse(int $responseId): void
+    {
+        abort_unless(static::getResource()::canCreate(), 403);
+
+        $response = PerpustakaanLiterasiResponse::withTrashed()->findOrFail($responseId);
+        $restored = $this->restoreHistoryRecords([$response]);
+
+        $this->notifyHistoryBulkAction(
+            'Restore history selesai',
+            "History aktif kembali: {$restored}.",
+            $restored,
+        );
+    }
+
+    /**
+     * @param  iterable<PerpustakaanLiterasiResponse>  $records
+     */
+    protected function deleteHistoryRecords(iterable $records): int
+    {
+        abort_unless(static::getResource()::canCreate(), 403);
+
+        $deleted = 0;
+
+        DB::transaction(function () use ($records, &$deleted): void {
+            foreach ($records as $record) {
+                if (! $record instanceof PerpustakaanLiterasiResponse) {
+                    continue;
+                }
+
+                $fresh = PerpustakaanLiterasiResponse::withTrashed()->find($record->getKey());
+
+                if (! $fresh || $fresh->trashed()) {
+                    continue;
+                }
+
+                $fresh->delete();
+                $deleted++;
+            }
+        });
+
+        return $deleted;
+    }
+
+    /**
+     * @param  iterable<PerpustakaanLiterasiResponse>  $records
+     */
+    protected function restoreHistoryRecords(iterable $records): int
+    {
+        abort_unless(static::getResource()::canCreate(), 403);
+
+        $restored = 0;
+
+        DB::transaction(function () use ($records, &$restored): void {
+            foreach ($records as $record) {
+                if (! $record instanceof PerpustakaanLiterasiResponse) {
+                    continue;
+                }
+
+                $fresh = PerpustakaanLiterasiResponse::onlyTrashed()->find($record->getKey());
+
+                if (! $fresh) {
+                    continue;
+                }
+
+                $fresh->restore();
+                $restored++;
+            }
+        });
+
+        return $restored;
+    }
+
+    protected function notifyHistoryBulkAction(string $title, string $body, int $processed): void
+    {
+        Notification::make()
+            ->title($title)
+            ->body($body)
+            ->{$processed > 0 ? 'success' : 'warning'}()
+            ->send();
     }
 
     protected function studentHistoryDetailView(PerpustakaanLiterasiResponse $record)
