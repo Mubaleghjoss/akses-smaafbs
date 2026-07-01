@@ -37,14 +37,43 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
         abort_unless(static::getResource()::canViewAny(), 403);
     }
 
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('restoreDeletedMaterialAction')
+                ->label('Restore Materi Terhapus')
+                ->icon('heroicon-o-arrow-uturn-left')
+                ->color('warning')
+                ->visible(fn (): bool => static::getResource()::canCreate()
+                    && PerpustakaanLiterasiMaterial::onlyTrashed()->exists())
+                ->modalHeading('Restore materi dan responden?')
+                ->modalDescription('Pilih materi yang ingin dikembalikan. Semua history siswa, jawaban, dan data plagiasi pada materi tersebut ikut dikembalikan.')
+                ->modalSubmitActionLabel('Restore Materi')
+                ->schema([
+                    Forms\Components\Select::make('material_id')
+                        ->label('Materi yang dikembalikan')
+                        ->options(fn (): array => $this->deletedMaterialOptions())
+                        ->searchable()
+                        ->native(false)
+                        ->required(),
+                ])
+                ->action(function (array $data): void {
+                    $this->restoreDeletedMaterial((int) ($data['material_id'] ?? 0));
+                }),
+        ];
+    }
+
     public function getViewData(): array
     {
         $responses = PerpustakaanLiterasiResponse::query();
+        $deletedResponses = PerpustakaanLiterasiResponse::onlyTrashed();
 
         return [
             'summaryMetrics' => [
                 'students' => (clone $responses)->distinct('data_siswa_id')->count('data_siswa_id'),
                 'responses' => (clone $responses)->count(),
+                'deleted_responses' => (clone $deletedResponses)->count(),
+                'deleted_materials' => PerpustakaanLiterasiMaterial::onlyTrashed()->count(),
                 'graded_responses' => (clone $responses)
                     ->whereHas('answers')
                     ->whereDoesntHave('answers', fn (Builder $query): Builder => $query->whereNull('is_correct'))
@@ -60,18 +89,25 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
     public function table(Table $table): Table
     {
         return $table
-            ->query(fn (): Builder => PerpustakaanLiterasiResponse::query()
+            ->query(fn (): Builder => PerpustakaanLiterasiResponse::withTrashed()
                 ->with([
-                    'material:id,title',
-                    'answers.question:id,material_id,sort_order,prompt',
-                    'answers.gradedBy:id,name',
-                    'laterSimilarityMatches',
+                    'material:id,title,deleted_at',
+                    'answers' => fn ($query) => $query
+                        ->withTrashed()
+                        ->with([
+                            'question' => fn ($questionQuery) => $questionQuery
+                                ->withTrashed()
+                                ->select('id', 'material_id', 'sort_order', 'prompt'),
+                            'gradedBy:id,name',
+                        ]),
+                    'laterSimilarityMatches' => fn ($query) => $query->withTrashed(),
                 ])
                 ->withCount([
-                    'answers',
-                    'answers as graded_answers_count' => fn (Builder $query): Builder => $query->whereNotNull('is_correct'),
-                    'answers as correct_answers_count' => fn (Builder $query): Builder => $query->where('is_correct', true),
+                    'answers' => fn (Builder $query): Builder => $query->withTrashed(),
+                    'answers as graded_answers_count' => fn (Builder $query): Builder => $query->withTrashed()->whereNotNull('is_correct'),
+                    'answers as correct_answers_count' => fn (Builder $query): Builder => $query->withTrashed()->where('is_correct', true),
                     'laterSimilarityMatches as confirmed_plagiarism_count' => fn (Builder $query): Builder => $query
+                        ->withTrashed()
                         ->where('review_status', PerpustakaanLiterasiSimilarityMatch::REVIEW_CONFIRMED),
                 ]))
             ->defaultSort('submitted_at', 'desc')
@@ -95,6 +131,14 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
                     ->label('Materi')
                     ->searchable()
                     ->wrap(),
+                Tables\Columns\TextColumn::make('deleted_at')
+                    ->label('Status')
+                    ->state(fn (PerpustakaanLiterasiResponse $record): string => $record->trashed() ? 'Terhapus' : 'Aktif')
+                    ->description(fn (PerpustakaanLiterasiResponse $record): ?string => $record->trashed()
+                        ? 'Dihapus '.$record->deleted_at?->format('d/m/Y H:i')
+                        : null)
+                    ->badge()
+                    ->color(fn (PerpustakaanLiterasiResponse $record): string => $record->trashed() ? 'danger' : 'success'),
                 Tables\Columns\TextColumn::make('submitted_at')
                     ->label('Dikirim')
                     ->dateTime('d/m/Y H:i')
@@ -120,15 +164,22 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
                     ->visibleFrom('lg'),
             ])
             ->filters([
+                Tables\Filters\TernaryFilter::make('deleted_at')
+                    ->label('Status History')
+                    ->placeholder('Semua')
+                    ->trueLabel('Terhapus')
+                    ->falseLabel('Aktif')
+                    ->nullable(),
                 Tables\Filters\SelectFilter::make('material_id')
                     ->label('Materi')
                     ->options(fn (): array => PerpustakaanLiterasiMaterial::query()
+                        ->withTrashed()
                         ->orderBy('title')
                         ->pluck('title', 'id')
                         ->all()),
                 Tables\Filters\SelectFilter::make('student_class_snapshot')
                     ->label('Kelas')
-                    ->options(fn (): array => PerpustakaanLiterasiResponse::query()
+                    ->options(fn (): array => PerpustakaanLiterasiResponse::withTrashed()
                         ->whereNotNull('student_class_snapshot')
                         ->where('student_class_snapshot', '!=', '')
                         ->distinct()
@@ -141,10 +192,10 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
                     ->falseLabel('Belum lengkap')
                     ->queries(
                         true: fn (Builder $query): Builder => $query
-                            ->whereHas('answers')
-                            ->whereDoesntHave('answers', fn (Builder $answerQuery): Builder => $answerQuery->whereNull('is_correct')),
+                            ->whereHas('answers', fn (Builder $answerQuery): Builder => $answerQuery->withTrashed())
+                            ->whereDoesntHave('answers', fn (Builder $answerQuery): Builder => $answerQuery->withTrashed()->whereNull('is_correct')),
                         false: fn (Builder $query): Builder => $query
-                            ->whereHas('answers', fn (Builder $answerQuery): Builder => $answerQuery->whereNull('is_correct')),
+                            ->whereHas('answers', fn (Builder $answerQuery): Builder => $answerQuery->withTrashed()->whereNull('is_correct')),
                     ),
             ])
             ->actions([
@@ -156,19 +207,7 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Tutup')
                     ->modalWidth('6xl')
-                    ->modalContent(fn (PerpustakaanLiterasiResponse $record) => view(
-                        'filament.resources.perpustakaan-literasi-material-resource.partials.student-history-detail',
-                        [
-                            'response' => $record->loadMissing([
-                                'material.questions',
-                                'answers.question',
-                                'answers.gradedBy',
-                                'laterSimilarityMatches.question',
-                                'laterSimilarityMatches.matchedResponse',
-                                'laterSimilarityMatches.matchedAnswer',
-                            ]),
-                        ]
-                    )),
+                    ->modalContent(fn (PerpustakaanLiterasiResponse $record) => $this->studentHistoryDetailView($record)),
                 Action::make('detailEdit')
                     ->label(fn (PerpustakaanLiterasiResponse $record): string => $this->isResponseFullyGraded($record) ? 'Detail / Edit Nilai' : 'Detail / Nilai')
                     ->icon(fn (PerpustakaanLiterasiResponse $record): string => $this->isResponseFullyGraded($record) ? 'heroicon-o-pencil-square' : 'heroicon-o-check-circle')
@@ -179,19 +218,7 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
                     ->modalSubmitActionLabel('Simpan Nilai')
                     ->modalCancelActionLabel('Tutup')
                     ->modalWidth('6xl')
-                    ->modalContent(fn (PerpustakaanLiterasiResponse $record) => view(
-                        'filament.resources.perpustakaan-literasi-material-resource.partials.student-history-detail',
-                        [
-                            'response' => $record->loadMissing([
-                                'material.questions',
-                                'answers.question',
-                                'answers.gradedBy',
-                                'laterSimilarityMatches.question',
-                                'laterSimilarityMatches.matchedResponse',
-                                'laterSimilarityMatches.matchedAnswer',
-                            ]),
-                        ]
-                    ))
+                    ->modalContent(fn (PerpustakaanLiterasiResponse $record) => $this->studentHistoryDetailView($record))
                     ->form(fn (PerpustakaanLiterasiResponse $record): array => $this->gradingFormSchema($record))
                     ->fillForm(fn (PerpustakaanLiterasiResponse $record): array => $this->gradingFormData($record))
                     ->action(function (PerpustakaanLiterasiResponse $record, array $data): void {
@@ -206,8 +233,37 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
     {
         $record->loadMissing('material');
 
+        if ($record->trashed() || $record->material?->trashed()) {
+            return false;
+        }
+
         return $record->material instanceof PerpustakaanLiterasiMaterial
             && static::getResource()::canEdit($record->material);
+    }
+
+    protected function studentHistoryDetailView(PerpustakaanLiterasiResponse $record)
+    {
+        return view(
+            'filament.resources.perpustakaan-literasi-material-resource.partials.student-history-detail',
+            [
+                'response' => $record->loadMissing([
+                    'material' => fn ($query) => $query->withTrashed(),
+                    'answers' => fn ($query) => $query
+                        ->withTrashed()
+                        ->with([
+                            'question' => fn ($questionQuery) => $questionQuery->withTrashed(),
+                            'gradedBy',
+                        ]),
+                    'laterSimilarityMatches' => fn ($query) => $query
+                        ->withTrashed()
+                        ->with([
+                            'question' => fn ($questionQuery) => $questionQuery->withTrashed(),
+                            'matchedResponse' => fn ($responseQuery) => $responseQuery->withTrashed(),
+                            'matchedAnswer' => fn ($answerQuery) => $answerQuery->withTrashed(),
+                        ]),
+                ]),
+            ]
+        );
     }
 
     protected function isResponseFullyGraded(PerpustakaanLiterasiResponse $record): bool
@@ -420,5 +476,45 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
             ->where('later_response_id', $record->getKey())
             ->where('later_answer_id', $answer->getKey())
             ->update($attributes);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function deletedMaterialOptions(): array
+    {
+        return PerpustakaanLiterasiMaterial::onlyTrashed()
+            ->withCount([
+                'responses as deleted_responses_count' => fn (Builder $query): Builder => $query->withTrashed(),
+            ])
+            ->orderByDesc('deleted_at')
+            ->orderBy('title')
+            ->get()
+            ->mapWithKeys(function (PerpustakaanLiterasiMaterial $material): array {
+                $deletedAt = $material->deleted_at?->format('d/m/Y H:i') ?? '-';
+                $responses = number_format((int) ($material->deleted_responses_count ?? 0), 0, ',', '.');
+
+                return [
+                    $material->getKey() => "{$material->title} - {$responses} responden - dihapus {$deletedAt}",
+                ];
+            })
+            ->all();
+    }
+
+    public function restoreDeletedMaterial(int $materialId): void
+    {
+        abort_unless(static::getResource()::canCreate(), 403);
+
+        $material = PerpustakaanLiterasiMaterial::onlyTrashed()->findOrFail($materialId);
+
+        DB::transaction(function () use ($material): void {
+            $material->restore();
+        });
+
+        Notification::make()
+            ->title('Materi berhasil direstore')
+            ->body('Materi, history responden, jawaban, dan data plagiasi terkait sudah aktif kembali.')
+            ->success()
+            ->send();
     }
 }

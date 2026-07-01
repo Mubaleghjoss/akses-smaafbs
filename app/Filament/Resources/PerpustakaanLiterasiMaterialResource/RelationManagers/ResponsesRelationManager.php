@@ -30,7 +30,7 @@ class ResponsesRelationManager extends RelationManager
             ->recordTitleAttribute('student_name_snapshot')
             ->defaultSort('submitted_at', 'desc')
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
-                ->with(['answers.question', 'answers.gradedBy', 'laterSimilarityMatches'])
+                ->with(['answers.question', 'answers.gradedBy', 'laterSimilarityMatches.matchedResponse', 'laterSimilarityMatches.reviewedBy'])
                 ->withCount([
                     'answers',
                     'answers as graded_answers_count' => fn (Builder $query): Builder => $query->whereNotNull('is_correct'),
@@ -142,7 +142,7 @@ class ResponsesRelationManager extends RelationManager
         $record->loadMissing('material.questions', 'answers.question');
         $answers = $record->answers->keyBy('question_id');
         $plagiarismMatchesByAnswer = $record->laterSimilarityMatches()
-            ->with(['matchedResponse', 'matchedAnswer'])
+            ->with(['matchedResponse', 'matchedAnswer', 'reviewedBy'])
             ->get()
             ->groupBy('later_answer_id');
 
@@ -164,7 +164,27 @@ class ResponsesRelationManager extends RelationManager
                         ->columnSpanFull(),
                 ];
 
-                if ($plagiarismMatches->isNotEmpty()) {
+                if ($question->hasAnswerKey()) {
+                    $schema[] = Forms\Components\Placeholder::make('answer_'.$answerId.'_answer_key')
+                        ->label('Kunci Jawaban')
+                        ->content(new HtmlString(
+                            '<div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm leading-6 text-emerald-950 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100">'.
+                            nl2br(e((string) $question->answerKey())).
+                            '</div>'
+                        ))
+                        ->columnSpanFull();
+                }
+
+                if (! $question->plagiarismDetectionEnabled()) {
+                    $schema[] = Forms\Components\Placeholder::make('answer_'.$answerId.'_plagiarism_disabled_info')
+                        ->label('Status Plagiasi')
+                        ->content(new HtmlString(
+                            '<div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm leading-6 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100">'.
+                            '<strong>Tidak plagiasi.</strong> Soal ini tidak dianalisa plagiasi karena deteksi plagiasi dinonaktifkan, sehingga jawaban tidak masuk Daftar Plagiat Per Kelas.'.
+                            '</div>'
+                        ))
+                        ->columnSpanFull();
+                } elseif ($plagiarismMatches->isNotEmpty()) {
                     $schema[] = Forms\Components\Placeholder::make('answer_'.$answerId.'_plagiarism_info')
                         ->label('Indikasi Plagiasi')
                         ->content($this->plagiarismMatchesHtml($plagiarismMatches))
@@ -281,8 +301,17 @@ class ResponsesRelationManager extends RelationManager
                 $class = $match->matchedResponse?->student_class_snapshot ?: '-';
                 $score = number_format((float) $match->similarity_score, 2, ',', '.').'%';
                 $status = PerpustakaanLiterasiSimilarityMatch::reviewStatusLabel($match->review_status);
+                $laterSubmitted = $match->later_submitted_at?->format('d/m/Y H:i') ?? '-';
+                $matchedSubmitted = $match->matched_submitted_at?->format('d/m/Y H:i') ?? '-';
+                $reviewedBy = $match->reviewedBy?->name ? ' oleh '.$match->reviewedBy->name : '';
+                $reviewedAt = $match->reviewed_at
+                    ? $match->reviewed_at->format('d/m/Y H:i').$reviewedBy
+                    : 'Belum diverifikasi guru';
 
-                return '<li><strong>'.e($score).'</strong> mirip dengan '.e($student).' ('.e($class).') - '.e($status).'</li>';
+                return '<li>'.
+                    '<div><strong>'.e($score).'</strong> mirip dengan '.e($student).' ('.e($class).') - '.e($status).'</div>'.
+                    '<div class="mt-1 text-xs opacity-80">Submit pembanding: '.e($matchedSubmitted).' | Submit jawaban ini: '.e($laterSubmitted).' | Verifikasi: '.e($reviewedAt).'</div>'.
+                    '</li>';
             })
             ->implode('');
 

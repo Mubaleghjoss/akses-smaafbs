@@ -2,16 +2,18 @@
     $summary = $analytics['grading_summary'] ?? [];
     $classActivity = $analytics['class_activity'] ?? [];
     $classRanking = $analytics['class_response_ranking'] ?? [];
+    $classCorrectRanking = $analytics['class_correct_ranking'] ?? [];
     $leastClassRanking = $analytics['least_class_response_ranking'] ?? [];
     $studentRankingByClass = $analytics['student_correct_ranking_by_class'] ?? [];
     $plagiarismClassRanking = $analytics['plagiarism_class_ranking'] ?? [];
     $plagiarismStudentRanking = $analytics['plagiarism_student_ranking'] ?? [];
+    $compact = (bool) ($compact ?? false);
 
     $formatNumber = fn (int|float $value): string => number_format($value, 0, ',', '.');
     $formatPercent = fn (int|float $value): string => number_format((float) $value, 1, ',', '.').'%';
 @endphp
 
-<section class="literasi-analytics" aria-label="{{ $title ?? 'Analisa Literasi' }}">
+<section class="literasi-analytics{{ $compact ? ' literasi-analytics--compact' : '' }}" aria-label="{{ $title ?? 'Analisa Literasi' }}">
     <header class="literasi-analytics__header">
         <div class="literasi-analytics__heading">
             <h2 class="literasi-analytics__title">{{ $title ?? 'Analisa Literasi' }}</h2>
@@ -38,15 +40,17 @@
             <strong class="literasi-metric-card__value">{{ $formatNumber((int) ($summary['correct_answers'] ?? 0)) }}</strong>
         </article>
 
-        <article class="literasi-metric-card">
-            <span class="literasi-metric-card__label">Akurasi Dinilai</span>
-            <strong class="literasi-metric-card__value">{{ $formatPercent((float) ($summary['accuracy'] ?? 0)) }}</strong>
-        </article>
+        @unless($compact)
+            <article class="literasi-metric-card">
+                <span class="literasi-metric-card__label">Akurasi Dinilai</span>
+                <strong class="literasi-metric-card__value">{{ $formatPercent((float) ($summary['accuracy'] ?? 0)) }}</strong>
+            </article>
 
-        <article class="literasi-metric-card literasi-metric-card--danger">
-            <span class="literasi-metric-card__label">Siswa Plagiasi</span>
-            <strong class="literasi-metric-card__value">{{ $formatNumber(count($plagiarismStudentRanking)) }}</strong>
-        </article>
+            <article class="literasi-metric-card literasi-metric-card--danger">
+                <span class="literasi-metric-card__label">Siswa Plagiasi</span>
+                <strong class="literasi-metric-card__value">{{ $formatNumber(count($plagiarismStudentRanking)) }}</strong>
+            </article>
+        @endunless
 
         <article class="literasi-metric-card literasi-metric-card--danger">
             <span class="literasi-metric-card__label">Plagiasi Terkonfirmasi</span>
@@ -87,29 +91,63 @@
             </div>
         </article>
 
+        @unless($compact)
+            <article class="literasi-panel">
+                <h3 class="literasi-panel__title">Ranking Kelas Terbanyak Mengisi</h3>
+                <div class="literasi-table-wrap">
+                    <table class="literasi-table">
+                        <thead>
+                            <tr>
+                                <th class="is-rank">#</th>
+                                <th>Kelas</th>
+                                <th class="is-number">Responden</th>
+                                <th class="is-number">Rasio</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($classRanking as $index => $row)
+                                <tr>
+                                    <td data-label="#" class="is-rank">{{ $index + 1 }}</td>
+                                    <td data-label="Kelas">{{ $row['class'] }}</td>
+                                    <td data-label="Responden" class="is-number">{{ $formatNumber((int) $row['total']) }}</td>
+                                    <td data-label="Rasio" class="is-number">{{ $row['ratio'] }}</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td class="literasi-table__empty" colspan="4">Belum ada ranking kelas.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </article>
+        @endunless
+
         <article class="literasi-panel">
-            <h3 class="literasi-panel__title">Ranking Kelas Terbanyak Mengisi</h3>
+            <h3 class="literasi-panel__title">Ranking 3 Kelas Jawaban Benar Terbanyak</h3>
             <div class="literasi-table-wrap">
                 <table class="literasi-table">
                     <thead>
                         <tr>
                             <th class="is-rank">#</th>
                             <th>Kelas</th>
-                            <th class="is-number">Responden</th>
-                            <th class="is-number">Rasio</th>
+                            <th class="is-number">Benar</th>
+                            <th class="is-number">Murid</th>
+                            <th class="is-number">Akurasi</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse($classRanking as $index => $row)
+                        @forelse($classCorrectRanking as $index => $row)
                             <tr>
                                 <td data-label="#" class="is-rank">{{ $index + 1 }}</td>
                                 <td data-label="Kelas">{{ $row['class'] }}</td>
-                                <td data-label="Responden" class="is-number">{{ $formatNumber((int) $row['total']) }}</td>
-                                <td data-label="Rasio" class="is-number">{{ $row['ratio'] }}</td>
+                                <td data-label="Benar" class="is-number">{{ $formatNumber((int) $row['correct_answers']) }}</td>
+                                <td data-label="Murid" class="is-number">{{ $formatNumber((int) $row['response_count']) }}</td>
+                                <td data-label="Akurasi" class="is-number">{{ $formatPercent((float) $row['accuracy']) }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td class="literasi-table__empty" colspan="4">Belum ada ranking kelas.</td>
+                                <td class="literasi-table__empty" colspan="5">Belum ada kelas dengan jawaban benar bulan ini.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -117,42 +155,44 @@
             </div>
         </article>
 
-        <article class="literasi-panel">
-            <h3 class="literasi-panel__title">Ranking 3 Kelas Tersedikit Mengisi</h3>
-            <div class="literasi-table-wrap">
-                <table class="literasi-table">
-                    <thead>
-                        <tr>
-                            <th class="is-rank">#</th>
-                            <th>Kelas</th>
-                            <th class="is-number">Responden</th>
-                            <th class="is-number">Rasio</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse($leastClassRanking as $index => $row)
+        @unless($compact)
+            <article class="literasi-panel">
+                <h3 class="literasi-panel__title">Ranking 3 Kelas Tersedikit Mengisi</h3>
+                <div class="literasi-table-wrap">
+                    <table class="literasi-table">
+                        <thead>
                             <tr>
-                                <td data-label="#" class="is-rank">{{ $index + 1 }}</td>
-                                <td data-label="Kelas">{{ $row['class'] }}</td>
-                                <td data-label="Responden" class="is-number">{{ $formatNumber((int) $row['total']) }}</td>
-                                <td data-label="Rasio" class="is-number">{{ $row['ratio'] }}</td>
+                                <th class="is-rank">#</th>
+                                <th>Kelas</th>
+                                <th class="is-number">Responden</th>
+                                <th class="is-number">Rasio</th>
                             </tr>
-                        @empty
-                            <tr>
-                                <td class="literasi-table__empty" colspan="4">Belum ada data kelas aktif.</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </article>
+                        </thead>
+                        <tbody>
+                            @forelse($leastClassRanking as $index => $row)
+                                <tr>
+                                    <td data-label="#" class="is-rank">{{ $index + 1 }}</td>
+                                    <td data-label="Kelas">{{ $row['class'] }}</td>
+                                    <td data-label="Responden" class="is-number">{{ $formatNumber((int) $row['total']) }}</td>
+                                    <td data-label="Rasio" class="is-number">{{ $row['ratio'] }}</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td class="literasi-table__empty" colspan="4">Belum ada data kelas aktif.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </article>
+        @endunless
     </div>
 
     <article class="literasi-panel">
-        <h3 class="literasi-panel__title">Ranking Siswa Per Kelas Berdasarkan Jawaban Benar</h3>
+        <h3 class="literasi-panel__title">{{ $compact ? 'Siswa Benar Per Kelas' : 'Ranking Siswa Per Kelas Berdasarkan Jawaban Benar' }}</h3>
         <div class="literasi-student-rankings">
             @forelse($studentRankingByClass as $class => $rows)
-                <details class="literasi-class-ranking" open>
+                <details class="literasi-class-ranking" @if(! $compact) open @endif>
                     <summary>{{ $class }}</summary>
                     <div class="literasi-table-wrap">
                         <table class="literasi-table">
@@ -187,7 +227,7 @@
 
     <div class="literasi-analytics__grid">
         <article class="literasi-panel literasi-panel--danger">
-            <h3 class="literasi-panel__title">Kelas Tersering Plagiasi</h3>
+            <h3 class="literasi-panel__title">{{ $compact ? 'Daftar Plagiat Per Kelas' : 'Kelas Tersering Plagiasi' }}</h3>
             <div class="literasi-table-wrap">
                 <table class="literasi-table">
                     <thead>
@@ -215,7 +255,7 @@
         </article>
 
         <article class="literasi-panel literasi-panel--danger">
-            <h3 class="literasi-panel__title">Siswa Tersering Plagiasi</h3>
+            <h3 class="literasi-panel__title">{{ $compact ? 'Daftar Plagiat Per Siswa' : 'Siswa Tersering Plagiasi' }}</h3>
             <div class="literasi-table-wrap">
                 <table class="literasi-table">
                     <thead>

@@ -7,6 +7,7 @@ use App\Models\BerkasGuru;
 use App\Models\BerkasSiswa;
 use App\Models\User;
 use App\Support\Admin\AdminModuleAccess;
+use App\Support\ServerSync\ServerDataPuller;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -409,3 +410,35 @@ Artisan::command('app:reset-data {--force : Wajib untuk menjalankan reset}', fun
 
     return 0;
 })->purpose('Reset seluruh data (LOCAL ONLY)');
+
+Artisan::command('app:pull-server-data {--force : Wajib untuk menimpa database dan storage lokal}', function () {
+    $puller = app(ServerDataPuller::class);
+
+    if (! $this->option('force')) {
+        $this->error('Tambahkan flag --force untuk menarik data server dan menimpa data lokal.');
+
+        return 1;
+    }
+
+    $errors = $puller->readinessErrors();
+
+    if ($errors !== []) {
+        foreach ($errors as $error) {
+            $this->error($error);
+        }
+
+        return 1;
+    }
+
+    $result = $puller->pull(function (string $line): void {
+        $this->line($line);
+    });
+
+    $this->newLine();
+    $this->info('Tarik data server selesai.');
+    $this->line('Backup lokal: '.($result['backup_path'] ?: 'dinonaktifkan'));
+    $this->line('Dump server: '.$result['dump_path']);
+    $this->line('Storage tersinkron: '.(implode(', ', $result['storage_paths']) ?: '-'));
+
+    return 0;
+})->purpose('Tarik database dan file storage server ke lokal lalu timpa data lokal (LOCAL ONLY)');

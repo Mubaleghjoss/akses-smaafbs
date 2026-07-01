@@ -158,6 +158,8 @@ class HomeLandingPageTest extends TestCase
         $response
             ->assertOk()
             ->assertSee('Identitas sekolah untuk orang tua, siswa, dan masyarakat.')
+            ->assertSee('Program Literasi')
+            ->assertSee('/perpustakaan/literacy-habituation-program', false)
             ->assertSee('data-home-profile-tab-trigger="identitas-sekolah"', false)
             ->assertSee('data-home-profile-tab-trigger="komite"', false)
             ->assertSee('data-home-profile-tab-trigger="prestasi-siswa"', false)
@@ -252,6 +254,24 @@ class HomeLandingPageTest extends TestCase
             ->assertOk()
             ->assertSee('Abdullah Karim')
             ->assertDontSee('Karina Putri');
+    }
+
+    public function test_student_search_endpoint_returns_json_without_session_middleware(): void
+    {
+        DataSiswa::query()->create([
+            'nama' => 'Abdullah Karim',
+            'nisn' => '1122334455',
+            'status' => 'aktif',
+            'jk' => 'L',
+            'tanggal_lahir' => '2010-02-03',
+        ]);
+
+        $this->getJson(route('home.student-search', ['q' => 'abd']))
+            ->assertOk()
+            ->assertJsonPath('query', 'abd')
+            ->assertJsonPath('results.0.nama', 'Abdullah Karim')
+            ->assertJsonPath('results.0.nisn', '1122334455')
+            ->assertJsonPath('results.0.status', 'aktif');
     }
 
     public function test_home_landing_page_degrades_safely_when_data_siswa_table_is_missing(): void

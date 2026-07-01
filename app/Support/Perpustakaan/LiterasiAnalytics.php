@@ -33,6 +33,7 @@ class LiterasiAnalytics
             'grading_summary' => static::gradingSummary($material, $monthStart, $monthEnd),
             'class_activity' => static::classActivityRows($material),
             'class_response_ranking' => static::classResponseRanking($material, $monthStart, $monthEnd),
+            'class_correct_ranking' => static::classCorrectRanking($material, $monthStart, $monthEnd),
             'least_class_response_ranking' => static::leastClassResponseRanking($material, $monthStart, $monthEnd),
             'student_correct_ranking_by_class' => static::studentCorrectRankingByClass($material, $monthStart, $monthEnd),
             'plagiarism_class_ranking' => static::plagiarismClassRanking($material, $monthStart, $monthEnd),
@@ -111,6 +112,48 @@ class LiterasiAnalytics
                     'active_total' => $active,
                     'ratio' => $active > 0 ? $total.'/'.$active : $total.'/?',
                     'percentage' => $active > 0 ? round(($total / $active) * 100, 1) : null,
+                ];
+            })
+            ->all();
+    }
+
+    public static function classCorrectRanking(
+        ?PerpustakaanLiterasiMaterial $material,
+        Carbon $start,
+        Carbon $end,
+        int $limit = 3
+    ): array {
+        if (! static::gradingColumnsAvailable()) {
+            return [];
+        }
+
+        return PerpustakaanLiterasiAnswer::query()
+            ->join('perpustakaan_literasi_responses as responses', 'responses.id', '=', 'perpustakaan_literasi_answers.response_id')
+            ->whereBetween('responses.submitted_at', [$start, $end])
+            ->when($material, fn (Builder $query): Builder => $query->where('responses.material_id', $material->getKey()))
+            ->whereNotNull('responses.student_class_snapshot')
+            ->where('responses.student_class_snapshot', '!=', '')
+            ->select('responses.student_class_snapshot')
+            ->selectRaw('count(distinct responses.id) as response_count')
+            ->selectRaw('sum(case when perpustakaan_literasi_answers.is_correct is not null then 1 else 0 end) as graded_answers')
+            ->selectRaw('sum(case when perpustakaan_literasi_answers.is_correct = 1 then 1 else 0 end) as correct_answers')
+            ->groupBy('responses.student_class_snapshot')
+            ->havingRaw('sum(case when perpustakaan_literasi_answers.is_correct = 1 then 1 else 0 end) > 0')
+            ->orderByDesc('correct_answers')
+            ->orderByDesc('graded_answers')
+            ->orderBy('responses.student_class_snapshot')
+            ->limit($limit)
+            ->get()
+            ->map(function ($row): array {
+                $graded = (int) $row->graded_answers;
+                $correct = (int) $row->correct_answers;
+
+                return [
+                    'class' => (string) $row->student_class_snapshot,
+                    'response_count' => (int) $row->response_count,
+                    'correct_answers' => $correct,
+                    'graded_answers' => $graded,
+                    'accuracy' => $graded > 0 ? round(($correct / $graded) * 100, 1) : 0.0,
                 ];
             })
             ->all();

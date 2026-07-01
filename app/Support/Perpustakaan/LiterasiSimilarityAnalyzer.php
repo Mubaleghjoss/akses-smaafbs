@@ -11,11 +11,11 @@ use Illuminate\Support\Str;
 
 class LiterasiSimilarityAnalyzer
 {
-    public const DEFAULT_THRESHOLD = 90.0;
+    public const DEFAULT_THRESHOLD = 50.0;
 
-    protected const MIN_NORMALIZED_CHARACTERS = 80;
+    protected const MIN_NORMALIZED_CHARACTERS = 30;
 
-    protected const MIN_WORDS = 12;
+    protected const MIN_WORDS = 5;
 
     public function analyzeResponse(PerpustakaanLiterasiResponse $response, float $threshold = self::DEFAULT_THRESHOLD): void
     {
@@ -23,12 +23,13 @@ class LiterasiSimilarityAnalyzer
 
         DB::transaction(function () use ($response, $threshold): void {
             PerpustakaanLiterasiSimilarityMatch::query()
+                ->withTrashed()
                 ->where(function ($query) use ($response): void {
                     $query
                         ->where('later_response_id', $response->getKey())
                         ->orWhere('matched_response_id', $response->getKey());
                 })
-                ->delete();
+                ->forceDelete();
 
             foreach ($response->answers as $answer) {
                 $this->analyzeAnswer($response, $answer, $threshold);
@@ -41,9 +42,15 @@ class LiterasiSimilarityAnalyzer
         PerpustakaanLiterasiAnswer $answer,
         float $threshold
     ): void {
-        $normalizedAnswer = $this->normalizeText((string) $answer->answer_text);
+        if ($answer->question && ! $answer->question->plagiarismDetectionEnabled()) {
+            return;
+        }
 
-        if (! $this->isComparable($normalizedAnswer)) {
+        $normalizedAnswer = $this->normalizeText((string) $answer->answer_text);
+        $answerComparable = $this->isComparable($normalizedAnswer);
+        $answerExactComparable = $this->isExactMatchComparable($normalizedAnswer);
+
+        if (! $answerComparable && ! $answerExactComparable) {
             return;
         }
 
@@ -64,14 +71,9 @@ class LiterasiSimilarityAnalyzer
             }
 
             $candidateText = $this->normalizeText((string) $candidateAnswer->answer_text);
+            $score = $this->scoreComparableAnswers($normalizedAnswer, $candidateText, $answerComparable);
 
-            if (! $this->isComparable($candidateText)) {
-                continue;
-            }
-
-            $score = $this->similarityScore($normalizedAnswer, $candidateText);
-
-            if ($score < $threshold) {
+            if ($score === null || $score < $threshold) {
                 continue;
             }
 
@@ -116,6 +118,26 @@ class LiterasiSimilarityAnalyzer
         }
 
         return $this->wordCount($text) >= self::MIN_WORDS;
+    }
+
+    protected function isExactMatchComparable(string $text): bool
+    {
+        return $text !== '';
+    }
+
+    protected function scoreComparableAnswers(string $left, string $right, bool $leftComparable): ?float
+    {
+        if ($this->isExactMatchComparable($left)
+            && $this->isExactMatchComparable($right)
+            && $left === $right) {
+            return 100.0;
+        }
+
+        if (! $leftComparable || ! $this->isComparable($right)) {
+            return null;
+        }
+
+        return $this->similarityScore($left, $right);
     }
 
     protected function similarityScore(string $left, string $right): float

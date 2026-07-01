@@ -8,6 +8,7 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\HtmlString;
 
 class SimilarityMatchesRelationManager extends RelationManager
 {
@@ -19,6 +20,8 @@ class SimilarityMatchesRelationManager extends RelationManager
     {
         return $table
             ->recordTitleAttribute('student_class_snapshot')
+            ->emptyStateHeading('Tidak ada indikasi plagiasi')
+            ->emptyStateDescription('Jawaban yang muncul di sini hanya dari soal dengan deteksi plagiasi aktif. Soal yang deteksinya dinonaktifkan tidak dianalisa plagiasi dan dianggap tidak plagiasi karena pengaturan soal.')
             ->defaultSort('similarity_score', 'desc')
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
                 'question',
@@ -26,6 +29,7 @@ class SimilarityMatchesRelationManager extends RelationManager
                 'matchedResponse',
                 'laterAnswer',
                 'matchedAnswer',
+                'reviewedBy',
             ]))
             ->columns([
                 Tables\Columns\TextColumn::make('student_class_snapshot')
@@ -55,6 +59,24 @@ class SimilarityMatchesRelationManager extends RelationManager
                     ->limit(60)
                     ->wrap()
                     ->visibleFrom('lg'),
+                Tables\Columns\TextColumn::make('matched_submitted_at')
+                    ->label('Submit Pembanding')
+                    ->dateTime('d/m/Y H:i')
+                    ->placeholder('-')
+                    ->visibleFrom('xl')
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('later_submitted_at')
+                    ->label('Submit Belakangan')
+                    ->dateTime('d/m/Y H:i')
+                    ->placeholder('-')
+                    ->visibleFrom('lg')
+                    ->toggleable(),
+                Tables\Columns\TextColumn::make('reviewed_at')
+                    ->label('Diverifikasi')
+                    ->dateTime('d/m/Y H:i')
+                    ->placeholder('-')
+                    ->visibleFrom('xl')
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Terdeteksi')
                     ->since()
@@ -75,6 +97,17 @@ class SimilarityMatchesRelationManager extends RelationManager
                     ->label('Status Review')
                     ->options(PerpustakaanLiterasiSimilarityMatch::reviewStatusOptions()),
             ])
+            ->headerActions([
+                Action::make('disabledPlagiarismQuestionsInfo')
+                    ->label('Soal Nonaktif Plagiasi')
+                    ->icon('heroicon-o-information-circle')
+                    ->color('gray')
+                    ->modalHeading('Soal yang tidak dianalisa plagiasi')
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('Tutup')
+                    ->modalContent(fn (): HtmlString => $this->disabledPlagiarismQuestionsHtml())
+                    ->visible(fn (): bool => $this->disabledPlagiarismQuestions()->isNotEmpty()),
+            ])
             ->actions([
                 Action::make('lihatDetail')
                     ->label('Detail')
@@ -85,9 +118,38 @@ class SimilarityMatchesRelationManager extends RelationManager
                     ->modalWidth('5xl')
                     ->modalContent(fn (PerpustakaanLiterasiSimilarityMatch $record) => view(
                         'filament.resources.perpustakaan-literasi-material-resource.partials.similarity-detail',
-                        ['match' => $record->loadMissing('question', 'laterResponse', 'matchedResponse', 'laterAnswer', 'matchedAnswer')]
+                        ['match' => $record->loadMissing('question', 'laterResponse', 'matchedResponse', 'laterAnswer', 'matchedAnswer', 'reviewedBy')]
                     )),
             ])
             ->bulkActions([]);
+    }
+
+    protected function disabledPlagiarismQuestions()
+    {
+        return $this->getOwnerRecord()
+            ->questions()
+            ->where('plagiarism_detection_enabled', false)
+            ->orderBy('sort_order')
+            ->get();
+    }
+
+    protected function disabledPlagiarismQuestionsHtml(): HtmlString
+    {
+        $questions = $this->disabledPlagiarismQuestions();
+
+        if ($questions->isEmpty()) {
+            return new HtmlString('<div class="text-sm text-gray-600 dark:text-gray-300">Semua soal pada materi ini masih mengaktifkan deteksi plagiasi.</div>');
+        }
+
+        $items = $questions
+            ->map(fn ($question): string => '<li><strong>Pertanyaan '.number_format((int) $question->sort_order, 0, ',', '.').':</strong> '.e($question->prompt).'</li>')
+            ->implode('');
+
+        return new HtmlString(
+            '<div class="space-y-3 text-sm leading-6 text-gray-700 dark:text-gray-200">'.
+            '<p><strong>Tidak plagiasi karena soal dinonaktifkan plagiasi.</strong> Jawaban untuk soal berikut tidak dibuatkan indikasi plagiasi oleh sistem.</p>'.
+            '<ul class="list-disc space-y-2 pl-5">'.$items.'</ul>'.
+            '</div>'
+        );
     }
 }

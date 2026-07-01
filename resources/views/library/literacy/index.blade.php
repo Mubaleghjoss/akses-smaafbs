@@ -28,6 +28,7 @@
 
     <div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         @forelse($materials as $material)
+            @php($readingPreview = $material->readingContentPreview())
             <article class="card flex h-full flex-col overflow-hidden">
                 @if($material->imageUrl())
                     <img src="{{ $material->imageUrl() }}" alt="" class="h-44 w-full object-cover">
@@ -36,12 +37,12 @@
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="chip">{{ number_format($material->questions_count ?? 0, 0, ',', '.') }} pertanyaan</span>
                         @if($material->closes_at)
-                            <span class="chip">Tutup {{ $material->closes_at->format('d/m/Y') }}</span>
+                            <span class="chip">Tutup {{ $material->closes_at->format('d/m/Y H:i') }}</span>
                         @endif
                     </div>
                     <h2 class="mt-3 break-words text-lg font-semibold">{{ $material->title }}</h2>
-                    @if(filled($material->reading_content))
-                        <div class="mt-2 line-clamp-3 whitespace-pre-line text-sm leading-6 text-slate-500">{{ $material->reading_content }}</div>
+                    @if(filled($readingPreview))
+                        <div class="mt-2 line-clamp-3 text-sm leading-6 text-slate-500">{{ $readingPreview }}</div>
                     @endif
                     <div class="mt-auto pt-5">
                         <a class="btn btn-primary w-full" href="{{ route('library.literacy.show', $material->slug) }}">Buka Materi</a>

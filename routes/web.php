@@ -30,6 +30,7 @@ use App\Http\Controllers\PerpustakaanLiteracyProgramController;
 use App\Http\Controllers\SarprasBospInventoryPublicController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\SurveiPublicController;
+use App\Http\Middleware\AdminAwareVerifyCsrfToken;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Http\Request;
@@ -216,7 +217,7 @@ Route::get('/manifest.webmanifest', function () {
 
 Route::get('/service-worker.js', function () {
     $script = <<<'JS'
-const CACHE_NAME = 'akses-public-shell-v3';
+const CACHE_NAME = 'akses-public-shell-v5';
 const NETWORK_ONLY_PREFIXES = [
     '/admin',
     '/livewire',
@@ -253,12 +254,32 @@ const shouldBypassCache = (request, url) => {
     return false;
 };
 
-const fetchNetworkOnly = (request) => {
-    if (request.method === 'GET') {
-        return fetch(request, { cache: 'no-store' });
+const networkErrorResponse = (request) => {
+    const headers = {
+        'Cache-Control': 'no-store',
+        'Content-Type': request.mode === 'navigate' ? 'text/html; charset=UTF-8' : 'text/plain; charset=UTF-8',
+    };
+
+    if (request.mode === 'navigate') {
+        return new Response(
+            '<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Koneksi gagal</title></head><body><main style="font-family:system-ui,sans-serif;max-width:36rem;margin:3rem auto;padding:0 1rem;line-height:1.6"><h1 style="font-size:1.25rem">Koneksi ke server gagal</h1><p>Halaman ini membutuhkan koneksi langsung ke server. Periksa server lokal atau koneksi jaringan, lalu muat ulang halaman.</p></main></body></html>',
+            { status: 503, statusText: 'Service Unavailable', headers },
+        );
     }
 
-    return fetch(request);
+    return new Response('Network request failed.', {
+        status: 503,
+        statusText: 'Service Unavailable',
+        headers,
+    });
+};
+
+const fetchNetworkOnly = (request) => {
+    if (request.method === 'GET') {
+        return fetch(request, { cache: 'no-store' }).catch(() => networkErrorResponse(request));
+    }
+
+    return fetch(request).catch(() => networkErrorResponse(request));
 };
 
 self.addEventListener('install', (event) => {
@@ -303,7 +324,17 @@ self.addEventListener('fetch', (event) => {
 
                 return response;
             })
-            .catch(() => caches.match(request).then((cached) => cached || caches.match('/')))
+            .catch(() => caches.match(request).then((cached) => {
+                if (cached) {
+                    return cached;
+                }
+
+                if (request.mode === 'navigate') {
+                    return caches.match('/').then((fallback) => fallback || networkErrorResponse(request));
+                }
+
+                return networkErrorResponse(request);
+            }))
     );
 });
 JS;
@@ -321,6 +352,7 @@ Route::get('/student-search', [HomeController::class, 'studentSearch'])
         AddQueuedCookiesToResponse::class,
         StartSession::class,
         ShareErrorsFromSession::class,
+        AdminAwareVerifyCsrfToken::class,
         \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
     ])
     ->middleware('throttle:30,1')
@@ -365,6 +397,8 @@ Route::redirect('/perpus/index.php', '/perpustakaan/aktivitas-literasi/form');
 Route::redirect('/perpus/cari_buku.php', '/perpustakaan');
 Route::redirect('/perpus/hasil_literasi.php', '/perpustakaan/hasil-literasi');
 Route::get('/perpustakaan', [LibraryController::class, 'index'])->name('library.index');
+Route::redirect('/literasi', '/perpustakaan/literacy-habituation-program')
+    ->name('library.literacy.shortcut');
 Route::get('/perpustakaan/literacy-habituation-program', [PerpustakaanLiteracyProgramController::class, 'index'])
     ->name('library.literacy.index');
 Route::get('/perpustakaan/literacy-habituation-program/edit', [PerpustakaanLiteracyProgramController::class, 'editLookup'])

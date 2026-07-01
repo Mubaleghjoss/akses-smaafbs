@@ -104,6 +104,12 @@
                     </div>
                 @endif
             </div>
+
+            <div class="mt-5 border-t border-slate-200 pt-5">
+                <a class="btn btn-secondary w-full" href="{{ route('library.literacy.show', $material->slug) }}">
+                    Isi Jawaban Murid Baru
+                </a>
+            </div>
         </aside>
     </div>
 @endsection

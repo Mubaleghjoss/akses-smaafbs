@@ -141,6 +141,14 @@ mkdir -p public/storage
 File upload publik project ini disimpan langsung di `public/storage` lewat konfigurasi disk `public`, bukan di `storage/app/public`.
 Jangan mengandalkan `php artisan storage:link` untuk project ini.
 
+Jika perlu mengatur sumber sinkron data API, buka `/admin/pengaturans`, isi bagian **Sinkron Data API**, lalu simpan. Halaman itu hanya menampilkan `Sinkronkan data API` dan `Nama Domain Server`; nilai akan disimpan ke `SERVER_SYNC_API_ENABLED` dan `SERVER_SYNC_DOMAIN` di `.env`.
+
+Untuk menyalin database dan storage server ke komputer lokal, lengkapi variabel `SERVER_SYNC_SSH_*`, `SERVER_SYNC_REMOTE_*`, dan `SERVER_SYNC_STORAGE_PATHS` pada `.env` lokal. Setelah itu buka bagian **Sinkron Data API** lalu klik **Tarik Data Server**. Tombol hanya aktif jika `APP_ENV=local`, database lokal memakai MySQL/MariaDB, dan seluruh konfigurasi SSH/database server sudah lengkap. Proses membuat backup lokal terlebih dahulu, lalu menimpa database serta folder storage lokal dari server.
+
+Server produksi tidak membutuhkan endpoint sinkron khusus. Komputer lokal menjalankan `ssh`, `mysqldump`, dan `scp` langsung ke akun server. Pastikan akun SSH server dapat membaca folder aplikasi dan menjalankan `mysqldump` untuk database aplikasi.
+
+Pada Windows, request web tidak menjalankan OpenSSH secara langsung. Tombol admin menulis antrean ke `storage/app/server-sync/requests`, lalu memicu task `Akses2ServerSyncRunner` yang menjalankan `scripts/run-server-sync.ps1` memakai sesi user Windows. Nama task dan binary `schtasks` dapat diatur melalui `SERVER_SYNC_RUNNER_TASK` dan `SERVER_SYNC_SCHTASKS_BINARY`.
+
 Jika ingin menjalankan semua proses lokal sekaligus:
 
 ```bash

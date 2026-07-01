@@ -10,9 +10,12 @@ const registerServiceWorker = () => {
     }
 
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register(SW_PATH, { scope: '/' }).catch(() => {
-            // Ignore registration failures to keep unsupported/blocked browsers graceful.
-        });
+        navigator.serviceWorker
+            .register(SW_PATH, { scope: '/' })
+            .then((registration) => registration.update())
+            .catch(() => {
+                // Ignore registration failures to keep unsupported/blocked browsers graceful.
+            });
     });
 };
 

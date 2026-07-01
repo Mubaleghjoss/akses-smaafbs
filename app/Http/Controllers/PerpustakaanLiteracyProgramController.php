@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\DataSiswa;
+use App\Models\PerpustakaanLiterasiAnswer;
 use App\Models\PerpustakaanLiterasiMaterial;
 use App\Models\PerpustakaanLiterasiQuestion;
 use App\Models\PerpustakaanLiterasiResponse;
@@ -113,12 +114,20 @@ class PerpustakaanLiteracyProgramController extends Controller
         $code = Str::upper(trim((string) $request->query('code', '')));
 
         if ($code === '') {
-            return redirect()
-                ->route('library.literacy.index')
-                ->withErrors(['code' => 'Masukkan kode unik jawaban.']);
+            return back()
+                ->withErrors(['code' => 'Masukkan kode unik jawaban.'])
+                ->withInput();
         }
 
-        return redirect()->route('library.literacy.edit', $code);
+        $response = $this->findResponseByEditCode($code);
+
+        if (! $response) {
+            return back()
+                ->withErrors(['code' => 'Kode unik jawaban tidak ditemukan.'])
+                ->withInput();
+        }
+
+        return redirect()->route('library.literacy.edit', $response->shortEditCode());
     }
 
     public function edit(string $code): View
@@ -174,6 +183,17 @@ class PerpustakaanLiteracyProgramController extends Controller
 
     protected function resolveResponseByEditCode(string $code): PerpustakaanLiterasiResponse
     {
+        $response = $this->findResponseByEditCode($code);
+
+        if (! $response) {
+            abort(404);
+        }
+
+        return $response;
+    }
+
+    protected function findResponseByEditCode(string $code): ?PerpustakaanLiterasiResponse
+    {
         $normalized = Str::upper(trim($code));
 
         $query = PerpustakaanLiterasiResponse::query();
@@ -183,10 +203,10 @@ class PerpustakaanLiteracyProgramController extends Controller
         } elseif (preg_match('/^[A-Z0-9]{6}$/', $normalized)) {
             $query->where('edit_code', 'like', '%-'.$normalized);
         } else {
-            abort(404);
+            return null;
         }
 
-        return $query->firstOrFail();
+        return $query->first();
     }
 
     /**
@@ -238,8 +258,13 @@ class PerpustakaanLiteracyProgramController extends Controller
                 'answer_text' => $answerText,
                 'character_count' => mb_strlen($answerText),
             ];
+            $answerKeyGradingPayload = $gradingColumnsAvailable
+                ? $this->answerKeyGradingPayload($question, $answerText, $existingAnswer)
+                : null;
 
-            if ($gradingColumnsAvailable
+            if ($answerKeyGradingPayload !== null) {
+                $payload = array_merge($payload, $answerKeyGradingPayload);
+            } elseif ($gradingColumnsAvailable
                 && $existingAnswer
                 && (string) $existingAnswer->answer_text !== $answerText) {
                 $payload = array_merge($payload, [
@@ -252,6 +277,42 @@ class PerpustakaanLiteracyProgramController extends Controller
 
             $response->answers()->updateOrCreate(['question_id' => $question->getKey()], $payload);
         }
+    }
+
+    /**
+     * @return array{is_correct: bool|null, graded_by: int|null, graded_at: \Illuminate\Support\Carbon|null, grading_note: string|null}|null
+     */
+    protected function answerKeyGradingPayload(
+        PerpustakaanLiterasiQuestion $question,
+        string $answerText,
+        ?PerpustakaanLiterasiAnswer $existingAnswer
+    ): ?array {
+        if (! $question->shouldAutoGradeByAnswerKey()) {
+            return null;
+        }
+
+        if (! $question->matchesAnswerKey($answerText)) {
+            return [
+                'is_correct' => null,
+                'graded_by' => null,
+                'graded_at' => null,
+                'grading_note' => null,
+            ];
+        }
+
+        $autoNote = 'Dinilai otomatis berdasarkan kunci jawaban.';
+        $gradedAt = $existingAnswer?->is_correct === true
+            && $existingAnswer->graded_by === null
+            && $existingAnswer->grading_note === $autoNote
+                ? ($existingAnswer->graded_at ?: now())
+                : now();
+
+        return [
+            'is_correct' => true,
+            'graded_by' => null,
+            'graded_at' => $gradedAt,
+            'grading_note' => $autoNote,
+        ];
     }
 
     /**

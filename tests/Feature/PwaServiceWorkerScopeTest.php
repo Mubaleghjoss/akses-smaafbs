@@ -27,6 +27,10 @@ class PwaServiceWorkerScopeTest extends TestCase
             ->assertSee("'/logout'", false)
             ->assertSee('shouldBypassCache', false)
             ->assertSee("fetch(request, { cache: 'no-store' })", false)
+            ->assertSee('networkErrorResponse', false)
+            ->assertSee("status: 503", false)
+            ->assertSee("request.mode === 'navigate'", false)
+            ->assertDontSee("cached || caches.match('/')", false)
             ->assertSee('event.respondWith(fetchNetworkOnly(request));', false);
     }
 

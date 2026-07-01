@@ -18,7 +18,9 @@
                         <a class="chip mt-4 inline-flex" href="{{ $material->google_drive_url }}" target="_blank" rel="noopener">Buka Google Drive</a>
                     @endif
                     @if(filled($material->reading_content))
-                        <div class="mt-5 whitespace-pre-line text-sm leading-7 text-slate-700 md:text-base">{{ $material->reading_content }}</div>
+                        <div class="literacy-reading-content">
+                            {!! $material->readingContentHtml() !!}
+                        </div>
                     @endif
                 </div>
             </article>
@@ -141,11 +143,25 @@
             </form>
         </section>
 
-        <aside class="card h-fit p-5">
-            <h2 class="text-lg font-semibold">Catatan</h2>
-            <div class="mt-3 space-y-3 text-sm leading-6 text-slate-600">
-                <p>Jawaban hanya bisa dikirim satu kali untuk setiap siswa dan materi.</p>
-                <p>Simpan kode unik setelah mengirim. Kode itu dipakai untuk membuka kembali halaman edit.</p>
+        <aside class="card h-fit space-y-5 p-5">
+            <div>
+                <h2 class="text-lg font-semibold">Edit Jawaban</h2>
+                <form method="get" action="{{ route('library.literacy.edit.lookup') }}" class="mt-3 space-y-3">
+                    <label class="text-sm font-semibold text-slate-700" for="code">Kode edit jawaban</label>
+                    <input id="code" name="code" value="{{ old('code') }}" class="input uppercase" placeholder="Contoh: ABC123">
+                    @error('code')
+                        <div class="text-xs text-rose-600">{{ $message }}</div>
+                    @enderror
+                    <button class="btn btn-secondary w-full" type="submit">Buka Edit</button>
+                </form>
+            </div>
+
+            <div class="border-t border-slate-200 pt-5">
+                <h2 class="text-lg font-semibold">Catatan</h2>
+                <div class="mt-3 space-y-3 text-sm leading-6 text-slate-600">
+                    <p>Jawaban hanya bisa dikirim satu kali untuk setiap siswa dan materi.</p>
+                    <p>Simpan kode unik setelah mengirim. Kode itu dipakai untuk membuka kembali halaman edit.</p>
+                </div>
             </div>
         </aside>
     </div>

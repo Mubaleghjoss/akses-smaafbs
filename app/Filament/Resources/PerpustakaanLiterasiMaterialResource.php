@@ -11,12 +11,18 @@ use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\RelationManagers
 use App\Models\DataSiswa;
 use App\Models\PerpustakaanLiterasiMaterial;
 use App\Models\PerpustakaanLiterasiQuestion;
+use App\Models\PerpustakaanLiterasiResponse;
 use App\Models\PerpustakaanLiterasiSimilarityMatch;
 use App\Support\Perpustakaan\LiterasiAnalytics;
+use App\Support\Perpustakaan\LiterasiSimilarityAnalyzer;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms;
+use Filament\Notifications\Notification;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
@@ -28,6 +34,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema as SchemaFacade;
 use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 
 class PerpustakaanLiterasiMaterialResource extends Resource
 {
@@ -78,11 +85,37 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                                 $component->state(static::containsLatex((string) $record?->reading_content));
                             })
                             ->columnSpanFull(),
-                        Forms\Components\Textarea::make('reading_content')
+                        Forms\Components\RichEditor::make('reading_content')
                             ->label('Isi Bacaan')
-                            ->rows(10)
-                            ->helperText(fn (Get $get): ?string => $get('show_reading_latex_tools') ? 'Rumus matematika bisa ditulis dengan LaTeX: \(x^2\), \(\frac{a}{b}\), \(\sqrt{x}\), atau \(\int_0^1 x\,dx\).' : null)
-                            ->extraInputAttributes(['data-literacy-latex-target' => '1'])
+                            ->toolbarButtons([
+                                ['bold', 'italic', 'underline', 'strike', 'textColor', 'highlight', 'clearFormatting'],
+                                ['h2', 'h3', 'paragraph', 'lead', 'small'],
+                                ['alignStart', 'alignCenter', 'alignEnd', 'alignJustify'],
+                                ['blockquote', 'bulletList', 'orderedList'],
+                                ['grid', 'table', 'attachFiles'],
+                                ['undo', 'redo'],
+                            ])
+                            ->floatingToolbars([
+                                'grid' => ['gridDelete'],
+                                'table' => [
+                                    'tableAddColumnBefore', 'tableAddColumnAfter', 'tableDeleteColumn',
+                                    'tableAddRowBefore', 'tableAddRowAfter', 'tableDeleteRow',
+                                    'tableMergeCells', 'tableSplitCell',
+                                    'tableToggleHeaderRow', 'tableToggleHeaderCell',
+                                    'tableDelete',
+                                ],
+                            ])
+                            ->fileAttachmentsDisk('public')
+                            ->fileAttachmentsDirectory('literasi/materials/reading')
+                            ->fileAttachmentsVisibility('public')
+                            ->fileAttachmentsAcceptedFileTypes(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
+                            ->fileAttachmentsMaxSize(4096)
+                            ->resizableImages()
+                            ->customTextColors()
+                            ->maxLength(20000)
+                            ->helperText(fn (Get $get): string => $get('show_reading_latex_tools')
+                                ? 'Editor mendukung tebal, miring, heading, warna teks, tabel, kolom, dan upload gambar langsung di posisi kursor. Rumus LaTeX tetap bisa diketik manual, contoh: \(x^2\), \(\frac{a}{b}\), \(\sqrt{x}\).'
+                                : 'Editor mendukung tebal, miring, heading, warna teks, tabel, kolom, dan upload gambar langsung di posisi kursor.')
                             ->columnSpanFull(),
                         SchemaView::make('filament.resources.perpustakaan-literasi-material-resource.partials.latex-picker')
                             ->visible(fn (Get $get): bool => (bool) $get('show_reading_latex_tools'))
@@ -100,14 +133,16 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                         Forms\Components\Toggle::make('is_active')
                             ->label('Aktifkan materi')
                             ->default(true),
-                        Forms\Components\DatePicker::make('opens_at')
+                        Forms\Components\DateTimePicker::make('opens_at')
                             ->label('Mulai Dibuka')
+                            ->seconds(false)
                             ->native(true)
-                            ->displayFormat('d/m/Y'),
-                        Forms\Components\DatePicker::make('closes_at')
+                            ->displayFormat('d/m/Y H:i'),
+                        Forms\Components\DateTimePicker::make('closes_at')
                             ->label('Ditutup Pada')
+                            ->seconds(false)
                             ->native(true)
-                            ->displayFormat('d/m/Y'),
+                            ->displayFormat('d/m/Y H:i'),
                     ]),
                 Section::make('Pertanyaan')
                     ->description('Pertanyaan dikunci setelah ada responden agar jawaban dan analisa tetap konsisten.')
@@ -120,6 +155,9 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                             ->cloneable()
                             ->defaultItems(1)
                             ->addActionLabel('Tambah Pertanyaan')
+                            ->itemLabel(fn (array $state): string => filled($state['prompt'] ?? null)
+                                ? Str::limit((string) $state['prompt'], 70)
+                                : 'Pertanyaan baru')
                             ->disabled(fn (?PerpustakaanLiterasiMaterial $record): bool => $record?->hasResponses() ?? false)
                             ->schema([
                                 Forms\Components\Checkbox::make('show_question_latex_tools')
@@ -151,6 +189,31 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                                     ->label('Link Google Drive')
                                     ->url()
                                     ->maxLength(1000),
+                                Forms\Components\Toggle::make('plagiarism_detection_enabled')
+                                    ->label('Aktifkan deteksi plagiasi')
+                                    ->default(true)
+                                    ->live()
+                                    ->helperText('Aktif: jawaban soal ini dibandingkan dengan jawaban siswa lain pada materi yang sama. Jawaban sama persis selalu muncul sebagai 100%; jawaban mirip muncul mulai 50%.'),
+                                Forms\Components\Placeholder::make('plagiarism_detection_help')
+                                    ->label('Cara kerja deteksi dan kunci jawaban')
+                                    ->content(fn (Get $get): HtmlString => new HtmlString((bool) $get('plagiarism_detection_enabled')
+                                        ? '<div class="text-sm leading-6 text-gray-600 dark:text-gray-300">'.
+                                            '<strong>Deteksi aktif:</strong> sistem membuat indikasi plagiasi untuk jawaban yang sama persis atau mirip minimal 50%. '.
+                                            'Jika kunci jawaban diisi, jawaban yang sama dengan kunci otomatis Benar, tetapi tetap masuk daftar plagiasi bila mirip/sama dengan jawaban siswa lain.'.
+                                        '</div>'
+                                        : '<div class="text-sm leading-6 text-gray-600 dark:text-gray-300">'.
+                                            '<strong>Deteksi tidak aktif:</strong> sistem tidak membuat indikasi plagiasi untuk soal ini. '.
+                                            'Jika kunci jawaban diisi, jawaban yang sama dengan kunci otomatis dinilai Benar dan tidak masuk Daftar Plagiat Per Kelas; jawaban berbeda tetap Belum dinilai untuk diperiksa guru.'.
+                                        '</div>'))
+                                    ->columnSpanFull(),
+                                Forms\Components\Textarea::make('answer_key')
+                                    ->label('Kunci Jawaban')
+                                    ->rows(3)
+                                    ->maxLength(4000)
+                                    ->helperText(fn (Get $get): string => (bool) $get('plagiarism_detection_enabled')
+                                        ? 'Mode deteksi aktif: jawaban yang sama dengan kunci otomatis Benar, dan tetap dicek plagiasi terhadap jawaban siswa lain.'
+                                        : 'Mode deteksi tidak aktif: jawaban yang sama dengan kunci otomatis Benar dan tidak masuk Daftar Plagiat Per Kelas; jawaban berbeda tetap Belum dinilai.')
+                                    ->columnSpanFull(),
                                 Forms\Components\TextInput::make('min_characters')
                                     ->label('Minimal Karakter Jawaban')
                                     ->required()
@@ -183,6 +246,7 @@ class PerpustakaanLiterasiMaterialResource extends Resource
             emptyStateHeading: 'Belum ada materi literasi',
             emptyStateDescription: 'Buat materi Literacy Habituation Program agar siswa bisa membaca dan mengirim jawaban.'
         )
+            ->heading('Daftar Materi')
             ->defaultSort('created_at', 'desc')
             ->columns([
                 Tables\Columns\ViewColumn::make('title')
@@ -191,47 +255,10 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                     ->sortable()
                     ->view('filament.resources.perpustakaan-literasi-material-resource.partials.material-table-cell')
                     ->extraAttributes(['class' => 'literasi-material-title-column']),
-                Tables\Columns\IconColumn::make('is_active')
-                    ->label('Aktif')
-                    ->boolean()
-                    ->visibleFrom('md'),
-                Tables\Columns\TextColumn::make('responses_count')
-                    ->label('Responden')
-                    ->counts('responses')
-                    ->badge()
-                    ->visibleFrom('md'),
-                Tables\Columns\TextColumn::make('graded_responses_summary')
-                    ->label('Dinilai')
-                    ->state(fn (PerpustakaanLiterasiMaterial $record): string => number_format((int) ($record->graded_responses_count ?? 0), 0, ',', '.')
-                        .'/'.number_format((int) ($record->responses_count ?? 0), 0, ',', '.'))
-                    ->description('responden selesai')
-                    ->badge()
-                    ->color(fn (PerpustakaanLiterasiMaterial $record): string => ((int) ($record->responses_count ?? 0) > 0 && (int) ($record->graded_responses_count ?? 0) >= (int) ($record->responses_count ?? 0)) ? 'success' : 'warning')
-                    ->visibleFrom('md'),
-                Tables\Columns\TextColumn::make('similarity_matches_count')
-                    ->label('Indikasi Plagiat')
-                    ->counts('similarityMatches')
-                    ->badge()
-                    ->color(fn (int $state): string => $state > 0 ? 'danger' : 'gray')
-                    ->visibleFrom('md'),
-                Tables\Columns\TextColumn::make('confirmed_similarity_matches_count')
-                    ->label('Konfirmasi Plagiat')
-                    ->state(fn (PerpustakaanLiterasiMaterial $record): int => (int) ($record->confirmed_similarity_matches_count ?? 0))
-                    ->description(fn (PerpustakaanLiterasiMaterial $record): string => 'dari '.number_format((int) ($record->similarity_matches_count ?? 0), 0, ',', '.').' indikasi')
-                    ->badge()
-                    ->color(fn (int $state): string => $state > 0 ? 'danger' : 'gray')
-                    ->visibleFrom('md'),
-                Tables\Columns\TextColumn::make('closes_at')
-                    ->label('Tutup')
-                    ->date('d/m/Y')
-                    ->placeholder('-')
-                    ->visibleFrom('lg')
-                    ->toggleable(),
-                Tables\Columns\TextColumn::make('updated_at')
-                    ->label('Diupdate')
-                    ->since()
-                    ->visibleFrom('lg')
-                    ->toggleable(),
+                Tables\Columns\TextColumn::make('schedule_window')
+                    ->label('Durasi Soal')
+                    ->state(fn (PerpustakaanLiterasiMaterial $record): HtmlString => static::scheduleWindowHtml($record))
+                    ->html(),
             ])
             ->filters([
                 Tables\Filters\TernaryFilter::make('is_active')
@@ -242,14 +269,98 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                 ViewAction::make()
                     ->label('Detail'),
                 EditAction::make(),
-                static::makeDeleteTableAction('materi literasi')
-                    ->visible(fn (PerpustakaanLiterasiMaterial $record): bool => ! $record->hasResponses()),
+                Action::make('reanalyzeSimilarity')
+                    ->label('Analisa Ulang')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('gray')
+                    ->requiresConfirmation()
+                    ->modalHeading('Analisa ulang plagiasi materi?')
+                    ->modalDescription('Sistem akan menghitung ulang indikasi plagiasi untuk semua jawaban pada materi ini sesuai pengaturan soal terbaru.')
+                    ->modalSubmitActionLabel('Analisa Ulang')
+                    ->visible(fn (PerpustakaanLiterasiMaterial $record): bool => static::canEdit($record) && $record->hasResponses())
+                    ->action(function (PerpustakaanLiterasiMaterial $record): void {
+                        $analyzer = app(LiterasiSimilarityAnalyzer::class);
+                        $total = 0;
+
+                        PerpustakaanLiterasiResponse::query()
+                            ->where('material_id', $record->getKey())
+                            ->with('answers.question')
+                            ->chunkById(50, function ($responses) use ($analyzer, &$total): void {
+                                foreach ($responses as $response) {
+                                    $analyzer->analyzeResponse($response);
+                                    $total++;
+                                }
+                            });
+
+                        Notification::make()
+                            ->title('Analisa plagiasi selesai')
+                            ->body(number_format($total, 0, ',', '.').' responden dianalisa ulang.')
+                            ->success()
+                            ->send();
+                    }),
+                DeleteAction::make()
+                    ->label('Hapus')
+                    ->requiresConfirmation()
+                    ->modalHeading('Hapus materi dan history responden?')
+                    ->modalDescription('Materi akan masuk daftar terhapus. History siswa, jawaban, dan data plagiasi ikut disembunyikan dari daftar aktif, tetapi masih bisa dipulihkan dari halaman History Pengerjaan Siswa.')
+                    ->modalSubmitActionLabel('Ya, hapus sementara')
+                    ->successNotificationTitle('Materi dan history responden masuk daftar terhapus.'),
             ])
             ->bulkActions([
                 BulkActionGroup::make([
-                    static::makeDeleteBulkTableAction(),
+                    DeleteBulkAction::make()
+                        ->label('Hapus Terpilih')
+                        ->requiresConfirmation()
+                        ->modalHeading('Hapus materi terpilih dan history respondennya?')
+                        ->modalDescription('Semua materi terpilih akan masuk daftar terhapus. History siswa, jawaban, dan data plagiasi ikut disembunyikan dari daftar aktif dan bisa dipulihkan kembali.')
+                        ->modalSubmitActionLabel('Ya, hapus sementara')
+                        ->successNotificationTitle('Materi terpilih dan history respondennya masuk daftar terhapus.'),
                 ]),
             ]);
+    }
+
+    public static function scheduleWindowHtml(PerpustakaanLiterasiMaterial $record): HtmlString
+    {
+        $opensAt = $record->opens_at?->format('d/m/Y H:i') ?? 'Langsung';
+        $closesAt = $record->closes_at?->format('d/m/Y H:i') ?? 'Tanpa batas';
+
+        return new HtmlString(
+            '<div class="literasi-schedule-cell">'.
+                '<div class="literasi-schedule-cell__row"><span>Mulai</span><strong>'.e($opensAt).'</strong></div>'.
+                '<div class="literasi-schedule-cell__row"><span>Tutup</span><strong>'.e($closesAt).'</strong></div>'.
+            '</div>'
+        );
+    }
+
+    public static function questionsListHtml(PerpustakaanLiterasiMaterial $record): HtmlString
+    {
+        $questions = $record->questions()
+            ->orderBy('sort_order')
+            ->get();
+
+        if ($questions->isEmpty()) {
+            return new HtmlString('<div class="text-sm text-gray-500 dark:text-gray-400">Materi ini belum memiliki soal.</div>');
+        }
+
+        $items = $questions
+            ->values()
+            ->map(function (PerpustakaanLiterasiQuestion $question, int $index): string {
+                $answerKeyHtml = filled($question->answer_key)
+                    ? '<div class="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-500/30 dark:bg-emerald-500/10">'.
+                        '<div class="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Kunci Jawaban</div>'.
+                        '<div class="mt-1 whitespace-pre-line text-sm leading-6 text-emerald-950 dark:text-emerald-100">'.e($question->answer_key).'</div>'.
+                    '</div>'
+                    : '';
+
+                return '<article class="rounded-xl border border-gray-200 bg-white p-3 dark:border-white/10 dark:bg-white/5">'.
+                    '<div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Soal '.number_format($index + 1, 0, ',', '.').'</div>'.
+                    '<div class="mt-2 whitespace-pre-line text-sm font-semibold leading-6 text-gray-950 dark:text-white">'.e($question->prompt).'</div>'.
+                    $answerKeyHtml.
+                '</article>';
+            })
+            ->implode('');
+
+        return new HtmlString('<div class="grid gap-3 md:grid-cols-2">'.$items.'</div>');
     }
 
     public static function getEloquentQuery(): Builder
@@ -277,7 +388,10 @@ class PerpustakaanLiterasiMaterialResource extends Resource
         return $schema
             ->schema([
                 Section::make('Ringkasan Materi')
-                    ->columns(['default' => 1, 'md' => 5])
+                    ->columnSpanFull()
+                    ->collapsible()
+                    ->collapsed()
+                    ->columns(['default' => 1, 'md' => 4])
                     ->schema([
                         TextEntry::make('responses_total')
                             ->label('Total Responden')
@@ -288,18 +402,9 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                         TextEntry::make('classes_total')
                             ->label('Kelas Mengisi')
                             ->state(fn (PerpustakaanLiterasiMaterial $record): int => $record->responses()->whereNotNull('student_class_snapshot')->distinct()->count('student_class_snapshot')),
-                        TextEntry::make('similarity_total')
-                            ->label('Indikasi Plagiat')
-                            ->state(fn (PerpustakaanLiterasiMaterial $record): int => $record->similarityMatches()->count())
-                            ->badge()
-                            ->color(fn (int $state): string => $state > 0 ? 'danger' : 'gray'),
-                        TextEntry::make('similarity_confirmed')
-                            ->label('Konfirmasi Plagiat')
-                            ->state(fn (PerpustakaanLiterasiMaterial $record): int => SchemaFacade::hasColumn('perpustakaan_literasi_similarity_matches', 'review_status')
-                                ? $record->similarityMatches()->where('review_status', PerpustakaanLiterasiSimilarityMatch::REVIEW_CONFIRMED)->count()
-                                : 0)
-                            ->badge()
-                            ->color(fn (int $state): string => $state > 0 ? 'danger' : 'gray'),
+                        TextEntry::make('questions_total')
+                            ->label('Jumlah Soal')
+                            ->state(fn (PerpustakaanLiterasiMaterial $record): int => $record->questions()->count()),
                         TextEntry::make('public_url')
                             ->label('Link Publik')
                             ->state(fn (PerpustakaanLiterasiMaterial $record): string => $record->publicUrl())
@@ -307,26 +412,24 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                             ->openUrlInNewTab()
                             ->columnSpanFull(),
                     ]),
-                Section::make('Analisa Per Kelas')
+                Section::make('Daftar Soal')
+                    ->columnSpanFull()
+                    ->collapsible()
+                    ->collapsed()
                     ->schema([
-                        TextEntry::make('class_analysis')
-                            ->label('Responden')
-                            ->state(fn (PerpustakaanLiterasiMaterial $record): HtmlString => static::classAnalysisHtml($record))
+                        TextEntry::make('questions_list')
+                            ->hiddenLabel()
+                            ->state(fn (PerpustakaanLiterasiMaterial $record): HtmlString => static::questionsListHtml($record))
                             ->html()
                             ->columnSpanFull(),
                     ]),
-                Section::make('Ringkasan Plagiat Per Kelas')
-                    ->schema([
-                        TextEntry::make('plagiarism_summary')
-                            ->label('Indikasi')
-                            ->state(fn (PerpustakaanLiterasiMaterial $record): HtmlString => static::plagiarismSummaryHtml($record))
-                            ->html()
-                            ->columnSpanFull(),
-                    ]),
-                Section::make('Analisa Nilai & Ranking Bulan Ini')
+                Section::make('Rekap Materi')
+                    ->columnSpanFull()
+                    ->collapsible()
+                    ->collapsed()
                     ->schema([
                         TextEntry::make('monthly_ranking_analysis')
-                            ->label('Rekap')
+                            ->hiddenLabel()
                             ->state(fn (PerpustakaanLiterasiMaterial $record): HtmlString => static::monthlyRankingAnalysisHtml($record))
                             ->html()
                             ->columnSpanFull(),
@@ -345,8 +448,7 @@ class PerpustakaanLiterasiMaterialResource extends Resource
     public static function canDelete($record): bool
     {
         return $record instanceof PerpustakaanLiterasiMaterial
-            && static::userCanModule('manage')
-            && ! $record->hasResponses();
+            && static::userCanModule('manage');
     }
 
     public static function getPages(): array
@@ -464,8 +566,9 @@ class PerpustakaanLiterasiMaterialResource extends Resource
             'filament.resources.perpustakaan-literasi-material-resource.partials.analytics-panel',
             [
                 'analytics' => LiterasiAnalytics::forMaterial($record),
-                'title' => 'Analisa Materi Bulan Ini',
-                'description' => 'Ranking dan rekap hanya untuk materi ini.',
+                'title' => 'Rekap Bulan Ini',
+                'description' => 'Nilai, responden, dan plagiasi untuk materi ini.',
+                'compact' => true,
             ]
         )->render());
     }

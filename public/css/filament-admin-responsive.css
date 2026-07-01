@@ -31,6 +31,26 @@
     border-radius: 0.8rem;
 }
 
+.fi-checkbox-input {
+    border: 1px solid rgba(100, 116, 139, 0.45) !important;
+    background-color: #ffffff !important;
+}
+
+input[type='checkbox'].fi-checkbox-input:checked,
+input[type='radio'].fi-checkbox-input:checked {
+    border-color: #15803d !important;
+    background-color: #15803d !important;
+    background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M3.25 8.25 6.5 11.5 12.75 4.75' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3e%3c/svg%3e") !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    background-size: 0.85rem 0.85rem !important;
+}
+
+.dark .fi-checkbox-input,
+.fi-theme-dark .fi-checkbox-input {
+    border-color: rgba(203, 213, 225, 0.38) !important;
+}
+
 .fi-sidebar-item-has-children > .fi-sidebar-item-btn {
     gap: 0.5rem;
 }
@@ -703,6 +723,10 @@
     color: #0f172a;
 }
 
+.literasi-analytics--compact {
+    gap: 0.85rem;
+}
+
 .dark .literasi-analytics,
 .fi-theme-dark .literasi-analytics {
     color: #f8fafc;
@@ -799,6 +823,12 @@
     display: grid;
     gap: 0.4rem;
     padding: 0.9rem;
+}
+
+.literasi-analytics--compact .literasi-metric-card,
+.literasi-analytics--compact .literasi-panel,
+.literasi-analytics--compact .literasi-analytics__header {
+    padding: 0.85rem;
 }
 
 .literasi-metric-card--success {
@@ -1015,6 +1045,90 @@
     gap: 0.35rem;
     margin: 0;
     padding-left: 1.1rem;
+}
+
+.literasi-index-summary {
+    width: 100%;
+    min-width: 0;
+    margin-bottom: 1rem;
+    border: 1px solid rgba(14, 165, 233, 0.28);
+    border-radius: 0.5rem;
+    background: #f0f9ff;
+    color: #0f172a;
+    box-shadow: 0 18px 45px -34px rgba(15, 23, 42, 0.38);
+}
+
+.dark .literasi-index-summary,
+.fi-theme-dark .literasi-index-summary {
+    border-color: rgba(56, 189, 248, 0.3);
+    background: rgba(12, 74, 110, 0.26);
+    color: #f8fafc;
+}
+
+.literasi-index-summary > summary {
+    display: flex;
+    cursor: pointer;
+    list-style: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem;
+}
+
+.literasi-index-summary > summary::-webkit-details-marker {
+    display: none;
+}
+
+.literasi-index-summary > summary::after {
+    content: '+';
+    flex: none;
+    display: grid;
+    width: 1.75rem;
+    height: 1.75rem;
+    place-items: center;
+    border-radius: 999px;
+    background: rgba(14, 165, 233, 0.14);
+    color: #0369a1;
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.literasi-index-summary[open] > summary::after {
+    content: '-';
+}
+
+.dark .literasi-index-summary > summary::after,
+.fi-theme-dark .literasi-index-summary > summary::after {
+    background: rgba(56, 189, 248, 0.18);
+    color: #e0f2fe;
+}
+
+.literasi-index-summary strong,
+.literasi-index-summary small {
+    display: block;
+}
+
+.literasi-index-summary strong {
+    font-size: 0.95rem;
+    font-weight: 800;
+    line-height: 1.3;
+}
+
+.literasi-index-summary small {
+    margin-top: 0.2rem;
+    color: #475569;
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.dark .literasi-index-summary small,
+.fi-theme-dark .literasi-index-summary small {
+    color: #cbd5e1;
+}
+
+.literasi-index-summary__content {
+    padding: 0 1rem 1rem;
 }
 
 .literasi-history-link-card {
@@ -1434,6 +1548,44 @@
     border-color: rgba(244, 63, 94, 0.34);
     background: rgba(136, 19, 55, 0.25);
     color: #fecdd3;
+}
+
+.literasi-schedule-cell {
+    display: grid;
+    gap: 0.25rem;
+    min-width: 11rem;
+    font-size: 0.82rem;
+    line-height: 1.35;
+}
+
+.literasi-schedule-cell__row {
+    display: flex;
+    min-width: 0;
+    align-items: baseline;
+    gap: 0.45rem;
+}
+
+.literasi-schedule-cell__row span {
+    flex: 0 0 2.75rem;
+    color: #64748b;
+    font-weight: 750;
+}
+
+.literasi-schedule-cell__row strong {
+    min-width: 0;
+    color: #0f172a;
+    font-weight: 800;
+    overflow-wrap: anywhere;
+}
+
+.dark .literasi-schedule-cell__row span,
+.fi-theme-dark .literasi-schedule-cell__row span {
+    color: #cbd5e1;
+}
+
+.dark .literasi-schedule-cell__row strong,
+.fi-theme-dark .literasi-schedule-cell__row strong {
+    color: #f8fafc;
 }
 
 .literasi-material-title-column .fi-ta-text-description {
