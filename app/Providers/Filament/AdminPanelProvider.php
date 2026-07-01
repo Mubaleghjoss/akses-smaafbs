@@ -49,6 +49,7 @@ class AdminPanelProvider extends PanelProvider
             ->brandLogo(fn (): ?string => app(SiteSettingsAccessor::class)->logoPath())
             ->darkModeBrandLogo(fn (): ?string => app(SiteSettingsAccessor::class)->logoPath())
             ->brandLogoHeight('2.5rem')
+            ->sidebarFullyCollapsibleOnDesktop()
             ->login(Login::class)
             ->profile(EditAccountProfile::class, false)
             ->colors([
@@ -99,6 +100,14 @@ class AdminPanelProvider extends PanelProvider
             ->renderHook(
                 PanelsRenderHook::BODY_END,
                 fn (): string => view('filament.components.force-guru-password-change-modal')->render()
+            )
+            ->renderHook(
+                PanelsRenderHook::SIDEBAR_LOGO_AFTER,
+                fn (): string => '<span class="admin-sidebar-menu-label" x-show="$store.sidebar.isOpen">Menu</span>'
+            )
+            ->renderHook(
+                PanelsRenderHook::TOPBAR_LOGO_AFTER,
+                fn (): string => '<span class="admin-topbar-menu-label">Menu</span>'
             )
             ->renderHook(
                 PanelsRenderHook::AUTH_LOGIN_FORM_BEFORE,
@@ -252,5 +261,4 @@ class AdminPanelProvider extends PanelProvider
             ]);
     }
 }
-
 
