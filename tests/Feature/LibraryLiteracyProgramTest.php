@@ -960,6 +960,61 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertSame(1, PerpustakaanLiterasiResponse::query()->doesntHave('material')->count());
     }
 
+    public function test_deleted_literacy_history_can_be_permanently_deleted_with_related_records(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $admin = User::query()->create([
+            'name' => 'Admin Force Delete History',
+            'username' => 'admin-force-delete-history',
+            'password' => bcrypt('password'),
+        ]);
+        $admin->assignRole('admin');
+
+        $studentA = $this->createStudent('Codex Force A', 'X Force');
+        $studentB = $this->createStudent('Codex Force B', 'X Force');
+        $material = $this->createMaterial('Materi Force Delete History');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Soal force delete history.',
+            'max_characters' => 500,
+        ]);
+        $responseA = $this->createResponseWithAnswer($material, $studentA, $question, 'Jawaban pembanding force.');
+        $responseB = $this->createResponseWithAnswer($material, $studentB, $question, 'Jawaban target force.');
+        $answerA = $responseA->answers()->firstOrFail();
+        $answerB = $responseB->answers()->firstOrFail();
+        $match = PerpustakaanLiterasiSimilarityMatch::query()->create([
+            'material_id' => $material->getKey(),
+            'question_id' => $question->getKey(),
+            'later_response_id' => $responseB->getKey(),
+            'matched_response_id' => $responseA->getKey(),
+            'later_answer_id' => $answerB->getKey(),
+            'matched_answer_id' => $answerA->getKey(),
+            'student_class_snapshot' => 'X Force',
+            'similarity_score' => 76.25,
+            'later_submitted_at' => now(),
+            'matched_submitted_at' => now()->subMinute(),
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(StudentHistoryPerpustakaanLiterasi::class)
+            ->call('deleteHistoryResponse', $responseB->getKey());
+
+        $this->assertSoftDeleted('perpustakaan_literasi_responses', ['id' => $responseB->getKey()]);
+        $this->assertSoftDeleted('perpustakaan_literasi_answers', ['id' => $answerB->getKey()]);
+        $this->assertSoftDeleted('perpustakaan_literasi_similarity_matches', ['id' => $match->getKey()]);
+
+        Livewire::actingAs($admin)
+            ->test(StudentHistoryPerpustakaanLiterasi::class)
+            ->call('forceDeleteHistoryResponse', $responseB->getKey());
+
+        $this->assertNull(PerpustakaanLiterasiResponse::withTrashed()->find($responseB->getKey()));
+        $this->assertNull(PerpustakaanLiterasiAnswer::withTrashed()->find($answerB->getKey()));
+        $this->assertNull(PerpustakaanLiterasiSimilarityMatch::withTrashed()->find($match->getKey()));
+        $this->assertNotNull(PerpustakaanLiterasiResponse::withTrashed()->find($responseA->getKey()));
+        $this->assertNotNull(PerpustakaanLiterasiAnswer::withTrashed()->find($answerA->getKey()));
+    }
+
     protected function runLiteracyProgramMigration(): void
     {
         if (Schema::hasTable('perpustakaan_literasi_materials')) {

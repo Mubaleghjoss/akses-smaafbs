@@ -292,6 +292,19 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
                     ->action(function (PerpustakaanLiterasiResponse $record): void {
                         $this->restoreHistoryResponse((int) $record->getKey());
                     }),
+                Action::make('forceDeleteHistory')
+                    ->label('Hapus Permanen')
+                    ->icon('heroicon-o-no-symbol')
+                    ->color('danger')
+                    ->visible(fn (PerpustakaanLiterasiResponse $record): bool => static::getResource()::canCreate()
+                        && $record->trashed())
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (PerpustakaanLiterasiResponse $record): string => 'Hapus permanen history '.$record->student_name_snapshot.'?')
+                    ->modalDescription('Aksi ini menghapus permanen history, jawaban, dan data plagiasi terkait. Data tidak bisa direstore lagi.')
+                    ->modalSubmitActionLabel('Hapus permanen')
+                    ->action(function (PerpustakaanLiterasiResponse $record): void {
+                        $this->forceDeleteHistoryResponse((int) $record->getKey());
+                    }),
             ])
             ->bulkActions([
                 BulkActionGroup::make([
@@ -331,6 +344,25 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
                                 'Restore history selesai',
                                 "History aktif kembali: {$restored}.",
                                 $restored,
+                            );
+                        }),
+                    BulkAction::make('forceDeleteSelectedHistories')
+                        ->label('Hapus Permanen Terpilih')
+                        ->icon('heroicon-o-no-symbol')
+                        ->color('danger')
+                        ->visible(fn (): bool => static::getResource()::canCreate())
+                        ->requiresConfirmation()
+                        ->modalHeading('Hapus permanen history terpilih?')
+                        ->modalDescription('Hanya history yang sudah masuk History Terhapus yang akan dihapus permanen. History aktif akan dilewati. Data tidak bisa direstore lagi.')
+                        ->modalSubmitActionLabel('Hapus permanen')
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (iterable $records): void {
+                            $deleted = $this->forceDeleteHistoryRecords($records);
+
+                            $this->notifyHistoryBulkAction(
+                                'Hapus permanen history selesai',
+                                "History dihapus permanen: {$deleted}.",
+                                $deleted,
                             );
                         }),
                 ]),
@@ -396,6 +428,20 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
         );
     }
 
+    public function forceDeleteHistoryResponse(int $responseId): void
+    {
+        abort_unless(static::getResource()::canCreate(), 403);
+
+        $response = PerpustakaanLiterasiResponse::withTrashed()->findOrFail($responseId);
+        $deleted = $this->forceDeleteHistoryRecords([$response]);
+
+        $this->notifyHistoryBulkAction(
+            'Hapus permanen history selesai',
+            "History dihapus permanen: {$deleted}.",
+            $deleted,
+        );
+    }
+
     /**
      * @param  iterable<PerpustakaanLiterasiResponse>  $records
      */
@@ -452,6 +498,67 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
         });
 
         return $restored;
+    }
+
+    /**
+     * @param  iterable<PerpustakaanLiterasiResponse>  $records
+     */
+    protected function forceDeleteHistoryRecords(iterable $records): int
+    {
+        abort_unless(static::getResource()::canCreate(), 403);
+
+        $deleted = 0;
+
+        DB::transaction(function () use ($records, &$deleted): void {
+            foreach ($records as $record) {
+                if (! $record instanceof PerpustakaanLiterasiResponse) {
+                    continue;
+                }
+
+                $fresh = PerpustakaanLiterasiResponse::onlyTrashed()->find($record->getKey());
+
+                if (! $fresh) {
+                    continue;
+                }
+
+                $this->forceDeleteHistoryRecord($fresh);
+                $deleted++;
+            }
+        });
+
+        return $deleted;
+    }
+
+    protected function forceDeleteHistoryRecord(PerpustakaanLiterasiResponse $response): void
+    {
+        $answerIds = $response->answers()
+            ->withTrashed()
+            ->pluck('id')
+            ->all();
+
+        PerpustakaanLiterasiSimilarityMatch::withTrashed()
+            ->where(function (Builder $query) use ($response, $answerIds): void {
+                $query
+                    ->where('later_response_id', $response->getKey())
+                    ->orWhere('matched_response_id', $response->getKey());
+
+                if ($answerIds !== []) {
+                    $query
+                        ->orWhereIn('later_answer_id', $answerIds)
+                        ->orWhereIn('matched_answer_id', $answerIds);
+                }
+            })
+            ->get()
+            ->each
+            ->forceDelete();
+
+        $response->answers()
+            ->withTrashed()
+            ->get()
+            ->each
+            ->forceDelete();
+
+        $response->forceDelete();
     }
 
     protected function notifyHistoryBulkAction(string $title, string $body, int $processed): void
