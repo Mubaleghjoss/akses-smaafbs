@@ -184,6 +184,8 @@ class CreateCalendarEvent extends Page
             return;
         }
 
+        $replacedIds = $this->deleteExistingEventsForImport($items, $visibility);
+
         $created = [];
         foreach ($items as $item) {
             $created[] = CalendarEvent::query()->create([
@@ -198,11 +200,18 @@ class CreateCalendarEvent extends Page
 
         $payloads = array_map(fn (CalendarEvent $event) => $this->formatCalendarEvent($event), $created);
 
+        if ($replacedIds !== []) {
+            $this->dispatch('calendar-events-deleted-bulk', calendarEventIds: $replacedIds);
+        }
+
         $this->dispatch('calendar-events-imported', calendarEvents: $payloads);
 
         $this->importText = '';
 
         $message = 'Agenda berhasil diimpor ('.count($created).' kegiatan).';
+        if (count($replacedIds) > 0) {
+            $message .= ' '.count($replacedIds).' agenda lama pada tanggal yang sama diganti.';
+        }
         if ($skipped > 0) {
             $message .= ' Ada '.$skipped.' baris yang dilewati.';
         }
@@ -363,6 +372,60 @@ class CreateCalendarEvent extends Page
         }
 
         return $payload;
+    }
+
+    protected function deleteExistingEventsForImport(array $items, string $visibility): array
+    {
+        $ranges = [];
+        foreach ($items as $item) {
+            $start = $item['start']->copy()->startOfDay();
+            $end = ($item['end'] ?? null)?->copy()->endOfDay() ?? $start->copy()->endOfDay();
+            $key = $start->toDateString().'|'.$end->toDateString();
+
+            $ranges[$key] = [$start, $end];
+        }
+
+        if ($ranges === []) {
+            return [];
+        }
+
+        $query = CalendarEvent::query()
+            ->where(function ($query) use ($visibility) {
+                if ($visibility === 'external') {
+                    $query->where('visibility', 'external')->orWhereNull('visibility');
+
+                    return;
+                }
+
+                $query->where('visibility', $visibility);
+            })
+            ->where(function ($query) use ($ranges) {
+                foreach ($ranges as [$start, $end]) {
+                    $query->orWhere(function ($query) use ($start, $end) {
+                        $query
+                            ->where('start', '<=', $end)
+                            ->where(function ($query) use ($start) {
+                                $query
+                                    ->where('end', '>=', $start)
+                                    ->orWhere(function ($query) use ($start) {
+                                        $query->whereNull('end')->where('start', '>=', $start);
+                                    });
+                            });
+                    });
+                }
+            });
+
+        $ids = $query->pluck('id')->map(fn ($id): int => (int) $id)->all();
+
+        if ($ids === []) {
+            return [];
+        }
+
+        abort_unless(static::getResource()::canDeleteAny(), 403);
+
+        CalendarEvent::query()->whereIn('id', $ids)->delete();
+
+        return $ids;
     }
 
     protected function parseImportText(string $text): array

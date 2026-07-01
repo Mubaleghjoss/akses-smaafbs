@@ -79,6 +79,64 @@ class CalendarEventCreatePageTest extends TestCase
         ]);
     }
 
+    public function test_import_replaces_existing_events_on_same_imported_schedule(): void
+    {
+        $admin = $this->createAdminUser();
+
+        $existingPublic = CalendarEvent::query()->create([
+            'title' => 'Agenda publik lama',
+            'description' => null,
+            'visibility' => 'external',
+            'all_day' => true,
+            'start' => '2026-05-05 00:00:00',
+            'end' => null,
+        ]);
+
+        $existingInternal = CalendarEvent::query()->create([
+            'title' => 'Agenda internal tetap',
+            'description' => null,
+            'visibility' => 'internal',
+            'all_day' => true,
+            'start' => '2026-05-05 00:00:00',
+            'end' => null,
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CreateCalendarEvent::class)
+            ->set('importVisibility', 'external')
+            ->set('importText', "Agenda Kegiatan Mei 2026\n5 Mei 2026\n1. KBM semester 2\n2. Apel pagi")
+            ->call('importFromText')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseMissing('calendar_events', [
+            'id' => $existingPublic->id,
+        ]);
+
+        $this->assertDatabaseHas('calendar_events', [
+            'id' => $existingInternal->id,
+            'title' => 'Agenda internal tetap',
+            'visibility' => 'internal',
+        ]);
+
+        $this->assertDatabaseHas('calendar_events', [
+            'title' => 'KBM semester 2',
+            'visibility' => 'external',
+        ]);
+
+        $this->assertDatabaseHas('calendar_events', [
+            'title' => 'Apel pagi',
+            'visibility' => 'external',
+        ]);
+
+        $this->assertSame(
+            2,
+            CalendarEvent::query()
+                ->where('visibility', 'external')
+                ->whereDate('start', '2026-05-05')
+                ->count()
+        );
+    }
+
     public function test_admin_can_update_calendar_event_visibility_and_range(): void
     {
         $admin = $this->createAdminUser();
