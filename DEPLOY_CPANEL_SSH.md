@@ -303,8 +303,15 @@ Script itu akan menjalankan:
 - pull kode terbaru dari GitHub,
 - install/update Composer dependency,
 - install/build asset frontend,
+- menyalin `public/build` ke document root publik jika document root memakai `/home/CPANEL_USER/public_html/web/app`,
 - migrate database,
 - refresh cache Laravel.
+
+Jika document root server berbeda, set variabel ini saat menjalankan script:
+
+```bash
+PUBLIC_WEB_ROOT=/home/CPANEL_USER/path/document-root bash scripts/cpanel-update.sh
+```
 
 ## 13. Kalau update gagal
 

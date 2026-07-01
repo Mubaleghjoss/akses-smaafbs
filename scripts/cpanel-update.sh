@@ -2,6 +2,7 @@
 set -euo pipefail
 
 BRANCH="${1:-main}"
+PUBLIC_WEB_ROOT="${PUBLIC_WEB_ROOT:-${HOME}/public_html/web/app}"
 
 echo "==> Pull kode terbaru dari GitHub (${BRANCH})"
 git pull --ff-only origin "${BRANCH}"
@@ -24,6 +25,13 @@ if command -v npm >/dev/null 2>&1; then
 else
     echo "ERROR: npm tidak ditemukan. Aktifkan Node.js 20.19+ atau Node.js 22 di cPanel."
     exit 1
+fi
+
+if [ -d "${PUBLIC_WEB_ROOT}" ] && [ "${PUBLIC_WEB_ROOT}" != "$(pwd)/public" ]; then
+    echo "==> Sinkron asset frontend ke document root (${PUBLIC_WEB_ROOT})"
+    mkdir -p "${PUBLIC_WEB_ROOT}/build"
+    cp -a public/build/. "${PUBLIC_WEB_ROOT}/build/"
+    rm -f "${PUBLIC_WEB_ROOT}/hot"
 fi
 
 echo "==> Siapkan storage dan cache folder"
