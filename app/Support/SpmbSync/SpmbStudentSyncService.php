@@ -271,7 +271,7 @@ class SpmbStudentSyncService
                 $localValue = $localValue->format('Y-m-d');
             }
 
-            if ($this->comparable($localValue) !== $this->comparable($value)) {
+            if ($this->comparable($localValue, $field) !== $this->comparable($value, $field)) {
                 $differences[] = [
                     'field' => $field,
                     'local' => $localValue,
@@ -292,8 +292,13 @@ class SpmbStudentSyncService
         return $differences;
     }
 
-    private function comparable(mixed $value): string
+    private function comparable(mixed $value, string $field): string
     {
+        if (in_array($field, ['tinggi_badan', 'berat_badan', 'lingkar_kepala'], true)
+            && is_numeric($value)) {
+            return rtrim(rtrim(number_format((float) $value, 4, '.', ''), '0'), '.');
+        }
+
         return mb_strtolower(trim((string) ($value ?? '')));
     }
 

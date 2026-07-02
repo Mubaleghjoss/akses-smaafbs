@@ -172,7 +172,11 @@ class SpmbStudentSyncTest extends TestCase
             'sekolah_asal' => [
                 'nama' => 'SMP Asal',
             ],
-            'fisik' => [],
+            'fisik' => [
+                'tinggi_badan' => 176,
+                'berat_badan' => 65.5,
+                'lingkar_kepala' => 55,
+            ],
             'hasil_tes' => [
                 'kepribadian' => 'Plegmatis',
                 'gaya_belajar' => 'Visual',
@@ -202,6 +206,9 @@ class SpmbStudentSyncTest extends TestCase
             $table->date('tanggal_lahir')->nullable();
             $table->text('alamat')->nullable();
             $table->string('sekolah_asal')->nullable();
+            $table->decimal('tinggi_badan', 5, 2)->nullable();
+            $table->decimal('berat_badan', 5, 2)->nullable();
+            $table->decimal('lingkar_kepala', 5, 2)->nullable();
             $table->string('wa_ortu')->nullable();
             $table->string('kepribadian')->nullable();
             $table->string('gaya_belajar')->nullable();
