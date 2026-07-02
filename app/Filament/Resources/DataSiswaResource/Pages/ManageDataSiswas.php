@@ -60,6 +60,12 @@ class ManageDataSiswas extends ManageRecords
     protected function getHeaderActions(): array
     {
         return [
+            Actions\Action::make('syncSpmb')
+                ->label('Sinkron SPMB')
+                ->icon('heroicon-o-arrow-path')
+                ->color('warning')
+                ->url(DataSiswaResource::getUrl('spmb-sync'))
+                ->visible(fn (): bool => DataSiswaResource::canCreate()),
             Actions\Action::make('downloadTemplateDataSiswa')
                 ->label('Download Template Data')
                 ->icon('heroicon-o-arrow-down-tray')

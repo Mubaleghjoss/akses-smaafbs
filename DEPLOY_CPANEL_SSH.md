@@ -153,7 +153,14 @@ CACHE_STORE=database
 CACHE_LIMITER_STORE=database
 QUEUE_CONNECTION=database
 FILESYSTEM_DISK=public
+
+SPMB_SYNC_BASE_URL=https://seleksi.smaafbs.sch.id
+SPMB_SYNC_TOKEN=ISI_TOKEN_RAHASIA_YANG_SAMA_DENGAN_SERVER_SPMB
+SPMB_SYNC_TIMEOUT=30
 ```
+
+`SPMB_SYNC_TOKEN` harus sama dengan `AKSES_SYNC_TOKEN` pada `.env` aplikasi SPMB.
+Gunakan token acak panjang dan jangan menyimpannya di GitHub.
 
 Jika document root hosting bukan folder `public` di repo ini, atau URL `/storage/...` sebenarnya dibaca dari folder lain seperti:
 

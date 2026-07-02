@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'spmb_sync' => [
+        'base_url' => env('SPMB_SYNC_BASE_URL', 'https://seleksi.smaafbs.sch.id'),
+        'token' => env('SPMB_SYNC_TOKEN'),
+        'timeout' => env('SPMB_SYNC_TIMEOUT', 30),
+    ],
+
 ];

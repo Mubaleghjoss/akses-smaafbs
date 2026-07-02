@@ -45,6 +45,8 @@ class DataSiswa extends Model
     protected $casts = [
         'tanggal_lahir' => 'date',
         'tanggal_non_aktif' => 'date',
+        'spmb_source_updated_at' => 'datetime',
+        'spmb_synced_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];

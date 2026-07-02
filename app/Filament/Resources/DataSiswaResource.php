@@ -616,6 +616,7 @@ class DataSiswaResource extends Resource
     {
         return [
             'index' => Pages\ManageDataSiswas::route('/'),
+            'spmb-sync' => Pages\SyncSpmbStudents::route('/sync-spmb'),
             'view' => Pages\ViewDataSiswa::route('/{record}'),
         ];
     }
