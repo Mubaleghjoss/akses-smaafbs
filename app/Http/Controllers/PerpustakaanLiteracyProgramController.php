@@ -76,7 +76,8 @@ class PerpustakaanLiteracyProgramController extends Controller
                 ->withInput();
         }
 
-        if (! $this->studentVerificationMatches($student, (string) ($validated['student_verification'] ?? ''))) {
+        if (($material->student_verification_enabled ?? true)
+            && ! $this->studentVerificationMatches($student, (string) ($validated['student_verification'] ?? ''))) {
             return back()
                 ->withErrors(['student_verification' => $this->studentVerificationErrorMessage($student, (string) ($validated['student_verification'] ?? ''))])
                 ->withInput();
@@ -218,7 +219,7 @@ class PerpustakaanLiteracyProgramController extends Controller
 
         $query = PerpustakaanLiterasiResponse::query();
 
-        if (str_starts_with($normalized, 'LHP-')) {
+        if (preg_match('/^[A-Z0-9]+-\d{6}-[A-Z0-9]{6}$/', $normalized)) {
             $query->where('edit_code', $normalized);
         } elseif (preg_match('/^[A-Z0-9]{6}$/', $normalized)) {
             $query->where('edit_code', 'like', '%-'.$normalized);

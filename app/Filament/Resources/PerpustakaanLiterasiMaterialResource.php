@@ -131,6 +131,10 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                             ->maxLength(4000)
                             ->helperText('Opsional. Jika kosong, halaman publik memakai arahan default anti menyontek.')
                             ->columnSpanFull(),
+                        Forms\Components\Toggle::make('student_verification_enabled')
+                            ->label('Wajibkan verifikasi siswa')
+                            ->default(true)
+                            ->helperText('Jika aktif, siswa harus mengisi NISN atau tanggal lahir yang cocok saat mengirim jawaban.'),
                         SchemaView::make('filament.resources.perpustakaan-literasi-material-resource.partials.latex-picker')
                             ->visible(fn (Get $get): bool => (bool) $get('show_reading_latex_tools'))
                             ->columnSpanFull(),

@@ -31,6 +31,7 @@ class PerpustakaanLiterasiMaterial extends Model implements HasRichContent
 
     protected $casts = [
         'is_active' => 'boolean',
+        'student_verification_enabled' => 'boolean',
         'opens_at' => 'datetime',
         'closes_at' => 'datetime',
         'created_at' => 'datetime',
@@ -182,6 +183,21 @@ class PerpustakaanLiterasiMaterial extends Model implements HasRichContent
             self::CATEGORY_NUMERACY_EXCELLENCE => 'border-emerald-200 bg-emerald-50 text-emerald-700',
             self::CATEGORY_SIGAP_29_KARAKTER => 'border-amber-200 bg-amber-50 text-amber-700',
             default => 'border-slate-200 bg-slate-50 text-slate-600',
+        };
+    }
+
+    public function editCodePrefix(): string
+    {
+        return self::editCodePrefixForCategory($this->program_category);
+    }
+
+    public static function editCodePrefixForCategory(?string $category): string
+    {
+        return match (trim((string) $category)) {
+            self::CATEGORY_NUMERACY_EXCELLENCE => 'NEP',
+            self::CATEGORY_SIGAP_29_KARAKTER => 'SIGAP',
+            self::CATEGORY_LITERACY_HABITUATION => 'LHP',
+            default => 'LHP',
         };
     }
 

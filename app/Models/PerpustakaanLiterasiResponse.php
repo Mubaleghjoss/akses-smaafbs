@@ -36,7 +36,13 @@ class PerpustakaanLiterasiResponse extends Model
     {
         static::creating(function (self $response): void {
             if (blank($response->edit_code)) {
-                $response->edit_code = static::generateEditCode();
+                $material = $response->relationLoaded('material')
+                    ? $response->material
+                    : PerpustakaanLiterasiMaterial::query()
+                        ->select(['id', 'program_category'])
+                        ->find($response->material_id);
+
+                $response->edit_code = static::generateEditCode($material?->program_category);
             }
 
             $response->ai_detection_status ??= self::AI_STATUS_NOT_CHECKED;
@@ -115,11 +121,13 @@ class PerpustakaanLiterasiResponse extends Model
         ])->save();
     }
 
-    public static function generateEditCode(): string
+    public static function generateEditCode(?string $programCategory = null): string
     {
+        $prefix = PerpustakaanLiterasiMaterial::editCodePrefixForCategory($programCategory);
+
         do {
             $shortCode = Str::upper(Str::random(6));
-            $code = 'LHP-'.now()->format('ymd').'-'.$shortCode;
+            $code = $prefix.'-'.now()->format('ymd').'-'.$shortCode;
         } while (
             static::query()->where('edit_code', $code)->exists()
             || static::query()->where('edit_code', 'like', '%-'.$shortCode)->exists()

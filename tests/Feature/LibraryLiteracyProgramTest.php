@@ -42,6 +42,7 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->runLiteracySoftDeletesMigration();
         $this->runLiterasiNumerasiProgramMigration();
         $this->runLiteracyInstructionsMigration();
+        $this->runLiteracyStudentVerificationSettingMigration();
         $this->bootstrapLibraryHubTables();
     }
 
@@ -283,6 +284,80 @@ class LibraryLiteracyProgramTest extends TestCase
             'data_siswa_id' => $student->getKey(),
             'student_name_snapshot' => 'Codex Verifikasi Siswa',
         ]);
+    }
+
+    public function test_student_identity_verification_can_be_disabled_per_material(): void
+    {
+        $student = $this->createStudent('Codex Verifikasi Opsional', 'X Opsional', [
+            'nisn' => '9988776655',
+            'tanggal_lahir' => '2010-02-20',
+        ]);
+        $material = $this->createMaterial('Materi Verifikasi Dimatikan', [
+            'student_verification_enabled' => false,
+        ]);
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Tuliskan ringkasan singkat.',
+            'min_characters' => 20,
+            'max_characters' => 500,
+        ]);
+
+        $this->get(route('library.literacy.show', $material->slug))
+            ->assertOk()
+            ->assertDontSee('Verifikasi siswa')
+            ->assertDontSee('id="student_verification"', false);
+
+        $this->post(route('library.literacy.store', $material->slug), [
+            'student_id' => $student->getKey(),
+            'answers' => [
+                $question->getKey() => 'Saya mengerjakan soal ini dengan nama sendiri tanpa verifikasi tambahan.',
+            ],
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('perpustakaan_literasi_responses', [
+            'material_id' => $material->getKey(),
+            'data_siswa_id' => $student->getKey(),
+            'student_name_snapshot' => 'Codex Verifikasi Opsional',
+        ]);
+    }
+
+    public function test_edit_code_prefix_follows_material_program_category(): void
+    {
+        $cases = [
+            [PerpustakaanLiterasiMaterial::CATEGORY_LITERACY_HABITUATION, 'LHP'],
+            [PerpustakaanLiterasiMaterial::CATEGORY_NUMERACY_EXCELLENCE, 'NEP'],
+            [PerpustakaanLiterasiMaterial::CATEGORY_SIGAP_29_KARAKTER, 'SIGAP'],
+        ];
+
+        foreach ($cases as [$category, $prefix]) {
+            $student = $this->createStudent('Codex Kode '.$prefix, 'X Kode');
+            $material = $this->createMaterial('Materi Kode '.$prefix, [
+                'program_category' => $category,
+            ]);
+            $question = $material->questions()->create([
+                'sort_order' => 1,
+                'prompt' => 'Tuliskan jawaban untuk kode '.$prefix.'.',
+                'min_characters' => 20,
+                'max_characters' => 500,
+            ]);
+
+            $this->post(route('library.literacy.store', $material->slug), [
+                'student_id' => $student->getKey(),
+                'answers' => [
+                    $question->getKey() => 'Jawaban siswa untuk memastikan kode edit mengikuti kategori materi.',
+                ],
+            ])->assertRedirect();
+
+            $response = PerpustakaanLiterasiResponse::query()
+                ->where('material_id', $material->getKey())
+                ->where('data_siswa_id', $student->getKey())
+                ->firstOrFail();
+
+            $this->assertStringStartsWith($prefix.'-', (string) $response->edit_code);
+
+            $this->get(route('library.literacy.edit.lookup', ['code' => $response->edit_code]))
+                ->assertRedirect(route('library.literacy.edit', $response->shortEditCode()));
+        }
     }
 
     public function test_duplicate_student_submission_without_code_is_rejected(): void
@@ -1037,6 +1112,11 @@ class LibraryLiteracyProgramTest extends TestCase
 
         $material = $this->createMaterial('Materi Aksi Tabel Literasi');
 
+        $this->actingAs($admin)
+            ->get(PerpustakaanLiterasiMaterialResource::getUrl('create'))
+            ->assertOk()
+            ->assertSee('Wajibkan verifikasi siswa');
+
         Livewire::actingAs($admin)
             ->test(ListPerpustakaanLiterasiMaterials::class)
             ->assertTableActionVisible('setProgramCategory', $material)
@@ -1353,6 +1433,17 @@ class LibraryLiteracyProgramTest extends TestCase
         }
 
         $migration = require database_path('migrations/2026_07_08_090000_add_instructions_to_perpustakaan_literasi_materials.php');
+        $migration->up();
+    }
+
+    protected function runLiteracyStudentVerificationSettingMigration(): void
+    {
+        if (Schema::hasTable('perpustakaan_literasi_materials')
+            && Schema::hasColumn('perpustakaan_literasi_materials', 'student_verification_enabled')) {
+            return;
+        }
+
+        $migration = require database_path('migrations/2026_07_08_120000_add_student_verification_setting_to_perpustakaan_literasi_materials.php');
         $migration->up();
     }
 
