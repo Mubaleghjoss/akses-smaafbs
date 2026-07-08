@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource;
+use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\Pages\ListPerpustakaanLiterasiMaterials;
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\Pages\StudentHistoryPerpustakaanLiterasi;
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\Pages\ViewPerpustakaanLiterasiMaterial;
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\RelationManagers\ResponsesRelationManager;
@@ -931,6 +932,8 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('Belum Berkategori')
             ->assertSee('History Pengerjaan Siswa')
             ->assertSee('Hitung Ulang Plagiasi')
+            ->assertSee('Setting Tatib')
+            ->assertSee('Pilih Kategori')
             ->assertSee('Ranking Kelas Terbanyak Mengisi')
             ->assertSee('Ranking 3 Kelas Jawaban Benar Terbanyak')
             ->assertSee('Ranking 3 Kelas Tersedikit Mengisi')
@@ -964,6 +967,73 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertDontSee('Ringkasan Plagiat Per Kelas')
             ->assertDontSee('Ranking Kelas Terbanyak Mengisi')
             ->assertDontSee('Ranking 3 Kelas Tersedikit Mengisi');
+    }
+
+    public function test_literasi_material_table_actions_update_category_tatib_and_active_status(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $admin = User::query()->create([
+            'name' => 'Admin Aksi Literasi',
+            'username' => 'admin-aksi-literasi',
+            'password' => bcrypt('password'),
+        ]);
+        $admin->assignRole('admin');
+
+        $material = $this->createMaterial('Materi Aksi Tabel Literasi');
+
+        Livewire::actingAs($admin)
+            ->test(ListPerpustakaanLiterasiMaterials::class)
+            ->assertTableActionVisible('setProgramCategory', $material)
+            ->assertTableActionVisible('setInstructions', $material)
+            ->assertTableActionVisible('toggleActive', $material)
+            ->callTableAction('setProgramCategory', $material, [
+                'program_category' => PerpustakaanLiterasiMaterial::CATEGORY_SIGAP_29_KARAKTER,
+            ])
+            ->callTableAction('setInstructions', $material, [
+                'instructions' => "Baca arahan dari admin.\nJangan keluar halaman.",
+            ])
+            ->callTableAction('toggleActive', $material);
+
+        $material->refresh();
+
+        $this->assertSame(PerpustakaanLiterasiMaterial::CATEGORY_SIGAP_29_KARAKTER, $material->program_category);
+        $this->assertSame("Baca arahan dari admin.\nJangan keluar halaman.", $material->instructions);
+        $this->assertFalse($material->is_active);
+    }
+
+    public function test_expired_literasi_material_moves_from_active_tab_to_inactive_tab(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $admin = User::query()->create([
+            'name' => 'Admin Jadwal Literasi',
+            'username' => 'admin-jadwal-literasi',
+            'password' => bcrypt('password'),
+        ]);
+        $admin->assignRole('admin');
+
+        $active = $this->createMaterial('Materi Masih Aktif', [
+            'closes_at' => now()->addHour(),
+        ]);
+        $expired = $this->createMaterial('Materi Sudah Lewat Durasi', [
+            'is_active' => true,
+            'closes_at' => now()->subMinute(),
+        ]);
+        $manualInactive = $this->createMaterial('Materi Nonaktif Manual', [
+            'is_active' => false,
+            'closes_at' => now()->addHour(),
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(ListPerpustakaanLiterasiMaterials::class)
+            ->call('loadTable')
+            ->assertCanSeeTableRecords([$active])
+            ->assertCanNotSeeTableRecords([$expired, $manualInactive])
+            ->set('activeTab', 'inactive')
+            ->call('loadTable')
+            ->assertCanSeeTableRecords([$expired, $manualInactive])
+            ->assertCanNotSeeTableRecords([$active]);
     }
 
     public function test_deleted_literacy_material_moves_student_history_to_deleted_and_restore_brings_responses_back(): void

@@ -29,6 +29,7 @@ class PerpustakaanLiteracyProgramController extends Controller
         return view('library.literacy.index', [
             'title' => 'Literasi Numerasi',
             'materials' => $materials,
+            'instructionsHtml' => PerpustakaanLiterasiMaterial::defaultInstructionsHtml(),
         ]);
     }
 

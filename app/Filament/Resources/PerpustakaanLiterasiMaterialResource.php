@@ -16,6 +16,7 @@ use App\Models\PerpustakaanLiterasiSimilarityMatch;
 use App\Support\Perpustakaan\LiterasiAnalytics;
 use App\Support\Perpustakaan\LiterasiSimilarityAnalyzer;
 use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -303,6 +304,62 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                 ViewAction::make()
                     ->label('Detail'),
                 EditAction::make(),
+                Action::make('setProgramCategory')
+                    ->label('Pilih Kategori')
+                    ->icon('heroicon-o-tag')
+                    ->color('warning')
+                    ->visible(fn (PerpustakaanLiterasiMaterial $record): bool => static::canEdit($record))
+                    ->fillForm(fn (PerpustakaanLiterasiMaterial $record): array => [
+                        'program_category' => $record->program_category,
+                    ])
+                    ->form([
+                        Forms\Components\Select::make('program_category')
+                            ->label('Kategori Soal')
+                            ->options(PerpustakaanLiterasiMaterial::programCategoryOptions())
+                            ->required()
+                            ->native(false),
+                    ])
+                    ->modalHeading(fn (PerpustakaanLiterasiMaterial $record): string => 'Pilih kategori untuk '.$record->title)
+                    ->modalSubmitActionLabel('Simpan Kategori')
+                    ->action(function (PerpustakaanLiterasiMaterial $record, array $data): void {
+                        $record->forceFill([
+                            'program_category' => $data['program_category'] ?? null,
+                        ])->save();
+
+                        Notification::make()
+                            ->title('Kategori soal diperbarui.')
+                            ->success()
+                            ->send();
+                    }),
+                Action::make('setInstructions')
+                    ->label('Atur Tatib')
+                    ->icon('heroicon-o-clipboard-document-list')
+                    ->color('gray')
+                    ->visible(fn (PerpustakaanLiterasiMaterial $record): bool => static::canEdit($record))
+                    ->fillForm(fn (PerpustakaanLiterasiMaterial $record): array => [
+                        'instructions' => $record->instructionsText(),
+                    ])
+                    ->form([
+                        Forms\Components\Textarea::make('instructions')
+                            ->label('Arahan / Tatib Pengerjaan')
+                            ->rows(7)
+                            ->helperText('Kosongkan untuk mengikuti tatib default dari tombol Setting Tatib.')
+                            ->columnSpanFull(),
+                    ])
+                    ->modalHeading(fn (PerpustakaanLiterasiMaterial $record): string => 'Atur tatib '.$record->title)
+                    ->modalSubmitActionLabel('Simpan Tatib')
+                    ->action(function (PerpustakaanLiterasiMaterial $record, array $data): void {
+                        $instructions = trim((string) ($data['instructions'] ?? ''));
+
+                        $record->forceFill([
+                            'instructions' => $instructions !== '' ? $instructions : null,
+                        ])->save();
+
+                        Notification::make()
+                            ->title('Tatib materi diperbarui.')
+                            ->success()
+                            ->send();
+                    }),
                 Action::make('reanalyzeSimilarity')
                     ->label('Analisa Ulang')
                     ->icon('heroicon-o-arrow-path')
@@ -332,6 +389,27 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                             ->success()
                             ->send();
                     }),
+                Action::make('toggleActive')
+                    ->label(fn (PerpustakaanLiterasiMaterial $record): string => $record->is_active ? 'Nonaktifkan' : 'Aktifkan')
+                    ->icon(fn (PerpustakaanLiterasiMaterial $record): string => $record->is_active ? 'heroicon-o-eye-slash' : 'heroicon-o-check-circle')
+                    ->color(fn (PerpustakaanLiterasiMaterial $record): string => $record->is_active ? 'warning' : 'success')
+                    ->visible(fn (PerpustakaanLiterasiMaterial $record): bool => static::canEdit($record))
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (PerpustakaanLiterasiMaterial $record): string => $record->is_active ? 'Nonaktifkan materi ini?' : 'Aktifkan materi ini?')
+                    ->modalDescription(fn (PerpustakaanLiterasiMaterial $record): string => $record->is_active
+                        ? 'Materi tidak akan tampil di halaman publik Literasi Numerasi.'
+                        : 'Materi aktif akan tampil lagi jika jadwal buka/tutupnya masih sesuai.')
+                    ->modalSubmitActionLabel(fn (PerpustakaanLiterasiMaterial $record): string => $record->is_active ? 'Nonaktifkan' : 'Aktifkan')
+                    ->action(function (PerpustakaanLiterasiMaterial $record): void {
+                        $record->forceFill([
+                            'is_active' => ! $record->is_active,
+                        ])->save();
+
+                        Notification::make()
+                            ->title($record->is_active ? 'Materi diaktifkan.' : 'Materi dinonaktifkan.')
+                            ->success()
+                            ->send();
+                    }),
                 DeleteAction::make()
                     ->label('Hapus')
                     ->requiresConfirmation()
@@ -342,6 +420,71 @@ class PerpustakaanLiterasiMaterialResource extends Resource
             ])
             ->bulkActions([
                 BulkActionGroup::make([
+                    BulkAction::make('setSelectedProgramCategory')
+                        ->label('Pilih Kategori')
+                        ->icon('heroicon-o-tag')
+                        ->color('warning')
+                        ->visible(fn (): bool => static::canCreate())
+                        ->form([
+                            Forms\Components\Select::make('program_category')
+                                ->label('Kategori Soal')
+                                ->options(PerpustakaanLiterasiMaterial::programCategoryOptions())
+                                ->required()
+                                ->native(false),
+                        ])
+                        ->modalHeading('Pilih kategori untuk materi terpilih')
+                        ->modalDescription('Kategori akan diterapkan ke semua materi yang sedang dipilih.')
+                        ->modalSubmitActionLabel('Simpan Kategori')
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (iterable $records, array $data): void {
+                            $updated = 0;
+
+                            foreach ($records as $record) {
+                                if (! $record instanceof PerpustakaanLiterasiMaterial) {
+                                    continue;
+                                }
+
+                                $record->forceFill([
+                                    'program_category' => $data['program_category'] ?? null,
+                                ])->save();
+
+                                $updated++;
+                            }
+
+                            Notification::make()
+                                ->title('Kategori soal terpilih diperbarui.')
+                                ->body(number_format($updated, 0, ',', '.').' materi diperbarui.')
+                                ->success()
+                                ->send();
+                        }),
+                    BulkAction::make('deactivateSelected')
+                        ->label('Nonaktifkan Terpilih')
+                        ->icon('heroicon-o-eye-slash')
+                        ->color('warning')
+                        ->visible(fn (): bool => static::canCreate())
+                        ->requiresConfirmation()
+                        ->modalHeading('Nonaktifkan materi terpilih?')
+                        ->modalDescription('Materi yang dipilih tidak akan tampil di halaman publik Literasi Numerasi.')
+                        ->modalSubmitActionLabel('Nonaktifkan')
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (iterable $records): void {
+                            $updated = 0;
+
+                            foreach ($records as $record) {
+                                if (! $record instanceof PerpustakaanLiterasiMaterial || ! $record->is_active) {
+                                    continue;
+                                }
+
+                                $record->forceFill(['is_active' => false])->save();
+                                $updated++;
+                            }
+
+                            Notification::make()
+                                ->title('Materi terpilih dinonaktifkan.')
+                                ->body(number_format($updated, 0, ',', '.').' materi aktif dinonaktifkan.')
+                                ->success()
+                                ->send();
+                        }),
                     DeleteBulkAction::make()
                         ->label('Hapus Terpilih')
                         ->requiresConfirmation()

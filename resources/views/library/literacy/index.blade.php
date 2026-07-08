@@ -27,9 +27,7 @@
     <details class="card mt-6 p-5" open>
         <summary class="cursor-pointer text-sm font-semibold text-slate-900">Arahan dan tata tertib pengerjaan</summary>
         <div class="mt-3 space-y-2 text-sm leading-6 text-slate-600">
-            <p>Kerjakan soal secara mandiri, jujur, dan sesuai kemampuan sendiri.</p>
-            <p>Jangan menyalin jawaban teman, membuka jawaban dari sumber lain tanpa memahami, atau meminta orang lain mengerjakan.</p>
-            <p>Jika perlu membuka layanan perpus, gunakan menu Akses Perpus di header sebelum mulai mengisi jawaban.</p>
+            {!! $instructionsHtml !!}
         </div>
     </details>
 

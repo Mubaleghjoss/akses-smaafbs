@@ -21,6 +21,8 @@ class PerpustakaanLiterasiMaterial extends Model implements HasRichContent
 
     public const CATEGORY_SIGAP_29_KARAKTER = 'sigap_29_karakter';
 
+    public const GLOBAL_INSTRUCTIONS_SETTING_KEY = 'perpustakaan_literasi_default_instructions';
+
     public const DEFAULT_INSTRUCTIONS = "Kerjakan soal secara mandiri, jujur, dan sesuai kemampuan sendiri.\nJangan menyalin jawaban teman, membuka jawaban dari sumber lain tanpa memahami, atau meminta orang lain mengerjakan.\nJika perlu membuka layanan perpus, gunakan menu Akses Perpus di header sebelum mulai mengisi jawaban.";
 
     protected $table = 'perpustakaan_literasi_materials';
@@ -215,7 +217,7 @@ class PerpustakaanLiterasiMaterial extends Model implements HasRichContent
         $instructions = trim((string) $this->instructions);
 
         if ($instructions === '') {
-            return self::DEFAULT_INSTRUCTIONS;
+            return self::defaultInstructionsText();
         }
 
         return $instructions;
@@ -223,7 +225,31 @@ class PerpustakaanLiterasiMaterial extends Model implements HasRichContent
 
     public function instructionsHtml(): string
     {
-        return collect(preg_split('/\R{2,}|\R/', $this->instructionsText()) ?: [])
+        return self::instructionsTextToHtml($this->instructionsText());
+    }
+
+    public static function defaultInstructionsText(): string
+    {
+        return trim((string) Pengaturan::value(self::GLOBAL_INSTRUCTIONS_SETTING_KEY, self::DEFAULT_INSTRUCTIONS))
+            ?: self::DEFAULT_INSTRUCTIONS;
+    }
+
+    public static function defaultInstructionsHtml(): string
+    {
+        return self::instructionsTextToHtml(self::defaultInstructionsText());
+    }
+
+    public static function saveDefaultInstructions(string $instructions): void
+    {
+        Pengaturan::query()->updateOrCreate(
+            ['nama_pengaturan' => self::GLOBAL_INSTRUCTIONS_SETTING_KEY],
+            ['nilai_pengaturan' => trim($instructions) ?: self::DEFAULT_INSTRUCTIONS]
+        );
+    }
+
+    protected static function instructionsTextToHtml(string $instructions): string
+    {
+        return collect(preg_split('/\R{2,}|\R/', $instructions) ?: [])
             ->map(fn (string $line): string => trim($line))
             ->filter()
             ->map(fn (string $line): string => '<p>'.e($line).'</p>')
