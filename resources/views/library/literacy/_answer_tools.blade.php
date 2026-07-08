@@ -2,6 +2,59 @@
     (() => {
         const formatNumber = (value) => new Intl.NumberFormat('id-ID').format(value);
         const forms = document.querySelectorAll('[data-literacy-answer-form]');
+        const submitScrollStorageKey = 'literacy.answer.submitScrollTarget';
+
+        const storedSubmitScrollTarget = () => {
+            try {
+                return window.sessionStorage.getItem(submitScrollStorageKey) || '';
+            } catch (error) {
+                return '';
+            }
+        };
+
+        const clearSubmitScrollTarget = () => {
+            try {
+                window.sessionStorage.removeItem(submitScrollStorageKey);
+            } catch (error) {
+                // Storage can be unavailable in strict private modes.
+            }
+        };
+
+        const rememberSubmitScrollTarget = (selector) => {
+            try {
+                window.sessionStorage.setItem(submitScrollStorageKey, selector);
+            } catch (error) {
+                // Storage can be unavailable in strict private modes.
+            }
+        };
+
+        const restoreSubmitScrollTarget = () => {
+            const selector = storedSubmitScrollTarget()
+                || (window.location.hash === '#status-jawaban' ? '#status-jawaban' : '');
+
+            if (selector === '') {
+                return;
+            }
+
+            clearSubmitScrollTarget();
+
+            const target = document.querySelector(selector);
+
+            if (!target) {
+                return;
+            }
+
+            window.setTimeout(() => {
+                target.scrollIntoView({
+                    block: 'center',
+                    behavior: 'auto',
+                });
+
+                target.focus?.({ preventScroll: true });
+            }, 80);
+        };
+
+        restoreSubmitScrollTarget();
 
         forms.forEach((form) => {
             if (form.dataset.literacyAnswerReady === '1') {
@@ -9,6 +62,9 @@
             }
 
             form.dataset.literacyAnswerReady = '1';
+            form.addEventListener('submit', () => {
+                rememberSubmitScrollTarget(form.dataset.literacyScrollTarget || '[data-literacy-submit-status]');
+            });
 
             form.querySelectorAll('[data-literacy-answer-input]').forEach((textarea) => {
                 const wrapper = textarea.closest('section') || form;
@@ -502,6 +558,7 @@
 
             input.setCustomValidity('Pilih siswa dari daftar yang muncul.');
             input.reportValidity();
+            clearSubmitScrollTarget();
             event.preventDefault();
         });
         updateVerificationRequirement(students.find((student) => String(student.id) === hiddenInput.value) || null);

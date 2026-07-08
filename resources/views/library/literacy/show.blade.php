@@ -53,7 +53,14 @@
                 </div>
             </details>
 
-            <form method="post" action="{{ route('library.literacy.store', $material->slug) }}" class="card space-y-5 p-6 md:p-7" data-literacy-answer-form data-literacy-integrity-form>
+            <form
+                method="post"
+                action="{{ route('library.literacy.store', $material->slug) }}"
+                class="card space-y-5 p-6 md:p-7"
+                data-literacy-answer-form
+                data-literacy-integrity-form
+                data-literacy-scroll-target="#status-jawaban"
+            >
                 @csrf
                 <input type="hidden" name="integrity[tab_switch_count]" value="0" data-integrity-field="tab_switch_count">
                 <input type="hidden" name="integrity[app_hidden_count]" value="0" data-integrity-field="app_hidden_count">
@@ -65,11 +72,13 @@
                     <p class="mt-1 text-sm text-slate-500">Pilih nama siswa dari data master aktif. Setelah terkirim, sistem akan memberi kode unik untuk edit.</p>
                 </div>
 
-                @if($errors->any())
-                    <div class="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-                        Periksa kembali isian yang ditandai.
-                    </div>
-                @endif
+                <div id="status-jawaban" class="scroll-mt-28 outline-none" tabindex="-1" data-literacy-submit-status>
+                    @if($errors->any())
+                        <div class="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
+                            Periksa kembali isian yang ditandai.
+                        </div>
+                    @endif
+                </div>
 
                 @if($students === [])
                     <div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">

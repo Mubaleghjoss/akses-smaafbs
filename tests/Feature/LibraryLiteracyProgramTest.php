@@ -203,6 +203,8 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('<strong class="font-semibold text-slate-900">Guru / Tim Literasi Numerasi</strong>', false)
             ->assertSee('Buka Edit')
             ->assertSee('data-literacy-student-combobox', false)
+            ->assertSee('id="status-jawaban"', false)
+            ->assertSee('data-literacy-scroll-target="#status-jawaban"', false)
             ->assertSee('data-literacy-answer-count', false);
 
         $this->from(route('library.literacy.show', $material->slug))
@@ -234,6 +236,8 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('Saya memahami isi bacaan')
             ->assertSee('Isi Jawaban Murid Baru')
             ->assertSee(route('library.literacy.show', $material->slug), false)
+            ->assertSee('id="status-jawaban"', false)
+            ->assertSee('data-literacy-scroll-target="#status-jawaban"', false)
             ->assertSee('data-literacy-answer-count', false);
 
         $this->post(route('library.literacy.update', $response->shortEditCode()), [

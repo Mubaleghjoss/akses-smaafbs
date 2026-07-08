@@ -13,6 +13,7 @@
             data-literacy-answer-form
             data-literacy-integrity-form
             data-integrity-endpoint="{{ route('library.literacy.integrity', $response->shortEditCode()) }}"
+            data-literacy-scroll-target="#status-jawaban"
         >
             @csrf
             <input type="hidden" name="integrity[tab_switch_count]" value="0" data-integrity-field="tab_switch_count">
@@ -28,20 +29,22 @@
                 <p class="mt-3 text-sm text-slate-500">Perbarui jawaban, lalu simpan kembali. Kode unik tetap sama.</p>
             </div>
 
-            @if(session('success'))
-                <div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                    {{ session('success') }}
-                    @if(session('edit_code'))
-                        <div class="mt-2 font-semibold">Kode unik: {{ session('edit_code') }}</div>
-                    @endif
-                </div>
-            @endif
+            <div id="status-jawaban" class="scroll-mt-28 space-y-3 outline-none" tabindex="-1" data-literacy-submit-status>
+                @if(session('success'))
+                    <div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
+                        {{ session('success') }}
+                        @if(session('edit_code'))
+                            <div class="mt-2 font-semibold">Kode unik: {{ session('edit_code') }}</div>
+                        @endif
+                    </div>
+                @endif
 
-            @if($errors->any())
-                <div class="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-                    Periksa kembali isian yang ditandai.
-                </div>
-            @endif
+                @if($errors->any())
+                    <div class="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
+                        Periksa kembali isian yang ditandai.
+                    </div>
+                @endif
+            </div>
 
             @foreach($material->questions as $index => $question)
                 @php
