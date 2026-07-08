@@ -4,15 +4,51 @@ namespace App\Filament\Resources\PerpustakaanLiterasiMaterialResource\Pages;
 
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource;
 use App\Filament\Widgets\PerpustakaanLiterasiGlobalAnalytics;
+use App\Models\PerpustakaanLiterasiMaterial;
 use App\Models\PerpustakaanLiterasiResponse;
 use App\Support\Perpustakaan\LiterasiSimilarityAnalyzer;
 use Filament\Actions;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Schemas\Components\Tabs\Tab;
+use Illuminate\Database\Eloquent\Builder;
 
 class ListPerpustakaanLiterasiMaterials extends ListRecords
 {
     protected static string $resource = PerpustakaanLiterasiMaterialResource::class;
+
+    public function getTabs(): array
+    {
+        return [
+            'active' => Tab::make('Semua Aktif')
+                ->query(fn (Builder $query): Builder => $query->where('is_active', true)),
+            PerpustakaanLiterasiMaterial::CATEGORY_LITERACY_HABITUATION => Tab::make('Literacy Habituation Programme')
+                ->query(fn (Builder $query): Builder => $query
+                    ->where('is_active', true)
+                    ->where('program_category', PerpustakaanLiterasiMaterial::CATEGORY_LITERACY_HABITUATION)),
+            PerpustakaanLiterasiMaterial::CATEGORY_NUMERACY_EXCELLENCE => Tab::make('Numeracy Excellence Programme')
+                ->query(fn (Builder $query): Builder => $query
+                    ->where('is_active', true)
+                    ->where('program_category', PerpustakaanLiterasiMaterial::CATEGORY_NUMERACY_EXCELLENCE)),
+            PerpustakaanLiterasiMaterial::CATEGORY_SIGAP_29_KARAKTER => Tab::make('Sigap 29 Karakter')
+                ->query(fn (Builder $query): Builder => $query
+                    ->where('is_active', true)
+                    ->where('program_category', PerpustakaanLiterasiMaterial::CATEGORY_SIGAP_29_KARAKTER)),
+            'uncategorized' => Tab::make('Belum Berkategori')
+                ->query(fn (Builder $query): Builder => $query
+                    ->where('is_active', true)
+                    ->where(function (Builder $inner): void {
+                        $inner->whereNull('program_category')->orWhere('program_category', '');
+                    })),
+            'inactive' => Tab::make('Soal Non Aktif')
+                ->query(fn (Builder $query): Builder => $query->where('is_active', false)),
+        ];
+    }
+
+    public function getDefaultActiveTab(): string|int|null
+    {
+        return 'active';
+    }
 
     protected function getHeaderActions(): array
     {
@@ -45,7 +81,10 @@ class ListPerpustakaanLiterasiMaterials extends ListRecords
                         ->success()
                         ->send();
                 }),
-            Actions\CreateAction::make(),
+            Actions\CreateAction::make()
+                ->fillForm(fn (): array => $this->activeProgramCategory() !== null
+                    ? ['program_category' => $this->activeProgramCategory()]
+                    : []),
         ];
     }
 
@@ -59,5 +98,14 @@ class ListPerpustakaanLiterasiMaterials extends ListRecords
     public function getHeaderWidgetsColumns(): int|array
     {
         return 1;
+    }
+
+    protected function activeProgramCategory(): ?string
+    {
+        $activeTab = (string) data_get($this, 'activeTab', '');
+
+        return array_key_exists($activeTab, PerpustakaanLiterasiMaterial::programCategoryOptions())
+            ? $activeTab
+            : null;
     }
 }

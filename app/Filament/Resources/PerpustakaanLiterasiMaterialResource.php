@@ -50,11 +50,11 @@ class PerpustakaanLiterasiMaterialResource extends Resource
 
     protected static ?int $navigationSort = 9;
 
-    protected static ?string $navigationLabel = 'Literasi';
+    protected static ?string $navigationLabel = 'Literasi Numerasi';
 
-    protected static ?string $modelLabel = 'materi literasi';
+    protected static ?string $modelLabel = 'materi literasi numerasi';
 
-    protected static ?string $pluralModelLabel = 'Literasi';
+    protected static ?string $pluralModelLabel = 'Literasi Numerasi';
 
     protected static ?string $permissionPrefix = 'perpustakaan_literasi';
 
@@ -68,13 +68,20 @@ class PerpustakaanLiterasiMaterialResource extends Resource
         return $schema
             ->schema([
                 Section::make('Materi Bacaan')
-                    ->description('Materi aktif akan muncul di menu publik Literacy Habituation Program.')
+                    ->description('Materi aktif akan muncul di menu publik Literasi Numerasi.')
                     ->columns(['default' => 1, 'md' => 2])
                     ->schema([
                         Forms\Components\TextInput::make('title')
                             ->label('Judul Materi')
                             ->required()
                             ->maxLength(180)
+                            ->columnSpanFull(),
+                        Forms\Components\Select::make('program_category')
+                            ->label('Kategori Soal')
+                            ->options(PerpustakaanLiterasiMaterial::programCategoryOptions())
+                            ->native(false)
+                            ->required()
+                            ->helperText('Pilih kategori program agar siswa dan guru bisa membedakan jenis soal.')
                             ->columnSpanFull(),
                         Forms\Components\Checkbox::make('show_reading_latex_tools')
                             ->label('Tampilkan template rumus LaTeX')
@@ -117,6 +124,12 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                                 ? 'Editor mendukung tebal, miring, heading, warna teks, tabel, kolom, dan upload gambar langsung di posisi kursor. Rumus LaTeX tetap bisa diketik manual, contoh: \(x^2\), \(\frac{a}{b}\), \(\sqrt{x}\).'
                                 : 'Editor mendukung tebal, miring, heading, warna teks, tabel, kolom, dan upload gambar langsung di posisi kursor.')
                             ->columnSpanFull(),
+                        Forms\Components\Textarea::make('instructions')
+                            ->label('Arahan / Tatib Pengerjaan')
+                            ->rows(4)
+                            ->maxLength(4000)
+                            ->helperText('Opsional. Jika kosong, halaman publik memakai arahan default anti menyontek.')
+                            ->columnSpanFull(),
                         SchemaView::make('filament.resources.perpustakaan-literasi-material-resource.partials.latex-picker')
                             ->visible(fn (Get $get): bool => (bool) $get('show_reading_latex_tools'))
                             ->columnSpanFull(),
@@ -130,6 +143,11 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                             ->label('Link Google Drive')
                             ->url()
                             ->maxLength(1000),
+                        Forms\Components\TextInput::make('video_url')
+                            ->label('Link Video YouTube / Google Drive')
+                            ->url()
+                            ->maxLength(1000)
+                            ->helperText('Jika link YouTube atau file Google Drive valid, video ditampilkan sebagai frame di halaman publik.'),
                         Forms\Components\Toggle::make('is_active')
                             ->label('Aktifkan materi')
                             ->default(true),
@@ -243,8 +261,8 @@ class PerpustakaanLiterasiMaterialResource extends Resource
         return static::optimizeAdminTable(
             $table,
             searchPlaceholder: 'Cari judul materi...',
-            emptyStateHeading: 'Belum ada materi literasi',
-            emptyStateDescription: 'Buat materi Literacy Habituation Program agar siswa bisa membaca dan mengirim jawaban.'
+            emptyStateHeading: 'Belum ada materi literasi numerasi',
+            emptyStateDescription: 'Buat materi Literasi Numerasi agar siswa bisa membaca dan mengirim jawaban.'
         )
             ->heading('Daftar Materi')
             ->defaultSort('created_at', 'desc')
@@ -261,6 +279,22 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                     ->html(),
             ])
             ->filters([
+                Tables\Filters\SelectFilter::make('program_category')
+                    ->label('Kategori Soal')
+                    ->options([
+                        '__blank' => PerpustakaanLiterasiMaterial::uncategorizedProgramLabel(),
+                    ] + PerpustakaanLiterasiMaterial::programCategoryOptions())
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+
+                        if ($value === null || $value === '') {
+                            return $query;
+                        }
+
+                        return $value === '__blank'
+                            ? $query->whereNull('program_category')
+                            : $query->where('program_category', $value);
+                    }),
                 Tables\Filters\TernaryFilter::make('is_active')
                     ->label('Status Aktif'),
             ])
@@ -405,6 +439,11 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                         TextEntry::make('questions_total')
                             ->label('Jumlah Soal')
                             ->state(fn (PerpustakaanLiterasiMaterial $record): int => $record->questions()->count()),
+                        TextEntry::make('program_category')
+                            ->label('Kategori Soal')
+                            ->badge()
+                            ->state(fn (PerpustakaanLiterasiMaterial $record): string => $record->programCategoryLabel())
+                            ->color(fn (PerpustakaanLiterasiMaterial $record): string => $record->programCategoryColor()),
                         TextEntry::make('public_url')
                             ->label('Link Publik')
                             ->state(fn (PerpustakaanLiterasiMaterial $record): string => $record->publicUrl())

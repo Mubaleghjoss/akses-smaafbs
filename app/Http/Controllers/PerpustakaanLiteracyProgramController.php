@@ -27,7 +27,7 @@ class PerpustakaanLiteracyProgramController extends Controller
             ->paginate(12);
 
         return view('library.literacy.index', [
-            'title' => 'Literacy Habituation Program',
+            'title' => 'Literasi Numerasi',
             'materials' => $materials,
         ]);
     }
@@ -58,7 +58,7 @@ class PerpustakaanLiteracyProgramController extends Controller
         $validated = $request->validate(
             $this->answerValidationRules($questions) + [
                 'student_id' => ['required', 'integer', 'exists:data_siswa,id'],
-            ],
+            ] + $this->integrityValidationRules(),
             [],
             $this->answerValidationAttributes($questions),
         );
@@ -97,6 +97,7 @@ class PerpustakaanLiteracyProgramController extends Controller
             ]);
 
             $this->syncAnswers($response, $questions, $validated['answers'] ?? []);
+            $response->addIntegrityCounts($this->integrityCountsFromValidated($validated));
 
             return $response;
         });
@@ -136,7 +137,7 @@ class PerpustakaanLiteracyProgramController extends Controller
         $response->loadMissing(['material.questions', 'answers']);
 
         return view('library.literacy.edit', [
-            'title' => 'Edit Jawaban Literasi',
+            'title' => 'Edit Jawaban Literasi Numerasi',
             'response' => $response,
             'material' => $response->material,
             'answerMap' => $response->answers->keyBy('question_id'),
@@ -153,13 +154,14 @@ class PerpustakaanLiteracyProgramController extends Controller
         $questions = $response->material->questions;
 
         $validated = $request->validate(
-            $this->answerValidationRules($questions),
+            $this->answerValidationRules($questions) + $this->integrityValidationRules(),
             [],
             $this->answerValidationAttributes($questions),
         );
 
         DB::transaction(function () use ($response, $questions, $validated): void {
             $this->syncAnswers($response, $questions, $validated['answers'] ?? []);
+            $response->addIntegrityCounts($this->integrityCountsFromValidated($validated));
             $response->forceFill([
                 'last_edited_at' => now(),
             ])->save();
@@ -171,6 +173,16 @@ class PerpustakaanLiteracyProgramController extends Controller
             ->route('library.literacy.edit', $response->shortEditCode())
             ->with('success', 'Jawaban berhasil diperbarui.')
             ->with('edit_code', $response->edit_code);
+    }
+
+    public function recordIntegrity(Request $request, string $code)
+    {
+        $response = $this->resolveResponseByEditCode($code);
+        $validated = $request->validate($this->integrityValidationRules());
+
+        $response->addIntegrityCounts($this->integrityCountsFromValidated($validated));
+
+        return response()->noContent();
     }
 
     protected function resolvePublicMaterial(string $slug): PerpustakaanLiterasiMaterial
@@ -239,6 +251,30 @@ class PerpustakaanLiteracyProgramController extends Controller
         return $questions->mapWithKeys(fn (PerpustakaanLiterasiQuestion $question): array => [
             'answers.'.$question->getKey() => 'jawaban untuk pertanyaan '.$question->sort_order,
         ])->all();
+    }
+
+    protected function integrityValidationRules(): array
+    {
+        return [
+            'integrity' => ['nullable', 'array'],
+            'integrity.tab_switch_count' => ['nullable', 'integer', 'min:0', 'max:10000'],
+            'integrity.app_hidden_count' => ['nullable', 'integer', 'min:0', 'max:10000'],
+            'integrity.page_leave_attempt_count' => ['nullable', 'integer', 'min:0', 'max:10000'],
+        ];
+    }
+
+    /**
+     * @return array{tab_switch_count: int, app_hidden_count: int, page_leave_attempt_count: int}
+     */
+    protected function integrityCountsFromValidated(array $validated): array
+    {
+        $integrity = is_array($validated['integrity'] ?? null) ? $validated['integrity'] : [];
+
+        return [
+            'tab_switch_count' => max(0, (int) ($integrity['tab_switch_count'] ?? 0)),
+            'app_hidden_count' => max(0, (int) ($integrity['app_hidden_count'] ?? 0)),
+            'page_leave_attempt_count' => max(0, (int) ($integrity['page_leave_attempt_count'] ?? 0)),
+        ];
     }
 
     /**

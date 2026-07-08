@@ -21,9 +21,29 @@
 
             @include('filament.resources.perpustakaan-literasi-material-resource.partials.analytics-panel', [
                 'analytics' => $analytics,
-                'title' => 'Analisa Total Literasi',
-                'description' => 'Rekap semua materi Literacy Habituation Program.',
+                'title' => 'Keseluruhan Soal Selama 1 Bulan',
+                'description' => 'Rekap semua materi Literasi Numerasi pada bulan berjalan.',
             ])
+
+            <details class="literasi-index-summary" open>
+                <summary>
+                    <span>
+                        <strong>Secara Kategori Soal Selama 1 Bulan</strong>
+                        <small>Ringkasan dipisahkan untuk tiap kategori program.</small>
+                    </span>
+                </summary>
+
+                <div class="literasi-index-summary__content">
+                    @foreach($categoryAnalytics as $category)
+                        @include('filament.resources.perpustakaan-literasi-material-resource.partials.analytics-panel', [
+                            'analytics' => $category['analytics'],
+                            'title' => $category['label'],
+                            'description' => 'Rekap bulan berjalan untuk kategori '.$category['label'].'.',
+                            'compact' => true,
+                        ])
+                    @endforeach
+                </div>
+            </details>
         </div>
     </details>
 </x-filament-widgets::widget>

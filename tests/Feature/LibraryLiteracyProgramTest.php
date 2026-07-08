@@ -17,6 +17,7 @@ use App\Support\Admin\AdminModuleAccess;
 use App\Support\Perpustakaan\LiterasiAnalytics;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
@@ -38,6 +39,9 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->runLiteracyGradingMigration();
         $this->runLiteracySimilarityReviewMigration();
         $this->runLiteracySoftDeletesMigration();
+        $this->runLiterasiNumerasiProgramMigration();
+        $this->runLiteracyInstructionsMigration();
+        $this->bootstrapLibraryHubTables();
     }
 
     public function test_public_index_only_shows_available_materials(): void
@@ -57,8 +61,9 @@ class LibraryLiteracyProgramTest extends TestCase
 
         $this->get(route('library.literacy.index'))
             ->assertOk()
-            ->assertSee('Literacy Habituation Program')
+            ->assertSee('Literasi Numerasi')
             ->assertSee('Materi Aktif Literasi')
+            ->assertSee('Belum Berkategori')
             ->assertSee('Tutup '.$active->closes_at->format('d/m/Y H:i'))
             ->assertSee('tex-chtml.js', false)
             ->assertSee('\(x^{2}\)', false)
@@ -70,7 +75,55 @@ class LibraryLiteracyProgramTest extends TestCase
     public function test_literasi_shortcut_redirects_to_literacy_program(): void
     {
         $this->get('/literasi')
-            ->assertRedirect('/perpustakaan/literacy-habituation-program');
+            ->assertRedirect('/perpustakaan/program-literasi-numerasi');
+
+        $this->get('/perpustakaan/literacy-habituation-program')
+            ->assertRedirect('/perpustakaan/program-literasi-numerasi');
+    }
+
+    public function test_public_literasi_numerasi_page_shows_category_video_tatib_and_header_perpus_link(): void
+    {
+        $this->createStudent('Codex Numerasi Siswa', 'X Numerasi');
+        $material = $this->createMaterial('Materi Numerasi Video', [
+            'program_category' => PerpustakaanLiterasiMaterial::CATEGORY_NUMERACY_EXCELLENCE,
+            'video_url' => 'https://youtu.be/dQw4w9WgXcQ',
+            'instructions' => "Baca arahan khusus dari admin.\nJangan membuka tab lain selama mengerjakan.",
+        ]);
+        $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Jelaskan pola angka pada video.',
+            'min_characters' => 10,
+            'max_characters' => 500,
+        ]);
+
+        $this->get('/perpustakaan')
+            ->assertOk()
+            ->assertSee('Akses Perpus')
+            ->assertDontSee('Cari Buku Perpus')
+            ->assertDontSee('Ringkasan Aktivitas Perpus')
+            ->assertDontSee('Form Aktivitas Perpus')
+            ->assertDontSee('Input Hasil Literasi Perpus');
+
+        $this->get(route('library.literacy.index'))
+            ->assertOk()
+            ->assertSee('Literasi Numerasi')
+            ->assertSee('Arahan dan tata tertib pengerjaan')
+            ->assertSee('Akses Perpus')
+            ->assertSee('Numeracy Excellence Programme');
+
+        $this->get('/perpustakaan/literacy-habituation-program/'.$material->slug)
+            ->assertRedirect(route('library.literacy.show', $material->slug));
+
+        $this->get(route('library.literacy.show', $material->slug))
+            ->assertOk()
+            ->assertSee('Numeracy Excellence Programme')
+            ->assertSee('Arahan dan tata tertib pengerjaan')
+            ->assertSee('Akses Perpus')
+            ->assertSee('Baca arahan khusus dari admin.')
+            ->assertSee('Jangan membuka tab lain selama mengerjakan.')
+            ->assertSee('https://www.youtube.com/embed/dQw4w9WgXcQ', false)
+            ->assertSee('data-literacy-integrity-form', false)
+            ->assertSee('data-integrity-field="tab_switch_count"', false);
     }
 
     public function test_public_literacy_images_normalize_legacy_filename_only_paths(): void
@@ -208,6 +261,68 @@ class LibraryLiteracyProgramTest extends TestCase
 
         $this->post(route('library.literacy.store', $material->slug), $payload)
             ->assertSessionHasErrors(['student_id']);
+    }
+
+    public function test_literacy_integrity_counts_are_saved_from_submit_update_and_beacon(): void
+    {
+        $student = $this->createStudent('Codex Integritas Siswa', 'XI Integritas');
+        $material = $this->createMaterial('Materi Integritas');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Apa komitmen pengerjaan mandiri?',
+            'min_characters' => 10,
+            'max_characters' => 500,
+        ]);
+
+        $this->post(route('library.literacy.store', $material->slug), [
+            'student_id' => $student->getKey(),
+            'answers' => [
+                $question->getKey() => 'Saya mengerjakan sendiri dengan jujur dan tidak menyalin jawaban teman.',
+            ],
+            'integrity' => [
+                'tab_switch_count' => 2,
+                'app_hidden_count' => 1,
+                'page_leave_attempt_count' => 1,
+            ],
+        ])->assertRedirect();
+
+        $response = PerpustakaanLiterasiResponse::query()
+            ->where('data_siswa_id', $student->getKey())
+            ->firstOrFail();
+
+        $this->assertSame(2, $response->tab_switch_count);
+        $this->assertSame(1, $response->app_hidden_count);
+        $this->assertSame(1, $response->page_leave_attempt_count);
+        $this->assertNotNull($response->last_integrity_event_at);
+
+        $this->post(route('library.literacy.update', $response->shortEditCode()), [
+            'answers' => [
+                $question->getKey() => 'Saya memperbaiki jawaban dengan tetap mengerjakan sendiri dan jujur.',
+            ],
+            'integrity' => [
+                'tab_switch_count' => 1,
+                'app_hidden_count' => 0,
+                'page_leave_attempt_count' => 2,
+            ],
+        ])->assertRedirect(route('library.literacy.edit', $response->shortEditCode()));
+
+        $response->refresh();
+        $this->assertSame(3, $response->tab_switch_count);
+        $this->assertSame(1, $response->app_hidden_count);
+        $this->assertSame(3, $response->page_leave_attempt_count);
+
+        $this->post(route('library.literacy.integrity', $response->shortEditCode()), [
+            'integrity' => [
+                'tab_switch_count' => 1,
+                'app_hidden_count' => 1,
+                'page_leave_attempt_count' => 0,
+            ],
+        ])->assertNoContent();
+
+        $response->refresh();
+        $this->assertSame(4, $response->tab_switch_count);
+        $this->assertSame(2, $response->app_hidden_count);
+        $this->assertSame(3, $response->page_leave_attempt_count);
     }
 
     public function test_answer_character_limit_is_validated(): void
@@ -459,6 +574,8 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertOk()
             ->assertSee('Tampilkan template rumus LaTeX')
             ->assertSee('Editor mendukung tebal, miring, heading, warna teks, tabel, kolom, dan upload gambar langsung di posisi kursor')
+            ->assertSee('Arahan / Tatib Pengerjaan')
+            ->assertSee('Jika kosong, halaman publik memakai arahan default anti menyontek.')
             ->assertSee('Aktifkan deteksi plagiasi')
             ->assertSee('Jawaban sama persis selalu muncul sebagai 100%')
             ->assertSee('Mode deteksi aktif: jawaban yang sama dengan kunci otomatis Benar')
@@ -571,10 +688,10 @@ class LibraryLiteracyProgramTest extends TestCase
         $schemaMethod = new \ReflectionMethod(ResponsesRelationManager::class, 'gradingFormSchema');
         $schemaMethod->setAccessible(true);
         $gradingSchema = $schemaMethod->invoke($gradingComponent->instance(), $response);
-        $childComponents = new \ReflectionProperty($gradingSchema[0], 'childComponents');
+        $childComponents = new \ReflectionProperty($gradingSchema[1], 'childComponents');
         $childComponents->setAccessible(true);
-        $firstQuestionComponents = $childComponents->getValue($gradingSchema[0])['default'];
-        $answerKeyPlaceholder = collect($firstQuestionComponents)
+        $answerKeyPlaceholder = collect($gradingSchema)
+            ->flatMap(fn ($section): array => $childComponents->getValue($section)['default'] ?? [])
             ->first(fn ($component): bool => method_exists($component, 'getName')
                 && $component->getName() === 'answer_'.$answer->getKey().'_answer_key');
 
@@ -755,6 +872,8 @@ class LibraryLiteracyProgramTest extends TestCase
         $classCorrectRanking = collect($analytics['class_correct_ranking'])->keyBy('class');
         $leastClassRanking = collect($analytics['least_class_response_ranking']);
         $studentRanking = collect($analytics['student_correct_ranking_by_class']['X Ranking'] ?? [])->keyBy('name');
+        $wrongStudents = collect($analytics['student_wrong_ranking'])->keyBy('name');
+        $missingStudents = collect($analytics['missing_students'])->keyBy('name');
         $plagiarismStudents = collect($analytics['plagiarism_student_ranking'])->keyBy('name');
 
         $this->assertSame(2, (int) $classActivity['X Ranking']['month']);
@@ -767,6 +886,8 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertSame(0, (int) $leastClassRanking->first()['total']);
         $this->assertSame(1, (int) $studentRanking['Codex Ranking B']['correct_answers']);
         $this->assertSame(100.0, (float) $studentRanking['Codex Ranking B']['accuracy']);
+        $this->assertSame(1, (int) $wrongStudents['Codex Ranking A']['wrong_answers']);
+        $this->assertSame('X Kosong', $missingStudents['Codex Ranking Belum Mengisi']['class']);
         $this->assertSame(1, (int) $plagiarismStudents['Codex Ranking B']['total']);
         $this->assertSame(1, (int) $plagiarismStudents['Codex Ranking C']['total']);
         $this->assertFalse($plagiarismStudents->has('Codex Ranking A'));
@@ -800,13 +921,22 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('Ringkasan Literasi')
             ->assertSee('Daftar Materi')
             ->assertSee('Durasi Soal')
-            ->assertSee('Analisa Total Literasi')
+            ->assertSee('Semua Aktif')
+            ->assertSee('Literacy Habituation Programme')
+            ->assertSee('Numeracy Excellence Programme')
+            ->assertSee('Sigap 29 Karakter')
+            ->assertSee('Soal Non Aktif')
+            ->assertSee('Keseluruhan Soal Selama 1 Bulan')
+            ->assertSee('Secara Kategori Soal Selama 1 Bulan')
+            ->assertSee('Belum Berkategori')
             ->assertSee('History Pengerjaan Siswa')
             ->assertSee('Hitung Ulang Plagiasi')
             ->assertSee('Ranking Kelas Terbanyak Mengisi')
             ->assertSee('Ranking 3 Kelas Jawaban Benar Terbanyak')
             ->assertSee('Ranking 3 Kelas Tersedikit Mengisi')
-            ->assertSee('Ranking Siswa Per Kelas Berdasarkan Jawaban Benar');
+            ->assertSee('Ranking Siswa Per Kelas Berdasarkan Jawaban Benar')
+            ->assertSee('Siswa Banyak Salah')
+            ->assertSee('Siswa Tidak Mengisi');
 
         $this->assertStringContainsString(
             $material->closes_at->format('d/m/Y H:i'),
@@ -1075,6 +1205,68 @@ class LibraryLiteracyProgramTest extends TestCase
 
         $migration = require database_path('migrations/2026_07_01_090000_add_soft_deletes_to_perpustakaan_literasi_tables.php');
         $migration->up();
+    }
+
+    protected function runLiterasiNumerasiProgramMigration(): void
+    {
+        if (Schema::hasTable('perpustakaan_literasi_materials')
+            && Schema::hasColumn('perpustakaan_literasi_materials', 'program_category')
+            && Schema::hasColumn('perpustakaan_literasi_materials', 'video_url')
+            && Schema::hasColumn('perpustakaan_literasi_responses', 'tab_switch_count')) {
+            return;
+        }
+
+        $migration = require database_path('migrations/2026_07_07_090000_add_literasi_numerasi_program_fields.php');
+        $migration->up();
+    }
+
+    protected function runLiteracyInstructionsMigration(): void
+    {
+        if (Schema::hasTable('perpustakaan_literasi_materials')
+            && Schema::hasColumn('perpustakaan_literasi_materials', 'instructions')) {
+            return;
+        }
+
+        $migration = require database_path('migrations/2026_07_08_090000_add_instructions_to_perpustakaan_literasi_materials.php');
+        $migration->up();
+    }
+
+    protected function bootstrapLibraryHubTables(): void
+    {
+        if (! Schema::hasTable('perpustakaan_kategori')) {
+            Schema::create('perpustakaan_kategori', function (Blueprint $table): void {
+                $table->id();
+                $table->string('nama_kategori')->nullable();
+                $table->string('status')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! Schema::hasTable('perpustakaan_lemari')) {
+            Schema::create('perpustakaan_lemari', function (Blueprint $table): void {
+                $table->id();
+                $table->string('nama_lemari')->nullable();
+                $table->string('lokasi')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! Schema::hasTable('perpustakaan_buku')) {
+            Schema::create('perpustakaan_buku', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('kategori_id')->nullable();
+                $table->unsignedBigInteger('lemari_id')->nullable();
+                $table->string('judul_buku')->nullable();
+                $table->string('penulis')->nullable();
+                $table->string('penerbit')->nullable();
+                $table->text('deskripsi')->nullable();
+                $table->string('file_type')->nullable();
+                $table->string('status')->nullable();
+                $table->string('file_path')->nullable();
+                $table->unsignedInteger('download_count')->default(0);
+                $table->timestamps();
+            });
+        }
     }
 
     protected function createMaterial(string $title, array $attributes = []): PerpustakaanLiterasiMaterial

@@ -136,7 +136,7 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
             ->searchDebounce('600ms')
             ->searchPlaceholder('Cari siswa, kelas, atau materi...')
             ->emptyStateHeading('Belum ada history pengerjaan')
-            ->emptyStateDescription('History akan muncul setelah siswa mengirim jawaban Literacy Habituation Program.')
+            ->emptyStateDescription('History akan muncul setelah siswa mengirim jawaban Literasi Numerasi.')
             ->columns([
                 Tables\Columns\TextColumn::make('student_name_snapshot')
                     ->label('Siswa')
@@ -612,7 +612,8 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
             ->get()
             ->groupBy('later_answer_id');
 
-        return $record->material->questions
+        return collect([$this->integritySummarySection($record)])
+            ->merge($record->material->questions
             ->map(function ($question, int $index) use ($answers, $plagiarismMatchesByAnswer): Section {
                 $answer = $answers->get($question->getKey());
                 $answerId = (int) $answer?->getKey();
@@ -663,8 +664,29 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
                     ->columns(['default' => 1, 'md' => 2])
                     ->schema($schema);
             })
+            ->values())
             ->values()
             ->all();
+    }
+
+    protected function integritySummarySection(PerpustakaanLiterasiResponse $record): Section
+    {
+        return Section::make('Tindakan Keluar Halaman')
+            ->columns(['default' => 1, 'md' => 4])
+            ->schema([
+                Forms\Components\Placeholder::make('tab_switch_count')
+                    ->label('Pindah Tab')
+                    ->content(number_format((int) ($record->tab_switch_count ?? 0), 0, ',', '.').'x'),
+                Forms\Components\Placeholder::make('app_hidden_count')
+                    ->label('Keluar Aplikasi')
+                    ->content(number_format((int) ($record->app_hidden_count ?? 0), 0, ',', '.').'x'),
+                Forms\Components\Placeholder::make('page_leave_attempt_count')
+                    ->label('Percobaan Keluar Halaman')
+                    ->content(number_format((int) ($record->page_leave_attempt_count ?? 0), 0, ',', '.').'x'),
+                Forms\Components\Placeholder::make('last_integrity_event_at')
+                    ->label('Event Terakhir')
+                    ->content($record->last_integrity_event_at?->format('d/m/Y H:i') ?? '-'),
+            ]);
     }
 
     protected function gradingFormData(PerpustakaanLiterasiResponse $record): array

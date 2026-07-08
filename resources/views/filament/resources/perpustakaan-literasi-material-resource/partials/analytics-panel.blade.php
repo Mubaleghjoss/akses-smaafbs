@@ -5,6 +5,8 @@
     $classCorrectRanking = $analytics['class_correct_ranking'] ?? [];
     $leastClassRanking = $analytics['least_class_response_ranking'] ?? [];
     $studentRankingByClass = $analytics['student_correct_ranking_by_class'] ?? [];
+    $studentWrongRanking = $analytics['student_wrong_ranking'] ?? [];
+    $missingStudents = $analytics['missing_students'] ?? [];
     $plagiarismClassRanking = $analytics['plagiarism_class_ranking'] ?? [];
     $plagiarismStudentRanking = $analytics['plagiarism_student_ranking'] ?? [];
     $compact = (bool) ($compact ?? false);
@@ -46,10 +48,22 @@
                 <strong class="literasi-metric-card__value">{{ $formatPercent((float) ($summary['accuracy'] ?? 0)) }}</strong>
             </article>
 
-            <article class="literasi-metric-card literasi-metric-card--danger">
-                <span class="literasi-metric-card__label">Siswa Plagiasi</span>
-                <strong class="literasi-metric-card__value">{{ $formatNumber(count($plagiarismStudentRanking)) }}</strong>
-            </article>
+            <details class="literasi-metric-card literasi-metric-card--danger" id="literasi-plagiarism-students-card">
+                <summary class="cursor-pointer">
+                    <span class="literasi-metric-card__label">Siswa Plagiasi</span>
+                    <strong class="literasi-metric-card__value">{{ $formatNumber(count($plagiarismStudentRanking)) }}</strong>
+                </summary>
+                <div class="mt-3 space-y-2 text-xs">
+                    @forelse($plagiarismStudentRanking as $row)
+                        <div class="flex items-start justify-between gap-2 rounded-lg bg-white/70 px-2 py-1 dark:bg-white/10">
+                            <span>{{ $row['name'] }} <span class="opacity-70">({{ $row['class'] }})</span></span>
+                            <strong>{{ $formatNumber((int) $row['total']) }}</strong>
+                        </div>
+                    @empty
+                        <div class="text-xs opacity-80">Belum ada siswa plagiasi pada periode ini.</div>
+                    @endforelse
+                </div>
+            </details>
         @endunless
 
         <article class="literasi-metric-card literasi-metric-card--danger">
@@ -224,6 +238,64 @@
             @endforelse
         </div>
     </article>
+
+    @unless($compact)
+        <div class="literasi-analytics__grid">
+            <details class="literasi-panel">
+                <summary class="literasi-panel__title cursor-pointer">Siswa Banyak Salah</summary>
+                <div class="literasi-table-wrap mt-3">
+                    <table class="literasi-table">
+                        <thead>
+                            <tr>
+                                <th>Siswa</th>
+                                <th>Kelas</th>
+                                <th class="is-number">Salah</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($studentWrongRanking as $row)
+                                <tr>
+                                    <td data-label="Siswa">{{ $row['name'] }}</td>
+                                    <td data-label="Kelas">{{ $row['class'] }}</td>
+                                    <td data-label="Salah" class="is-number">{{ $formatNumber((int) $row['wrong_answers']) }}</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td class="literasi-table__empty" colspan="3">Belum ada jawaban salah pada periode ini.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+
+            <details class="literasi-panel">
+                <summary class="literasi-panel__title cursor-pointer">Siswa Tidak Mengisi</summary>
+                <div class="literasi-table-wrap mt-3">
+                    <table class="literasi-table">
+                        <thead>
+                            <tr>
+                                <th>Siswa</th>
+                                <th>Kelas</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($missingStudents as $row)
+                                <tr>
+                                    <td data-label="Siswa">{{ $row['name'] }}</td>
+                                    <td data-label="Kelas">{{ $row['class'] }}</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td class="literasi-table__empty" colspan="2">Semua siswa aktif sudah memiliki respon pada scope ini.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        </div>
+    @endunless
 
     <div class="literasi-analytics__grid">
         <article class="literasi-panel literasi-panel--danger">

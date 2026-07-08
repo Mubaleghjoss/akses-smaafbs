@@ -23,6 +23,10 @@ class PerpustakaanLiterasiResponse extends Model
         'last_edited_at' => 'datetime',
         'ai_score' => 'float',
         'ai_metadata' => 'array',
+        'tab_switch_count' => 'integer',
+        'app_hidden_count' => 'integer',
+        'page_leave_attempt_count' => 'integer',
+        'last_integrity_event_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
@@ -88,6 +92,27 @@ class PerpustakaanLiterasiResponse extends Model
     public function editUrl(): string
     {
         return route('library.literacy.edit', $this->shortEditCode());
+    }
+
+    /**
+     * @param  array{tab_switch_count?: int, app_hidden_count?: int, page_leave_attempt_count?: int}  $counts
+     */
+    public function addIntegrityCounts(array $counts): void
+    {
+        $tabSwitches = max(0, (int) ($counts['tab_switch_count'] ?? 0));
+        $appHidden = max(0, (int) ($counts['app_hidden_count'] ?? 0));
+        $leaveAttempts = max(0, (int) ($counts['page_leave_attempt_count'] ?? 0));
+
+        if ($tabSwitches + $appHidden + $leaveAttempts <= 0) {
+            return;
+        }
+
+        $this->forceFill([
+            'tab_switch_count' => (int) ($this->tab_switch_count ?? 0) + $tabSwitches,
+            'app_hidden_count' => (int) ($this->app_hidden_count ?? 0) + $appHidden,
+            'page_leave_attempt_count' => (int) ($this->page_leave_attempt_count ?? 0) + $leaveAttempts,
+            'last_integrity_event_at' => now(),
+        ])->save();
     }
 
     public static function generateEditCode(): string

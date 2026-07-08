@@ -19,38 +19,57 @@ class LiterasiAnalytics
         return static::build(null);
     }
 
+    public static function forProgramCategory(string $category): array
+    {
+        return static::build(null, $category);
+    }
+
+    public static function categoryAnalytics(): array
+    {
+        return collect(static::programCategoryScopes())
+            ->map(fn (string $label, string $category): array => [
+                'key' => $category,
+                'label' => $label,
+                'analytics' => static::forProgramCategory($category),
+            ])
+            ->values()
+            ->all();
+    }
+
     public static function forMaterial(PerpustakaanLiterasiMaterial $material): array
     {
         return static::build($material);
     }
 
-    protected static function build(?PerpustakaanLiterasiMaterial $material): array
+    protected static function build(?PerpustakaanLiterasiMaterial $material, ?string $programCategory = null): array
     {
         [$monthStart, $monthEnd] = static::monthRange();
 
         return [
             'period_label' => $monthStart->format('d/m/Y').' - '.$monthEnd->format('d/m/Y'),
-            'grading_summary' => static::gradingSummary($material, $monthStart, $monthEnd),
-            'class_activity' => static::classActivityRows($material),
-            'class_response_ranking' => static::classResponseRanking($material, $monthStart, $monthEnd),
-            'class_correct_ranking' => static::classCorrectRanking($material, $monthStart, $monthEnd),
-            'least_class_response_ranking' => static::leastClassResponseRanking($material, $monthStart, $monthEnd),
-            'student_correct_ranking_by_class' => static::studentCorrectRankingByClass($material, $monthStart, $monthEnd),
-            'plagiarism_class_ranking' => static::plagiarismClassRanking($material, $monthStart, $monthEnd),
-            'plagiarism_student_ranking' => static::plagiarismStudentRanking($material, $monthStart, $monthEnd),
+            'grading_summary' => static::gradingSummary($material, $monthStart, $monthEnd, $programCategory),
+            'class_activity' => static::classActivityRows($material, $programCategory),
+            'class_response_ranking' => static::classResponseRanking($material, $monthStart, $monthEnd, programCategory: $programCategory),
+            'class_correct_ranking' => static::classCorrectRanking($material, $monthStart, $monthEnd, programCategory: $programCategory),
+            'least_class_response_ranking' => static::leastClassResponseRanking($material, $monthStart, $monthEnd, programCategory: $programCategory),
+            'student_correct_ranking_by_class' => static::studentCorrectRankingByClass($material, $monthStart, $monthEnd, programCategory: $programCategory),
+            'student_wrong_ranking' => static::studentWrongRanking($material, $monthStart, $monthEnd, programCategory: $programCategory),
+            'missing_students' => static::missingStudents($material, $monthStart, $monthEnd, programCategory: $programCategory),
+            'plagiarism_class_ranking' => static::plagiarismClassRanking($material, $monthStart, $monthEnd, programCategory: $programCategory),
+            'plagiarism_student_ranking' => static::plagiarismStudentRanking($material, $monthStart, $monthEnd, programCategory: $programCategory),
         ];
     }
 
-    public static function classActivityRows(?PerpustakaanLiterasiMaterial $material = null): array
+    public static function classActivityRows(?PerpustakaanLiterasiMaterial $material = null, ?string $programCategory = null): array
     {
         [$todayStart, $todayEnd] = static::todayRange();
         [$weekStart, $weekEnd] = static::weekRange();
         [$monthStart, $monthEnd] = static::monthRange();
 
         $activeTotals = static::activeStudentTotalsByClass();
-        $todayTotals = static::responseCountsByClass($todayStart, $todayEnd, $material);
-        $weekTotals = static::responseCountsByClass($weekStart, $weekEnd, $material);
-        $monthTotals = static::responseCountsByClass($monthStart, $monthEnd, $material);
+        $todayTotals = static::responseCountsByClass($todayStart, $todayEnd, $material, $programCategory);
+        $weekTotals = static::responseCountsByClass($weekStart, $weekEnd, $material, $programCategory);
+        $monthTotals = static::responseCountsByClass($monthStart, $monthEnd, $material, $programCategory);
 
         return $activeTotals
             ->keys()
@@ -86,11 +105,12 @@ class LiterasiAnalytics
         ?PerpustakaanLiterasiMaterial $material,
         Carbon $start,
         Carbon $end,
-        int $limit = 10
+        int $limit = 10,
+        ?string $programCategory = null
     ): array {
         $activeTotals = static::activeStudentTotalsByClass();
 
-        return static::responseQuery($material)
+        return static::responseQuery($material, $programCategory)
             ->whereBetween('submitted_at', [$start, $end])
             ->whereNotNull('student_class_snapshot')
             ->where('student_class_snapshot', '!=', '')
@@ -121,7 +141,8 @@ class LiterasiAnalytics
         ?PerpustakaanLiterasiMaterial $material,
         Carbon $start,
         Carbon $end,
-        int $limit = 3
+        int $limit = 3,
+        ?string $programCategory = null
     ): array {
         if (! static::gradingColumnsAvailable()) {
             return [];
@@ -131,6 +152,7 @@ class LiterasiAnalytics
             ->join('perpustakaan_literasi_responses as responses', 'responses.id', '=', 'perpustakaan_literasi_answers.response_id')
             ->whereBetween('responses.submitted_at', [$start, $end])
             ->when($material, fn (Builder $query): Builder => $query->where('responses.material_id', $material->getKey()))
+            ->when($programCategory, fn (Builder $query): Builder => static::constrainJoinedResponseCategory($query, $programCategory))
             ->whereNotNull('responses.student_class_snapshot')
             ->where('responses.student_class_snapshot', '!=', '')
             ->select('responses.student_class_snapshot')
@@ -163,10 +185,11 @@ class LiterasiAnalytics
         ?PerpustakaanLiterasiMaterial $material,
         Carbon $start,
         Carbon $end,
-        int $limit = 3
+        int $limit = 3,
+        ?string $programCategory = null
     ): array {
         $activeTotals = static::activeStudentTotalsByClass();
-        $monthTotals = static::responseCountsByClass($start, $end, $material);
+        $monthTotals = static::responseCountsByClass($start, $end, $material, $programCategory);
 
         return $activeTotals
             ->keys()
@@ -198,7 +221,8 @@ class LiterasiAnalytics
         ?PerpustakaanLiterasiMaterial $material,
         Carbon $start,
         Carbon $end,
-        int $limitPerClass = 5
+        int $limitPerClass = 5,
+        ?string $programCategory = null
     ): array {
         if (! static::gradingColumnsAvailable()) {
             return [];
@@ -208,6 +232,7 @@ class LiterasiAnalytics
             ->join('perpustakaan_literasi_responses as responses', 'responses.id', '=', 'perpustakaan_literasi_answers.response_id')
             ->whereBetween('responses.submitted_at', [$start, $end])
             ->when($material, fn (Builder $query): Builder => $query->where('responses.material_id', $material->getKey()))
+            ->when($programCategory, fn (Builder $query): Builder => static::constrainJoinedResponseCategory($query, $programCategory))
             ->select([
                 'responses.data_siswa_id',
                 'responses.student_name_snapshot',
@@ -262,9 +287,10 @@ class LiterasiAnalytics
         ?PerpustakaanLiterasiMaterial $material,
         Carbon $start,
         Carbon $end,
-        int $limit = 10
+        int $limit = 10,
+        ?string $programCategory = null
     ): array {
-        return static::similarityQuery($material, $start, $end)
+        return static::similarityQuery($material, $start, $end, $programCategory)
             ->whereNotNull('student_class_snapshot')
             ->where('student_class_snapshot', '!=', '')
             ->select('student_class_snapshot')
@@ -285,9 +311,10 @@ class LiterasiAnalytics
         ?PerpustakaanLiterasiMaterial $material,
         Carbon $start,
         Carbon $end,
-        int $limit = 10
+        int $limit = 10,
+        ?string $programCategory = null
     ): array {
-        return static::similarityQuery($material, $start, $end)
+        return static::similarityQuery($material, $start, $end, $programCategory)
             ->join('perpustakaan_literasi_responses as later', 'later.id', '=', 'perpustakaan_literasi_similarity_matches.later_response_id')
             ->select([
                 'later.data_siswa_id',
@@ -314,7 +341,84 @@ class LiterasiAnalytics
             ->all();
     }
 
-    public static function gradingSummary(?PerpustakaanLiterasiMaterial $material, Carbon $start, Carbon $end): array
+    public static function studentWrongRanking(
+        ?PerpustakaanLiterasiMaterial $material,
+        Carbon $start,
+        Carbon $end,
+        int $limit = 15,
+        ?string $programCategory = null
+    ): array {
+        if (! static::gradingColumnsAvailable()) {
+            return [];
+        }
+
+        return PerpustakaanLiterasiAnswer::query()
+            ->join('perpustakaan_literasi_responses as responses', 'responses.id', '=', 'perpustakaan_literasi_answers.response_id')
+            ->whereBetween('responses.submitted_at', [$start, $end])
+            ->when($material, fn (Builder $query): Builder => $query->where('responses.material_id', $material->getKey()))
+            ->when($programCategory, fn (Builder $query): Builder => static::constrainJoinedResponseCategory($query, $programCategory))
+            ->where('perpustakaan_literasi_answers.is_correct', false)
+            ->select([
+                'responses.data_siswa_id',
+                'responses.student_name_snapshot',
+                'responses.student_class_snapshot',
+            ])
+            ->selectRaw('count(perpustakaan_literasi_answers.id) as wrong_answers')
+            ->groupBy([
+                'responses.data_siswa_id',
+                'responses.student_name_snapshot',
+                'responses.student_class_snapshot',
+            ])
+            ->orderByDesc('wrong_answers')
+            ->orderBy('responses.student_class_snapshot')
+            ->orderBy('responses.student_name_snapshot')
+            ->limit($limit)
+            ->get()
+            ->map(fn ($row): array => [
+                'student_id' => (int) $row->data_siswa_id,
+                'name' => (string) $row->student_name_snapshot,
+                'class' => (string) ($row->student_class_snapshot ?: '-'),
+                'wrong_answers' => (int) $row->wrong_answers,
+            ])
+            ->all();
+    }
+
+    public static function missingStudents(
+        ?PerpustakaanLiterasiMaterial $material,
+        Carbon $start,
+        Carbon $end,
+        int $limit = 30,
+        ?string $programCategory = null
+    ): array {
+        if (! Schema::hasTable('data_siswa')) {
+            return [];
+        }
+
+        $respondedStudentIds = static::responseQuery($material, $programCategory)
+            ->whereBetween('submitted_at', [$start, $end])
+            ->select('data_siswa_id');
+
+        return DataSiswa::query()
+            ->where('status', 'aktif')
+            ->whereNotIn('id', $respondedStudentIds)
+            ->orderBy('rombel_saat_ini')
+            ->orderBy('nama')
+            ->limit($limit)
+            ->get(['id', 'nama', 'rombel_saat_ini'])
+            ->map(fn (DataSiswa $student): array => [
+                'student_id' => (int) $student->getKey(),
+                'name' => (string) $student->nama,
+                'class' => (string) ($student->rombel_saat_ini ?: '-'),
+            ])
+            ->all();
+    }
+
+    public static function gradingSummary(
+        ?PerpustakaanLiterasiMaterial $material,
+        Carbon $start,
+        Carbon $end,
+        ?string $programCategory = null
+    ): array
     {
         if (! static::gradingColumnsAvailable()) {
             return [
@@ -331,12 +435,13 @@ class LiterasiAnalytics
             ->join('perpustakaan_literasi_responses as responses', 'responses.id', '=', 'perpustakaan_literasi_answers.response_id')
             ->whereBetween('responses.submitted_at', [$start, $end])
             ->when($material, fn (Builder $query): Builder => $query->where('responses.material_id', $material->getKey()))
+            ->when($programCategory, fn (Builder $query): Builder => static::constrainJoinedResponseCategory($query, $programCategory))
             ->selectRaw('count(perpustakaan_literasi_answers.id) as total_answers')
             ->selectRaw('sum(case when perpustakaan_literasi_answers.is_correct is not null then 1 else 0 end) as graded_answers')
             ->selectRaw('sum(case when perpustakaan_literasi_answers.is_correct = 1 then 1 else 0 end) as correct_answers')
             ->first();
 
-        $responses = static::responseQuery($material)
+        $responses = static::responseQuery($material, $programCategory)
             ->whereBetween('submitted_at', [$start, $end])
             ->count();
         $graded = (int) ($answerTotals?->graded_answers ?? 0);
@@ -348,24 +453,34 @@ class LiterasiAnalytics
             'graded_answers' => $graded,
             'correct_answers' => $correct,
             'accuracy' => $graded > 0 ? round(($correct / $graded) * 100, 1) : 0.0,
-            'confirmed_plagiarism' => static::confirmedPlagiarismCount($material, $start, $end),
+            'confirmed_plagiarism' => static::confirmedPlagiarismCount($material, $start, $end, $programCategory),
         ];
     }
 
-    protected static function confirmedPlagiarismCount(?PerpustakaanLiterasiMaterial $material, Carbon $start, Carbon $end): int
+    protected static function confirmedPlagiarismCount(
+        ?PerpustakaanLiterasiMaterial $material,
+        Carbon $start,
+        Carbon $end,
+        ?string $programCategory = null
+    ): int
     {
         if (! static::similarityReviewColumnsAvailable()) {
             return 0;
         }
 
-        return (int) static::similarityQuery($material, $start, $end)
+        return (int) static::similarityQuery($material, $start, $end, $programCategory)
             ->where('review_status', PerpustakaanLiterasiSimilarityMatch::REVIEW_CONFIRMED)
             ->count();
     }
 
-    protected static function responseCountsByClass(Carbon $start, Carbon $end, ?PerpustakaanLiterasiMaterial $material): Collection
+    protected static function responseCountsByClass(
+        Carbon $start,
+        Carbon $end,
+        ?PerpustakaanLiterasiMaterial $material,
+        ?string $programCategory = null
+    ): Collection
     {
-        return static::responseQuery($material)
+        return static::responseQuery($material, $programCategory)
             ->whereBetween('submitted_at', [$start, $end])
             ->whereNotNull('student_class_snapshot')
             ->where('student_class_snapshot', '!=', '')
@@ -391,17 +506,24 @@ class LiterasiAnalytics
             ->pluck('total', 'rombel_saat_ini');
     }
 
-    protected static function responseQuery(?PerpustakaanLiterasiMaterial $material): Builder
+    protected static function responseQuery(?PerpustakaanLiterasiMaterial $material, ?string $programCategory = null): Builder
     {
         return PerpustakaanLiterasiResponse::query()
             ->whereNotNull('submitted_at')
-            ->when($material, fn (Builder $query): Builder => $query->where('material_id', $material->getKey()));
+            ->when($material, fn (Builder $query): Builder => $query->where('material_id', $material->getKey()))
+            ->when($programCategory, fn (Builder $query): Builder => static::constrainResponseCategory($query, $programCategory));
     }
 
-    protected static function similarityQuery(?PerpustakaanLiterasiMaterial $material, Carbon $start, Carbon $end): Builder
+    protected static function similarityQuery(
+        ?PerpustakaanLiterasiMaterial $material,
+        Carbon $start,
+        Carbon $end,
+        ?string $programCategory = null
+    ): Builder
     {
         return PerpustakaanLiterasiSimilarityMatch::query()
             ->when($material, fn (Builder $query): Builder => $query->where('perpustakaan_literasi_similarity_matches.material_id', $material->getKey()))
+            ->when($programCategory, fn (Builder $query): Builder => static::constrainSimilarityCategory($query, $programCategory))
             ->where(function (Builder $query) use ($start, $end): void {
                 $query
                     ->whereBetween('later_submitted_at', [$start, $end])
@@ -411,6 +533,44 @@ class LiterasiAnalytics
                             ->whereBetween('perpustakaan_literasi_similarity_matches.created_at', [$start, $end]);
                     });
             });
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function programCategoryScopes(): array
+    {
+        return [
+            '__blank' => PerpustakaanLiterasiMaterial::uncategorizedProgramLabel(),
+        ] + PerpustakaanLiterasiMaterial::programCategoryOptions();
+    }
+
+    protected static function constrainResponseCategory(Builder $query, string $programCategory): Builder
+    {
+        return $query->whereIn('material_id', static::materialIdsForCategoryQuery($programCategory));
+    }
+
+    protected static function constrainJoinedResponseCategory(Builder $query, string $programCategory): Builder
+    {
+        return $query->whereIn('responses.material_id', static::materialIdsForCategoryQuery($programCategory));
+    }
+
+    protected static function constrainSimilarityCategory(Builder $query, string $programCategory): Builder
+    {
+        return $query->whereIn('perpustakaan_literasi_similarity_matches.material_id', static::materialIdsForCategoryQuery($programCategory));
+    }
+
+    protected static function materialIdsForCategoryQuery(string $programCategory): Builder
+    {
+        return PerpustakaanLiterasiMaterial::query()
+            ->select('id')
+            ->when(
+                $programCategory === '__blank',
+                fn (Builder $query): Builder => $query->where(function (Builder $inner): void {
+                    $inner->whereNull('program_category')->orWhere('program_category', '');
+                }),
+                fn (Builder $query): Builder => $query->where('program_category', $programCategory),
+            );
     }
 
     protected static function gradingColumnsAvailable(): bool

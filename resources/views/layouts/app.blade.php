@@ -83,7 +83,8 @@
                 </a>
 
                 <div class="relative z-40 flex flex-wrap items-center justify-end gap-2 md:hidden">
-                    <a class="btn btn-secondary" href="{{ route('library.literacy.index') }}">Program Literasi</a>
+                    <a class="btn btn-secondary" href="{{ route('library.literacy.index') }}">Literasi Numerasi</a>
+                    <a class="btn btn-secondary" href="{{ route('library.index') }}">Akses Perpus</a>
                     <a class="btn btn-primary" href="/admin/login">Login</a>
                     <div data-pwa-install-root class="hidden">
                         <button type="button" data-pwa-install-trigger class="btn btn-secondary">Install App</button>
@@ -91,7 +92,8 @@
                 </div>
 
                 <nav class="hidden flex-wrap items-center justify-end gap-2 text-sm md:flex md:max-w-[60%]">
-                    <a class="btn btn-secondary" href="{{ route('library.literacy.index') }}">Program Literasi</a>
+                    <a class="btn btn-secondary" href="{{ route('library.literacy.index') }}">Literasi Numerasi</a>
+                    <a class="btn btn-secondary" href="{{ route('library.index') }}">Akses Perpus</a>
                     <a class="btn btn-primary" href="/admin/login">Login</a>
                     <div data-pwa-install-root class="hidden">
                         <button type="button" data-pwa-install-trigger class="btn btn-secondary">Install App</button>

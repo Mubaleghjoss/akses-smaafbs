@@ -158,8 +158,10 @@ class HomeLandingPageTest extends TestCase
         $response
             ->assertOk()
             ->assertSee('Identitas sekolah untuk orang tua, siswa, dan masyarakat.')
-            ->assertSee('Program Literasi')
-            ->assertSee('/perpustakaan/literacy-habituation-program', false)
+            ->assertSee('Literasi Numerasi')
+            ->assertSee('Akses Perpus')
+            ->assertSee('/perpustakaan/program-literasi-numerasi', false)
+            ->assertSee('/perpustakaan', false)
             ->assertSee('data-home-profile-tab-trigger="identitas-sekolah"', false)
             ->assertSee('data-home-profile-tab-trigger="komite"', false)
             ->assertSee('data-home-profile-tab-trigger="prestasi-siswa"', false)

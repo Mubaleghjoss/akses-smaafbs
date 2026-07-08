@@ -397,22 +397,34 @@ Route::redirect('/perpus/index.php', '/perpustakaan/aktivitas-literasi/form');
 Route::redirect('/perpus/cari_buku.php', '/perpustakaan');
 Route::redirect('/perpus/hasil_literasi.php', '/perpustakaan/hasil-literasi');
 Route::get('/perpustakaan', [LibraryController::class, 'index'])->name('library.index');
-Route::redirect('/literasi', '/perpustakaan/literacy-habituation-program')
+Route::redirect('/literasi', '/perpustakaan/program-literasi-numerasi')
     ->name('library.literacy.shortcut');
-Route::get('/perpustakaan/literacy-habituation-program', [PerpustakaanLiteracyProgramController::class, 'index'])
+Route::redirect('/perpustakaan/literacy-habituation-program', '/perpustakaan/program-literasi-numerasi');
+Route::get('/perpustakaan/literacy-habituation-program/edit/{code}', function (string $code) {
+    return redirect()->route('library.literacy.edit', ['code' => $code], 301);
+})->where('code', '[A-Za-z0-9-]+');
+Route::redirect('/perpustakaan/literacy-habituation-program/edit', '/perpustakaan/program-literasi-numerasi/edit');
+Route::get('/perpustakaan/literacy-habituation-program/{slug}', function (string $slug) {
+    return redirect()->route('library.literacy.show', ['slug' => $slug], 301);
+});
+Route::get('/perpustakaan/program-literasi-numerasi', [PerpustakaanLiteracyProgramController::class, 'index'])
     ->name('library.literacy.index');
-Route::get('/perpustakaan/literacy-habituation-program/edit', [PerpustakaanLiteracyProgramController::class, 'editLookup'])
+Route::get('/perpustakaan/program-literasi-numerasi/edit', [PerpustakaanLiteracyProgramController::class, 'editLookup'])
     ->name('library.literacy.edit.lookup');
-Route::get('/perpustakaan/literacy-habituation-program/edit/{code}', [PerpustakaanLiteracyProgramController::class, 'edit'])
+Route::post('/perpustakaan/program-literasi-numerasi/edit/{code}/integrity', [PerpustakaanLiteracyProgramController::class, 'recordIntegrity'])
+    ->middleware('throttle:60,1')
+    ->where('code', '[A-Za-z0-9-]+')
+    ->name('library.literacy.integrity');
+Route::get('/perpustakaan/program-literasi-numerasi/edit/{code}', [PerpustakaanLiteracyProgramController::class, 'edit'])
     ->where('code', '[A-Za-z0-9-]+')
     ->name('library.literacy.edit');
-Route::post('/perpustakaan/literacy-habituation-program/edit/{code}', [PerpustakaanLiteracyProgramController::class, 'update'])
+Route::post('/perpustakaan/program-literasi-numerasi/edit/{code}', [PerpustakaanLiteracyProgramController::class, 'update'])
     ->middleware('throttle:30,1')
     ->where('code', '[A-Za-z0-9-]+')
     ->name('library.literacy.update');
-Route::get('/perpustakaan/literacy-habituation-program/{slug}', [PerpustakaanLiteracyProgramController::class, 'show'])
+Route::get('/perpustakaan/program-literasi-numerasi/{slug}', [PerpustakaanLiteracyProgramController::class, 'show'])
     ->name('library.literacy.show');
-Route::post('/perpustakaan/literacy-habituation-program/{slug}', [PerpustakaanLiteracyProgramController::class, 'store'])
+Route::post('/perpustakaan/program-literasi-numerasi/{slug}', [PerpustakaanLiteracyProgramController::class, 'store'])
     ->middleware('throttle:30,1')
     ->name('library.literacy.store');
 Route::get('/perpustakaan/aktivitas-literasi', [LibraryController::class, 'activities'])->name('library.activities');

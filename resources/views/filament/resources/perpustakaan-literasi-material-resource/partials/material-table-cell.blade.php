@@ -15,6 +15,7 @@
     </div>
 
     <div class="literasi-material-cell__meta" aria-label="Ringkasan materi">
+        <span class="literasi-material-cell__pill">{{ $record->programCategoryLabel() }}</span>
         <span class="literasi-material-cell__pill">{{ number_format($questions, 0, ',', '.') }} soal</span>
         <span class="literasi-material-cell__pill">{{ number_format($responses, 0, ',', '.') }} responden</span>
         <span class="literasi-material-cell__pill">{{ number_format($gradedResponses, 0, ',', '.') }}/{{ number_format($responses, 0, ',', '.') }} dinilai</span>

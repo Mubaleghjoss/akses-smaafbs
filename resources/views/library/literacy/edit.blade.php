@@ -1,18 +1,31 @@
 @extends('layouts.app')
 
 @section('content')
-    @include('library._nav')
-
-    <a class="chip" href="{{ route('library.literacy.index') }}"><- Kembali ke Literacy Habituation Program</a>
+    <div class="flex flex-wrap gap-2">
+        <a class="chip" href="{{ route('library.literacy.index') }}"><- Kembali ke Literasi Numerasi</a>
+    </div>
 
     <div class="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <form method="post" action="{{ route('library.literacy.update', $response->shortEditCode()) }}" class="card space-y-5 p-6 md:p-7" data-literacy-answer-form>
+        <form
+            method="post"
+            action="{{ route('library.literacy.update', $response->shortEditCode()) }}"
+            class="card space-y-5 p-6 md:p-7"
+            data-literacy-answer-form
+            data-literacy-integrity-form
+            data-integrity-endpoint="{{ route('library.literacy.integrity', $response->shortEditCode()) }}"
+        >
             @csrf
+            <input type="hidden" name="integrity[tab_switch_count]" value="0" data-integrity-field="tab_switch_count">
+            <input type="hidden" name="integrity[app_hidden_count]" value="0" data-integrity-field="app_hidden_count">
+            <input type="hidden" name="integrity[page_leave_attempt_count]" value="0" data-integrity-field="page_leave_attempt_count">
 
             <div>
                 <div class="text-xs uppercase tracking-[0.2em] text-slate-400">Edit Jawaban</div>
                 <h1 class="mt-2 text-2xl font-semibold">{{ $material->title }}</h1>
-                <p class="mt-1 text-sm text-slate-500">Perbarui jawaban, lalu simpan kembali. Kode unik tetap sama.</p>
+                <div class="mt-3 flex flex-wrap gap-2">
+                    <span class="chip {{ $material->programCategoryBadgeClasses() }}">{{ $material->programCategoryLabel() }}</span>
+                </div>
+                <p class="mt-3 text-sm text-slate-500">Perbarui jawaban, lalu simpan kembali. Kode unik tetap sama.</p>
             </div>
 
             @if(session('success'))
@@ -39,6 +52,7 @@
                 @endphp
                 <section class="rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
                     <div class="flex flex-wrap items-center gap-2">
+                        <span class="chip {{ $material->programCategoryBadgeClasses() }}">{{ $material->programCategoryLabel() }}</span>
                         <span class="chip">Pertanyaan {{ $index + 1 }}</span>
                         <span class="chip">Min. {{ number_format($minCharacters, 0, ',', '.') }} karakter</span>
                         <span class="chip">Maks. {{ number_format($maxCharacters, 0, ',', '.') }} karakter</span>

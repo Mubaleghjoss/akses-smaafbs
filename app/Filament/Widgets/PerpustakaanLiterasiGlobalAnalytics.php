@@ -25,6 +25,7 @@ class PerpustakaanLiterasiGlobalAnalytics extends Widget
     {
         return [
             'analytics' => LiterasiAnalytics::global(),
+            'categoryAnalytics' => LiterasiAnalytics::categoryAnalytics(),
         ];
     }
 }

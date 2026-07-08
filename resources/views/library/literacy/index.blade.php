@@ -1,15 +1,13 @@
 @extends('layouts.app')
 
 @section('content')
-    @include('library._nav')
-
     <div class="card p-6 reveal">
         <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
             <div>
-                <div class="text-xs uppercase tracking-[0.2em] text-slate-400">Perpustakaan</div>
-                <h1 class="mt-2 text-2xl font-semibold">Literacy Habituation Program</h1>
+                <div class="text-xs uppercase tracking-[0.2em] text-slate-400">Program</div>
+                <h1 class="mt-2 text-2xl font-semibold">Literasi Numerasi</h1>
                 <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                    Pilih materi bacaan aktif, baca instruksi, lalu kirim jawaban sesuai pertanyaan yang tersedia.
+                    Pilih soal aktif, baca instruksi, lalu kirim jawaban sesuai pertanyaan yang tersedia.
                 </p>
             </div>
 
@@ -26,15 +24,27 @@
         </div>
     </div>
 
+    <details class="card mt-6 p-5" open>
+        <summary class="cursor-pointer text-sm font-semibold text-slate-900">Arahan dan tata tertib pengerjaan</summary>
+        <div class="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+            <p>Kerjakan soal secara mandiri, jujur, dan sesuai kemampuan sendiri.</p>
+            <p>Jangan menyalin jawaban teman, membuka jawaban dari sumber lain tanpa memahami, atau meminta orang lain mengerjakan.</p>
+            <p>Jika perlu membuka layanan perpus, gunakan menu Akses Perpus di header sebelum mulai mengisi jawaban.</p>
+        </div>
+    </details>
+
     <div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         @forelse($materials as $material)
-            @php($readingPreview = $material->readingContentPreview())
+            @php
+                $readingPreview = $material->readingContentPreview();
+            @endphp
             <article class="card flex h-full flex-col overflow-hidden">
                 @if($material->imageUrl())
                     <img src="{{ $material->imageUrl() }}" alt="" class="h-44 w-full object-cover">
                 @endif
                 <div class="flex flex-1 flex-col p-5">
                     <div class="flex flex-wrap items-center gap-2">
+                        <span class="chip {{ $material->programCategoryBadgeClasses() }}">{{ $material->programCategoryLabel() }}</span>
                         <span class="chip">{{ number_format($material->questions_count ?? 0, 0, ',', '.') }} pertanyaan</span>
                         @if($material->closes_at)
                             <span class="chip">Tutup {{ $material->closes_at->format('d/m/Y H:i') }}</span>
@@ -51,7 +61,7 @@
             </article>
         @empty
             <div class="card p-6 text-sm text-slate-500 md:col-span-2 xl:col-span-3">
-                Belum ada materi Literacy Habituation Program yang aktif.
+                Belum ada soal Literasi Numerasi yang aktif.
             </div>
         @endforelse
     </div>

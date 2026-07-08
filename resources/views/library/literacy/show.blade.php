@@ -1,9 +1,13 @@
 @extends('layouts.app')
 
 @section('content')
-    @include('library._nav')
+    @php
+        $videoEmbedUrl = $material->videoEmbedUrl();
+    @endphp
 
-    <a class="chip" href="{{ route('library.literacy.index') }}"><- Kembali ke Literacy Habituation Program</a>
+    <div class="flex flex-wrap gap-2">
+        <a class="chip" href="{{ route('library.literacy.index') }}"><- Kembali ke Literasi Numerasi</a>
+    </div>
 
     <div class="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <section class="space-y-6">
@@ -12,10 +16,27 @@
                     <img src="{{ $material->imageUrl() }}" alt="" class="max-h-[28rem] w-full object-cover">
                 @endif
                 <div class="p-6 md:p-7">
-                    <div class="text-xs uppercase tracking-[0.2em] text-slate-400">Materi Bacaan</div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="chip {{ $material->programCategoryBadgeClasses() }}">{{ $material->programCategoryLabel() }}</span>
+                        <span class="chip">Materi Bacaan</span>
+                    </div>
                     <h1 class="mt-3 text-2xl font-semibold md:text-3xl">{{ $material->title }}</h1>
                     @if($material->google_drive_url)
                         <a class="chip mt-4 inline-flex" href="{{ $material->google_drive_url }}" target="_blank" rel="noopener">Buka Google Drive</a>
+                    @endif
+                    @if($videoEmbedUrl)
+                        <div class="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-slate-950">
+                            <iframe
+                                class="aspect-video w-full"
+                                src="{{ $videoEmbedUrl }}"
+                                title="Video pendukung {{ $material->title }}"
+                                loading="lazy"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                allowfullscreen
+                            ></iframe>
+                        </div>
+                    @elseif($material->video_url)
+                        <a class="chip mt-4 inline-flex" href="{{ $material->video_url }}" target="_blank" rel="noopener">Buka Video</a>
                     @endif
                     @if(filled($material->reading_content))
                         <div class="literacy-reading-content">
@@ -25,8 +46,18 @@
                 </div>
             </article>
 
-            <form method="post" action="{{ route('library.literacy.store', $material->slug) }}" class="card space-y-5 p-6 md:p-7" data-literacy-answer-form>
+            <details class="card p-5" open>
+                <summary class="cursor-pointer text-sm font-semibold text-slate-900">Arahan dan tata tertib pengerjaan</summary>
+                <div class="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+                    {!! $material->instructionsHtml() !!}
+                </div>
+            </details>
+
+            <form method="post" action="{{ route('library.literacy.store', $material->slug) }}" class="card space-y-5 p-6 md:p-7" data-literacy-answer-form data-literacy-integrity-form>
                 @csrf
+                <input type="hidden" name="integrity[tab_switch_count]" value="0" data-integrity-field="tab_switch_count">
+                <input type="hidden" name="integrity[app_hidden_count]" value="0" data-integrity-field="app_hidden_count">
+                <input type="hidden" name="integrity[page_leave_attempt_count]" value="0" data-integrity-field="page_leave_attempt_count">
 
                 <div>
                     <div class="text-xs uppercase tracking-[0.2em] text-slate-400">Jawaban</div>
@@ -98,6 +129,7 @@
                     @endphp
                     <section class="rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
                         <div class="flex flex-wrap items-center gap-2">
+                            <span class="chip {{ $material->programCategoryBadgeClasses() }}">{{ $material->programCategoryLabel() }}</span>
                             <span class="chip">Pertanyaan {{ $index + 1 }}</span>
                             <span class="chip">Min. {{ number_format($minCharacters, 0, ',', '.') }} karakter</span>
                             <span class="chip">Maks. {{ number_format($maxCharacters, 0, ',', '.') }} karakter</span>

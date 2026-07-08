@@ -98,6 +98,104 @@
                 textarea.addEventListener('input', refresh);
                 refresh();
             });
+
+            const integrityFields = {
+                tab_switch_count: form.querySelector('[data-integrity-field="tab_switch_count"]'),
+                app_hidden_count: form.querySelector('[data-integrity-field="app_hidden_count"]'),
+                page_leave_attempt_count: form.querySelector('[data-integrity-field="page_leave_attempt_count"]'),
+            };
+
+            if (Object.values(integrityFields).some(Boolean) && form.dataset.literacyIntegrityReady !== '1') {
+                form.dataset.literacyIntegrityReady = '1';
+
+                const counts = {
+                    tab_switch_count: 0,
+                    app_hidden_count: 0,
+                    page_leave_attempt_count: 0,
+                };
+                let submitting = false;
+                let beaconSent = false;
+
+                const syncIntegrityFields = () => {
+                    Object.entries(integrityFields).forEach(([key, input]) => {
+                        if (input) {
+                            input.value = String(counts[key] || 0);
+                        }
+                    });
+                };
+
+                const bumpIntegrity = (key) => {
+                    counts[key] = (counts[key] || 0) + 1;
+                    syncIntegrityFields();
+                };
+
+                const submitIntegrityBeacon = () => {
+                    const endpoint = form.dataset.integrityEndpoint || '';
+
+                    if (!endpoint || submitting || beaconSent) {
+                        return;
+                    }
+
+                    syncIntegrityFields();
+                    beaconSent = true;
+
+                    const payload = new FormData();
+                    const token = form.querySelector('input[name="_token"]')?.value || '';
+
+                    if (token) {
+                        payload.append('_token', token);
+                    }
+
+                    Object.entries(counts).forEach(([key, value]) => {
+                        payload.append(`integrity[${key}]`, String(value || 0));
+                    });
+
+                    if (navigator.sendBeacon) {
+                        navigator.sendBeacon(endpoint, payload);
+
+                        return;
+                    }
+
+                    fetch(endpoint, {
+                        method: 'POST',
+                        body: payload,
+                        credentials: 'same-origin',
+                        keepalive: true,
+                    }).catch(() => {});
+                };
+
+                form.addEventListener('submit', () => {
+                    submitting = true;
+                    syncIntegrityFields();
+                });
+
+                window.addEventListener('blur', () => {
+                    if (!submitting) {
+                        bumpIntegrity('tab_switch_count');
+                    }
+                });
+
+                document.addEventListener('visibilitychange', () => {
+                    if (!submitting && document.visibilityState === 'hidden') {
+                        bumpIntegrity('app_hidden_count');
+                    }
+                });
+
+                window.addEventListener('beforeunload', (event) => {
+                    if (submitting) {
+                        return;
+                    }
+
+                    bumpIntegrity('page_leave_attempt_count');
+                    event.preventDefault();
+                    event.returnValue = 'Jawaban belum tentu tersimpan. Tetap keluar dari halaman pengerjaan?';
+
+                    return event.returnValue;
+                });
+
+                window.addEventListener('pagehide', submitIntegrityBeacon);
+                syncIntegrityFields();
+            }
         });
 
         const combobox = document.querySelector('[data-literacy-student-combobox]');

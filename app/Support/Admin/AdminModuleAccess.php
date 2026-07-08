@@ -124,7 +124,7 @@ class AdminModuleAccess
         'event_timelines' => 'Kelola timeline kegiatan dan tahapan acara.',
         'berita' => 'Kelola berita sekolah dan update perkembangannya.',
         'galeri' => 'Kelola galeri foto kegiatan sekolah.',
-        'perpustakaan_literasi' => 'Kelola materi, pertanyaan, jawaban, dan analisa Literacy Habituation Program.',
+        'perpustakaan_literasi' => 'Kelola materi, pertanyaan, jawaban, dan analisa Literasi Numerasi.',
         'sarpras_bosp_inventory' => 'Kelola daftar inventaris barang yang dibeli dari BOSP.',
         'sarpras_sticker_settings' => 'Atur logo, ukuran, dan teks stiker inventaris sarpras.',
         'sarpras_room_inventory' => 'Kelola inventaris barang per ruang atau gedung.',

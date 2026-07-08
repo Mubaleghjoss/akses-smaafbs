@@ -1,13 +1,11 @@
 @extends('layouts.app')
 
 @section('content')
-    @include('library._nav')
-
     <div class="card p-6 reveal">
         <div class="flex flex-wrap items-end justify-between gap-4">
             <div>
                 <h1 class="text-2xl font-semibold">Layanan perpustakaan</h1>
-                <p class="mt-1 text-sm text-slate-500">Temukan buku fisik dan e-book untuk mendukung kegiatan belajar siswa.</p>
+                <p class="mt-1 text-sm text-slate-500">Cari buku fisik dan e-book yang tersedia di perpustakaan.</p>
             </div>
             <form method="get" class="grid w-full max-w-md gap-2 sm:flex sm:items-center">
                 <input name="q" value="{{ $q }}" class="input min-w-0" placeholder="Cari judul buku atau nama penulis..." />
@@ -22,6 +20,7 @@
                 @endforeach
             </div>
         @endif
+
     </div>
 
     <div class="card mt-6 overflow-hidden">

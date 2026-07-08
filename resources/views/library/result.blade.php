@@ -1,8 +1,6 @@
 @extends('layouts.app')
 
 @section('content')
-    @include('library._nav')
-
     <div class="card p-6 reveal">
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div>
