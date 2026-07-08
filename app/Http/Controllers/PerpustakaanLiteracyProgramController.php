@@ -90,7 +90,7 @@ class PerpustakaanLiteracyProgramController extends Controller
 
         if ($existingResponse) {
             return back()
-                ->withErrors(['student_id' => 'Siswa ini sudah mengirim jawaban. Gunakan kode unik untuk mengedit jawaban. Jika kode hilang atau merasa belum mengisi, hubungi guru/admin agar kode edit dicek dari History Pengerjaan Siswa.'])
+                ->withErrors(['student_id' => 'Siswa ini sudah mengirim jawaban. Gunakan kode unik untuk mengedit jawaban. Jika nama sudah mengisi dan lupa kode editnya, hubungi Guru / Tim Literasi Numerasi agar kode edit dicek.'])
                 ->withInput();
         }
 

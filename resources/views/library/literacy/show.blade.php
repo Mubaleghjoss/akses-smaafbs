@@ -214,6 +214,7 @@
                 <div class="mt-3 space-y-3 text-sm leading-6 text-slate-600">
                     <p>Jawaban hanya bisa dikirim satu kali untuk setiap siswa dan materi.</p>
                     <p>Simpan kode unik setelah mengirim. Kode itu dipakai untuk membuka kembali halaman edit.</p>
+                    <p>Jika nama sudah mengisi dan lupa kode editnya, segera hubungi <strong class="font-semibold text-slate-900">Guru / Tim Literasi Numerasi</strong> agar kode edit dicek.</p>
                 </div>
             </div>
         </aside>

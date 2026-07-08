@@ -200,6 +200,7 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('Verifikasi siswa')
             ->assertSee('NISN atau tanggal lahir')
             ->assertSee('Kode edit jawaban')
+            ->assertSee('<strong class="font-semibold text-slate-900">Guru / Tim Literasi Numerasi</strong>', false)
             ->assertSee('Buka Edit')
             ->assertSee('data-literacy-student-combobox', false)
             ->assertSee('data-literacy-answer-count', false);
@@ -381,7 +382,9 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertRedirect();
 
         $this->post(route('library.literacy.store', $material->slug), $payload)
-            ->assertSessionHasErrors(['student_id']);
+            ->assertSessionHasErrors([
+                'student_id' => 'Siswa ini sudah mengirim jawaban. Gunakan kode unik untuk mengedit jawaban. Jika nama sudah mengisi dan lupa kode editnya, hubungi Guru / Tim Literasi Numerasi agar kode edit dicek.',
+            ]);
     }
 
     public function test_literacy_integrity_counts_are_saved_from_submit_update_and_beacon(): void
