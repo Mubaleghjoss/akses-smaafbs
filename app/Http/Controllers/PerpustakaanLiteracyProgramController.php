@@ -59,6 +59,7 @@ class PerpustakaanLiteracyProgramController extends Controller
         $validated = $request->validate(
             $this->answerValidationRules($questions) + [
                 'student_id' => ['required', 'integer', 'exists:data_siswa,id'],
+                'student_verification' => ['nullable', 'string', 'max:80'],
             ] + $this->integrityValidationRules(),
             [],
             $this->answerValidationAttributes($questions),
@@ -75,6 +76,12 @@ class PerpustakaanLiteracyProgramController extends Controller
                 ->withInput();
         }
 
+        if (! $this->studentVerificationMatches($student, (string) ($validated['student_verification'] ?? ''))) {
+            return back()
+                ->withErrors(['student_verification' => $this->studentVerificationErrorMessage($student, (string) ($validated['student_verification'] ?? ''))])
+                ->withInput();
+        }
+
         $existingResponse = PerpustakaanLiterasiResponse::query()
             ->where('material_id', $material->getKey())
             ->where('data_siswa_id', $student->getKey())
@@ -82,7 +89,7 @@ class PerpustakaanLiteracyProgramController extends Controller
 
         if ($existingResponse) {
             return back()
-                ->withErrors(['student_id' => 'Siswa ini sudah mengirim jawaban. Gunakan kode unik untuk mengedit jawaban.'])
+                ->withErrors(['student_id' => 'Siswa ini sudah mengirim jawaban. Gunakan kode unik untuk mengedit jawaban. Jika kode hilang atau merasa belum mengisi, hubungi guru/admin agar kode edit dicek dari History Pengerjaan Siswa.'])
                 ->withInput();
         }
 
@@ -353,7 +360,7 @@ class PerpustakaanLiteracyProgramController extends Controller
     }
 
     /**
-     * @return array<int, array{id:int,label:string,name:string,class:string}>
+     * @return array<int, array{id:int,label:string,name:string,class:string,verification_required:bool}>
      */
     protected function studentOptions(): array
     {
@@ -362,7 +369,7 @@ class PerpustakaanLiteracyProgramController extends Controller
         }
 
         return DataSiswa::query()
-            ->select(['id', 'nama', 'rombel_saat_ini', 'status'])
+            ->select(['id', 'nama', 'rombel_saat_ini', 'status', 'nisn', 'tanggal_lahir'])
             ->where('status', 'aktif')
             ->whereNotNull('nama')
             ->where('nama', '!=', '')
@@ -378,9 +385,75 @@ class PerpustakaanLiteracyProgramController extends Controller
                     'name' => $name,
                     'class' => $class,
                     'label' => $class !== '' ? $name.' - '.$class : $name,
+                    'verification_required' => $this->studentRequiresVerification($student),
                 ];
             })
             ->values()
             ->all();
+    }
+
+    protected function studentRequiresVerification(DataSiswa $student): bool
+    {
+        return filled($student->nisn) || $student->tanggal_lahir !== null;
+    }
+
+    protected function studentVerificationMatches(DataSiswa $student, string $value): bool
+    {
+        if (! $this->studentRequiresVerification($student)) {
+            return true;
+        }
+
+        $value = trim($value);
+
+        if ($value === '') {
+            return false;
+        }
+
+        $studentNisn = preg_replace('/\D+/', '', (string) $student->nisn) ?: '';
+        $valueDigits = preg_replace('/\D+/', '', $value) ?: '';
+
+        if ($studentNisn !== '' && hash_equals($studentNisn, $valueDigits)) {
+            return true;
+        }
+
+        $birthDate = $student->tanggal_lahir?->format('Y-m-d');
+
+        if ($birthDate === null) {
+            return false;
+        }
+
+        return in_array($birthDate, $this->normalizedVerificationDates($value), true);
+    }
+
+    protected function studentVerificationErrorMessage(DataSiswa $student, string $value): string
+    {
+        return trim($value) === ''
+            ? 'Isi NISN atau tanggal lahir siswa yang dipilih untuk verifikasi.'
+            : 'NISN atau tanggal lahir tidak cocok dengan data siswa yang dipilih.';
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function normalizedVerificationDates(string $value): array
+    {
+        $value = trim($value);
+        $formats = ['Y-m-d', 'Y/m/d', 'd/m/Y', 'd-m-Y', 'Ymd', 'dmY'];
+        $dates = [];
+
+        foreach ($formats as $format) {
+            $date = \DateTimeImmutable::createFromFormat('!'.$format, $value);
+            $errors = \DateTimeImmutable::getLastErrors();
+            $hasErrors = is_array($errors)
+                && (((int) ($errors['warning_count'] ?? 0)) > 0 || ((int) ($errors['error_count'] ?? 0)) > 0);
+
+            if ($date === false || $hasErrors) {
+                continue;
+            }
+
+            $dates[] = $date->format('Y-m-d');
+        }
+
+        return array_values(array_unique($dates));
     }
 }

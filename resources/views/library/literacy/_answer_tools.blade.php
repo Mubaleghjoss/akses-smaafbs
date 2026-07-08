@@ -328,6 +328,8 @@
         const hiddenInput = combobox.querySelector('[data-student-id]');
         const results = combobox.querySelector('[data-student-results]');
         const selectedNotice = document.querySelector('[data-student-selected]');
+        const verificationInput = document.querySelector('[data-student-verification]');
+        const verificationHelp = document.querySelector('[data-student-verification-help]');
         let activeIndex = -1;
         let currentMatches = [];
 
@@ -356,11 +358,27 @@
             selectedNotice.classList.remove('hidden');
         };
 
+        const updateVerificationRequirement = (student) => {
+            if (!verificationInput) {
+                return;
+            }
+
+            const isRequired = Boolean(student?.verification_required);
+            verificationInput.required = isRequired;
+
+            if (verificationHelp) {
+                verificationHelp.textContent = isRequired
+                    ? 'Wajib isi NISN atau tanggal lahir siswa yang dipilih. Format tanggal bisa DD/MM/YYYY atau YYYY-MM-DD.'
+                    : 'Data NISN/tanggal lahir siswa ini belum lengkap di master. Admin tetap bisa mengecek history jika terjadi salah input.';
+            }
+        };
+
         const selectStudent = (student) => {
             hiddenInput.value = String(student.id);
             input.value = student.label;
             input.setCustomValidity('');
             updateSelectedNotice(student);
+            updateVerificationRequirement(student);
             closeResults();
         };
 
@@ -436,6 +454,7 @@
             hiddenInput.value = '';
             input.setCustomValidity('');
             updateSelectedNotice(null);
+            updateVerificationRequirement(null);
             renderResults();
         });
         input.addEventListener('keydown', (event) => {
@@ -485,6 +504,7 @@
             input.reportValidity();
             event.preventDefault();
         });
+        updateVerificationRequirement(students.find((student) => String(student.id) === hiddenInput.value) || null);
         document.addEventListener('click', (event) => {
             if (!combobox.contains(event.target)) {
                 closeResults();

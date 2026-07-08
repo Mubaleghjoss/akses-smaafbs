@@ -196,6 +196,8 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('Codex Literasi Siswa A - XII IPA')
             ->assertSee('Tuliskan ringkasan bacaan.')
             ->assertSee('Ketik nama atau kelas siswa')
+            ->assertSee('Verifikasi siswa')
+            ->assertSee('NISN atau tanggal lahir')
             ->assertSee('Kode edit jawaban')
             ->assertSee('Buka Edit')
             ->assertSee('data-literacy-student-combobox', false)
@@ -242,6 +244,44 @@ class LibraryLiteracyProgramTest extends TestCase
             'response_id' => $response->getKey(),
             'question_id' => $question->getKey(),
             'answer_text' => 'Jawaban saya sudah diedit dengan tambahan refleksi setelah membaca ulang materi.',
+        ]);
+    }
+
+    public function test_student_identity_verification_is_required_when_master_data_has_nisn_or_birth_date(): void
+    {
+        $student = $this->createStudent('Codex Verifikasi Siswa', 'X Verifikasi', [
+            'nisn' => '1234567890',
+            'tanggal_lahir' => '2010-01-15',
+        ]);
+        $material = $this->createMaterial('Materi Verifikasi Siswa');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Tuliskan komitmen mengerjakan sendiri.',
+            'min_characters' => 20,
+            'max_characters' => 500,
+        ]);
+
+        $payload = [
+            'student_id' => $student->getKey(),
+            'answers' => [
+                $question->getKey() => 'Saya mengerjakan soal ini sendiri dan tidak memakai nama siswa lain.',
+            ],
+        ];
+
+        $this->post(route('library.literacy.store', $material->slug), $payload)
+            ->assertSessionHasErrors(['student_verification']);
+
+        $this->post(route('library.literacy.store', $material->slug), $payload + [
+            'student_verification' => '0000000000',
+        ])->assertSessionHasErrors(['student_verification']);
+
+        $this->post(route('library.literacy.store', $material->slug), $payload + [
+            'student_verification' => '15/01/2010',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('perpustakaan_literasi_responses', [
+            'data_siswa_id' => $student->getKey(),
+            'student_name_snapshot' => 'Codex Verifikasi Siswa',
         ]);
     }
 
@@ -1363,13 +1403,13 @@ class LibraryLiteracyProgramTest extends TestCase
         ], $attributes));
     }
 
-    protected function createStudent(string $name, string $class): DataSiswa
+    protected function createStudent(string $name, string $class, array $attributes = []): DataSiswa
     {
-        return DataSiswa::query()->create([
+        return DataSiswa::query()->create(array_merge([
             'nama' => $name,
             'rombel_saat_ini' => $class,
             'status' => 'aktif',
-        ]);
+        ], $attributes));
     }
 
     protected function createResponseWithAnswer(

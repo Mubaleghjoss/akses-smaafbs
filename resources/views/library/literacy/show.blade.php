@@ -119,6 +119,25 @@
                             <div class="mt-1 text-xs text-rose-600">{{ $message }}</div>
                         @enderror
                     </div>
+
+                    <div>
+                        <label class="text-sm font-semibold text-slate-700" for="student_verification">Verifikasi siswa *</label>
+                        <input
+                            class="input mt-2"
+                            id="student_verification"
+                            name="student_verification"
+                            value="{{ old('student_verification') }}"
+                            placeholder="NISN atau tanggal lahir, contoh 15/01/2010"
+                            autocomplete="off"
+                            data-student-verification
+                        >
+                        <div class="mt-1 text-xs text-slate-500" data-student-verification-help>
+                            Isi NISN atau tanggal lahir siswa yang dipilih. Ini membantu mencegah nama dipakai oleh siswa lain.
+                        </div>
+                        @error('student_verification')
+                            <div class="mt-1 text-xs text-rose-600">{{ $message }}</div>
+                        @enderror
+                    </div>
                 @endif
 
                 @forelse($material->questions as $index => $question)
