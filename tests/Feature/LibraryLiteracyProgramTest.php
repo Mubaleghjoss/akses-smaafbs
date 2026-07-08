@@ -124,7 +124,12 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('Jangan membuka tab lain selama mengerjakan.')
             ->assertSee('https://www.youtube.com/embed/dQw4w9WgXcQ', false)
             ->assertSee('data-literacy-integrity-form', false)
-            ->assertSee('data-integrity-field="tab_switch_count"', false);
+            ->assertSee('data-integrity-field="tab_switch_count"', false)
+            ->assertSee('data-literacy-integrity-popup', false)
+            ->assertSee('Peringatan Integritas')
+            ->assertSee('Terdeteksi pindah tab atau fokus keluar dari halaman pengerjaan.')
+            ->assertSee('Terdeteksi keluar aplikasi atau menyembunyikan halaman pengerjaan.')
+            ->assertDontSee('Tetap keluar dari halaman pengerjaan?');
     }
 
     public function test_public_literacy_images_normalize_legacy_filename_only_paths(): void
@@ -691,6 +696,16 @@ class LibraryLiteracyProgramTest extends TestCase
         $gradingSchema = $schemaMethod->invoke($gradingComponent->instance(), $response);
         $childComponents = new \ReflectionProperty($gradingSchema[1], 'childComponents');
         $childComponents->setAccessible(true);
+        $integrityComponents = $childComponents->getValue($gradingSchema[0])['default'] ?? [];
+        $submittedAtPlaceholder = collect($integrityComponents)
+            ->first(fn ($component): bool => method_exists($component, 'getName')
+                && $component->getName() === 'submitted_at');
+        $submittedAtLabel = new \ReflectionProperty($submittedAtPlaceholder, 'label');
+        $submittedAtLabel->setAccessible(true);
+
+        $this->assertNotNull($submittedAtPlaceholder);
+        $this->assertSame('Submit jawaban', $submittedAtLabel->getValue($submittedAtPlaceholder));
+
         $answerKeyPlaceholder = collect($gradingSchema)
             ->flatMap(fn ($section): array => $childComponents->getValue($section)['default'] ?? [])
             ->first(fn ($component): bool => method_exists($component, 'getName')

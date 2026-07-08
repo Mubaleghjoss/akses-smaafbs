@@ -237,9 +237,9 @@ class ResponsesRelationManager extends RelationManager
                 Forms\Components\Placeholder::make('page_leave_attempt_count')
                     ->label('Percobaan Keluar Halaman')
                     ->content(number_format((int) ($record->page_leave_attempt_count ?? 0), 0, ',', '.').'x'),
-                Forms\Components\Placeholder::make('last_integrity_event_at')
-                    ->label('Event Terakhir')
-                    ->content($record->last_integrity_event_at?->format('d/m/Y H:i') ?? '-'),
+                Forms\Components\Placeholder::make('submitted_at')
+                    ->label('Submit jawaban')
+                    ->content($record->submitted_at?->format('d/m/Y H:i') ?? '-'),
             ]);
     }
 
