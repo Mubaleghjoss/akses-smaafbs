@@ -286,7 +286,12 @@ class ServerDataPuller
             }
 
             $this->emit($line, "Mengaktifkan storage lokal: {$pair['local']}");
-            $this->storageSwapper->replace($stagingPath, $localPath, $previousPath);
+            $mode = $this->storageSwapper->replace($stagingPath, $localPath, $previousPath);
+
+            if ($mode === StorageDirectorySwapper::MODE_MIRRORED) {
+                $this->emit($line, "Folder aktif {$pair['local']} sedang dipakai, isi storage disalin langsung tanpa memindahkan folder root.");
+            }
+
             $synced[] = $pair['local'];
         }
 

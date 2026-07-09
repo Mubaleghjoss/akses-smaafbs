@@ -54,6 +54,48 @@ class StorageDirectorySwapperTest extends TestCase
         }
     }
 
+    public function test_it_copies_staging_into_live_directory_when_live_root_cannot_be_moved(): void
+    {
+        $root = sys_get_temp_dir().DIRECTORY_SEPARATOR.'server-sync-swap-'.bin2hex(random_bytes(5));
+        $live = $root.DIRECTORY_SEPARATOR.'live';
+        $staging = $root.DIRECTORY_SEPARATOR.'staging';
+        $previous = $root.DIRECTORY_SEPARATOR.'previous';
+
+        mkdir($live.DIRECTORY_SEPARATOR.'literasi', 0777, true);
+        mkdir($staging.DIRECTORY_SEPARATOR.'literasi', 0777, true);
+        file_put_contents($live.DIRECTORY_SEPARATOR.'old-local-only.txt', 'still-here');
+        file_put_contents($live.DIRECTORY_SEPARATOR.'literasi'.DIRECTORY_SEPARATOR.'cover.png', 'old-cover');
+        file_put_contents($staging.DIRECTORY_SEPARATOR.'literasi'.DIRECTORY_SEPARATOR.'cover.png', 'server-cover');
+        file_put_contents($staging.DIRECTORY_SEPARATOR.'literasi'.DIRECTORY_SEPARATOR.'video.txt', 'server-video');
+
+        $swapper = new class($live) extends StorageDirectorySwapper
+        {
+            public function __construct(private string $lockedLivePath) {}
+
+            protected function moveDirectory(string $sourcePath, string $targetPath): bool
+            {
+                if ($sourcePath === $this->lockedLivePath) {
+                    return false;
+                }
+
+                return parent::moveDirectory($sourcePath, $targetPath);
+            }
+        };
+
+        try {
+            $mode = $swapper->replace($staging, $live, $previous);
+
+            $this->assertSame(StorageDirectorySwapper::MODE_MIRRORED, $mode);
+            $this->assertSame('server-cover', file_get_contents($live.DIRECTORY_SEPARATOR.'literasi'.DIRECTORY_SEPARATOR.'cover.png'));
+            $this->assertSame('server-video', file_get_contents($live.DIRECTORY_SEPARATOR.'literasi'.DIRECTORY_SEPARATOR.'video.txt'));
+            $this->assertSame('still-here', file_get_contents($live.DIRECTORY_SEPARATOR.'old-local-only.txt'));
+            $this->assertDirectoryDoesNotExist($staging);
+            $this->assertDirectoryDoesNotExist($previous);
+        } finally {
+            $this->deleteDirectory($root);
+        }
+    }
+
     protected function deleteDirectory(string $path): void
     {
         if (! is_dir($path)) {
