@@ -293,17 +293,71 @@ class DataSiswaSupport
         return Cache::remember(
             'data_siswa_support:angkatan_options:v'.self::optionsCacheVersion().':'.self::scopeCacheKey($user),
             now()->addMinutes(10),
-            fn (): array => self::baseQuery($user)
-                ->whereNotNull('rombel_saat_ini')
-                ->where('rombel_saat_ini', '!=', '')
-                ->pluck('rombel_saat_ini')
-                ->map(fn (?string $rombel): ?string => self::extractAngkatan($rombel))
+            function () use ($user): array {
+                $fromStudents = self::baseQuery($user)
+                    ->whereNotNull('rombel_saat_ini')
+                    ->where('rombel_saat_ini', '!=', '')
+                    ->pluck('rombel_saat_ini')
+                    ->map(fn (?string $rombel): ?string => self::extractAngkatan($rombel));
+
+                $fromMaster = self::canSeeMasterRombels($user)
+                    ? collect(self::masterAngkatanValues())
+                    : collect();
+
+                return $fromMaster
+                    ->merge($fromStudents)
+                    ->filter()
+                    ->unique()
+                    ->sort()
+                    ->mapWithKeys(fn (string $angkatan): array => [$angkatan => $angkatan])
+                    ->all();
+            },
+        );
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function rombelNamesForAngkatan(?string $angkatan, ?User $user = null): array
+    {
+        $normalized = Rombel::normalizeName($angkatan);
+
+        if ($normalized === '' || ! Rombel::tableAvailable() || ! self::canSeeMasterRombels($user)) {
+            return [];
+        }
+
+        return Cache::remember(
+            'data_siswa_support:rombel_names_for_angkatan:v'.self::optionsCacheVersion().':'.$normalized,
+            now()->addMinutes(10),
+            fn (): array => Rombel::query()
+                ->where('angkatan', $normalized)
+                ->orderBy('nama')
+                ->pluck('nama')
+                ->map(fn (?string $rombel): string => Rombel::normalizeName($rombel))
                 ->filter()
                 ->unique()
-                ->sort()
-                ->mapWithKeys(fn (string $angkatan): array => [$angkatan => $angkatan])
+                ->values()
                 ->all(),
         );
+    }
+
+    public static function angkatanLabelForRombel(?string $rombel): ?string
+    {
+        $normalized = Rombel::normalizeName($rombel);
+
+        if ($normalized === '') {
+            return null;
+        }
+
+        if (Rombel::tableAvailable()) {
+            $fromMaster = self::masterRombelAngkatanMap();
+
+            if (filled($fromMaster[$normalized] ?? null)) {
+                return (string) $fromMaster[$normalized];
+            }
+        }
+
+        return self::extractAngkatan($normalized);
     }
 
     /**
@@ -348,6 +402,47 @@ class DataSiswaSupport
             ->orderBy('nama')
             ->pluck('nama', 'nama')
             ->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected static function masterAngkatanValues(): array
+    {
+        if (! Rombel::tableAvailable()) {
+            return [];
+        }
+
+        return Rombel::query()
+            ->whereNotNull('angkatan')
+            ->where('angkatan', '!=', '')
+            ->orderBy('angkatan')
+            ->pluck('angkatan')
+            ->map(fn (?string $angkatan): string => Rombel::normalizeName($angkatan))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function masterRombelAngkatanMap(): array
+    {
+        return Cache::remember(
+            'data_siswa_support:rombel_angkatan_map:v'.self::optionsCacheVersion(),
+            now()->addMinutes(10),
+            fn (): array => Rombel::query()
+                ->whereNotNull('angkatan')
+                ->where('angkatan', '!=', '')
+                ->pluck('angkatan', 'nama')
+                ->mapWithKeys(fn (?string $angkatan, ?string $rombel): array => [
+                    Rombel::normalizeName($rombel) => Rombel::normalizeName($angkatan),
+                ])
+                ->filter()
+                ->all(),
+        );
     }
 
     /**

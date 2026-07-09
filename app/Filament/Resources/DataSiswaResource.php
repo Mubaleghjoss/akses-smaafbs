@@ -234,7 +234,7 @@ class DataSiswaResource extends Resource
                 Tables\Columns\TextColumn::make('rombel_saat_ini')->label('Rombel')->searchable()->visibleFrom('md'),
                 Tables\Columns\TextColumn::make('angkatan_label')
                     ->label('Angkatan')
-                    ->state(fn (DataSiswa $record): string => DataSiswaSupport::extractAngkatan($record->rombel_saat_ini) ?? '-')
+                    ->state(fn (DataSiswa $record): string => DataSiswaSupport::angkatanLabelForRombel($record->rombel_saat_ini) ?? '-')
                     ->visibleFrom('md')
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('jk')->label('JK')->badge()->visibleFrom('md'),
@@ -305,7 +305,16 @@ class DataSiswaResource extends Resource
                             return $query;
                         }
 
-                        return $query->where('rombel_saat_ini', 'like', '%'.$data['value'].'%');
+                        $value = Rombel::normalizeName($data['value'] ?? null);
+                        $rombelNames = DataSiswaSupport::rombelNamesForAngkatan($value, auth()->user());
+
+                        return $query->where(function (Builder $subQuery) use ($rombelNames, $value): void {
+                            if ($rombelNames !== []) {
+                                $subQuery->whereIn('rombel_saat_ini', $rombelNames);
+                            }
+
+                            $subQuery->{$rombelNames !== [] ? 'orWhere' : 'where'}('rombel_saat_ini', 'like', '%'.$value.'%');
+                        });
                     }),
                 Tables\Filters\SelectFilter::make('rombel_saat_ini')
                     ->label('Rombel')
@@ -594,7 +603,7 @@ class DataSiswaResource extends Resource
                             ->placeholder('-'),
                         TextEntry::make('angkatan')
                             ->label('Angkatan')
-                            ->state(fn (DataSiswa $record): string => DataSiswaSupport::extractAngkatan($record->rombel_saat_ini) ?? '-')
+                            ->state(fn (DataSiswa $record): string => DataSiswaSupport::angkatanLabelForRombel($record->rombel_saat_ini) ?? '-')
                             ->placeholder('-'),
                     ]),
                 Section::make('Identitas & Kontak')

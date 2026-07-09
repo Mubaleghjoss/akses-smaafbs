@@ -167,6 +167,52 @@ class DataSiswaManagementTest extends TestCase
             ->assertCanNotSeeTableRecords([$emptyStatus, $activeStudent]);
     }
 
+    public function test_data_siswa_angkatan_filter_uses_master_rombel_angkatan(): void
+    {
+        $admin = User::query()->create([
+            'name' => 'Admin Filter Angkatan',
+            'username' => 'admin-filter-angkatan',
+            'password' => bcrypt('password'),
+        ]);
+        $admin->assignRole('admin');
+
+        Rombel::query()->create([
+            'nama' => 'X 1',
+            'angkatan' => '6',
+            'is_active' => true,
+        ]);
+        Rombel::query()->create([
+            'nama' => 'XI 1',
+            'angkatan' => '5',
+            'is_active' => true,
+        ]);
+
+        $gradeSixStudent = DataSiswa::query()->create([
+            'nama' => 'Siswa Angkatan Enam',
+            'nisn' => '2010101001',
+            'status' => 'aktif',
+            'rombel_saat_ini' => 'X 1',
+        ]);
+        $gradeFiveStudent = DataSiswa::query()->create([
+            'nama' => 'Siswa Angkatan Lima',
+            'nisn' => '2010101002',
+            'status' => 'aktif',
+            'rombel_saat_ini' => 'XI 1',
+        ]);
+
+        $this->assertSame('6', DataSiswaSupport::angkatanLabelForRombel('X 1'));
+        $this->assertArrayHasKey('6', DataSiswaSupport::angkatanOptions($admin));
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::actingAs($admin)
+            ->test(ManageDataSiswas::class)
+            ->filterTable('angkatan', ['value' => '6'])
+            ->call('loadTable')
+            ->assertCanSeeTableRecords([$gradeSixStudent])
+            ->assertCanNotSeeTableRecords([$gradeFiveStudent]);
+    }
+
     public function test_data_siswa_table_can_bulk_move_rombel_and_update_status(): void
     {
         $admin = User::query()->create([
