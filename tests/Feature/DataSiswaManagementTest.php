@@ -120,6 +120,51 @@ class DataSiswaManagementTest extends TestCase
             ->assertSee('Kolom Database Lainnya');
     }
 
+    public function test_data_siswa_table_can_filter_blank_spmb_status_and_rombel(): void
+    {
+        $admin = User::query()->create([
+            'name' => 'Admin Filter SPMB',
+            'username' => 'admin-filter-spmb',
+            'password' => bcrypt('password'),
+        ]);
+        $admin->assignRole('admin');
+
+        $blankStatusAndRombel = DataSiswa::query()->create([
+            'nama' => 'Siswa SPMB Belum Lengkap',
+            'nisn' => '0011223344',
+            'status' => null,
+            'rombel_saat_ini' => null,
+        ]);
+        $emptyStatus = DataSiswa::query()->create([
+            'nama' => 'Siswa SPMB Status Kosong',
+            'nisn' => '0011223345',
+            'status' => '',
+            'rombel_saat_ini' => 'X.A / 2026-2027',
+        ]);
+        $activeStudent = DataSiswa::query()->create([
+            'nama' => 'Siswa Aktif Lengkap',
+            'nisn' => '0011223346',
+            'status' => 'aktif',
+            'rombel_saat_ini' => 'X.B / 2026-2027',
+        ]);
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::actingAs($admin)
+            ->test(ManageDataSiswas::class)
+            ->filterTable('status', '__blank')
+            ->call('loadTable')
+            ->assertCanSeeTableRecords([$blankStatusAndRombel, $emptyStatus])
+            ->assertCanNotSeeTableRecords([$activeStudent]);
+
+        Livewire::actingAs($admin)
+            ->test(ManageDataSiswas::class)
+            ->filterTable('rombel_saat_ini', '__blank')
+            ->call('loadTable')
+            ->assertCanSeeTableRecords([$blankStatusAndRombel])
+            ->assertCanNotSeeTableRecords([$emptyStatus, $activeStudent]);
+    }
+
     public function test_data_tes_siswa_import_action_can_open_without_memory_error(): void
     {
         $admin = User::query()->create([

@@ -271,7 +271,20 @@ class DataSiswaResource extends Resource
             ->filters([
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Status')
-                    ->options(DataSiswa::statusOptions()),
+                    ->options([
+                        '__blank' => 'Belum Ada Status (SPMB)',
+                    ] + DataSiswa::statusOptions())
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+
+                        if ($value === null || $value === '') {
+                            return $query;
+                        }
+
+                        return $value === '__blank'
+                            ? $query->where(fn (Builder $subQuery): Builder => $subQuery->whereNull('status')->orWhere('status', ''))
+                            : $query->where('status', $value);
+                    }),
                 Tables\Filters\SelectFilter::make('jk')
                     ->label('JK')
                     ->options([
@@ -294,7 +307,20 @@ class DataSiswaResource extends Resource
                     }),
                 Tables\Filters\SelectFilter::make('rombel_saat_ini')
                     ->label('Rombel')
-                    ->options(fn (): array => DataSiswaSupport::rombelOptions(auth()->user())),
+                    ->options(fn (): array => [
+                        '__blank' => 'Belum Ada Rombel/Kelas',
+                    ] + DataSiswaSupport::rombelOptions(auth()->user()))
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+
+                        if ($value === null || $value === '') {
+                            return $query;
+                        }
+
+                        return $value === '__blank'
+                            ? $query->where(fn (Builder $subQuery): Builder => $subQuery->whereNull('rombel_saat_ini')->orWhere('rombel_saat_ini', ''))
+                            : $query->where('rombel_saat_ini', $value);
+                    }),
                 Tables\Filters\SelectFilter::make('kategori_non_aktif')
                     ->label('Kategori Non Aktif')
                     ->options(DataSiswa::nonActiveCategoryOptions()),
