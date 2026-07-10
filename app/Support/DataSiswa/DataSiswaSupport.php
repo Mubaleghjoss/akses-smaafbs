@@ -304,8 +304,7 @@ class DataSiswaSupport
                     ? collect(self::masterAngkatanValues())
                     : collect();
 
-                return $fromMaster
-                    ->merge($fromStudents)
+                return ($fromMaster->isNotEmpty() ? $fromMaster : $fromStudents)
                     ->filter()
                     ->unique()
                     ->sort()
@@ -383,6 +382,37 @@ class DataSiswaSupport
                     ->merge($fromStudents)
                     ->filter()
                     ->sortKeys()
+                    ->all();
+            },
+        );
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function rombelFilterOptions(?User $user = null): array
+    {
+        return Cache::remember(
+            'data_siswa_support:rombel_filter_options:v'.self::optionsCacheVersion().':'.self::scopeCacheKey($user),
+            now()->addMinutes(10),
+            function () use ($user): array {
+                $fromMaster = self::canSeeMasterRombels($user)
+                    ? collect(self::masterRombelOptions(true))
+                    : collect();
+
+                if ($fromMaster->isNotEmpty()) {
+                    return $fromMaster
+                        ->filter()
+                        ->sortKeys()
+                        ->all();
+                }
+
+                return self::baseQuery($user)
+                    ->whereNotNull('rombel_saat_ini')
+                    ->where('rombel_saat_ini', '!=', '')
+                    ->orderBy('rombel_saat_ini')
+                    ->pluck('rombel_saat_ini', 'rombel_saat_ini')
+                    ->filter()
                     ->all();
             },
         );

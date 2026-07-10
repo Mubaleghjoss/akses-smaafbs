@@ -199,9 +199,25 @@ class DataSiswaManagementTest extends TestCase
             'status' => 'aktif',
             'rombel_saat_ini' => 'XI 1',
         ]);
+        DataSiswa::query()->create([
+            'nama' => 'Siswa Rombel Lama',
+            'nisn' => '2010101003',
+            'status' => 'aktif',
+            'rombel_saat_ini' => 'ROMBEL LAMA 2025/2026',
+        ]);
+        Rombel::query()
+            ->where('nama', 'ROMBEL LAMA 2025/2026')
+            ->first()
+            ?->delete();
 
         $this->assertSame('6', DataSiswaSupport::angkatanLabelForRombel('X 1'));
-        $this->assertArrayHasKey('6', DataSiswaSupport::angkatanOptions($admin));
+        $angkatanOptions = DataSiswaSupport::angkatanOptions($admin);
+        $rombelOptions = DataSiswaSupport::rombelFilterOptions($admin);
+
+        $this->assertArrayHasKey('6', $angkatanOptions);
+        $this->assertArrayNotHasKey('2025/2026', $angkatanOptions);
+        $this->assertArrayHasKey('X 1', $rombelOptions);
+        $this->assertArrayNotHasKey('ROMBEL LAMA 2025/2026', $rombelOptions);
 
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 

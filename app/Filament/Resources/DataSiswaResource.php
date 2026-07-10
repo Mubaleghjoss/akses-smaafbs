@@ -320,7 +320,7 @@ class DataSiswaResource extends Resource
                     ->label('Rombel')
                     ->options(fn (): array => [
                         '__blank' => 'Belum Ada Rombel/Kelas',
-                    ] + DataSiswaSupport::rombelOptions(auth()->user()))
+                    ] + DataSiswaSupport::rombelFilterOptions(auth()->user()))
                     ->query(function (Builder $query, array $data): Builder {
                         $value = $data['value'] ?? null;
 
