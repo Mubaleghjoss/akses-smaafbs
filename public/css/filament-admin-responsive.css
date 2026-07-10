@@ -469,6 +469,65 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
     }
 }
 
+/* Data Siswa has many page actions; keep them wrapped inside the viewport. */
+.fi-header,
+.fi-header > *,
+.fi-header-main-ctn,
+.fi-header-heading,
+.fi-header-actions-ctn {
+    min-width: 0;
+}
+
+.fi-resource-data-siswas .fi-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 0.85rem 1rem;
+}
+
+.fi-resource-data-siswas .fi-header-actions-ctn {
+    flex: 1 1 42rem;
+    width: auto;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 0.2rem;
+    scrollbar-width: thin;
+}
+
+.fi-resource-data-siswas .fi-header-actions-ctn > .fi-ac {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: flex-end;
+    gap: 0.5rem !important;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.fi-resource-data-siswas .fi-header-actions-ctn .fi-btn {
+    flex: 0 1 auto;
+    max-width: 100%;
+    white-space: nowrap;
+}
+
+@media (max-width: 1024px) {
+    .fi-resource-data-siswas .fi-header-actions-ctn {
+        flex-basis: 100%;
+        width: 100%;
+    }
+
+    .fi-resource-data-siswas .fi-header-actions-ctn > .fi-ac {
+        justify-content: flex-start;
+    }
+}
+
+@media (max-width: 640px) {
+    .fi-resource-data-siswas .fi-header-actions-ctn .fi-btn {
+        flex: 1 1 100%;
+        justify-content: center;
+        white-space: normal;
+    }
+}
+
 .data-siswa-workflow-card {
     display: grid;
     gap: 1rem;
