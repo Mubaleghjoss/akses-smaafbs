@@ -186,6 +186,11 @@ class DataSiswaManagementTest extends TestCase
             'angkatan' => '5',
             'is_active' => true,
         ]);
+        Rombel::query()->create([
+            'nama' => 'ALUMNI 2021/2022',
+            'angkatan' => '1',
+            'is_active' => false,
+        ]);
 
         $gradeSixStudent = DataSiswa::query()->create([
             'nama' => 'Siswa Angkatan Enam',
@@ -198,6 +203,12 @@ class DataSiswaManagementTest extends TestCase
             'nisn' => '2010101002',
             'status' => 'aktif',
             'rombel_saat_ini' => 'XI 1',
+        ]);
+        $alumniStudent = DataSiswa::query()->create([
+            'nama' => 'Siswa Alumni Angkatan Satu',
+            'nisn' => '2010101004',
+            'status' => 'alumni',
+            'rombel_saat_ini' => 'ALUMNI 2021/2022',
         ]);
         DataSiswa::query()->create([
             'nama' => 'Siswa Rombel Lama',
@@ -215,6 +226,7 @@ class DataSiswaManagementTest extends TestCase
         $rombelOptions = DataSiswaSupport::rombelFilterOptions($admin);
 
         $this->assertArrayHasKey('6', $angkatanOptions);
+        $this->assertArrayHasKey('1', $angkatanOptions);
         $this->assertArrayNotHasKey('2025/2026', $angkatanOptions);
         $this->assertArrayHasKey('X 1', $rombelOptions);
         $this->assertArrayNotHasKey('ROMBEL LAMA 2025/2026', $rombelOptions);
@@ -226,6 +238,13 @@ class DataSiswaManagementTest extends TestCase
             ->filterTable('angkatan', ['value' => '6'])
             ->call('loadTable')
             ->assertCanSeeTableRecords([$gradeSixStudent])
+            ->assertCanNotSeeTableRecords([$gradeFiveStudent]);
+
+        Livewire::actingAs($admin)
+            ->test(ManageDataSiswas::class)
+            ->filterTable('angkatan', ['value' => '1'])
+            ->call('loadTable')
+            ->assertCanSeeTableRecords([$alumniStudent])
             ->assertCanNotSeeTableRecords([$gradeFiveStudent]);
     }
 

@@ -308,13 +308,11 @@ class DataSiswaResource extends Resource
                         $value = Rombel::normalizeName($data['value'] ?? null);
                         $rombelNames = DataSiswaSupport::rombelNamesForAngkatan($value, auth()->user());
 
-                        return $query->where(function (Builder $subQuery) use ($rombelNames, $value): void {
-                            if ($rombelNames !== []) {
-                                $subQuery->whereIn('rombel_saat_ini', $rombelNames);
-                            }
+                        if ($rombelNames !== []) {
+                            return $query->whereIn('rombel_saat_ini', $rombelNames);
+                        }
 
-                            $subQuery->{$rombelNames !== [] ? 'orWhere' : 'where'}('rombel_saat_ini', 'like', '%'.$value.'%');
-                        });
+                        return $query->where('rombel_saat_ini', 'like', '%'.$value.'%');
                     }),
                 Tables\Filters\SelectFilter::make('rombel_saat_ini')
                     ->label('Rombel')
