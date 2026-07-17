@@ -236,6 +236,49 @@ class HomeLandingPageTest extends TestCase
             ->assertDontSee('Abdullah Karim');
     }
 
+    public function test_homepage_active_student_and_rombel_stats_follow_active_rombel_settings(): void
+    {
+        $this->ensureRombelTable();
+
+        DataSiswa::query()->create([
+            'nama' => 'Siswa Rombel Aktif',
+            'nisn' => '1122334401',
+            'status' => 'aktif',
+            'jk' => 'L',
+            'rombel_saat_ini' => 'X Aktif',
+            'tanggal_lahir' => '2010-02-03',
+        ]);
+
+        DataSiswa::query()->create([
+            'nama' => 'Siswa Rombel Nonaktif',
+            'nisn' => '1122334402',
+            'status' => 'aktif',
+            'jk' => 'P',
+            'rombel_saat_ini' => 'X Nonaktif',
+            'tanggal_lahir' => '2010-04-11',
+        ]);
+
+        DB::table('rombels')
+            ->where('nama', 'X Nonaktif')
+            ->update(['is_active' => false]);
+
+        $response = $this->get(route('home'));
+        $stats = $response->viewData('stats');
+
+        $response
+            ->assertOk()
+            ->assertSee('X Aktif')
+            ->assertDontSee('X Nonaktif');
+
+        $this->assertSame(1, $stats['active_students']);
+        $this->assertSame(1, $stats['student_active_male']);
+        $this->assertSame(0, $stats['student_active_female']);
+        $this->assertSame(1, $stats['rombel_count']);
+        $this->assertSame([
+            ['name' => 'X Aktif', 'students' => 1],
+        ], $stats['rombel_items']);
+    }
+
     public function test_home_landing_page_student_search_matches_partial_keyword(): void
     {
         DataSiswa::query()->create([
@@ -580,6 +623,22 @@ class HomeLandingPageTest extends TestCase
             $table->string('gaya_belajar', 100)->nullable();
             $table->string('profiling', 150)->nullable();
             $table->string('mbti', 20)->nullable();
+            $table->timestamps();
+        });
+    }
+
+    protected function ensureRombelTable(): void
+    {
+        if (Schema::hasTable('rombels')) {
+            return;
+        }
+
+        Schema::create('rombels', function (Blueprint $table): void {
+            $table->id();
+            $table->string('nama', 50)->unique();
+            $table->string('angkatan', 20)->nullable()->index();
+            $table->boolean('is_active')->default(true)->index();
+            $table->text('catatan')->nullable();
             $table->timestamps();
         });
     }

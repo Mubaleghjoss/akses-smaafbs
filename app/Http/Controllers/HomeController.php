@@ -9,6 +9,7 @@ use App\Models\PerpustakaanBuku;
 use App\Models\Prestasi;
 use App\Models\ProfilSekolah;
 use App\Models\ProkerBidang;
+use App\Models\Rombel;
 use App\Models\StrukturOrganisasi;
 use App\Models\VisiMisi;
 use Illuminate\Http\Request;
@@ -28,6 +29,22 @@ class HomeController extends Controller
         $hasDataSiswaStatusColumn = $hasDataSiswaTable && Schema::hasColumn('data_siswa', 'status');
         $hasDataSiswaGenderColumn = $hasDataSiswaTable && Schema::hasColumn('data_siswa', 'jk');
         $hasDataSiswaRombelColumn = $hasDataSiswaTable && Schema::hasColumn('data_siswa', 'rombel_saat_ini');
+        $activeRombelNames = null;
+
+        try {
+            if ($hasDataSiswaRombelColumn
+                && Schema::hasTable('rombels')
+                && Schema::hasColumn('rombels', 'is_active')) {
+                $activeRombelNames = Rombel::query()
+                    ->where('is_active', true)
+                    ->orderBy('nama')
+                    ->pluck('nama')
+                    ->filter(fn ($name): bool => filled($name))
+                    ->values();
+            }
+        } catch (\Throwable $e) {
+            // Keep compatibility with installations that do not have the rombel master yet.
+        }
 
         $guruTendikTable = Schema::hasTable('guru_tendik')
             ? 'guru_tendik'
@@ -60,9 +77,20 @@ class HomeController extends Controller
             // ignore missing optional module table
         }
 
+        $activeStudentsCount = 0;
+        if ($hasDataSiswaStatusColumn) {
+            $activeStudentsQuery = DataSiswa::query()->where('status', 'aktif');
+
+            if ($activeRombelNames instanceof Collection) {
+                $activeStudentsQuery->whereIn('rombel_saat_ini', $activeRombelNames);
+            }
+
+            $activeStudentsCount = $activeStudentsQuery->count();
+        }
+
         $stats = [
             'students' => $hasDataSiswaTable ? DataSiswa::query()->count() : 0,
-            'active_students' => $hasDataSiswaStatusColumn ? DataSiswa::query()->where('status', 'aktif')->count() : 0,
+            'active_students' => $activeStudentsCount,
             'alumni_students' => $hasDataSiswaStatusColumn ? DataSiswa::query()->where('status', 'alumni')->count() : 0,
             'achievements' => $achievementsCount,
             'news' => Berita::query()->where('status', 'aktif')->count(),
@@ -105,6 +133,9 @@ class HomeController extends Controller
                 $activeStudentGenderQuery = DataSiswa::query()->whereIn('jk', ['L', 'P']);
                 if ($hasDataSiswaStatusColumn) {
                     $activeStudentGenderQuery->where('status', 'aktif');
+                }
+                if ($activeRombelNames instanceof Collection) {
+                    $activeStudentGenderQuery->whereIn('rombel_saat_ini', $activeRombelNames);
                 }
 
                 $activeStudentGenderCounts = $activeStudentGenderQuery
@@ -200,21 +231,35 @@ class HomeController extends Controller
                 if ($hasDataSiswaStatusColumn) {
                     $rombelQuery->where('status', 'aktif');
                 }
+                if ($activeRombelNames instanceof Collection) {
+                    $rombelQuery->whereIn('rombel_saat_ini', $activeRombelNames);
+                }
 
-                $rombelRows = $rombelQuery
+                $rombelStudentCounts = $rombelQuery
                     ->select('rombel_saat_ini')
                     ->selectRaw('count(*) as total_students')
                     ->groupBy('rombel_saat_ini')
                     ->orderBy('rombel_saat_ini')
-                    ->get();
+                    ->pluck('total_students', 'rombel_saat_ini');
 
-                $stats['rombel_count'] = $rombelRows->count();
-                $stats['rombel_items'] = $rombelRows
-                    ->map(fn ($row): array => [
-                        'name' => (string) $row->rombel_saat_ini,
-                        'students' => (int) ($row->total_students ?? 0),
-                    ])
-                    ->all();
+                if ($activeRombelNames instanceof Collection) {
+                    $stats['rombel_count'] = $activeRombelNames->count();
+                    $stats['rombel_items'] = $activeRombelNames
+                        ->map(fn ($name): array => [
+                            'name' => (string) $name,
+                            'students' => (int) ($rombelStudentCounts[$name] ?? 0),
+                        ])
+                        ->all();
+                } else {
+                    $stats['rombel_count'] = $rombelStudentCounts->count();
+                    $stats['rombel_items'] = $rombelStudentCounts
+                        ->map(fn ($total, $name): array => [
+                            'name' => (string) $name,
+                            'students' => (int) $total,
+                        ])
+                        ->values()
+                        ->all();
+                }
             }
         } catch (\Throwable $e) {
             // ignore optional/legacy rombel source issues
