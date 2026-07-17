@@ -926,6 +926,107 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertSame(PerpustakaanLiterasiSimilarityMatch::REVIEW_CONFIRMED, $match->review_status);
     }
 
+    public function test_admin_can_bulk_trash_restore_and_force_delete_material_responses(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $admin = User::query()->create([
+            'name' => 'Admin Bulk Jawaban Literasi',
+            'username' => 'admin-bulk-jawaban-literasi',
+            'password' => bcrypt('password'),
+        ]);
+        $admin->assignRole('admin');
+
+        $material = $this->createMaterial('Materi Bulk Jawaban');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Pertanyaan bulk jawaban?',
+            'max_characters' => 500,
+        ]);
+        $keptResponse = $this->createResponseWithAnswer(
+            $material,
+            $this->createStudent('Codex Jawaban Tetap', 'X Bulk'),
+            $question,
+            'Jawaban pembanding yang tetap aktif.'
+        );
+        $deletedResponse = $this->createResponseWithAnswer(
+            $material,
+            $this->createStudent('Codex Jawaban Dihapus', 'X Bulk'),
+            $question,
+            'Jawaban yang akan masuk sampah.'
+        );
+        $keptAnswer = $keptResponse->answers()->firstOrFail();
+        $deletedAnswer = $deletedResponse->answers()->firstOrFail();
+        $match = PerpustakaanLiterasiSimilarityMatch::query()->create([
+            'material_id' => $material->getKey(),
+            'question_id' => $question->getKey(),
+            'later_response_id' => $deletedResponse->getKey(),
+            'matched_response_id' => $keptResponse->getKey(),
+            'later_answer_id' => $deletedAnswer->getKey(),
+            'matched_answer_id' => $keptAnswer->getKey(),
+            'student_class_snapshot' => 'X Bulk',
+            'similarity_score' => 92.5,
+            'later_submitted_at' => now(),
+            'matched_submitted_at' => now()->subMinute(),
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(ResponsesRelationManager::class, [
+                'ownerRecord' => $material,
+                'pageClass' => ViewPerpustakaanLiterasiMaterial::class,
+            ])
+            ->callTableBulkAction('deleteSelectedResponses', [$deletedResponse])
+            ->assertHasNoTableBulkActionErrors();
+
+        $this->assertSoftDeleted('perpustakaan_literasi_responses', ['id' => $deletedResponse->getKey()]);
+        $this->assertSoftDeleted('perpustakaan_literasi_answers', ['id' => $deletedAnswer->getKey()]);
+        $this->assertSoftDeleted('perpustakaan_literasi_similarity_matches', ['id' => $match->getKey()]);
+        $this->assertDatabaseHas('perpustakaan_literasi_responses', [
+            'id' => $keptResponse->getKey(),
+            'deleted_at' => null,
+        ]);
+
+        $trashedResponse = PerpustakaanLiterasiResponse::onlyTrashed()->findOrFail($deletedResponse->getKey());
+
+        Livewire::actingAs($admin)
+            ->test(ResponsesRelationManager::class, [
+                'ownerRecord' => $material,
+                'pageClass' => ViewPerpustakaanLiterasiMaterial::class,
+            ])
+            ->filterTable('response_status', 'trash')
+            ->callTableBulkAction('restoreSelectedResponses', [$trashedResponse])
+            ->assertHasNoTableBulkActionErrors();
+
+        $this->assertFalse(PerpustakaanLiterasiResponse::withTrashed()->findOrFail($deletedResponse->getKey())->trashed());
+        $this->assertFalse(PerpustakaanLiterasiAnswer::withTrashed()->findOrFail($deletedAnswer->getKey())->trashed());
+        $this->assertFalse(PerpustakaanLiterasiSimilarityMatch::withTrashed()->findOrFail($match->getKey())->trashed());
+
+        $restoredResponse = PerpustakaanLiterasiResponse::query()->findOrFail($deletedResponse->getKey());
+        Livewire::actingAs($admin)
+            ->test(ResponsesRelationManager::class, [
+                'ownerRecord' => $material,
+                'pageClass' => ViewPerpustakaanLiterasiMaterial::class,
+            ])
+            ->callTableBulkAction('deleteSelectedResponses', [$restoredResponse])
+            ->assertHasNoTableBulkActionErrors();
+
+        $trashedResponse = PerpustakaanLiterasiResponse::onlyTrashed()->findOrFail($deletedResponse->getKey());
+        Livewire::actingAs($admin)
+            ->test(ResponsesRelationManager::class, [
+                'ownerRecord' => $material,
+                'pageClass' => ViewPerpustakaanLiterasiMaterial::class,
+            ])
+            ->filterTable('response_status', 'trash')
+            ->callTableBulkAction('forceDeleteSelectedResponses', [$trashedResponse])
+            ->assertHasNoTableBulkActionErrors();
+
+        $this->assertNull(PerpustakaanLiterasiResponse::withTrashed()->find($deletedResponse->getKey()));
+        $this->assertNull(PerpustakaanLiterasiAnswer::withTrashed()->find($deletedAnswer->getKey()));
+        $this->assertNull(PerpustakaanLiterasiSimilarityMatch::withTrashed()->find($match->getKey()));
+        $this->assertNotNull(PerpustakaanLiterasiResponse::withTrashed()->find($keptResponse->getKey()));
+        $this->assertNotNull(PerpustakaanLiterasiAnswer::withTrashed()->find($keptAnswer->getKey()));
+    }
+
     public function test_public_edit_clears_existing_literacy_grading_when_answer_changes(): void
     {
         $grader = User::query()->create([

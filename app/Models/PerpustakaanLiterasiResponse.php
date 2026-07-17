@@ -50,6 +50,33 @@ class PerpustakaanLiterasiResponse extends Model
 
         static::deleting(function (self $response): void {
             if ($response->isForceDeleting()) {
+                $answerIds = $response->answers()
+                    ->withTrashed()
+                    ->pluck('id')
+                    ->all();
+
+                PerpustakaanLiterasiSimilarityMatch::withTrashed()
+                    ->where(function ($query) use ($response, $answerIds): void {
+                        $query
+                            ->where('later_response_id', $response->getKey())
+                            ->orWhere('matched_response_id', $response->getKey());
+
+                        if ($answerIds !== []) {
+                            $query
+                                ->orWhereIn('later_answer_id', $answerIds)
+                                ->orWhereIn('matched_answer_id', $answerIds);
+                        }
+                    })
+                    ->get()
+                    ->each
+                    ->forceDelete();
+
+                $response->answers()
+                    ->withTrashed()
+                    ->get()
+                    ->each
+                    ->forceDelete();
+
                 return;
             }
 

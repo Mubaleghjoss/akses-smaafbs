@@ -7,6 +7,8 @@ use App\Models\PerpustakaanLiterasiAnswer;
 use App\Models\PerpustakaanLiterasiResponse;
 use App\Models\PerpustakaanLiterasiSimilarityMatch;
 use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
+use Filament\Actions\BulkActionGroup;
 use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -30,11 +32,12 @@ class ResponsesRelationManager extends RelationManager
             ->recordTitleAttribute('student_name_snapshot')
             ->defaultSort('submitted_at', 'desc')
             ->modifyQueryUsing(fn (Builder $query): Builder => $query
+                ->withTrashed()
                 ->with(['answers.question', 'answers.gradedBy', 'laterSimilarityMatches.matchedResponse', 'laterSimilarityMatches.reviewedBy'])
                 ->withCount([
-                    'answers',
-                    'answers as graded_answers_count' => fn (Builder $query): Builder => $query->whereNotNull('is_correct'),
-                    'answers as correct_answers_count' => fn (Builder $query): Builder => $query->where('is_correct', true),
+                    'answers' => fn (Builder $query): Builder => $query->withTrashed(),
+                    'answers as graded_answers_count' => fn (Builder $query): Builder => $query->withTrashed()->whereNotNull('is_correct'),
+                    'answers as correct_answers_count' => fn (Builder $query): Builder => $query->withTrashed()->where('is_correct', true),
                 ]))
             ->columns([
                 Tables\Columns\TextColumn::make('student_name_snapshot')
@@ -74,8 +77,31 @@ class ResponsesRelationManager extends RelationManager
                     ->placeholder('-')
                     ->visibleFrom('lg')
                     ->toggleable(),
+                Tables\Columns\TextColumn::make('deleted_at')
+                    ->label('Status')
+                    ->state(fn (PerpustakaanLiterasiResponse $record): string => $record->trashed() ? 'Sampah' : 'Aktif')
+                    ->description(fn (PerpustakaanLiterasiResponse $record): ?string => $record->trashed()
+                        ? 'Dihapus '.$record->deleted_at?->format('d/m/Y H:i')
+                        : null)
+                    ->badge()
+                    ->color(fn (PerpustakaanLiterasiResponse $record): string => $record->trashed() ? 'danger' : 'success')
+                    ->visibleFrom('md'),
             ])
             ->filters([
+                Tables\Filters\SelectFilter::make('response_status')
+                    ->label('Status Jawaban')
+                    ->options([
+                        'active' => 'Aktif',
+                        'trash' => 'Sampah',
+                    ])
+                    ->default('active')
+                    ->query(function (Builder $query, array $data): Builder {
+                        return match ($data['value'] ?? 'active') {
+                            'trash' => $query->onlyTrashed(),
+                            'active' => $query->withoutTrashed(),
+                            default => $query,
+                        };
+                    }),
                 Tables\Filters\SelectFilter::make('student_class_snapshot')
                     ->label('Kelas')
                     ->options(fn (): array => $this->getOwnerRecord()
@@ -106,7 +132,8 @@ class ResponsesRelationManager extends RelationManager
                     ->label(fn (PerpustakaanLiterasiResponse $record): string => $this->isResponseFullyGraded($record) ? 'Edit Nilai' : 'Nilai')
                     ->icon(fn (PerpustakaanLiterasiResponse $record): string => $this->isResponseFullyGraded($record) ? 'heroicon-o-pencil-square' : 'heroicon-o-check-circle')
                     ->color(fn (PerpustakaanLiterasiResponse $record): string => $this->isResponseFullyGraded($record) ? 'warning' : 'success')
-                    ->visible(fn (): bool => PerpustakaanLiterasiMaterialResource::canEdit($this->getOwnerRecord()))
+                    ->visible(fn (PerpustakaanLiterasiResponse $record): bool => ! $record->trashed()
+                        && PerpustakaanLiterasiMaterialResource::canEdit($this->getOwnerRecord()))
                     ->modalHeading(fn (PerpustakaanLiterasiResponse $record): string => 'Nilai Jawaban: '.$record->student_name_snapshot)
                     ->modalSubmitActionLabel('Simpan Nilai')
                     ->modalCancelActionLabel('Tutup')
@@ -119,6 +146,7 @@ class ResponsesRelationManager extends RelationManager
                 Action::make('lihatJawaban')
                     ->label('Detail')
                     ->icon('heroicon-o-eye')
+                    ->visible(fn (PerpustakaanLiterasiResponse $record): bool => ! $record->trashed())
                     ->modalHeading(fn (PerpustakaanLiterasiResponse $record): string => 'Jawaban: '.$record->student_name_snapshot)
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Tutup')
@@ -137,10 +165,163 @@ class ResponsesRelationManager extends RelationManager
                     ->label('Link Edit')
                     ->icon('heroicon-o-arrow-top-right-on-square')
                     ->color('gray')
+                    ->visible(fn (PerpustakaanLiterasiResponse $record): bool => ! $record->trashed())
                     ->url(fn (PerpustakaanLiterasiResponse $record): string => $record->editUrl())
                     ->openUrlInNewTab(),
             ])
-            ->bulkActions([]);
+            ->bulkActions([
+                BulkActionGroup::make([
+                    BulkAction::make('deleteSelectedResponses')
+                        ->label('Pindahkan ke Sampah')
+                        ->icon('heroicon-o-trash')
+                        ->color('danger')
+                        ->visible(fn (): bool => $this->canManageResponses())
+                        ->requiresConfirmation()
+                        ->modalHeading('Pindahkan jawaban terpilih ke Sampah?')
+                        ->modalDescription('Jawaban responden, jawaban per soal, dan data plagiasi terkait akan disembunyikan. Data masih dapat direstore dari filter Sampah.')
+                        ->modalSubmitActionLabel('Pindahkan ke Sampah')
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (iterable $records): void {
+                            $processed = $this->deleteResponseRecords($records);
+                            $this->notifyBulkAction(
+                                'Jawaban dipindahkan ke Sampah',
+                                "Total jawaban responden: {$processed}.",
+                                $processed,
+                            );
+                        }),
+                    BulkAction::make('restoreSelectedResponses')
+                        ->label('Restore dari Sampah')
+                        ->icon('heroicon-o-arrow-uturn-left')
+                        ->color('warning')
+                        ->visible(fn (): bool => $this->canManageResponses())
+                        ->requiresConfirmation()
+                        ->modalHeading('Restore jawaban terpilih?')
+                        ->modalDescription('Hanya jawaban yang berada di Sampah yang akan diaktifkan kembali beserta jawaban per soal dan data plagiasinya.')
+                        ->modalSubmitActionLabel('Restore Jawaban')
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (iterable $records): void {
+                            $processed = $this->restoreResponseRecords($records);
+                            $this->notifyBulkAction(
+                                'Restore jawaban selesai',
+                                "Jawaban responden aktif kembali: {$processed}.",
+                                $processed,
+                            );
+                        }),
+                    BulkAction::make('forceDeleteSelectedResponses')
+                        ->label('Hapus Permanen')
+                        ->icon('heroicon-o-no-symbol')
+                        ->color('danger')
+                        ->visible(fn (): bool => $this->canManageResponses())
+                        ->requiresConfirmation()
+                        ->modalHeading('Hapus permanen jawaban terpilih?')
+                        ->modalDescription('Hanya jawaban yang sudah berada di Sampah yang akan dihapus permanen. Jawaban per soal dan data plagiasi terkait ikut dihapus dan tidak dapat direstore.')
+                        ->modalSubmitActionLabel('Hapus Permanen')
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (iterable $records): void {
+                            $processed = $this->forceDeleteResponseRecords($records);
+                            $this->notifyBulkAction(
+                                'Hapus permanen selesai',
+                                "Jawaban responden dihapus permanen: {$processed}.",
+                                $processed,
+                            );
+                        }),
+                ]),
+            ]);
+    }
+
+    protected function canManageResponses(): bool
+    {
+        return PerpustakaanLiterasiMaterialResource::canEdit($this->getOwnerRecord());
+    }
+
+    /**
+     * @param  iterable<PerpustakaanLiterasiResponse>  $records
+     */
+    protected function deleteResponseRecords(iterable $records): int
+    {
+        abort_unless($this->canManageResponses(), 403);
+
+        return $this->processResponseRecords($records, function (PerpustakaanLiterasiResponse $response): bool {
+            if ($response->trashed()) {
+                return false;
+            }
+
+            $response->delete();
+
+            return true;
+        });
+    }
+
+    /**
+     * @param  iterable<PerpustakaanLiterasiResponse>  $records
+     */
+    protected function restoreResponseRecords(iterable $records): int
+    {
+        abort_unless($this->canManageResponses(), 403);
+
+        return $this->processResponseRecords($records, function (PerpustakaanLiterasiResponse $response): bool {
+            if (! $response->trashed()) {
+                return false;
+            }
+
+            $response->restore();
+
+            return true;
+        });
+    }
+
+    /**
+     * @param  iterable<PerpustakaanLiterasiResponse>  $records
+     */
+    protected function forceDeleteResponseRecords(iterable $records): int
+    {
+        abort_unless($this->canManageResponses(), 403);
+
+        return $this->processResponseRecords($records, function (PerpustakaanLiterasiResponse $response): bool {
+            if (! $response->trashed()) {
+                return false;
+            }
+
+            $response->forceDelete();
+
+            return true;
+        });
+    }
+
+    /**
+     * @param  iterable<PerpustakaanLiterasiResponse>  $records
+     */
+    protected function processResponseRecords(iterable $records, callable $callback): int
+    {
+        $processed = 0;
+        $materialId = (int) $this->getOwnerRecord()->getKey();
+
+        DB::transaction(function () use ($records, $callback, $materialId, &$processed): void {
+            foreach ($records as $record) {
+                if (! $record instanceof PerpustakaanLiterasiResponse) {
+                    continue;
+                }
+
+                $fresh = PerpustakaanLiterasiResponse::withTrashed()
+                    ->where('material_id', $materialId)
+                    ->find($record->getKey());
+
+                if ($fresh && $callback($fresh)) {
+                    $processed++;
+                }
+            }
+        });
+
+        return $processed;
+    }
+
+    protected function notifyBulkAction(string $title, string $body, int $processed): void
+    {
+        Notification::make()
+            ->title($title)
+            ->body($body)
+            ->{$processed > 0 ? 'success' : 'warning'}()
+            ->send();
     }
 
     protected function gradingFormSchema(PerpustakaanLiterasiResponse $record): array
