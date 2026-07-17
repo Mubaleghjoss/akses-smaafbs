@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\AdminAwareVerifyCsrfToken;
+use App\Http\Middleware\AuthenticateTagihanStudentIntegration;
 use App\Http\Middleware\LogSlowAdminRequests;
 use App\Http\Middleware\PreventAdminResponseCaching;
 use App\Http\Middleware\TrustProxies;
@@ -17,10 +18,15 @@ use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->alias([
+            'tagihan.student.integration' => AuthenticateTagihanStudentIntegration::class,
+        ]);
+
         $middleware->replace(
             Illuminate\Http\Middleware\TrustProxies::class,
             TrustProxies::class,

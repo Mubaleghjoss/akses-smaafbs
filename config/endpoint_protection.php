@@ -93,6 +93,14 @@ return [
             'named_limiter' => 'public_agenda_events',
             'degradation_profile' => null,
         ],
+        'tagihan_student_integration' => [
+            'description' => 'Private server-to-server student master feed for the billing application.',
+            'routes' => [
+                '/api/v1/integrations/tagihan/students',
+            ],
+            'named_limiter' => 'tagihan_student_api',
+            'degradation_profile' => null,
+        ],
     ],
 
     /*
@@ -151,6 +159,15 @@ return [
             'response' => [
                 'type' => 'json',
                 'message' => 'Permintaan agenda terlalu sering. Silakan coba lagi dalam beberapa saat.',
+            ],
+        ],
+        'tagihan_student_api' => [
+            'attempts' => 30,
+            'decay_seconds' => 60,
+            'by' => 'ip',
+            'response' => [
+                'type' => 'json',
+                'message' => 'Terlalu banyak permintaan. Silakan coba lagi nanti.',
             ],
         ],
     ],
