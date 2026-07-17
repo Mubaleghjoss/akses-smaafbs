@@ -66,8 +66,14 @@ class DataSiswa extends Model
             $rombel = Rombel::normalizeName($record->rombel_saat_ini);
             $record->rombel_saat_ini = $rombel !== '' ? $rombel : null;
 
+            $rombelRecord = null;
+
             if ($record->rombel_saat_ini !== null) {
-                Rombel::ensureFromName($record->rombel_saat_ini);
+                $rombelRecord = Rombel::ensureFromName($record->rombel_saat_ini);
+            }
+
+            if ($rombelRecord && ! $rombelRecord->is_active && strtolower((string) $record->status) === 'aktif') {
+                $record->forceFill(Rombel::nonActiveStudentAttributes($rombelRecord->nama));
             }
 
             foreach (['kepribadian', 'gaya_belajar', 'profiling', 'mbti'] as $attribute) {

@@ -93,4 +93,51 @@ class RombelResourceTest extends TestCase
 
         $this->assertArrayHasKey($rombelName, DataSiswaSupport::rombelOptions($admin));
     }
+
+    public function test_deactivating_alumni_rombel_marks_active_students_as_alumni(): void
+    {
+        $rombelName = 'ALUMNI TEST '.Str::upper(Str::random(8));
+        $rombel = Rombel::query()->create([
+            'nama' => $rombelName,
+            'is_active' => true,
+        ]);
+
+        $activeStudent = DataSiswa::query()->create([
+            'nama' => 'Siswa Aktif di Rombel Alumni',
+            'rombel_saat_ini' => $rombelName,
+            'status' => 'aktif',
+        ]);
+        $alreadyInactiveStudent = DataSiswa::query()->create([
+            'nama' => 'Siswa Sudah Mutasi',
+            'rombel_saat_ini' => $rombelName,
+            'status' => 'pindah',
+            'kategori_non_aktif' => 'mutasi',
+        ]);
+
+        $rombel->update(['is_active' => false]);
+
+        $this->assertSame('alumni', $activeStudent->fresh()->status);
+        $this->assertSame('lulus', $activeStudent->fresh()->kategori_non_aktif);
+        $this->assertStringContainsString('rombel '.$rombelName.' dinonaktifkan', $activeStudent->fresh()->alasan_non_aktif);
+        $this->assertSame('pindah', $alreadyInactiveStudent->fresh()->status);
+        $this->assertSame('mutasi', $alreadyInactiveStudent->fresh()->kategori_non_aktif);
+    }
+
+    public function test_student_cannot_remain_active_when_saved_in_inactive_rombel(): void
+    {
+        $rombelName = 'MUTASI TEST '.Str::upper(Str::random(8));
+        Rombel::query()->create([
+            'nama' => $rombelName,
+            'is_active' => false,
+        ]);
+
+        $student = DataSiswa::query()->create([
+            'nama' => 'Siswa Masuk Rombel Mutasi',
+            'rombel_saat_ini' => $rombelName,
+            'status' => 'aktif',
+        ]);
+
+        $this->assertSame('pindah', $student->status);
+        $this->assertSame('mutasi', $student->kategori_non_aktif);
+    }
 }
