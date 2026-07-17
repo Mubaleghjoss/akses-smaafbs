@@ -1,73 +1,222 @@
 @php
     /** @var \App\Models\PerpustakaanLiterasiResponse $response */
     $answers = $response->answers->keyBy('question_id');
+    $questions = $response->material?->questions ?? collect();
+    $similarityMatches = $response->laterSimilarityMatches;
+    $matchesByAnswer = $similarityMatches->groupBy('later_answer_id');
+
+    $tabSwitchCount = (int) ($response->tab_switch_count ?? 0);
+    $appHiddenCount = (int) ($response->app_hidden_count ?? 0);
+    $pageLeaveCount = (int) ($response->page_leave_attempt_count ?? 0);
+    $integrityTotal = $tabSwitchCount + $appHiddenCount + $pageLeaveCount;
+    [$integrityLabel, $integrityTone] = match (true) {
+        $integrityTotal >= 5 => ['Aktivitas keluar halaman tinggi', 'danger'],
+        $integrityTotal > 0 => ['Perlu perhatian', 'warning'],
+        default => ['Tidak ada aktivitas keluar halaman', 'success'],
+    };
+
+    $confirmedMatches = $similarityMatches->where('review_status', \App\Models\PerpustakaanLiterasiSimilarityMatch::REVIEW_CONFIRMED);
+    $clearedMatches = $similarityMatches->where('review_status', \App\Models\PerpustakaanLiterasiSimilarityMatch::REVIEW_CLEARED);
+    $suspectedMatches = $similarityMatches->filter(fn ($match): bool => blank($match->review_status)
+        || $match->review_status === \App\Models\PerpustakaanLiterasiSimilarityMatch::REVIEW_SUSPECTED);
+    $checkedQuestionCount = $questions->filter(fn ($question): bool => $question->plagiarismDetectionEnabled())->count();
+
+    [$plagiarismLabel, $plagiarismDescription, $plagiarismTone] = match (true) {
+        $confirmedMatches->isNotEmpty() => [
+            'Plagiasi dikonfirmasi',
+            $confirmedMatches->count().' kecocokan telah dikonfirmasi oleh guru atau admin.',
+            'danger',
+        ],
+        $suspectedMatches->isNotEmpty() => [
+            'Terindikasi plagiasi',
+            $suspectedMatches->count().' kecocokan menunggu peninjauan guru atau admin.',
+            'warning',
+        ],
+        $similarityMatches->isNotEmpty() => [
+            'Aman setelah ditinjau',
+            $clearedMatches->count().' kecocokan telah dinyatakan bukan plagiasi.',
+            'success',
+        ],
+        $checkedQuestionCount === 0 => [
+            'Deteksi plagiasi tidak aktif',
+            'Tidak ada pertanyaan pada materi ini yang mengaktifkan pemeriksaan plagiasi.',
+            'neutral',
+        ],
+        default => [
+            'Tidak ada indikasi plagiasi',
+            'Tidak ditemukan kecocokan pada pertanyaan yang diperiksa.',
+            'success',
+        ],
+    };
 @endphp
 
-<div class="space-y-4 text-sm">
-    <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/5">
-        <div class="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">Responden</div>
-        <div class="mt-3 grid gap-3 md:grid-cols-2">
-            <div>
-                <div class="text-xs text-gray-500 dark:text-gray-400">Siswa</div>
-                <div class="font-medium text-gray-900 dark:text-white">{{ $response->student_name_snapshot }}</div>
-            </div>
-            <div>
-                <div class="text-xs text-gray-500 dark:text-gray-400">Kelas</div>
-                <div class="font-medium text-gray-900 dark:text-white">{{ $response->student_class_snapshot ?: '-' }}</div>
-            </div>
-            <div>
-                <div class="text-xs text-gray-500 dark:text-gray-400">Kode Edit</div>
-                <div class="font-medium text-gray-900 dark:text-white">{{ $response->edit_code }}</div>
-            </div>
-            <div>
-                <div class="text-xs text-gray-500 dark:text-gray-400">Waktu Kirim</div>
-                <div class="font-medium text-gray-900 dark:text-white">{{ $response->submitted_at?->format('d/m/Y H:i') ?? '-' }}</div>
-            </div>
+<div class="literasi-response-detail">
+    <section class="literasi-response-detail__identity">
+        <div class="literasi-response-detail__identity-main">
+            <span class="literasi-response-detail__eyebrow">Detail responden</span>
+            <h3>{{ $response->student_name_snapshot }}</h3>
+            <p>{{ $response->student_class_snapshot ?: 'Kelas belum tercatat' }}</p>
         </div>
-    </div>
+        <dl class="literasi-response-detail__identity-grid">
+            <div>
+                <dt>Kode Edit</dt>
+                <dd>{{ $response->edit_code }}</dd>
+            </div>
+            <div>
+                <dt>Submit Jawaban</dt>
+                <dd>{{ $response->submitted_at?->format('d/m/Y H:i') ?? '-' }}</dd>
+            </div>
+            <div>
+                <dt>Terakhir Diedit</dt>
+                <dd>{{ $response->last_edited_at?->format('d/m/Y H:i') ?? '-' }}</dd>
+            </div>
+            <div>
+                <dt>Total Jawaban</dt>
+                <dd>{{ number_format($response->answers->count(), 0, ',', '.') }}</dd>
+            </div>
+        </dl>
+    </section>
 
-    <div class="space-y-3">
-        @foreach($response->material->questions as $index => $question)
+    <section class="literasi-response-detail__section">
+        <div class="literasi-response-detail__section-head">
+            <div>
+                <span class="literasi-response-detail__eyebrow">Integritas pengerjaan</span>
+                <h4>Tindakan keluar halaman</h4>
+            </div>
+            <span class="literasi-response-detail__status literasi-response-detail__status--{{ $integrityTone }}">
+                {{ $integrityLabel }}
+            </span>
+        </div>
+
+        <div class="literasi-response-detail__metric-grid">
+            <article class="literasi-response-detail__metric">
+                <span>Pindah Tab</span>
+                <strong>{{ number_format($tabSwitchCount, 0, ',', '.') }}x</strong>
+                <small>Tab browser kehilangan fokus.</small>
+            </article>
+            <article class="literasi-response-detail__metric">
+                <span>Keluar Aplikasi</span>
+                <strong>{{ number_format($appHiddenCount, 0, ',', '.') }}x</strong>
+                <small>Browser atau aplikasi disembunyikan.</small>
+            </article>
+            <article class="literasi-response-detail__metric">
+                <span>Percobaan Keluar</span>
+                <strong>{{ number_format($pageLeaveCount, 0, ',', '.') }}x</strong>
+                <small>Navigasi keluar dari halaman soal.</small>
+            </article>
+            <article class="literasi-response-detail__metric literasi-response-detail__metric--total">
+                <span>Total Indikator</span>
+                <strong>{{ number_format($integrityTotal, 0, ',', '.') }}x</strong>
+                <small>Indikator teknis, bukan keputusan akhir.</small>
+            </article>
+        </div>
+    </section>
+
+    <section class="literasi-response-detail__section literasi-response-detail__section--{{ $plagiarismTone }}">
+        <div class="literasi-response-detail__section-head">
+            <div>
+                <span class="literasi-response-detail__eyebrow">Pemeriksaan kemiripan</span>
+                <h4>Status plagiasi</h4>
+            </div>
+            <span class="literasi-response-detail__status literasi-response-detail__status--{{ $plagiarismTone }}">
+                {{ $plagiarismLabel }}
+            </span>
+        </div>
+        <p class="literasi-response-detail__description">{{ $plagiarismDescription }}</p>
+        <div class="literasi-response-detail__plagiarism-counts">
+            <span><strong>{{ $suspectedMatches->count() }}</strong> belum ditinjau</span>
+            <span><strong>{{ $confirmedMatches->count() }}</strong> dikonfirmasi</span>
+            <span><strong>{{ $clearedMatches->count() }}</strong> dinyatakan aman</span>
+        </div>
+    </section>
+
+    <section class="literasi-response-detail__answers">
+        <div class="literasi-response-detail__answers-head">
+            <span class="literasi-response-detail__eyebrow">Rincian jawaban</span>
+            <h4>{{ number_format($questions->count(), 0, ',', '.') }} pertanyaan</h4>
+        </div>
+
+        @forelse($questions as $index => $question)
             @php
                 $answer = $answers->get($question->getKey());
+                $answerMatches = $answer ? $matchesByAnswer->get($answer->getKey(), collect()) : collect();
                 $statusLabel = match ($answer?->is_correct) {
                     true => 'Benar',
                     false => 'Salah',
                     default => 'Belum dinilai',
                 };
-                $statusClass = match ($answer?->is_correct) {
-                    true => 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
-                    false => 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300',
-                    default => 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300',
+                $statusTone = match ($answer?->is_correct) {
+                    true => 'success',
+                    false => 'danger',
+                    default => 'warning',
                 };
             @endphp
-            <div class="rounded-2xl border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-gray-900">
-                <div class="flex flex-wrap items-center gap-2">
-                    <span class="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-600 dark:bg-white/10 dark:text-gray-300">
-                        Pertanyaan {{ $index + 1 }}
-                    </span>
-                    <span class="inline-flex rounded-full bg-primary-50 px-2.5 py-1 text-[11px] font-semibold text-primary-700 dark:bg-primary-500/10 dark:text-primary-300">
-                        {{ number_format((int) ($answer?->character_count ?? 0), 0, ',', '.') }} karakter
-                    </span>
-                    <span class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold {{ $statusClass }}">
+            <article class="literasi-response-detail__answer">
+                <header class="literasi-response-detail__answer-head">
+                    <div>
+                        <span>Pertanyaan {{ $index + 1 }}</span>
+                        <strong>{{ number_format((int) ($answer?->character_count ?? 0), 0, ',', '.') }} karakter</strong>
+                    </div>
+                    <span class="literasi-response-detail__status literasi-response-detail__status--{{ $statusTone }}">
                         {{ $statusLabel }}
                     </span>
+                </header>
+
+                <div class="literasi-response-detail__prompt">{{ $question->prompt }}</div>
+                <div class="literasi-response-detail__answer-text">
+                    <span>{{ filled($answer?->answer_text) ? $answer->answer_text : '-' }}</span>
                 </div>
-                <div class="mt-3 text-sm font-medium leading-6 text-gray-900 dark:text-white">{{ $question->prompt }}</div>
-                <div class="mt-3 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-2 text-sm leading-6 text-gray-700 dark:border-white/10 dark:bg-white/5 dark:text-gray-200">
-                    <span class="whitespace-pre-line">{{ filled($answer?->answer_text) ? $answer->answer_text : '-' }}</span>
+
+                <div class="literasi-response-detail__answer-meta">
+                    @if(! $question->plagiarismDetectionEnabled())
+                        <span class="literasi-response-detail__status literasi-response-detail__status--neutral">Plagiasi tidak diperiksa</span>
+                    @elseif($answerMatches->isEmpty())
+                        <span class="literasi-response-detail__status literasi-response-detail__status--success">Tidak ada indikasi plagiasi</span>
+                    @else
+                        <span class="literasi-response-detail__status literasi-response-detail__status--warning">
+                            {{ $answerMatches->count() }} kecocokan plagiasi
+                        </span>
+                    @endif
                 </div>
+
+                @if($answerMatches->isNotEmpty())
+                    <div class="literasi-response-detail__matches">
+                        @foreach($answerMatches as $match)
+                            <div class="literasi-response-detail__match">
+                                <div>
+                                    <strong>{{ number_format((float) $match->similarity_score, 2, ',', '.') }}% mirip</strong>
+                                    <span>
+                                        {{ $match->matchedResponse?->student_name_snapshot ?: 'Responden pembanding' }}
+                                        ({{ $match->matchedResponse?->student_class_snapshot ?: '-' }})
+                                    </span>
+                                </div>
+                                <div>
+                                    <span class="literasi-response-detail__status literasi-response-detail__status--{{ \App\Models\PerpustakaanLiterasiSimilarityMatch::reviewStatusColor($match->review_status) }}">
+                                        {{ \App\Models\PerpustakaanLiterasiSimilarityMatch::reviewStatusLabel($match->review_status) }}
+                                    </span>
+                                    <small>
+                                        {{ $match->reviewed_at ? 'Ditinjau '.$match->reviewed_at->format('d/m/Y H:i') : 'Belum diverifikasi' }}
+                                        {{ $match->reviewedBy?->name ? ' oleh '.$match->reviewedBy->name : '' }}
+                                    </small>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+
                 @if($answer?->graded_at || filled($answer?->grading_note))
-                    <div class="mt-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs leading-5 text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300">
+                    <div class="literasi-response-detail__grading">
                         @if($answer?->graded_at)
-                            <div>Dinilai: {{ $answer->graded_at->format('d/m/Y H:i') }}{{ $answer->gradedBy?->name ? ' oleh '.$answer->gradedBy->name : '' }}</div>
+                            <div>Dinilai {{ $answer->graded_at->format('d/m/Y H:i') }}{{ $answer->gradedBy?->name ? ' oleh '.$answer->gradedBy->name : '' }}</div>
                         @endif
                         @if(filled($answer?->grading_note))
-                            <div class="mt-1 whitespace-pre-line">Catatan: {{ $answer->grading_note }}</div>
+                            <div>Catatan: <span>{{ $answer->grading_note }}</span></div>
                         @endif
                     </div>
                 @endif
-            </div>
-        @endforeach
-    </div>
+            </article>
+        @empty
+            <div class="literasi-response-detail__empty">Belum ada pertanyaan pada materi ini.</div>
+        @endforelse
+    </section>
 </div>

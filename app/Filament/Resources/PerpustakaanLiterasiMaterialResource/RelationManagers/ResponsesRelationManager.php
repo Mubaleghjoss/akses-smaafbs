@@ -122,10 +122,16 @@ class ResponsesRelationManager extends RelationManager
                     ->modalHeading(fn (PerpustakaanLiterasiResponse $record): string => 'Jawaban: '.$record->student_name_snapshot)
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Tutup')
-                    ->modalWidth('5xl')
+                    ->modalWidth('6xl')
                     ->modalContent(fn (PerpustakaanLiterasiResponse $record) => view(
                         'filament.resources.perpustakaan-literasi-material-resource.partials.response-detail',
-                        ['response' => $record->loadMissing('material.questions', 'answers.question', 'answers.gradedBy')]
+                        ['response' => $record->loadMissing(
+                            'material.questions',
+                            'answers.question',
+                            'answers.gradedBy',
+                            'laterSimilarityMatches.matchedResponse',
+                            'laterSimilarityMatches.reviewedBy',
+                        )]
                     )),
                 Action::make('bukaEditPublik')
                     ->label('Link Edit')

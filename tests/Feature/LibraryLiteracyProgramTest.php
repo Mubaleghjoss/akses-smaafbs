@@ -800,6 +800,32 @@ class LibraryLiteracyProgramTest extends TestCase
             'matched_submitted_at' => now()->subMinute(),
         ]);
 
+        $response->forceFill([
+            'tab_switch_count' => 2,
+            'app_hidden_count' => 1,
+            'page_leave_attempt_count' => 3,
+        ])->save();
+
+        $detailHtml = view(
+            'filament.resources.perpustakaan-literasi-material-resource.partials.response-detail',
+            ['response' => $response->load(
+                'material.questions',
+                'answers.question',
+                'answers.gradedBy',
+                'laterSimilarityMatches.matchedResponse',
+                'laterSimilarityMatches.reviewedBy',
+            )]
+        )->render();
+
+        $this->assertStringContainsString('literasi-response-detail__identity', $detailHtml);
+        $this->assertStringContainsString('Tindakan keluar halaman', $detailHtml);
+        $this->assertStringContainsString('Total Indikator', $detailHtml);
+        $this->assertStringContainsString('6x', $detailHtml);
+        $this->assertStringContainsString('Terindikasi plagiasi', $detailHtml);
+        $this->assertStringContainsString('94,25% mirip', $detailHtml);
+        $this->assertStringContainsString('Codex Pembanding Nilai', $detailHtml);
+        $this->assertStringContainsString('Belum ditinjau', $detailHtml);
+
         Livewire::actingAs($viewer)
             ->test(ResponsesRelationManager::class, [
                 'ownerRecord' => $material,
