@@ -391,6 +391,41 @@ class LibraryLiteracyProgramTest extends TestCase
             ]);
     }
 
+    public function test_trashed_student_response_is_reported_without_server_error(): void
+    {
+        $student = $this->createStudent('Codex Jawaban di Sampah', 'XI Sampah');
+        $material = $this->createMaterial('Materi Jawaban di Sampah');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Apa pesan utama bacaan?',
+            'max_characters' => 500,
+        ]);
+        $response = $this->createResponseWithAnswer(
+            $material,
+            $student,
+            $question,
+            'Jawaban lama yang sudah dipindahkan ke Sampah.'
+        );
+        $response->delete();
+
+        $this->from(route('library.literacy.show', $material->slug))
+            ->post(route('library.literacy.store', $material->slug), [
+                'student_id' => $student->getKey(),
+                'answers' => [
+                    $question->getKey() => 'Jawaban baru yang tidak boleh memicu duplicate-key 500.',
+                ],
+            ])
+            ->assertRedirect(route('library.literacy.show', $material->slug))
+            ->assertSessionHasErrors([
+                'student_id' => 'Jawaban siswa ini berada di Sampah. Hubungi Guru / Tim Literasi Numerasi untuk merestore jawaban lama atau menghapusnya permanen sebelum mengerjakan ulang.',
+            ]);
+
+        $this->assertSame(1, PerpustakaanLiterasiResponse::withTrashed()
+            ->where('material_id', $material->getKey())
+            ->where('data_siswa_id', $student->getKey())
+            ->count());
+    }
+
     public function test_literacy_integrity_counts_are_saved_from_submit_update_and_beacon(): void
     {
         $student = $this->createStudent('Codex Integritas Siswa', 'XI Integritas');
@@ -993,6 +1028,15 @@ class LibraryLiteracyProgramTest extends TestCase
                 'ownerRecord' => $material,
                 'pageClass' => ViewPerpustakaanLiterasiMaterial::class,
             ])
+            ->callTableAction('showTrashedResponses')
+            ->assertCanSeeTableRecords([$trashedResponse])
+            ->assertCanNotSeeTableRecords([$keptResponse]);
+
+        Livewire::actingAs($admin)
+            ->test(ResponsesRelationManager::class, [
+                'ownerRecord' => $material,
+                'pageClass' => ViewPerpustakaanLiterasiMaterial::class,
+            ])
             ->filterTable('response_status', 'trash')
             ->callTableBulkAction('restoreSelectedResponses', [$trashedResponse])
             ->assertHasNoTableBulkActionErrors();
@@ -1025,6 +1069,107 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertNull(PerpustakaanLiterasiSimilarityMatch::withTrashed()->find($match->getKey()));
         $this->assertNotNull(PerpustakaanLiterasiResponse::withTrashed()->find($keptResponse->getKey()));
         $this->assertNotNull(PerpustakaanLiterasiAnswer::withTrashed()->find($keptAnswer->getKey()));
+
+        $emptyTrashResponse = $this->createResponseWithAnswer(
+            $material,
+            $this->createStudent('Codex Kosongkan Sampah', 'X Bulk'),
+            $question,
+            'Jawaban yang akan dihapus lewat menu kosongkan sampah.'
+        );
+        $emptyTrashAnswer = $emptyTrashResponse->answers()->firstOrFail();
+        $emptyTrashResponse->delete();
+
+        Livewire::actingAs($admin)
+            ->test(ResponsesRelationManager::class, [
+                'ownerRecord' => $material,
+                'pageClass' => ViewPerpustakaanLiterasiMaterial::class,
+            ])
+            ->callTableAction('emptyResponseTrash')
+            ->assertHasNoTableActionErrors();
+
+        $this->assertNull(PerpustakaanLiterasiResponse::withTrashed()->find($emptyTrashResponse->getKey()));
+        $this->assertNull(PerpustakaanLiterasiAnswer::withTrashed()->find($emptyTrashAnswer->getKey()));
+        $this->assertNotNull(PerpustakaanLiterasiResponse::query()->find($keptResponse->getKey()));
+    }
+
+    public function test_admin_can_bulk_grade_selected_responses_and_questions(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $admin = User::query()->create([
+            'name' => 'Admin Bulk Nilai Literasi',
+            'username' => 'admin-bulk-nilai-literasi',
+            'password' => bcrypt('password'),
+        ]);
+        $admin->assignRole('admin');
+
+        $material = $this->createMaterial('Materi Bulk Nilai');
+        $questionOne = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Pertanyaan pertama untuk bulk nilai?',
+            'max_characters' => 500,
+        ]);
+        $questionTwo = $material->questions()->create([
+            'sort_order' => 2,
+            'prompt' => 'Pertanyaan kedua untuk bulk nilai?',
+            'max_characters' => 500,
+        ]);
+        $responseOne = $this->createResponseWithAnswer(
+            $material,
+            $this->createStudent('Codex Bulk Nilai Satu', 'XI Nilai'),
+            $questionOne,
+            'Jawaban siswa pertama untuk pertanyaan pertama.'
+        );
+        $responseTwo = $this->createResponseWithAnswer(
+            $material,
+            $this->createStudent('Codex Bulk Nilai Dua', 'XI Nilai'),
+            $questionOne,
+            'Jawaban siswa kedua untuk pertanyaan pertama.'
+        );
+
+        foreach ([$responseOne, $responseTwo] as $response) {
+            PerpustakaanLiterasiAnswer::query()->create([
+                'response_id' => $response->getKey(),
+                'question_id' => $questionTwo->getKey(),
+                'answer_text' => 'Jawaban untuk pertanyaan kedua yang belum ikut dinilai.',
+                'character_count' => 54,
+            ]);
+        }
+
+        Livewire::actingAs($admin)
+            ->test(ResponsesRelationManager::class, [
+                'ownerRecord' => $material,
+                'pageClass' => ViewPerpustakaanLiterasiMaterial::class,
+            ])
+            ->mountTableBulkAction('gradeSelectedResponses', [$responseOne, $responseTwo])
+            ->setTableBulkActionData([
+                'question_ids' => [$questionOne->getKey()],
+                'status' => 'correct',
+                'note' => 'Dinilai benar secara bulk.',
+            ])
+            ->assertTableBulkActionDataSet([
+                'question_ids' => [$questionOne->getKey()],
+                'status' => 'correct',
+                'note' => 'Dinilai benar secara bulk.',
+            ])
+            ->callMountedTableBulkAction()
+            ->assertHasNoTableBulkActionErrors();
+
+        $gradedAnswers = PerpustakaanLiterasiAnswer::query()
+            ->whereIn('response_id', [$responseOne->getKey(), $responseTwo->getKey()])
+            ->where('question_id', $questionOne->getKey())
+            ->get();
+
+        $this->assertCount(2, $gradedAnswers);
+        $this->assertTrue($gradedAnswers->every(fn (PerpustakaanLiterasiAnswer $answer): bool => $answer->is_correct === true));
+        $this->assertTrue($gradedAnswers->every(fn (PerpustakaanLiterasiAnswer $answer): bool => (int) $answer->graded_by === (int) $admin->getKey()));
+        $this->assertTrue($gradedAnswers->every(fn (PerpustakaanLiterasiAnswer $answer): bool => $answer->grading_note === 'Dinilai benar secara bulk.'));
+
+        $this->assertSame(0, PerpustakaanLiterasiAnswer::query()
+            ->whereIn('response_id', [$responseOne->getKey(), $responseTwo->getKey()])
+            ->where('question_id', $questionTwo->getKey())
+            ->whereNotNull('is_correct')
+            ->count());
     }
 
     public function test_public_edit_clears_existing_literacy_grading_when_answer_changes(): void

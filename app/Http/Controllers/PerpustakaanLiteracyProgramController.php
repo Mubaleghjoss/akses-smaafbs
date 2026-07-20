@@ -83,12 +83,18 @@ class PerpustakaanLiteracyProgramController extends Controller
                 ->withInput();
         }
 
-        $existingResponse = PerpustakaanLiterasiResponse::query()
+        $existingResponse = PerpustakaanLiterasiResponse::withTrashed()
             ->where('material_id', $material->getKey())
             ->where('data_siswa_id', $student->getKey())
             ->first();
 
         if ($existingResponse) {
+            if ($existingResponse->trashed()) {
+                return back()
+                    ->withErrors(['student_id' => 'Jawaban siswa ini berada di Sampah. Hubungi Guru / Tim Literasi Numerasi untuk merestore jawaban lama atau menghapusnya permanen sebelum mengerjakan ulang.'])
+                    ->withInput();
+            }
+
             return back()
                 ->withErrors(['student_id' => 'Siswa ini sudah mengirim jawaban. Gunakan kode unik untuk mengedit jawaban. Jika nama sudah mengisi dan lupa kode editnya, hubungi Guru / Tim Literasi Numerasi agar kode edit dicek.'])
                 ->withInput();

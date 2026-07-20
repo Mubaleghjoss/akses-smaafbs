@@ -7,6 +7,7 @@ use App\Models\PerpustakaanLiterasiAnswer;
 use App\Models\PerpustakaanLiterasiResponse;
 use App\Models\PerpustakaanLiterasiSimilarityMatch;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Forms;
@@ -19,6 +20,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 
 class ResponsesRelationManager extends RelationManager
 {
@@ -127,6 +129,38 @@ class ResponsesRelationManager extends RelationManager
                             ->whereHas('answers', fn (Builder $answerQuery): Builder => $answerQuery->whereNull('is_correct')),
                     ),
             ])
+            ->headerActions([
+                ActionGroup::make([
+                    Action::make('showTrashedResponses')
+                        ->label('Buka Sampah')
+                        ->icon('heroicon-o-archive-box')
+                        ->color('warning')
+                        ->action(fn () => $this->showResponseStatus('trash')),
+                    Action::make('emptyResponseTrash')
+                        ->label('Hapus Permanen Semua')
+                        ->icon('heroicon-o-no-symbol')
+                        ->color('danger')
+                        ->visible(fn (): bool => $this->canManageResponses() && $this->trashedResponseCount() > 0)
+                        ->requiresConfirmation()
+                        ->modalHeading('Hapus permanen semua jawaban di Sampah?')
+                        ->modalDescription(fn (): string => 'Sebanyak '.$this->trashedResponseCount().' jawaban responden di Sampah akan dihapus permanen beserta jawaban per soal dan data plagiasi terkait. Tindakan ini tidak dapat dibatalkan.')
+                        ->modalSubmitActionLabel('Ya, Hapus Permanen Semua')
+                        ->action(function (): void {
+                            $processed = $this->forceDeleteAllTrashedResponses();
+
+                            $this->showResponseStatus('trash');
+                            $this->notifyBulkAction(
+                                'Sampah jawaban dikosongkan',
+                                "Jawaban responden dihapus permanen: {$processed}.",
+                                $processed,
+                            );
+                        }),
+                ])
+                    ->label(fn (): string => 'Sampah ('.$this->trashedResponseCount().')')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    ->button(),
+            ])
             ->actions([
                 Action::make('nilaiJawaban')
                     ->label(fn (PerpustakaanLiterasiResponse $record): string => $this->isResponseFullyGraded($record) ? 'Edit Nilai' : 'Nilai')
@@ -171,6 +205,26 @@ class ResponsesRelationManager extends RelationManager
             ])
             ->bulkActions([
                 BulkActionGroup::make([
+                    BulkAction::make('gradeSelectedResponses')
+                        ->label('Nilai Jawaban Terpilih')
+                        ->icon('heroicon-o-check-badge')
+                        ->color('success')
+                        ->visible(fn (): bool => $this->canManageResponses())
+                        ->modalHeading('Nilai banyak jawaban sekaligus')
+                        ->modalDescription('Nilai yang dipilih akan diterapkan pada pertanyaan dan siswa aktif yang dipilih. Jawaban di Sampah akan dilewati.')
+                        ->modalSubmitActionLabel('Terapkan Nilai')
+                        ->modalWidth('lg')
+                        ->form(fn (): array => $this->bulkGradingFormSchema())
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (iterable $records, array $data): void {
+                            $result = $this->gradeSelectedResponseRecords($records, $data);
+
+                            $this->notifyBulkAction(
+                                'Bulk penilaian selesai',
+                                "Siswa diproses: {$result['responses']}. Jawaban dinilai: {$result['answers']}.",
+                                $result['answers'],
+                            );
+                        }),
                     BulkAction::make('deleteSelectedResponses')
                         ->label('Pindahkan ke Sampah')
                         ->icon('heroicon-o-trash')
@@ -232,6 +286,163 @@ class ResponsesRelationManager extends RelationManager
     protected function canManageResponses(): bool
     {
         return PerpustakaanLiterasiMaterialResource::canEdit($this->getOwnerRecord());
+    }
+
+    protected function showResponseStatus(string $status): void
+    {
+        $filters = is_array($this->tableFilters) ? $this->tableFilters : [];
+        $filters['response_status']['value'] = $status === 'trash' ? 'trash' : 'active';
+        $this->tableFilters = $filters;
+        $this->resetPage();
+    }
+
+    protected function trashedResponseCount(): int
+    {
+        return PerpustakaanLiterasiResponse::onlyTrashed()
+            ->where('material_id', $this->getOwnerRecord()->getKey())
+            ->count();
+    }
+
+    protected function forceDeleteAllTrashedResponses(): int
+    {
+        abort_unless($this->canManageResponses(), 403);
+
+        $processed = 0;
+        $materialId = (int) $this->getOwnerRecord()->getKey();
+
+        DB::transaction(function () use ($materialId, &$processed): void {
+            PerpustakaanLiterasiResponse::onlyTrashed()
+                ->where('material_id', $materialId)
+                ->orderBy('id')
+                ->get()
+                ->each(function (PerpustakaanLiterasiResponse $response) use (&$processed): void {
+                    $response->forceDelete();
+                    $processed++;
+                });
+        });
+
+        return $processed;
+    }
+
+    protected function bulkGradingFormSchema(): array
+    {
+        $questionOptions = $this->bulkGradingQuestionOptions();
+
+        return [
+            Section::make('Pengaturan Nilai')
+                ->columns(['default' => 1])
+                ->schema([
+                    Forms\Components\CheckboxList::make('question_ids')
+                        ->label('Pertanyaan yang Dinilai')
+                        ->options($questionOptions)
+                        ->searchable()
+                        ->bulkToggleable()
+                        ->columns(['default' => 1, 'md' => 2])
+                        ->required()
+                        ->helperText('Pilih pertanyaan tertentu atau gunakan Pilih Semua untuk menilai seluruh pertanyaan.'),
+                    Forms\Components\Radio::make('status')
+                        ->label('Nilai')
+                        ->options([
+                            'correct' => 'Benar',
+                            'wrong' => 'Salah',
+                            'ungraded' => 'Reset menjadi Belum Dinilai',
+                        ])
+                        ->required(),
+                    Forms\Components\Textarea::make('note')
+                        ->label('Catatan untuk Semua Jawaban')
+                        ->rows(3)
+                        ->maxLength(1000)
+                        ->helperText('Opsional. Catatan yang sama diterapkan pada jawaban yang dipilih.'),
+                ]),
+        ];
+    }
+
+    protected function bulkGradingQuestionOptions(): array
+    {
+        return $this->getOwnerRecord()
+            ->questions()
+            ->orderBy('sort_order')
+            ->get(['id', 'prompt', 'sort_order'])
+            ->mapWithKeys(fn ($question): array => [
+                $question->getKey() => 'Pertanyaan '.$question->sort_order.' - '.Str::limit(trim((string) $question->prompt), 90),
+            ])
+            ->all();
+    }
+
+    /**
+     * @param  iterable<PerpustakaanLiterasiResponse>  $records
+     * @return array{responses:int,answers:int}
+     */
+    protected function gradeSelectedResponseRecords(iterable $records, array $data): array
+    {
+        abort_unless($this->canManageResponses(), 403);
+
+        $materialId = (int) $this->getOwnerRecord()->getKey();
+        $questionIds = $this->getOwnerRecord()
+            ->questions()
+            ->whereKey(collect($data['question_ids'] ?? [])->map(fn ($id): int => (int) $id)->filter()->unique()->all())
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+        $status = (string) ($data['status'] ?? '');
+        $note = trim((string) ($data['note'] ?? ''));
+        $processedResponses = 0;
+        $processedAnswers = 0;
+
+        if ($questionIds === [] || ! in_array($status, ['correct', 'wrong', 'ungraded'], true)) {
+            return ['responses' => 0, 'answers' => 0];
+        }
+
+        DB::transaction(function () use ($records, $materialId, $questionIds, $status, $note, &$processedResponses, &$processedAnswers): void {
+            foreach ($records as $record) {
+                if (! $record instanceof PerpustakaanLiterasiResponse) {
+                    continue;
+                }
+
+                $response = PerpustakaanLiterasiResponse::query()
+                    ->where('material_id', $materialId)
+                    ->find($record->getKey());
+
+                if (! $response) {
+                    continue;
+                }
+
+                $answers = $response->answers()
+                    ->whereIn('question_id', $questionIds)
+                    ->get();
+
+                if ($answers->isEmpty()) {
+                    continue;
+                }
+
+                foreach ($answers as $answer) {
+                    if ($status === 'ungraded') {
+                        $answer->forceFill([
+                            'is_correct' => null,
+                            'graded_by' => null,
+                            'graded_at' => null,
+                            'grading_note' => null,
+                        ])->save();
+                    } else {
+                        $answer->forceFill([
+                            'is_correct' => $status === 'correct',
+                            'graded_by' => auth()->id(),
+                            'graded_at' => now(),
+                            'grading_note' => $note !== '' ? $note : null,
+                        ])->save();
+                    }
+
+                    $processedAnswers++;
+                }
+
+                $processedResponses++;
+            }
+        });
+
+        return [
+            'responses' => $processedResponses,
+            'answers' => $processedAnswers,
+        ];
     }
 
     /**
