@@ -38,7 +38,92 @@ class LiterasiAnalytics
 
     public static function forMaterial(PerpustakaanLiterasiMaterial $material): array
     {
-        return static::build($material);
+        return static::build($material) + [
+            'material_completion' => static::materialCompletion($material),
+        ];
+    }
+
+    public static function materialCompletion(PerpustakaanLiterasiMaterial $material): array
+    {
+        if (! Schema::hasTable('data_siswa') || ! Schema::hasTable('perpustakaan_literasi_responses')) {
+            return [
+                'active_total' => 0,
+                'completed_total' => 0,
+                'missing_total' => 0,
+                'trashed_total' => 0,
+                'completion_percentage' => 0.0,
+                'classes' => [],
+            ];
+        }
+
+        $students = DataSiswa::query()
+            ->where('status', 'aktif')
+            ->orderBy('rombel_saat_ini')
+            ->orderBy('nama')
+            ->get(['id', 'nama', 'rombel_saat_ini']);
+
+        $responses = PerpustakaanLiterasiResponse::withTrashed()
+            ->where('material_id', $material->getKey())
+            ->get(['id', 'data_siswa_id', 'deleted_at'])
+            ->keyBy('data_siswa_id');
+
+        $classes = $students
+            ->groupBy(fn (DataSiswa $student): string => trim((string) $student->rombel_saat_ini) ?: '-')
+            ->map(function (Collection $classStudents, string $class) use ($responses): array {
+                $completed = [];
+                $missing = [];
+                $trashed = [];
+
+                foreach ($classStudents as $student) {
+                    $row = [
+                        'student_id' => (int) $student->getKey(),
+                        'name' => (string) $student->nama,
+                        'class' => $class,
+                    ];
+                    $response = $responses->get($student->getKey());
+
+                    if (! $response) {
+                        $missing[] = $row;
+                    } elseif ($response->deleted_at !== null) {
+                        $trashed[] = $row;
+                    } else {
+                        $completed[] = $row;
+                    }
+                }
+
+                $activeTotal = $classStudents->count();
+
+                return [
+                    'class' => $class,
+                    'active_total' => $activeTotal,
+                    'completed_total' => count($completed),
+                    'missing_total' => count($missing),
+                    'trashed_total' => count($trashed),
+                    'completion_percentage' => $activeTotal > 0
+                        ? round((count($completed) / $activeTotal) * 100, 1)
+                        : 0.0,
+                    'missing_students' => $missing,
+                    'trashed_students' => $trashed,
+                ];
+            })
+            ->sortBy('class', SORT_NATURAL)
+            ->values();
+
+        $activeTotal = $students->count();
+        $completedTotal = (int) $classes->sum('completed_total');
+        $missingTotal = (int) $classes->sum('missing_total');
+        $trashedTotal = (int) $classes->sum('trashed_total');
+
+        return [
+            'active_total' => $activeTotal,
+            'completed_total' => $completedTotal,
+            'missing_total' => $missingTotal,
+            'trashed_total' => $trashedTotal,
+            'completion_percentage' => $activeTotal > 0
+                ? round(($completedTotal / $activeTotal) * 100, 1)
+                : 0.0,
+            'classes' => $classes->all(),
+        ];
     }
 
     protected static function build(?PerpustakaanLiterasiMaterial $material, ?string $programCategory = null): array
@@ -418,8 +503,7 @@ class LiterasiAnalytics
         Carbon $start,
         Carbon $end,
         ?string $programCategory = null
-    ): array
-    {
+    ): array {
         if (! static::gradingColumnsAvailable()) {
             return [
                 'responses' => 0,
@@ -462,8 +546,7 @@ class LiterasiAnalytics
         Carbon $start,
         Carbon $end,
         ?string $programCategory = null
-    ): int
-    {
+    ): int {
         if (! static::similarityReviewColumnsAvailable()) {
             return 0;
         }
@@ -478,8 +561,7 @@ class LiterasiAnalytics
         Carbon $end,
         ?PerpustakaanLiterasiMaterial $material,
         ?string $programCategory = null
-    ): Collection
-    {
+    ): Collection {
         return static::responseQuery($material, $programCategory)
             ->whereBetween('submitted_at', [$start, $end])
             ->whereNotNull('student_class_snapshot')
@@ -519,8 +601,7 @@ class LiterasiAnalytics
         Carbon $start,
         Carbon $end,
         ?string $programCategory = null
-    ): Builder
-    {
+    ): Builder {
         return PerpustakaanLiterasiSimilarityMatch::query()
             ->when($material, fn (Builder $query): Builder => $query->where('perpustakaan_literasi_similarity_matches.material_id', $material->getKey()))
             ->when($programCategory, fn (Builder $query): Builder => static::constrainSimilarityCategory($query, $programCategory))

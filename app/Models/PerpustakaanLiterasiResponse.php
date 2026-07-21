@@ -14,6 +14,14 @@ class PerpustakaanLiterasiResponse extends Model
 
     public const AI_STATUS_NOT_CHECKED = 'not_checked';
 
+    public const SIMILARITY_STATUS_PENDING = 'pending';
+
+    public const SIMILARITY_STATUS_PROCESSING = 'processing';
+
+    public const SIMILARITY_STATUS_COMPLETED = 'completed';
+
+    public const SIMILARITY_STATUS_FAILED = 'failed';
+
     protected $table = 'perpustakaan_literasi_responses';
 
     protected $guarded = [];
@@ -27,6 +35,9 @@ class PerpustakaanLiterasiResponse extends Model
         'app_hidden_count' => 'integer',
         'page_leave_attempt_count' => 'integer',
         'last_integrity_event_at' => 'datetime',
+        'similarity_analysis_version' => 'integer',
+        'similarity_analysis_queued_at' => 'datetime',
+        'similarity_analyzed_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',

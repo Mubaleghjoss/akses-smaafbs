@@ -9,6 +9,7 @@
     $missingStudents = $analytics['missing_students'] ?? [];
     $plagiarismClassRanking = $analytics['plagiarism_class_ranking'] ?? [];
     $plagiarismStudentRanking = $analytics['plagiarism_student_ranking'] ?? [];
+    $materialCompletion = $analytics['material_completion'] ?? null;
     $compact = (bool) ($compact ?? false);
 
     $formatNumber = fn (int|float $value): string => number_format($value, 0, ',', '.');
@@ -71,6 +72,63 @@
             <strong class="literasi-metric-card__value">{{ $formatNumber((int) ($summary['confirmed_plagiarism'] ?? 0)) }}</strong>
         </article>
     </div>
+
+    @if(is_array($materialCompletion))
+        <article class="literasi-panel literasi-completion">
+            <div class="literasi-completion__header">
+                <div>
+                    <h3 class="literasi-panel__title">Status Pengisian Materi</h3>
+                    <p class="literasi-analytics__description">Seluruh waktu untuk semua siswa aktif. Jawaban di Sampah dipisahkan dari siswa yang belum pernah mengisi.</p>
+                </div>
+                <span class="literasi-analytics__period">Penyelesaian: {{ $formatPercent((float) ($materialCompletion['completion_percentage'] ?? 0)) }}</span>
+            </div>
+
+            <div class="literasi-completion__metrics">
+                <div><span>Siswa Aktif</span><strong>{{ $formatNumber((int) ($materialCompletion['active_total'] ?? 0)) }}</strong></div>
+                <div class="is-success"><span>Sudah Mengisi</span><strong>{{ $formatNumber((int) ($materialCompletion['completed_total'] ?? 0)) }}</strong></div>
+                <div class="is-warning"><span>Belum Mengisi</span><strong>{{ $formatNumber((int) ($materialCompletion['missing_total'] ?? 0)) }}</strong></div>
+                <div class="is-danger"><span>Di Sampah</span><strong>{{ $formatNumber((int) ($materialCompletion['trashed_total'] ?? 0)) }}</strong></div>
+            </div>
+
+            <div class="literasi-completion__classes">
+                @forelse(($materialCompletion['classes'] ?? []) as $class)
+                    <details class="literasi-completion__class" @if(($class['missing_total'] ?? 0) > 0 || ($class['trashed_total'] ?? 0) > 0) open @endif>
+                        <summary>
+                            <strong>{{ $class['class'] }}</strong>
+                            <span>{{ $formatNumber((int) $class['completed_total']) }}/{{ $formatNumber((int) $class['active_total']) }} mengisi</span>
+                            <span class="is-warning">{{ $formatNumber((int) $class['missing_total']) }} belum</span>
+                            @if(($class['trashed_total'] ?? 0) > 0)
+                                <span class="is-danger">{{ $formatNumber((int) $class['trashed_total']) }} di Sampah</span>
+                            @endif
+                        </summary>
+
+                        <div class="literasi-completion__lists">
+                            <section>
+                                <h4>Belum Mengisi</h4>
+                                @forelse(($class['missing_students'] ?? []) as $student)
+                                    <div class="literasi-completion__student">{{ $student['name'] }}</div>
+                                @empty
+                                    <p class="literasi-empty-state">Tidak ada siswa yang belum mengisi.</p>
+                                @endforelse
+                            </section>
+
+                            @if(($class['trashed_total'] ?? 0) > 0)
+                                <section class="is-trash">
+                                    <h4>Jawaban di Sampah</h4>
+                                    @foreach(($class['trashed_students'] ?? []) as $student)
+                                        <div class="literasi-completion__student">{{ $student['name'] }}</div>
+                                    @endforeach
+                                    <p class="literasi-completion__hint">Restore atau hapus permanen melalui pengelolaan responden materi.</p>
+                                </section>
+                            @endif
+                        </div>
+                    </details>
+                @empty
+                    <p class="literasi-empty-state">Data siswa aktif belum tersedia.</p>
+                @endforelse
+            </div>
+        </article>
+    @endif
 
     <div class="literasi-analytics__grid">
         <article class="literasi-panel">

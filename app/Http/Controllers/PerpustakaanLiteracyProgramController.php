@@ -2,15 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\LiteracySubmissionQueueBusy;
+use App\Jobs\AnalyzeLiteracyResponseSimilarity;
 use App\Models\DataSiswa;
 use App\Models\PerpustakaanLiterasiAnswer;
 use App\Models\PerpustakaanLiterasiMaterial;
 use App\Models\PerpustakaanLiterasiQuestion;
 use App\Models\PerpustakaanLiterasiResponse;
-use App\Support\Perpustakaan\LiterasiSimilarityAnalyzer;
-use Illuminate\Database\Eloquent\Builder;
+use App\Support\Perpustakaan\LiteracySubmissionQueue;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -45,7 +49,7 @@ class PerpustakaanLiteracyProgramController extends Controller
         ]);
     }
 
-    public function store(Request $request, string $slug, LiterasiSimilarityAnalyzer $analyzer): RedirectResponse
+    public function store(Request $request, string $slug, LiteracySubmissionQueue $submissionQueue): RedirectResponse
     {
         $material = $this->resolvePublicMaterial($slug);
         $questions = $material->questions()->get();
@@ -56,73 +60,105 @@ class PerpustakaanLiteracyProgramController extends Controller
                 ->withInput();
         }
 
-        $validated = $request->validate(
-            $this->answerValidationRules($questions) + [
-                'student_id' => ['required', 'integer', 'exists:data_siswa,id'],
-                'student_verification' => ['nullable', 'string', 'max:80'],
-            ] + $this->integrityValidationRules(),
-            [],
-            $this->answerValidationAttributes($questions),
-        );
+        $requestId = $this->submissionRequestId($request);
+        $studentId = (int) $request->input('student_id');
 
-        $student = DataSiswa::query()
-            ->whereKey((int) $validated['student_id'])
-            ->where('status', 'aktif')
-            ->first();
-
-        if (! $student) {
-            return back()
-                ->withErrors(['student_id' => 'Pilih siswa aktif dari data master.'])
-                ->withInput();
+        try {
+            $ticket = $submissionQueue->claimNewSubmission(
+                $request,
+                $material,
+                $studentId,
+                $requestId,
+                $request->string('submission_ticket')->toString(),
+            );
+        } catch (LiteracySubmissionQueueBusy $exception) {
+            return $this->queueWaitResponse($exception);
         }
 
-        if (($material->student_verification_enabled ?? true)
-            && ! $this->studentVerificationMatches($student, (string) ($validated['student_verification'] ?? ''))) {
-            return back()
-                ->withErrors(['student_verification' => $this->studentVerificationErrorMessage($student, (string) ($validated['student_verification'] ?? ''))])
-                ->withInput();
-        }
+        $ticketCompleted = $ticket?->status === 'completed';
 
-        $existingResponse = PerpustakaanLiterasiResponse::withTrashed()
-            ->where('material_id', $material->getKey())
-            ->where('data_siswa_id', $student->getKey())
-            ->first();
+        try {
+            if ($ticketCompleted && $ticket?->result_response_id) {
+                $completedResponse = PerpustakaanLiterasiResponse::query()->find($ticket->result_response_id);
 
-        if ($existingResponse) {
-            if ($existingResponse->trashed()) {
+                if ($completedResponse) {
+                    return $this->successfulSubmissionRedirect($completedResponse, 'Jawaban sudah berhasil dikirim.');
+                }
+            }
+
+            $validated = $request->validate(
+                $this->answerValidationRules($questions) + [
+                    'student_id' => ['required', 'integer', 'exists:data_siswa,id'],
+                    'student_verification' => ['nullable', 'string', 'max:80'],
+                    'submission_request_id' => ['nullable', 'uuid'],
+                    'submission_ticket' => ['nullable', 'string', 'max:64'],
+                ] + $this->integrityValidationRules(),
+                [],
+                $this->answerValidationAttributes($questions),
+            );
+
+            $student = DataSiswa::query()
+                ->whereKey((int) $validated['student_id'])
+                ->where('status', 'aktif')
+                ->first();
+
+            if (! $student) {
                 return back()
-                    ->withErrors(['student_id' => 'Jawaban siswa ini berada di Sampah. Hubungi Guru / Tim Literasi Numerasi untuk merestore jawaban lama atau menghapusnya permanen sebelum mengerjakan ulang.'])
+                    ->withErrors(['student_id' => 'Pilih siswa aktif dari data master.'])
                     ->withInput();
             }
 
-            return back()
-                ->withErrors(['student_id' => 'Siswa ini sudah mengirim jawaban. Gunakan kode unik untuk mengedit jawaban. Jika nama sudah mengisi dan lupa kode editnya, hubungi Guru / Tim Literasi Numerasi agar kode edit dicek.'])
-                ->withInput();
+            if (($material->student_verification_enabled ?? true)
+                && ! $this->studentVerificationMatches($student, (string) ($validated['student_verification'] ?? ''))) {
+                return back()
+                    ->withErrors(['student_verification' => $this->studentVerificationErrorMessage($student, (string) ($validated['student_verification'] ?? ''))])
+                    ->withInput();
+            }
+
+            $existingResponse = PerpustakaanLiterasiResponse::withTrashed()
+                ->where('material_id', $material->getKey())
+                ->where('data_siswa_id', $student->getKey())
+                ->first();
+
+            if ($existingResponse) {
+                if ($existingResponse->trashed()) {
+                    return back()
+                        ->withErrors(['student_id' => 'Jawaban siswa ini berada di Sampah. Hubungi Guru / Tim Literasi Numerasi untuk merestore jawaban lama atau menghapusnya permanen sebelum mengerjakan ulang.'])
+                        ->withInput();
+                }
+
+                return back()
+                    ->withErrors(['student_id' => 'Siswa ini sudah mengirim jawaban. Gunakan kode unik untuk mengedit jawaban. Jika nama sudah mengisi dan lupa kode editnya, hubungi Guru / Tim Literasi Numerasi agar kode edit dicek.'])
+                    ->withInput();
+            }
+
+            $response = DB::transaction(function () use ($request, $material, $questions, $student, $validated): PerpustakaanLiterasiResponse {
+                $response = PerpustakaanLiterasiResponse::query()->create([
+                    'material_id' => $material->getKey(),
+                    'data_siswa_id' => $student->getKey(),
+                    'student_name_snapshot' => trim((string) $student->nama),
+                    'student_class_snapshot' => trim((string) $student->rombel_saat_ini) ?: null,
+                    'submitted_at' => now(),
+                    'submitted_ip' => $request->ip(),
+                    'user_agent' => substr((string) $request->userAgent(), 0, 2000),
+                ]);
+
+                $this->syncAnswers($response, $questions, $validated['answers'] ?? []);
+                $response->addIntegrityCounts($this->integrityCountsFromValidated($validated));
+
+                return $response;
+            });
+
+            AnalyzeLiteracyResponseSimilarity::queueFor($response);
+            $submissionQueue->complete($ticket, $response);
+            $ticketCompleted = true;
+
+            return $this->successfulSubmissionRedirect($response, 'Jawaban berhasil dikirim. Simpan kode unik untuk mengedit jawaban.');
+        } finally {
+            if (! $ticketCompleted) {
+                $submissionQueue->release($ticket);
+            }
         }
-
-        $response = DB::transaction(function () use ($request, $material, $questions, $student, $validated): PerpustakaanLiterasiResponse {
-            $response = PerpustakaanLiterasiResponse::query()->create([
-                'material_id' => $material->getKey(),
-                'data_siswa_id' => $student->getKey(),
-                'student_name_snapshot' => trim((string) $student->nama),
-                'student_class_snapshot' => trim((string) $student->rombel_saat_ini) ?: null,
-                'submitted_at' => now(),
-                'submitted_ip' => $request->ip(),
-                'user_agent' => substr((string) $request->userAgent(), 0, 2000),
-            ]);
-
-            $this->syncAnswers($response, $questions, $validated['answers'] ?? []);
-            $response->addIntegrityCounts($this->integrityCountsFromValidated($validated));
-
-            return $response;
-        });
-
-        $analyzer->analyzeResponse($response->fresh(['answers']));
-
-        return redirect()
-            ->route('library.literacy.edit', $response->shortEditCode())
-            ->with('success', 'Jawaban berhasil dikirim. Simpan kode unik untuk mengedit jawaban.')
-            ->with('edit_code', $response->edit_code);
     }
 
     public function editLookup(Request $request): RedirectResponse
@@ -162,32 +198,120 @@ class PerpustakaanLiteracyProgramController extends Controller
     public function update(
         Request $request,
         string $code,
-        LiterasiSimilarityAnalyzer $analyzer
+        LiteracySubmissionQueue $submissionQueue
     ): RedirectResponse {
         $response = $this->resolveResponseByEditCode($code);
         $response->loadMissing('material.questions');
         $questions = $response->material->questions;
 
-        $validated = $request->validate(
-            $this->answerValidationRules($questions) + $this->integrityValidationRules(),
-            [],
-            $this->answerValidationAttributes($questions),
+        $requestId = $this->submissionRequestId($request);
+
+        try {
+            $ticket = $submissionQueue->claimEditSubmission(
+                $request,
+                $response,
+                $requestId,
+                $request->string('submission_ticket')->toString(),
+            );
+        } catch (LiteracySubmissionQueueBusy $exception) {
+            return $this->queueWaitResponse($exception);
+        }
+
+        $ticketCompleted = $ticket?->status === 'completed';
+
+        try {
+            if ($ticketCompleted) {
+                return $this->successfulSubmissionRedirect($response, 'Perubahan jawaban sudah berhasil disimpan.');
+            }
+
+            $validated = $request->validate(
+                $this->answerValidationRules($questions) + [
+                    'submission_request_id' => ['nullable', 'uuid'],
+                    'submission_ticket' => ['nullable', 'string', 'max:64'],
+                ] + $this->integrityValidationRules(),
+                [],
+                $this->answerValidationAttributes($questions),
+            );
+
+            DB::transaction(function () use ($response, $questions, $validated): void {
+                $this->syncAnswers($response, $questions, $validated['answers'] ?? []);
+                $response->addIntegrityCounts($this->integrityCountsFromValidated($validated));
+                $response->forceFill([
+                    'last_edited_at' => now(),
+                ])->save();
+            });
+
+            AnalyzeLiteracyResponseSimilarity::queueFor($response);
+            $submissionQueue->complete($ticket, $response);
+            $ticketCompleted = true;
+
+            return $this->successfulSubmissionRedirect($response, 'Jawaban berhasil diperbarui.');
+        } finally {
+            if (! $ticketCompleted) {
+                $submissionQueue->release($ticket);
+            }
+        }
+    }
+
+    public function requestStoreTicket(
+        Request $request,
+        string $slug,
+        LiteracySubmissionQueue $submissionQueue,
+    ): JsonResponse {
+        $material = $this->resolvePublicMaterial($slug);
+        $validated = $request->validate([
+            'student_id' => ['required', 'integer', 'exists:data_siswa,id'],
+            'submission_request_id' => ['required', 'uuid'],
+        ]);
+
+        $student = DataSiswa::query()
+            ->whereKey((int) $validated['student_id'])
+            ->where('status', 'aktif')
+            ->firstOrFail();
+
+        $ticket = $submissionQueue->requestNewTicket(
+            $request,
+            $material,
+            $student->getKey(),
+            (string) $validated['submission_request_id'],
         );
 
-        DB::transaction(function () use ($response, $questions, $validated): void {
-            $this->syncAnswers($response, $questions, $validated['answers'] ?? []);
-            $response->addIntegrityCounts($this->integrityCountsFromValidated($validated));
-            $response->forceFill([
-                'last_edited_at' => now(),
-            ])->save();
-        });
+        return $this->ticketResponse($submissionQueue->payloadFor($ticket));
+    }
 
-        $analyzer->analyzeResponse($response->fresh(['answers']));
+    public function requestUpdateTicket(
+        Request $request,
+        string $code,
+        LiteracySubmissionQueue $submissionQueue,
+    ): JsonResponse {
+        $response = $this->resolveResponseByEditCode($code);
+        $validated = $request->validate([
+            'submission_request_id' => ['required', 'uuid'],
+        ]);
 
-        return redirect()
-            ->route('library.literacy.edit', $response->shortEditCode())
-            ->with('success', 'Jawaban berhasil diperbarui.')
-            ->with('edit_code', $response->edit_code);
+        $ticket = $submissionQueue->requestEditTicket(
+            $request,
+            $response,
+            (string) $validated['submission_request_id'],
+        );
+
+        return $this->ticketResponse($submissionQueue->payloadFor($ticket));
+    }
+
+    public function submissionTicketStatus(
+        Request $request,
+        string $token,
+        LiteracySubmissionQueue $submissionQueue,
+    ): JsonResponse {
+        return $this->ticketResponse($submissionQueue->status($request, $token));
+    }
+
+    public function cancelSubmissionTicket(
+        Request $request,
+        string $token,
+        LiteracySubmissionQueue $submissionQueue,
+    ): JsonResponse {
+        return response()->json($submissionQueue->cancel($request, $token));
     }
 
     public function recordIntegrity(Request $request, string $code)
@@ -237,7 +361,7 @@ class PerpustakaanLiteracyProgramController extends Controller
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, PerpustakaanLiterasiQuestion>  $questions
+     * @param  Collection<int, PerpustakaanLiterasiQuestion>  $questions
      * @return array<string, mixed>
      */
     protected function answerValidationRules($questions): array
@@ -258,7 +382,7 @@ class PerpustakaanLiteracyProgramController extends Controller
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, PerpustakaanLiterasiQuestion>  $questions
+     * @param  Collection<int, PerpustakaanLiterasiQuestion>  $questions
      * @return array<string, string>
      */
     protected function answerValidationAttributes($questions): array
@@ -293,7 +417,7 @@ class PerpustakaanLiteracyProgramController extends Controller
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, PerpustakaanLiterasiQuestion>  $questions
+     * @param  Collection<int, PerpustakaanLiterasiQuestion>  $questions
      * @param  array<int|string, mixed>  $answers
      */
     protected function syncAnswers(PerpustakaanLiterasiResponse $response, $questions, array $answers): void
@@ -331,7 +455,7 @@ class PerpustakaanLiteracyProgramController extends Controller
     }
 
     /**
-     * @return array{is_correct: bool|null, graded_by: int|null, graded_at: \Illuminate\Support\Carbon|null, grading_note: string|null}|null
+     * @return array{is_correct: bool|null, graded_by: int|null, graded_at: Carbon|null, grading_note: string|null}|null
      */
     protected function answerKeyGradingPayload(
         PerpustakaanLiterasiQuestion $question,
@@ -462,5 +586,56 @@ class PerpustakaanLiteracyProgramController extends Controller
         }
 
         return array_values(array_unique($dates));
+    }
+
+    protected function submissionRequestId(Request $request): string
+    {
+        $requestId = trim((string) $request->input('submission_request_id'));
+
+        if (! Str::isUuid($requestId)) {
+            $requestId = (string) Str::uuid();
+            $request->merge(['submission_request_id' => $requestId]);
+        }
+
+        return $requestId;
+    }
+
+    protected function ticketResponse(array $payload): JsonResponse
+    {
+        $status = ($payload['status'] ?? null) === 'waiting' ? 202 : 201;
+
+        return response()
+            ->json($payload, $status)
+            ->header('Retry-After', (string) ($payload['retry_after_seconds'] ?? 5));
+    }
+
+    protected function queueWaitResponse(LiteracySubmissionQueueBusy $exception): RedirectResponse
+    {
+        $payload = $exception->queuePayload;
+        $position = max(1, (int) ($payload['position'] ?? 1));
+        $seconds = max(1, (int) ($payload['estimated_wait_seconds'] ?? 5));
+
+        request()->merge([
+            'submission_ticket' => $payload['ticket'] ?? request('submission_ticket'),
+        ]);
+
+        return redirect()
+            ->back(303)
+            ->withErrors([
+                'submission_queue' => 'Server sedang melayani pengiriman lain. Posisi antrean Anda '.$position
+                    .', perkiraan tunggu '.$seconds.' detik. Silakan tekan Kirim kembali setelah hitung mundur.',
+            ])
+            ->withInput()
+            ->header('Retry-After', (string) ($payload['retry_after_seconds'] ?? 5));
+    }
+
+    protected function successfulSubmissionRedirect(
+        PerpustakaanLiterasiResponse $response,
+        string $message,
+    ): RedirectResponse {
+        return redirect()
+            ->route('library.literacy.edit', $response->shortEditCode())
+            ->with('success', $message)
+            ->with('edit_code', $response->edit_code);
     }
 }

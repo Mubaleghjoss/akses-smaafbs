@@ -1,14 +1,14 @@
 <?php
 
 use App\Contracts\SiteSettingsAccessor;
+use App\Http\Controllers\Admin\AdminUserCredentialDocumentController;
 use App\Http\Controllers\Admin\BerkasGuruDocumentController;
 use App\Http\Controllers\Admin\BoardingBacaanAssessmentExportController;
 use App\Http\Controllers\Admin\BoardingRapotDocumentController;
-use App\Http\Controllers\Admin\AdminUserCredentialDocumentController;
 use App\Http\Controllers\Admin\DataSiswaExportController;
-use App\Http\Controllers\Admin\DataSiswaProfileExportController;
 use App\Http\Controllers\Admin\DataSiswaImportReviewExportController;
 use App\Http\Controllers\Admin\DataSiswaImportTemplateController;
+use App\Http\Controllers\Admin\DataSiswaProfileExportController;
 use App\Http\Controllers\Admin\ForceGuruPasswordChangeController;
 use App\Http\Controllers\Admin\GuruTendikExportController;
 use App\Http\Controllers\Admin\GuruTendikImportTemplateController;
@@ -33,6 +33,7 @@ use App\Http\Controllers\SurveiPublicController;
 use App\Http\Middleware\AdminAwareVerifyCsrfToken;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Http\Request;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
@@ -353,7 +354,7 @@ Route::get('/student-search', [HomeController::class, 'studentSearch'])
         StartSession::class,
         ShareErrorsFromSession::class,
         AdminAwareVerifyCsrfToken::class,
-        \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+        ValidateCsrfToken::class,
     ])
     ->middleware('throttle:30,1')
     ->name('home.student-search');
@@ -412,20 +413,35 @@ Route::get('/perpustakaan/program-literasi-numerasi', [PerpustakaanLiteracyProgr
 Route::get('/perpustakaan/program-literasi-numerasi/edit', [PerpustakaanLiteracyProgramController::class, 'editLookup'])
     ->name('library.literacy.edit.lookup');
 Route::post('/perpustakaan/program-literasi-numerasi/edit/{code}/integrity', [PerpustakaanLiteracyProgramController::class, 'recordIntegrity'])
-    ->middleware('throttle:60,1')
+    ->middleware('throttle:literacy_integrity')
     ->where('code', '[A-Za-z0-9-]+')
     ->name('library.literacy.integrity');
 Route::get('/perpustakaan/program-literasi-numerasi/edit/{code}', [PerpustakaanLiteracyProgramController::class, 'edit'])
     ->where('code', '[A-Za-z0-9-]+')
     ->name('library.literacy.edit');
 Route::post('/perpustakaan/program-literasi-numerasi/edit/{code}', [PerpustakaanLiteracyProgramController::class, 'update'])
-    ->middleware('throttle:30,1')
+    ->middleware('throttle:literacy_submit')
     ->where('code', '[A-Za-z0-9-]+')
     ->name('library.literacy.update');
 Route::get('/perpustakaan/program-literasi-numerasi/{slug}', [PerpustakaanLiteracyProgramController::class, 'show'])
     ->name('library.literacy.show');
+Route::post('/perpustakaan/program-literasi-numerasi/{slug}/submission-ticket', [PerpustakaanLiteracyProgramController::class, 'requestStoreTicket'])
+    ->middleware('throttle:literacy_queue_ticket')
+    ->name('library.literacy.queue.store');
+Route::post('/perpustakaan/program-literasi-numerasi/edit/{code}/submission-ticket', [PerpustakaanLiteracyProgramController::class, 'requestUpdateTicket'])
+    ->middleware('throttle:literacy_queue_ticket')
+    ->where('code', '[A-Za-z0-9-]+')
+    ->name('library.literacy.queue.update');
+Route::get('/perpustakaan/program-literasi-numerasi/submission-queue/{token}', [PerpustakaanLiteracyProgramController::class, 'submissionTicketStatus'])
+    ->middleware('throttle:literacy_queue_status')
+    ->where('token', '[A-Za-z0-9]{64}')
+    ->name('library.literacy.queue.status');
+Route::delete('/perpustakaan/program-literasi-numerasi/submission-queue/{token}', [PerpustakaanLiteracyProgramController::class, 'cancelSubmissionTicket'])
+    ->middleware('throttle:literacy_queue_status')
+    ->where('token', '[A-Za-z0-9]{64}')
+    ->name('library.literacy.queue.cancel');
 Route::post('/perpustakaan/program-literasi-numerasi/{slug}', [PerpustakaanLiteracyProgramController::class, 'store'])
-    ->middleware('throttle:30,1')
+    ->middleware('throttle:literacy_submit')
     ->name('library.literacy.store');
 Route::get('/perpustakaan/aktivitas-literasi', [LibraryController::class, 'activities'])->name('library.activities');
 Route::get('/perpustakaan/aktivitas-literasi/export', [LibraryController::class, 'exportActivities'])->name('library.activities.export');

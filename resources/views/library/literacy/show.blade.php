@@ -60,8 +60,12 @@
                 data-literacy-answer-form
                 data-literacy-integrity-form
                 data-literacy-scroll-target="#status-jawaban"
+                data-literacy-queue-enabled="{{ config('literacy.submission_queue.enabled', true) ? '1' : '0' }}"
+                data-literacy-ticket-endpoint="{{ route('library.literacy.queue.store', $material->slug) }}"
             >
                 @csrf
+                <input type="hidden" name="submission_request_id" value="{{ old('submission_request_id', (string) \Illuminate\Support\Str::uuid()) }}" data-literacy-request-id>
+                <input type="hidden" name="submission_ticket" value="{{ old('submission_ticket') }}" data-literacy-ticket>
                 <input type="hidden" name="integrity[tab_switch_count]" value="0" data-integrity-field="tab_switch_count">
                 <input type="hidden" name="integrity[app_hidden_count]" value="0" data-integrity-field="app_hidden_count">
                 <input type="hidden" name="integrity[page_leave_attempt_count]" value="0" data-integrity-field="page_leave_attempt_count">
@@ -78,6 +82,17 @@
                             Periksa kembali isian yang ditandai.
                         </div>
                     @endif
+                </div>
+
+                <div class="hidden rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900" role="status" aria-live="polite" data-literacy-queue-panel>
+                    <div class="flex items-start gap-3">
+                        <span class="mt-0.5 inline-block h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-sky-200 border-t-sky-600" aria-hidden="true"></span>
+                        <div class="min-w-0 flex-1">
+                            <div class="font-semibold" data-literacy-queue-title>Menyiapkan antrean pengiriman...</div>
+                            <div class="mt-1 leading-6 text-sky-800" data-literacy-queue-message>Jawaban tetap tersimpan di halaman ini. Jangan tutup halaman.</div>
+                        </div>
+                    </div>
+                    <button class="mt-3 rounded-xl border border-sky-300 px-3 py-2 text-xs font-semibold text-sky-800" type="button" data-literacy-queue-cancel>Batal menunggu</button>
                 </div>
 
                 @if($students === [])
@@ -201,7 +216,7 @@
                     </div>
                 @endforelse
 
-                <button class="btn btn-primary w-full sm:w-auto" type="submit" @disabled($students === [] || $material->questions->isEmpty())>Kirim Jawaban</button>
+                <button class="btn btn-primary w-full sm:w-auto" type="submit" data-literacy-submit-button @disabled($students === [] || $material->questions->isEmpty())>Kirim Jawaban</button>
             </form>
         </section>
 

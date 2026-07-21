@@ -19,31 +19,32 @@
                 <span class="literasi-history-link-card__action">Buka History</span>
             </a>
 
-            @include('filament.resources.perpustakaan-literasi-material-resource.partials.analytics-panel', [
-                'analytics' => $analytics,
-                'title' => 'Keseluruhan Soal Selama 1 Bulan',
-                'description' => 'Rekap semua materi Literasi Numerasi pada bulan berjalan.',
-            ])
+            <div class="literasi-analytics-tabs" role="tablist" aria-label="Kategori analisa literasi">
+                @foreach($analyticsTabs as $key => $label)
+                    <button
+                        type="button"
+                        role="tab"
+                        wire:click="selectAnalyticsTab('{{ $key }}')"
+                        wire:loading.attr="disabled"
+                        @class(['is-active' => $activeAnalyticsTab === $key])
+                        aria-selected="{{ $activeAnalyticsTab === $key ? 'true' : 'false' }}"
+                    >
+                        {{ $label }}
+                    </button>
+                @endforeach
+            </div>
 
-            <details class="literasi-index-summary" open>
-                <summary>
-                    <span>
-                        <strong>Secara Kategori Soal Selama 1 Bulan</strong>
-                        <small>Ringkasan dipisahkan untuk tiap kategori program.</small>
-                    </span>
-                </summary>
+            <div class="literasi-analytics-loading" wire:loading.flex wire:target="selectAnalyticsTab">
+                Memuat analisa kategori...
+            </div>
 
-                <div class="literasi-index-summary__content">
-                    @foreach($categoryAnalytics as $category)
-                        @include('filament.resources.perpustakaan-literasi-material-resource.partials.analytics-panel', [
-                            'analytics' => $category['analytics'],
-                            'title' => $category['label'],
-                            'description' => 'Rekap bulan berjalan untuk kategori '.$category['label'].'.',
-                            'compact' => true,
-                        ])
-                    @endforeach
-                </div>
-            </details>
+            <div wire:loading.remove wire:target="selectAnalyticsTab" wire:key="literasi-analytics-{{ $activeAnalyticsTab }}">
+                @include('filament.resources.perpustakaan-literasi-material-resource.partials.analytics-panel', [
+                    'analytics' => $analytics,
+                    'title' => $analyticsTitle,
+                    'description' => $analyticsDescription,
+                ])
+            </div>
         </div>
     </details>
 </x-filament-widgets::widget>

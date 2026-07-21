@@ -9,9 +9,12 @@ use App\Support\Auth\WebAuthn\DatabaseWebAuthnChallengeFlow;
 use App\Support\Auth\WebAuthn\DatabaseWebAuthnCredentialDomain;
 use App\Support\Security\EndpointProtectionPolicy;
 use App\Support\SiteSettings\PengaturanSiteSettingsAccessor;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -35,6 +38,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         EndpointProtectionPolicy::registerNamedLimiters();
+        $this->registerLiteracyRateLimiters();
         $this->registerSlowAdminQueryLogger();
 
         View::composer('layouts.app', function (BladeView $view): void {
@@ -115,6 +119,36 @@ class AppServiceProvider extends ServiceProvider
 
         config(['app.url' => $rootUrl]);
         URL::forceRootUrl($rootUrl);
+    }
+
+    protected function registerLiteracyRateLimiters(): void
+    {
+        RateLimiter::for('literacy_queue_ticket', fn (Request $request): array => [
+            Limit::perMinute(12)->by('literacy-ticket-session|'.$this->literacySessionKey($request)),
+            Limit::perMinute(600)->by('literacy-ticket-ip|'.$request->ip()),
+        ]);
+
+        RateLimiter::for('literacy_queue_status', fn (Request $request): array => [
+            Limit::perMinute(30)->by('literacy-status-session|'.$this->literacySessionKey($request)),
+            Limit::perMinute(1200)->by('literacy-status-ip|'.$request->ip()),
+        ]);
+
+        RateLimiter::for('literacy_submit', fn (Request $request): array => [
+            Limit::perMinute(10)->by('literacy-submit-session|'.$this->literacySessionKey($request)),
+            Limit::perMinute(600)->by('literacy-submit-ip|'.$request->ip()),
+        ]);
+
+        RateLimiter::for('literacy_integrity', fn (Request $request): array => [
+            Limit::perMinute(60)->by('literacy-integrity-session|'.$this->literacySessionKey($request)),
+            Limit::perMinute(1200)->by('literacy-integrity-ip|'.$request->ip()),
+        ]);
+    }
+
+    protected function literacySessionKey(Request $request): string
+    {
+        return $request->hasSession() && $request->session()->getId() !== ''
+            ? $request->session()->getId()
+            : (string) $request->ip();
     }
 
     protected function registerSlowAdminQueryLogger(): void

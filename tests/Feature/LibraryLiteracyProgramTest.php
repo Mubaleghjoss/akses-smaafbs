@@ -7,20 +7,30 @@ use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\Pages\ListPerpus
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\Pages\StudentHistoryPerpustakaanLiterasi;
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\Pages\ViewPerpustakaanLiterasiMaterial;
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\RelationManagers\ResponsesRelationManager;
+use App\Filament\Widgets\PerpustakaanLiterasiGlobalAnalytics;
+use App\Jobs\AnalyzeLiteracyResponseSimilarity;
 use App\Models\DataSiswa;
 use App\Models\PerpustakaanLiterasiAnswer;
 use App\Models\PerpustakaanLiterasiMaterial;
 use App\Models\PerpustakaanLiterasiQuestion;
 use App\Models\PerpustakaanLiterasiResponse;
 use App\Models\PerpustakaanLiterasiSimilarityMatch;
+use App\Models\PerpustakaanLiterasiSubmissionTicket;
 use App\Models\User;
 use App\Support\Admin\AdminModuleAccess;
+use App\Support\Perpustakaan\LiteracySubmissionQueue;
 use App\Support\Perpustakaan\LiterasiAnalytics;
 use Filament\Facades\Filament;
-use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Http\Request as HttpRequest;
+use Illuminate\Session\ArraySessionHandler;
+use Illuminate\Session\Store;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Tests\Feature\Concerns\BootstrapsAdminFeatureTables;
 use Tests\TestCase;
@@ -43,6 +53,7 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->runLiterasiNumerasiProgramMigration();
         $this->runLiteracyInstructionsMigration();
         $this->runLiteracyStudentVerificationSettingMigration();
+        $this->runLiteracySubmissionQueueMigration();
         $this->bootstrapLibraryHubTables();
     }
 
@@ -205,7 +216,10 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('data-literacy-student-combobox', false)
             ->assertSee('id="status-jawaban"', false)
             ->assertSee('data-literacy-scroll-target="#status-jawaban"', false)
-            ->assertSee('data-literacy-answer-count', false);
+            ->assertSee('data-literacy-answer-count', false)
+            ->assertSee('data-literacy-queue-panel', false)
+            ->assertSee('Harap tunggu')
+            ->assertSee('data-literacy-ticket-endpoint', false);
 
         $this->from(route('library.literacy.show', $material->slug))
             ->get(route('library.literacy.edit.lookup', ['code' => 'SALAH1']))
@@ -324,6 +338,89 @@ class LibraryLiteracyProgramTest extends TestCase
             'data_siswa_id' => $student->getKey(),
             'student_name_snapshot' => 'Codex Verifikasi Opsional',
         ]);
+    }
+
+    public function test_literacy_submission_queue_admits_fifteen_and_promotes_waiting_tickets_fifo(): void
+    {
+        config(['literacy.submission_queue.active_slots' => 15]);
+
+        $material = $this->createMaterial('Materi Antrean FIFO');
+        $queue = app(LiteracySubmissionQueue::class);
+        $requests = [];
+        $tickets = [];
+
+        foreach (range(1, 17) as $index) {
+            $requests[$index] = $this->literacyQueueRequest('browser-'.$index);
+            $tickets[$index] = $queue->requestNewTicket(
+                $requests[$index],
+                $material,
+                $index,
+                (string) Str::uuid(),
+            );
+        }
+
+        $this->assertSame(15, PerpustakaanLiterasiSubmissionTicket::query()->where('status', 'admitted')->count());
+        $this->assertSame('waiting', $tickets[16]->refresh()->status);
+        $this->assertSame('waiting', $tickets[17]->refresh()->status);
+        $this->assertSame(1, $queue->payloadFor($tickets[16])['position']);
+        $this->assertSame(2, $queue->payloadFor($tickets[17])['position']);
+
+        $tickets[1]->forceFill(['expires_at' => now()->subSecond()])->save();
+
+        $this->assertSame('admitted', $queue->status($requests[16], $tickets[16]->public_token)['status']);
+        $this->assertSame('expired', $tickets[1]->refresh()->status);
+        $this->assertSame('waiting', $tickets[17]->refresh()->status);
+
+        $queue->complete($tickets[2]);
+
+        $this->assertSame('admitted', $queue->status($requests[17], $tickets[17]->public_token)['status']);
+    }
+
+    public function test_submit_only_queues_similarity_analysis_instead_of_running_it_in_request(): void
+    {
+        Queue::fake();
+
+        $student = $this->createStudent('Codex Queue Analisa', 'X Queue');
+        $material = $this->createMaterial('Materi Queue Analisa');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Jelaskan manfaat antrean.',
+            'min_characters' => 20,
+            'max_characters' => 500,
+        ]);
+
+        $this->post(route('library.literacy.store', $material->slug), [
+            'student_id' => $student->getKey(),
+            'submission_request_id' => (string) Str::uuid(),
+            'answers' => [
+                $question->getKey() => 'Antrean membuat penyimpanan jawaban tetap ringan saat banyak siswa mengirim bersamaan.',
+            ],
+        ])->assertRedirect();
+
+        $response = PerpustakaanLiterasiResponse::query()->where('data_siswa_id', $student->getKey())->firstOrFail();
+
+        $this->assertSame(PerpustakaanLiterasiResponse::SIMILARITY_STATUS_PENDING, $response->similarity_analysis_status);
+        $this->assertSame(1, $response->similarity_analysis_version);
+        $this->assertDatabaseCount('perpustakaan_literasi_similarity_matches', 0);
+        Queue::assertPushedOn('literacy-analysis', AnalyzeLiteracyResponseSimilarity::class);
+    }
+
+    public function test_twenty_student_sessions_on_same_school_ip_are_not_throttled(): void
+    {
+        $limiter = RateLimiter::limiter('literacy_queue_ticket');
+
+        $this->assertNotNull($limiter);
+
+        foreach (range(1, 20) as $index) {
+            $request = $this->literacyQueueRequest('school-browser-'.$index);
+            $request->server->set('REMOTE_ADDR', '203.0.113.25');
+            $limits = $limiter($request);
+
+            foreach ($limits as $limit) {
+                RateLimiter::hit($limit->key, $limit->decaySeconds);
+                $this->assertFalse(RateLimiter::tooManyAttempts($limit->key, $limit->maxAttempts));
+            }
+        }
     }
 
     public function test_edit_code_prefix_follows_material_program_category(): void
@@ -1305,6 +1402,39 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertSame(2, (int) $analytics['grading_summary']['correct_answers']);
     }
 
+    public function test_material_completion_separates_missing_students_from_trashed_responses(): void
+    {
+        $completedStudent = $this->createStudent('Codex Sudah Mengisi', 'X Status');
+        $trashedStudent = $this->createStudent('Codex Jawaban Sampah', 'X Status');
+        $missingStudent = $this->createStudent('Codex Belum Mengisi', 'XI Status');
+        $material = $this->createMaterial('Materi Status Pengisian');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Tuliskan jawaban status.',
+            'max_characters' => 500,
+        ]);
+
+        $this->createResponseWithAnswer($material, $completedStudent, $question, 'Jawaban siswa yang sudah mengisi.');
+        $trashedResponse = $this->createResponseWithAnswer($material, $trashedStudent, $question, 'Jawaban yang kemudian masuk sampah.');
+        $trashedResponse->delete();
+
+        $completion = LiterasiAnalytics::materialCompletion($material);
+        $classes = collect($completion['classes'])->keyBy('class');
+
+        $this->assertSame(3, $completion['active_total']);
+        $this->assertSame(1, $completion['completed_total']);
+        $this->assertSame(1, $completion['missing_total']);
+        $this->assertSame(1, $completion['trashed_total']);
+        $this->assertSame('Codex Belum Mengisi', $classes['XI Status']['missing_students'][0]['name']);
+        $this->assertSame('Codex Jawaban Sampah', $classes['X Status']['trashed_students'][0]['name']);
+
+        $html = (string) PerpustakaanLiterasiMaterialResource::monthlyRankingAnalysisHtml($material);
+        $this->assertStringContainsString('Status Pengisian Materi', $html);
+        $this->assertStringContainsString($missingStudent->nama, $html);
+        $this->assertStringContainsString($trashedStudent->nama, $html);
+        $this->assertStringContainsString('Jawaban di Sampah', $html);
+    }
+
     public function test_literacy_admin_pages_show_monthly_analytics_panels(): void
     {
         $admin = User::query()->create([
@@ -1337,7 +1467,7 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('Sigap 29 Karakter')
             ->assertSee('Soal Non Aktif')
             ->assertSee('Keseluruhan Soal Selama 1 Bulan')
-            ->assertSee('Secara Kategori Soal Selama 1 Bulan')
+            ->assertSee('Kategori analisa literasi', false)
             ->assertSee('Belum Berkategori')
             ->assertSee('History Pengerjaan Siswa')
             ->assertSee('Hitung Ulang Plagiasi')
@@ -1349,6 +1479,13 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('Ranking Siswa Per Kelas Berdasarkan Jawaban Benar')
             ->assertSee('Siswa Banyak Salah')
             ->assertSee('Siswa Tidak Mengisi');
+
+        Livewire::actingAs($admin)
+            ->test(PerpustakaanLiterasiGlobalAnalytics::class)
+            ->assertSet('activeAnalyticsTab', 'all')
+            ->call('selectAnalyticsTab', PerpustakaanLiterasiMaterial::CATEGORY_NUMERACY_EXCELLENCE)
+            ->assertSet('activeAnalyticsTab', PerpustakaanLiterasiMaterial::CATEGORY_NUMERACY_EXCELLENCE)
+            ->assertSee('Numeracy Excellence Selama 1 Bulan');
 
         $this->assertStringContainsString(
             $material->closes_at->format('d/m/Y H:i'),
@@ -1724,6 +1861,29 @@ class LibraryLiteracyProgramTest extends TestCase
 
         $migration = require database_path('migrations/2026_07_08_120000_add_student_verification_setting_to_perpustakaan_literasi_materials.php');
         $migration->up();
+    }
+
+    protected function runLiteracySubmissionQueueMigration(): void
+    {
+        if (Schema::hasTable('perpustakaan_literasi_submission_tickets')
+            && Schema::hasTable('perpustakaan_literasi_submission_queue_states')
+            && Schema::hasColumn('perpustakaan_literasi_responses', 'similarity_analysis_status')) {
+            return;
+        }
+
+        $migration = require database_path('migrations/2026_07_21_120000_add_literacy_submission_queue_and_analysis_status.php');
+        $migration->up();
+    }
+
+    protected function literacyQueueRequest(string $sessionId): HttpRequest
+    {
+        $request = HttpRequest::create('/perpustakaan/program-literasi-numerasi/antrean', 'POST');
+        $session = new Store('literacy-queue-test', new ArraySessionHandler(120));
+        $session->setId($sessionId);
+        $session->start();
+        $request->setLaravelSession($session);
+
+        return $request;
     }
 
     protected function bootstrapLibraryHubTables(): void

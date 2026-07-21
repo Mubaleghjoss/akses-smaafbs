@@ -66,6 +66,191 @@
                 rememberSubmitScrollTarget(form.dataset.literacyScrollTarget || '[data-literacy-submit-status]');
             });
 
+            if (form.dataset.literacyQueueEnabled === '1' && form.dataset.literacyTicketEndpoint) {
+                const ticketInput = form.querySelector('[data-literacy-ticket]');
+                const requestIdInput = form.querySelector('[data-literacy-request-id]');
+                const studentIdInput = form.querySelector('[data-student-id]');
+                const panel = form.querySelector('[data-literacy-queue-panel]');
+                const title = form.querySelector('[data-literacy-queue-title]');
+                const message = form.querySelector('[data-literacy-queue-message]');
+                const cancelButton = form.querySelector('[data-literacy-queue-cancel]');
+                const submitButton = form.querySelector('[data-literacy-submit-button]');
+                let queueRunning = false;
+                let cancelled = false;
+                let cancelUrl = '';
+
+                const wait = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+                const csrfToken = () => form.querySelector('input[name="_token"]')?.value || '';
+                const waitLabel = (seconds) => {
+                    const safeSeconds = Math.max(1, Number.parseInt(seconds || '1', 10));
+
+                    if (safeSeconds < 60) {
+                        return `${safeSeconds} detik`;
+                    }
+
+                    const minutes = Math.floor(safeSeconds / 60);
+                    const remainder = safeSeconds % 60;
+
+                    return remainder > 0 ? `${minutes} menit ${remainder} detik` : `${minutes} menit`;
+                };
+
+                const showQueue = (heading, detail) => {
+                    panel?.classList.remove('hidden');
+
+                    if (title) {
+                        title.textContent = heading;
+                    }
+
+                    if (message) {
+                        message.textContent = detail;
+                    }
+                };
+
+                const resetQueue = () => {
+                    queueRunning = false;
+                    cancelled = false;
+                    cancelUrl = '';
+                    form.dataset.literacyQueueAdmitted = '0';
+
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                    }
+                };
+
+                const requestJson = async (url, options = {}) => {
+                    const response = await fetch(url, {
+                        credentials: 'same-origin',
+                        headers: {
+                            Accept: 'application/json',
+                            'X-CSRF-TOKEN': csrfToken(),
+                            ...(options.headers || {}),
+                        },
+                        ...options,
+                    });
+                    const payload = await response.json().catch(() => ({}));
+
+                    if (!response.ok) {
+                        const validationMessage = Object.values(payload.errors || {}).flat()[0];
+                        throw new Error(validationMessage || payload.message || 'Antrean belum dapat dihubungi.');
+                    }
+
+                    return payload;
+                };
+
+                const renderQueuePayload = (payload) => {
+                    if (ticketInput && payload.ticket) {
+                        ticketInput.value = payload.ticket;
+                    }
+
+                    cancelUrl = payload.cancel_url || cancelUrl;
+
+                    if (payload.status === 'waiting') {
+                        showQueue(
+                            `Harap tunggu - antrean ke-${Math.max(1, payload.position || 1)}`,
+                            `Perkiraan ${waitLabel(payload.estimated_wait_seconds)}. Jawaban tetap tersimpan di halaman ini.`
+                        );
+
+                        return false;
+                    }
+
+                    if (['admitted', 'processing', 'completed'].includes(payload.status)) {
+                        showQueue('Giliran Anda sudah tersedia', 'Jawaban sedang dikirim. Mohon jangan menutup halaman.');
+
+                        return true;
+                    }
+
+                    throw new Error('Tiket antrean berakhir. Tekan tombol Kirim untuk mengambil antrean baru.');
+                };
+
+                const runQueue = async () => {
+                    queueRunning = true;
+                    cancelled = false;
+
+                    if (submitButton) {
+                        submitButton.disabled = true;
+                    }
+
+                    showQueue('Menyiapkan antrean pengiriman...', 'Jawaban tetap tersimpan di halaman ini. Jangan tutup halaman.');
+                    panel?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                    try {
+                        await wait(Math.floor(Math.random() * 1500));
+
+                        if (cancelled) {
+                            return;
+                        }
+
+                        const body = new FormData();
+                        body.append('_token', csrfToken());
+                        body.append('submission_request_id', requestIdInput?.value || '');
+
+                        if (studentIdInput) {
+                            body.append('student_id', studentIdInput.value || '');
+                        }
+
+                        let payload = await requestJson(form.dataset.literacyTicketEndpoint, {
+                            method: 'POST',
+                            body,
+                        });
+
+                        while (!cancelled && !renderQueuePayload(payload)) {
+                            await wait(Math.max(2, payload.retry_after_seconds || 5) * 1000);
+
+                            if (cancelled) {
+                                return;
+                            }
+
+                            payload = await requestJson(payload.status_url, { method: 'GET' });
+                        }
+
+                        if (cancelled) {
+                            return;
+                        }
+
+                        form.dataset.literacyQueueAdmitted = '1';
+                        queueRunning = false;
+
+                        if (submitButton) {
+                            submitButton.disabled = false;
+                        }
+
+                        form.requestSubmit(submitButton || undefined);
+                    } catch (error) {
+                        showQueue('Pengiriman belum dapat dilanjutkan', error?.message || 'Antrean belum dapat dihubungi. Silakan coba lagi.');
+                        resetQueue();
+                    }
+                };
+
+                form.addEventListener('submit', (event) => {
+                    if (form.dataset.literacyQueueAdmitted === '1') {
+                        return;
+                    }
+
+                    event.preventDefault();
+
+                    if (queueRunning || !form.reportValidity()) {
+                        return;
+                    }
+
+                    runQueue();
+                });
+
+                cancelButton?.addEventListener('click', async () => {
+                    cancelled = true;
+
+                    if (cancelUrl) {
+                        requestJson(cancelUrl, { method: 'DELETE' }).catch(() => {});
+                    }
+
+                    if (ticketInput) {
+                        ticketInput.value = '';
+                    }
+
+                    panel?.classList.add('hidden');
+                    resetQueue();
+                });
+            }
+
             form.querySelectorAll('[data-literacy-answer-input]').forEach((textarea) => {
                 const wrapper = textarea.closest('section') || form;
                 const min = Number.parseInt(textarea.dataset.minCharacters || '0', 10);
@@ -301,7 +486,11 @@
                     }).catch(() => {});
                 };
 
-                form.addEventListener('submit', () => {
+                form.addEventListener('submit', (event) => {
+                    if (event.defaultPrevented) {
+                        return;
+                    }
+
                     submitting = true;
                     leavingPage = true;
                     clearPendingIntegrityTimers();

@@ -4,9 +4,9 @@ namespace App\Filament\Resources\PerpustakaanLiterasiMaterialResource\Pages;
 
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource;
 use App\Filament\Widgets\PerpustakaanLiterasiGlobalAnalytics;
+use App\Jobs\QueueLiteracySimilarityReanalysis;
 use App\Models\PerpustakaanLiterasiMaterial;
 use App\Models\PerpustakaanLiterasiResponse;
-use App\Support\Perpustakaan\LiterasiSimilarityAnalyzer;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Notifications\Notification;
@@ -60,21 +60,13 @@ class ListPerpustakaanLiterasiMaterials extends ListRecords
                 ->modalSubmitActionLabel('Hitung Ulang')
                 ->visible(fn (): bool => PerpustakaanLiterasiMaterialResource::canCreate())
                 ->action(function (): void {
-                    $analyzer = app(LiterasiSimilarityAnalyzer::class);
-                    $total = 0;
+                    $total = PerpustakaanLiterasiResponse::query()->count();
 
-                    PerpustakaanLiterasiResponse::query()
-                        ->with('answers.question')
-                        ->chunkById(50, function ($responses) use ($analyzer, &$total): void {
-                            foreach ($responses as $response) {
-                                $analyzer->analyzeResponse($response);
-                                $total++;
-                            }
-                        });
+                    QueueLiteracySimilarityReanalysis::dispatch();
 
                     Notification::make()
-                        ->title('Hitung ulang plagiasi selesai')
-                        ->body(number_format($total, 0, ',', '.').' responden dianalisa ulang.')
+                        ->title('Hitung ulang plagiasi masuk antrean')
+                        ->body(number_format($total, 0, ',', '.').' responden akan dianalisa bertahap di background.')
                         ->success()
                         ->send();
                 }),

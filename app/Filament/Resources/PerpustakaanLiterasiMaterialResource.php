@@ -8,13 +8,13 @@ use App\Filament\Concerns\HasOptimizedAdminTable;
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\Pages;
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\RelationManagers\ResponsesRelationManager;
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\RelationManagers\SimilarityMatchesRelationManager;
+use App\Jobs\QueueLiteracySimilarityReanalysis;
 use App\Models\DataSiswa;
 use App\Models\PerpustakaanLiterasiMaterial;
 use App\Models\PerpustakaanLiterasiQuestion;
 use App\Models\PerpustakaanLiterasiResponse;
 use App\Models\PerpustakaanLiterasiSimilarityMatch;
 use App\Support\Perpustakaan\LiterasiAnalytics;
-use App\Support\Perpustakaan\LiterasiSimilarityAnalyzer;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -23,8 +23,8 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms;
-use Filament\Notifications\Notification;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
@@ -374,22 +374,15 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                     ->modalSubmitActionLabel('Analisa Ulang')
                     ->visible(fn (PerpustakaanLiterasiMaterial $record): bool => static::canEdit($record) && $record->hasResponses())
                     ->action(function (PerpustakaanLiterasiMaterial $record): void {
-                        $analyzer = app(LiterasiSimilarityAnalyzer::class);
-                        $total = 0;
-
-                        PerpustakaanLiterasiResponse::query()
+                        $total = PerpustakaanLiterasiResponse::query()
                             ->where('material_id', $record->getKey())
-                            ->with('answers.question')
-                            ->chunkById(50, function ($responses) use ($analyzer, &$total): void {
-                                foreach ($responses as $response) {
-                                    $analyzer->analyzeResponse($response);
-                                    $total++;
-                                }
-                            });
+                            ->count();
+
+                        QueueLiteracySimilarityReanalysis::dispatch($record->getKey());
 
                         Notification::make()
-                            ->title('Analisa plagiasi selesai')
-                            ->body(number_format($total, 0, ',', '.').' responden dianalisa ulang.')
+                            ->title('Analisa plagiasi masuk antrean')
+                            ->body(number_format($total, 0, ',', '.').' responden akan dianalisa bertahap di background.')
                             ->success()
                             ->send();
                     }),
