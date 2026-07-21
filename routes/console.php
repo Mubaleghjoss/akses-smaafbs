@@ -136,7 +136,6 @@ Artisan::command('app:admin-performance-report {--limit=10 : Jumlah baris terata
 Schedule::command('queue:work --queue=literacy-analysis,default --stop-when-empty --max-jobs=10 --max-time=50 --tries=3 --sleep=1 --timeout=120')
     ->everyMinute()
     ->withoutOverlapping()
-    ->runInBackground()
     ->name('queue-controlled-worker');
 
 Artisan::command('app:backfill-module-access-levels {--dry-run : Tampilkan perubahan tanpa menyimpan} {--force : Paksa tulis ulang user yang sudah punya module_access_levels}', function () {
