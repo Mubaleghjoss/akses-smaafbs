@@ -64,12 +64,39 @@ class PublicLayoutBrandingTest extends TestCase
             ->assertSee('Informasi resmi untuk wali dan santri.')
             ->assertSee('Konten dipublikasikan sebagai layanan informasi sekolah.')
             ->assertSee('/storage/site-branding/logo/logo-public.png')
-            ->assertSee('<link rel="manifest" href="http://localhost/manifest.webmanifest">', false)
+            ->assertSee('<link rel="manifest" href="'.url('/manifest.webmanifest').'">', false)
             ->assertSee('/storage/site-branding/favicon/favicon-public.png')
             ->assertSee('<meta property="og:site_name" content="Portal Sekolah AFBS">', false)
             ->assertSee('<meta property="og:image" content="/storage/site-branding/logo/logo-public.png">', false);
 
         $response->assertDontSee('Portal informasi dan layanan sekolah');
+    }
+
+    public function test_public_layout_has_accessible_mobile_navigation_drawer(): void
+    {
+        $response = $this->get(route('home'));
+
+        $response
+            ->assertOk()
+            ->assertSee('id="public-navigation"', false)
+            ->assertSee('id="public-mobile-menu-toggle"', false)
+            ->assertSee('aria-controls="public-mobile-menu"', false)
+            ->assertSee('aria-expanded="false"', false)
+            ->assertSee('id="public-mobile-menu-overlay"', false)
+            ->assertSee('id="public-mobile-menu"', false)
+            ->assertSee('aria-hidden="true"', false)
+            ->assertSee('inert', false)
+            ->assertSee('Menu Utama')
+            ->assertSee('Beranda')
+            ->assertSee('Literasi Numerasi')
+            ->assertSee('Akses Perpus')
+            ->assertSee('Login Admin')
+            ->assertSee('Install Aplikasi');
+
+        $this->assertMatchesRegularExpression(
+            '/public-mobile-menu-link is-active[^>]*aria-current="page"[^>]*>\s*<span[^>]*>.*?<\/span>\s*<span>Beranda<\/span>/s',
+            $response->getContent(),
+        );
     }
 
     protected function recreatePengaturanTable(): void

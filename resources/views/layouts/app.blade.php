@@ -61,37 +61,30 @@
             </div>
         @endunless
 
-        <header @class([
-            'relative z-30 isolate border-b',
+        <header id="public-navigation" @class([
+            'public-navigation sticky top-0 z-50 isolate border-b',
             'border-white/70 bg-white/70 backdrop-blur' => ! $skipDecorativeChrome,
             'border-slate-200 bg-white' => $skipDecorativeChrome,
         ])>
-            <div class="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-5 md:flex-row md:items-center md:justify-between">
-                <a href="{{ route('home') }}" class="flex items-center gap-3">
+            <div class="mx-auto flex min-h-[4.5rem] w-full max-w-6xl items-center justify-between gap-3 px-4 py-3 md:min-h-20 md:px-6">
+                <a href="{{ route('home') }}" class="public-navigation-brand flex min-w-0 items-center gap-3" aria-label="Kembali ke beranda">
                     @if(filled($logoPath))
-                        <span class="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white p-1 shadow-sm sm:h-12 sm:w-12 sm:rounded-2xl">
                             <img src="{{ $logoPath }}" alt="Logo {{ $siteName }}" class="h-full w-full object-contain">
                         </span>
                     @else
-                        <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-base font-semibold text-white">{{ $brandInitials }}</span>
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-sm font-semibold text-white sm:h-11 sm:w-11 sm:rounded-2xl sm:text-base">{{ $brandInitials }}</span>
                     @endif
-                    <div>
-                        <div class="text-lg font-semibold">{{ $siteName }}</div>
-                        <div class="text-xs text-slate-500">{{ $siteSettings['topbar_badge'] }}</div>
-                        <div class="text-xs text-slate-500">{{ $siteSettings['topbar_text'] }}</div>
+                    <div class="min-w-0">
+                        <div class="truncate text-base font-semibold leading-tight sm:text-lg">{{ $siteName }}</div>
+                        <div class="public-navigation-copy mt-1 truncate text-[11px] leading-tight text-slate-500 sm:max-w-[20rem] sm:text-xs">
+                            {{ $siteSettings['topbar_badge'] }}<span class="mx-1" aria-hidden="true">&middot;</span>{{ $siteSettings['topbar_text'] }}
+                        </div>
                     </div>
                 </a>
 
-                <div class="relative z-40 flex flex-wrap items-center justify-end gap-2 md:hidden">
-                    <a class="btn btn-secondary" href="{{ route('library.literacy.index') }}">Literasi Numerasi</a>
-                    <a class="btn btn-secondary" href="{{ route('library.index') }}">Akses Perpus</a>
-                    <a class="btn btn-primary" href="/admin/login">Login</a>
-                    <div data-pwa-install-root class="hidden">
-                        <button type="button" data-pwa-install-trigger class="btn btn-secondary">Install App</button>
-                    </div>
-                </div>
-
-                <nav class="hidden flex-wrap items-center justify-end gap-2 text-sm md:flex md:max-w-[60%]">
+                <nav class="hidden flex-wrap items-center justify-end gap-2 text-sm md:flex md:max-w-[65%]" aria-label="Navigasi utama">
+                    <a class="btn btn-secondary" href="{{ route('home') }}">Beranda</a>
                     <a class="btn btn-secondary" href="{{ route('library.literacy.index') }}">Literasi Numerasi</a>
                     <a class="btn btn-secondary" href="{{ route('library.index') }}">Akses Perpus</a>
                     <a class="btn btn-primary" href="/admin/login">Login</a>
@@ -99,8 +92,89 @@
                         <button type="button" data-pwa-install-trigger class="btn btn-secondary">Install App</button>
                     </div>
                 </nav>
+
+                <button
+                    id="public-mobile-menu-toggle"
+                    type="button"
+                    class="public-mobile-menu-toggle md:hidden"
+                    aria-expanded="false"
+                    aria-controls="public-mobile-menu"
+                    aria-label="Buka menu navigasi"
+                >
+                    <svg class="public-mobile-menu-open-icon h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                    <svg class="public-mobile-menu-close-icon h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18 18 6M6 6l12 12" />
+                    </svg>
+                    <span>Menu</span>
+                </button>
             </div>
         </header>
+
+        <button
+            id="public-mobile-menu-overlay"
+            type="button"
+            class="public-mobile-menu-overlay md:hidden"
+            aria-label="Tutup menu navigasi"
+            aria-hidden="true"
+            tabindex="-1"
+        ></button>
+
+        <aside
+            id="public-mobile-menu"
+            class="public-mobile-menu-shell md:hidden"
+            aria-hidden="true"
+            aria-label="Navigasi mobile"
+            tabindex="-1"
+            inert
+        >
+            <div class="public-mobile-menu-header">
+                <div class="flex min-w-0 items-center gap-3">
+                    @if(filled($logoPath))
+                        <img src="{{ $logoPath }}" alt="" width="44" height="44" class="h-11 w-11 shrink-0 rounded-xl border border-slate-200 bg-white object-contain p-1">
+                    @else
+                        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-sm font-semibold text-white">{{ $brandInitials }}</span>
+                    @endif
+                    <div class="min-w-0">
+                        <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Menu Utama</p>
+                        <h2 class="truncate text-base font-extrabold text-slate-900">{{ $siteName }}</h2>
+                    </div>
+                </div>
+                <button id="public-mobile-menu-close" type="button" class="public-mobile-menu-close" aria-label="Tutup menu navigasi">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18 18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="public-mobile-menu-scroll">
+                <nav class="public-mobile-menu-card" aria-label="Menu utama ponsel">
+                    <a href="{{ route('home') }}" @class(['public-mobile-menu-link', 'is-active' => request()->routeIs('home')]) @if(request()->routeIs('home')) aria-current="page" @endif>
+                        <span class="public-mobile-menu-icon"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1v-9Z" /></svg></span>
+                        <span>Beranda</span>
+                    </a>
+                    <a href="{{ route('library.literacy.index') }}" @class(['public-mobile-menu-link', 'is-active' => request()->routeIs('library.literacy.*')]) @if(request()->routeIs('library.literacy.*')) aria-current="page" @endif>
+                        <span class="public-mobile-menu-icon"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Zm16 0A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5v-16Z" /></svg></span>
+                        <span>Literasi Numerasi</span>
+                    </a>
+                    <a href="{{ route('library.index') }}" @class(['public-mobile-menu-link', 'is-active' => request()->routeIs('library.index')]) @if(request()->routeIs('library.index')) aria-current="page" @endif>
+                        <span class="public-mobile-menu-icon"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 4h12a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2V4Zm0 12h14M8 7h8" /></svg></span>
+                        <span>Akses Perpus</span>
+                    </a>
+                    <a href="/admin/login" class="public-mobile-menu-link">
+                        <span class="public-mobile-menu-icon"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 8a3 3 0 1 0-6 0 3 3 0 0 0 6 0Zm4 13a7 7 0 0 0-14 0m12-8h4m-2-2v4" /></svg></span>
+                        <span>Login Admin</span>
+                    </a>
+                    <div data-pwa-install-root class="hidden border-t border-slate-200 pt-2">
+                        <button type="button" data-pwa-install-trigger class="public-mobile-menu-link w-full text-left">
+                            <span class="public-mobile-menu-icon"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14" /></svg></span>
+                            <span>Install Aplikasi</span>
+                        </button>
+                    </div>
+                </nav>
+            </div>
+        </aside>
 
         <main id="content" class="mx-auto w-full max-w-6xl px-4 py-10">
             @yield('content')
