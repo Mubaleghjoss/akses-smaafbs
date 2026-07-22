@@ -18,5 +18,6 @@ class PerpustakaanLiterasiSubmissionQueueState extends Model
 
     protected $casts = [
         'average_duration_ms' => 'integer',
+        'last_submission_activity_at' => 'datetime',
     ];
 }

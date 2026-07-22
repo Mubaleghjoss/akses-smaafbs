@@ -62,6 +62,14 @@
                 data-literacy-scroll-target="#status-jawaban"
                 data-literacy-queue-enabled="{{ config('literacy.submission_queue.enabled', true) ? '1' : '0' }}"
                 data-literacy-ticket-endpoint="{{ route('library.literacy.queue.store', $material->slug) }}"
+                data-literacy-draft-key="create:{{ $material->getKey() }}"
+                data-literacy-submission-success="0"
+                data-literacy-mass-mode="{{ config('literacy.submission_queue.mass_mode_enabled', true) ? '1' : '0' }}"
+                data-literacy-initial-jitter-seconds="{{ config('literacy.submission_queue.initial_jitter_seconds', 30) }}"
+                data-literacy-normal-jitter-seconds="{{ config('literacy.submission_queue.normal_initial_jitter_seconds', 2) }}"
+                data-literacy-retry-delays="{{ implode(',', config('literacy.submission_queue.retry_delays_seconds', [5, 10, 20, 30])) }}"
+                data-literacy-retry-window-seconds="{{ config('literacy.submission_queue.retry_window_seconds', 600) }}"
+                data-literacy-draft-ttl-hours="{{ config('literacy.submission_queue.draft_ttl_hours', 12) }}"
             >
                 @csrf
                 <input type="hidden" name="submission_request_id" value="{{ old('submission_request_id', (string) \Illuminate\Support\Str::uuid()) }}" data-literacy-request-id>

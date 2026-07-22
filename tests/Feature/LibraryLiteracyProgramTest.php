@@ -15,6 +15,7 @@ use App\Models\PerpustakaanLiterasiMaterial;
 use App\Models\PerpustakaanLiterasiQuestion;
 use App\Models\PerpustakaanLiterasiResponse;
 use App\Models\PerpustakaanLiterasiSimilarityMatch;
+use App\Models\PerpustakaanLiterasiSubmissionQueueState;
 use App\Models\PerpustakaanLiterasiSubmissionTicket;
 use App\Models\User;
 use App\Support\Admin\AdminModuleAccess;
@@ -218,8 +219,11 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('data-literacy-scroll-target="#status-jawaban"', false)
             ->assertSee('data-literacy-answer-count', false)
             ->assertSee('data-literacy-queue-panel', false)
-            ->assertSee('Harap tunggu')
-            ->assertSee('data-literacy-ticket-endpoint', false);
+            ->assertSee('Menyiapkan jalur antrean')
+            ->assertSee('data-literacy-ticket-endpoint', false)
+            ->assertSee('data-literacy-mass-mode="1"', false)
+            ->assertSee('literacy.submission.draft.v2:', false)
+            ->assertSee('Server sedang ramai - tidak perlu menekan Kirim lagi');
 
         $this->from(route('library.literacy.show', $material->slug))
             ->get(route('library.literacy.edit.lookup', ['code' => 'SALAH1']))
@@ -376,6 +380,145 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertSame('admitted', $queue->status($requests[17], $tickets[17]->public_token)['status']);
     }
 
+    public function test_literacy_submission_queue_uses_adaptive_polling_and_sixty_second_admission(): void
+    {
+        $this->assertSame(10, config('literacy.submission_queue.active_slots'));
+
+        config([
+            'literacy.submission_queue.active_slots' => 1,
+            'literacy.submission_queue.poll_seconds' => 5,
+            'literacy.submission_queue.poll_middle_position' => 1,
+            'literacy.submission_queue.poll_middle_seconds' => 12,
+            'literacy.submission_queue.poll_far_position' => 2,
+            'literacy.submission_queue.poll_far_seconds' => 25,
+            'literacy.submission_queue.admission_ttl_seconds' => 60,
+        ]);
+
+        $material = $this->createMaterial('Materi Antrean Adaptif');
+        $queue = app(LiteracySubmissionQueue::class);
+        $tickets = [];
+
+        foreach (range(1, 4) as $index) {
+            $tickets[$index] = $queue->requestNewTicket(
+                $this->literacyQueueRequest('adaptive-browser-'.$index),
+                $material,
+                $index,
+                (string) Str::uuid(),
+            );
+        }
+
+        $this->assertSame('admitted', $tickets[1]->refresh()->status);
+        $this->assertGreaterThanOrEqual(58, now()->diffInSeconds($tickets[1]->expires_at, false));
+        $this->assertLessThanOrEqual(60, now()->diffInSeconds($tickets[1]->expires_at, false));
+        $this->assertSame(5, $queue->payloadFor($tickets[2])['retry_after_seconds']);
+        $this->assertSame(12, $queue->payloadFor($tickets[3])['retry_after_seconds']);
+        $this->assertSame(25, $queue->payloadFor($tickets[4])['retry_after_seconds']);
+    }
+
+    public function test_similarity_worker_waits_until_submission_activity_is_idle(): void
+    {
+        config(['literacy.submission_queue.analysis_idle_seconds' => 180]);
+
+        $material = $this->createMaterial('Materi Jeda Analisa');
+        $queue = app(LiteracySubmissionQueue::class);
+        $ticket = $queue->requestNewTicket(
+            $this->literacyQueueRequest('analysis-idle-browser'),
+            $material,
+            1,
+            (string) Str::uuid(),
+        );
+
+        $this->assertTrue($queue->analysisShouldWait());
+
+        $ticket->forceFill([
+            'status' => 'admitted',
+            'expires_at' => now()->subSecond(),
+        ])->save();
+        PerpustakaanLiterasiSubmissionQueueState::query()
+            ->whereKey(LiteracySubmissionQueue::SCOPE)
+            ->update(['last_submission_activity_at' => now()->subSeconds(181)]);
+
+        $this->assertFalse($queue->analysisShouldWait());
+
+        PerpustakaanLiterasiSubmissionQueueState::query()
+            ->whereKey(LiteracySubmissionQueue::SCOPE)
+            ->update(['last_submission_activity_at' => now()]);
+
+        $this->assertTrue($queue->analysisShouldWait());
+    }
+
+    public function test_json_submit_returns_redirect_for_automatic_retry(): void
+    {
+        Queue::fake();
+
+        $student = $this->createStudent('Codex Retry JSON', 'X Retry');
+        $material = $this->createMaterial('Materi Retry JSON', [
+            'student_verification_enabled' => false,
+        ]);
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Jelaskan manfaat retry otomatis.',
+            'min_characters' => 20,
+            'max_characters' => 500,
+        ]);
+        $requestId = (string) Str::uuid();
+        $payload = [
+            'student_id' => $student->getKey(),
+            'submission_request_id' => $requestId,
+            'answers' => [
+                $question->getKey() => 'Retry otomatis menjaga jawaban tetap aman ketika koneksi sekolah terputus sesaat.',
+            ],
+        ];
+
+        $this->get(route('library.literacy.show', $material->slug))->assertOk();
+        $ticket = $this->postJson(route('library.literacy.queue.store', $material->slug), [
+            'student_id' => $student->getKey(),
+            'submission_request_id' => $requestId,
+        ])->assertCreated()->json('ticket');
+        $payload['submission_ticket'] = $ticket;
+
+        $this->postJson(route('library.literacy.store', $material->slug), $payload)
+            ->assertOk()
+            ->assertJsonPath('status', 'completed')
+            ->assertJsonStructure(['redirect_url', 'edit_code']);
+
+        $this->assertSame(1, PerpustakaanLiterasiResponse::query()
+            ->where('material_id', $material->getKey())
+            ->where('data_siswa_id', $student->getKey())
+            ->count());
+    }
+
+    public function test_completed_submission_ticket_is_idempotent_for_the_same_browser(): void
+    {
+        $material = $this->createMaterial('Materi Tiket Idempoten');
+        $queue = app(LiteracySubmissionQueue::class);
+        $request = $this->literacyQueueRequest('idempotent-browser');
+        $requestId = (string) Str::uuid();
+        $ticket = $queue->requestNewTicket($request, $material, 123, $requestId);
+
+        $claimed = $queue->claimNewSubmission(
+            $request,
+            $material,
+            123,
+            $requestId,
+            $ticket->public_token,
+        );
+
+        $queue->complete($claimed);
+
+        $retried = $queue->claimNewSubmission(
+            $request,
+            $material,
+            123,
+            $requestId,
+            $ticket->public_token,
+        );
+
+        $this->assertSame($ticket->getKey(), $retried->getKey());
+        $this->assertSame('completed', $retried->status);
+        $this->assertSame(1, PerpustakaanLiterasiSubmissionTicket::query()->count());
+    }
+
     public function test_submit_only_queues_similarity_analysis_instead_of_running_it_in_request(): void
     {
         Queue::fake();
@@ -405,13 +548,13 @@ class LibraryLiteracyProgramTest extends TestCase
         Queue::assertPushedOn('literacy-analysis', AnalyzeLiteracyResponseSimilarity::class);
     }
 
-    public function test_twenty_student_sessions_on_same_school_ip_are_not_throttled(): void
+    public function test_one_hundred_sixty_student_sessions_on_same_school_ip_are_not_throttled(): void
     {
         $limiter = RateLimiter::limiter('literacy_queue_ticket');
 
         $this->assertNotNull($limiter);
 
-        foreach (range(1, 20) as $index) {
+        foreach (range(1, 160) as $index) {
             $request = $this->literacyQueueRequest('school-browser-'.$index);
             $request->server->set('REMOTE_ADDR', '203.0.113.25');
             $limits = $limiter($request);
@@ -1865,14 +2008,17 @@ class LibraryLiteracyProgramTest extends TestCase
 
     protected function runLiteracySubmissionQueueMigration(): void
     {
-        if (Schema::hasTable('perpustakaan_literasi_submission_tickets')
-            && Schema::hasTable('perpustakaan_literasi_submission_queue_states')
-            && Schema::hasColumn('perpustakaan_literasi_responses', 'similarity_analysis_status')) {
-            return;
+        if (! Schema::hasTable('perpustakaan_literasi_submission_tickets')
+            || ! Schema::hasTable('perpustakaan_literasi_submission_queue_states')
+            || ! Schema::hasColumn('perpustakaan_literasi_responses', 'similarity_analysis_status')) {
+            $migration = require database_path('migrations/2026_07_21_120000_add_literacy_submission_queue_and_analysis_status.php');
+            $migration->up();
         }
 
-        $migration = require database_path('migrations/2026_07_21_120000_add_literacy_submission_queue_and_analysis_status.php');
-        $migration->up();
+        if (! Schema::hasColumn('perpustakaan_literasi_submission_queue_states', 'last_submission_activity_at')) {
+            $migration = require database_path('migrations/2026_07_22_090000_add_activity_to_literacy_submission_queue_states.php');
+            $migration->up();
+        }
     }
 
     protected function literacyQueueRequest(string $sessionId): HttpRequest

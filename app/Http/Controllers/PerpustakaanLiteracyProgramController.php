@@ -49,7 +49,7 @@ class PerpustakaanLiteracyProgramController extends Controller
         ]);
     }
 
-    public function store(Request $request, string $slug, LiteracySubmissionQueue $submissionQueue): RedirectResponse
+    public function store(Request $request, string $slug, LiteracySubmissionQueue $submissionQueue): RedirectResponse|JsonResponse
     {
         $material = $this->resolvePublicMaterial($slug);
         $questions = $material->questions()->get();
@@ -199,7 +199,7 @@ class PerpustakaanLiteracyProgramController extends Controller
         Request $request,
         string $code,
         LiteracySubmissionQueue $submissionQueue
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
         $response = $this->resolveResponseByEditCode($code);
         $response->loadMissing('material.questions');
         $questions = $response->material->questions;
@@ -609,11 +609,20 @@ class PerpustakaanLiteracyProgramController extends Controller
             ->header('Retry-After', (string) ($payload['retry_after_seconds'] ?? 5));
     }
 
-    protected function queueWaitResponse(LiteracySubmissionQueueBusy $exception): RedirectResponse
+    protected function queueWaitResponse(LiteracySubmissionQueueBusy $exception): RedirectResponse|JsonResponse
     {
         $payload = $exception->queuePayload;
         $position = max(1, (int) ($payload['position'] ?? 1));
         $seconds = max(1, (int) ($payload['estimated_wait_seconds'] ?? 5));
+
+        if (request()->expectsJson()) {
+            return response()
+                ->json($payload + [
+                    'message' => 'Server sedang melayani pengiriman lain. Posisi antrean Anda '.$position
+                        .', perkiraan tunggu '.$seconds.' detik.',
+                ], 425)
+                ->header('Retry-After', (string) ($payload['retry_after_seconds'] ?? 5));
+        }
 
         request()->merge([
             'submission_ticket' => $payload['ticket'] ?? request('submission_ticket'),
@@ -632,9 +641,23 @@ class PerpustakaanLiteracyProgramController extends Controller
     protected function successfulSubmissionRedirect(
         PerpustakaanLiterasiResponse $response,
         string $message,
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
+        $redirectUrl = route('library.literacy.edit', $response->shortEditCode());
+
+        if (request()->expectsJson()) {
+            request()->session()->flash('success', $message);
+            request()->session()->flash('edit_code', $response->edit_code);
+
+            return response()->json([
+                'status' => 'completed',
+                'message' => $message,
+                'redirect_url' => $redirectUrl,
+                'edit_code' => $response->edit_code,
+            ]);
+        }
+
         return redirect()
-            ->route('library.literacy.edit', $response->shortEditCode())
+            ->to($redirectUrl)
             ->with('success', $message)
             ->with('edit_code', $response->edit_code);
     }

@@ -16,6 +16,8 @@ class LiteracySubmissionQueue
 {
     public const SCOPE = 'literacy';
 
+    protected ?bool $activityColumnAvailable = null;
+
     public function enabled(): bool
     {
         return (bool) config('literacy.submission_queue.enabled', true)
@@ -107,6 +109,7 @@ class LiteracySubmissionQueue
 
         return DB::transaction(function () use ($request, $token): array {
             $state = $this->lockState();
+            $this->markSubmissionActivity($state);
             $this->expireStaleTickets();
             $this->promoteWaitingTickets();
 
@@ -127,6 +130,7 @@ class LiteracySubmissionQueue
 
         return DB::transaction(function () use ($request, $token): array {
             $state = $this->lockState();
+            $this->markSubmissionActivity($state);
             $this->expireStaleTickets();
 
             $ticket = PerpustakaanLiterasiSubmissionTicket::query()
@@ -161,6 +165,7 @@ class LiteracySubmissionQueue
 
         DB::transaction(function () use ($ticket, $response): void {
             $state = $this->lockState();
+            $this->markSubmissionActivity($state);
             $current = PerpustakaanLiterasiSubmissionTicket::query()
                 ->whereKey($ticket->getKey())
                 ->lockForUpdate()
@@ -195,7 +200,8 @@ class LiteracySubmissionQueue
         }
 
         DB::transaction(function () use ($ticket): void {
-            $this->lockState();
+            $state = $this->lockState();
+            $this->markSubmissionActivity($state);
 
             PerpustakaanLiterasiSubmissionTicket::query()
                 ->whereKey($ticket->getKey())
@@ -221,6 +227,7 @@ class LiteracySubmissionQueue
 
         return DB::transaction(function () use ($ticket): array {
             $state = $this->lockState();
+            $this->markSubmissionActivity($state);
             $this->expireStaleTickets();
             $this->promoteWaitingTickets();
 
@@ -241,7 +248,8 @@ class LiteracySubmissionQueue
         }
 
         return DB::transaction(function () use ($request, $operation, $operationKey, $materialId, $responseId, $studentId): PerpustakaanLiterasiSubmissionTicket {
-            $this->lockState();
+            $state = $this->lockState();
+            $this->markSubmissionActivity($state);
             $this->expireStaleTickets();
 
             $ownerHash = $this->ownerHash($request);
@@ -289,6 +297,7 @@ class LiteracySubmissionQueue
 
         return DB::transaction(function () use ($ticket, $expectedOperationKey): PerpustakaanLiterasiSubmissionTicket {
             $state = $this->lockState();
+            $this->markSubmissionActivity($state);
             $this->expireStaleTickets();
             $this->promoteWaitingTickets();
 
@@ -344,6 +353,55 @@ class LiteracySubmissionQueue
             ->whereKey(self::SCOPE)
             ->lockForUpdate()
             ->firstOrFail();
+    }
+
+    public function analysisShouldWait(): bool
+    {
+        if (! $this->enabled()) {
+            return false;
+        }
+
+        $hasActiveTickets = PerpustakaanLiterasiSubmissionTicket::query()
+            ->where('scope', self::SCOPE)
+            ->whereIn('status', [
+                PerpustakaanLiterasiSubmissionTicket::STATUS_WAITING,
+                PerpustakaanLiterasiSubmissionTicket::STATUS_ADMITTED,
+                PerpustakaanLiterasiSubmissionTicket::STATUS_PROCESSING,
+            ])
+            ->where('expires_at', '>', now())
+            ->exists();
+
+        if ($hasActiveTickets) {
+            return true;
+        }
+
+        if (! $this->activityColumnAvailable()) {
+            return false;
+        }
+
+        return PerpustakaanLiterasiSubmissionQueueState::query()
+            ->whereKey(self::SCOPE)
+            ->where('last_submission_activity_at', '>=', now()->subSeconds($this->analysisIdleSeconds()))
+            ->exists();
+    }
+
+    protected function markSubmissionActivity(PerpustakaanLiterasiSubmissionQueueState $state): void
+    {
+        if (! $this->activityColumnAvailable()) {
+            return;
+        }
+
+        $state->forceFill([
+            'last_submission_activity_at' => now(),
+        ])->save();
+    }
+
+    protected function activityColumnAvailable(): bool
+    {
+        return $this->activityColumnAvailable ??= Schema::hasColumn(
+            'perpustakaan_literasi_submission_queue_states',
+            'last_submission_activity_at',
+        );
     }
 
     protected function expireStaleTickets(): void
@@ -428,8 +486,9 @@ class LiteracySubmissionQueue
         }
 
         $averageSeconds = max(1, (int) ceil($state->average_duration_ms / 1000));
+        $retryAfterSeconds = $this->retryAfterSeconds($position);
         $estimatedSeconds = $position > 0
-            ? max($this->pollSeconds(), (int) ceil($position / $this->activeSlots()) * $averageSeconds)
+            ? max($retryAfterSeconds, (int) ceil($position / $this->activeSlots()) * $averageSeconds)
             : 0;
 
         return [
@@ -437,7 +496,8 @@ class LiteracySubmissionQueue
             'status' => $ticket->status,
             'position' => $position,
             'estimated_wait_seconds' => $estimatedSeconds,
-            'retry_after_seconds' => $this->pollSeconds(),
+            'retry_after_seconds' => $retryAfterSeconds,
+            'expires_at' => $ticket->expires_at?->toIso8601String(),
             'status_url' => route('library.literacy.queue.status', $ticket->public_token),
             'cancel_url' => route('library.literacy.queue.cancel', $ticket->public_token),
         ];
@@ -451,6 +511,7 @@ class LiteracySubmissionQueue
             'position' => 0,
             'estimated_wait_seconds' => 0,
             'retry_after_seconds' => 0,
+            'expires_at' => null,
             'status_url' => null,
             'cancel_url' => null,
         ];
@@ -463,12 +524,25 @@ class LiteracySubmissionQueue
 
     protected function activeSlots(): int
     {
-        return max(1, (int) config('literacy.submission_queue.active_slots', 15));
+        return max(1, (int) config('literacy.submission_queue.active_slots', 10));
     }
 
     protected function pollSeconds(): int
     {
         return max(2, (int) config('literacy.submission_queue.poll_seconds', 5));
+    }
+
+    protected function retryAfterSeconds(int $position): int
+    {
+        if ($position > (int) config('literacy.submission_queue.poll_far_position', 100)) {
+            return max($this->pollSeconds(), (int) config('literacy.submission_queue.poll_far_seconds', 25));
+        }
+
+        if ($position > (int) config('literacy.submission_queue.poll_middle_position', 30)) {
+            return max($this->pollSeconds(), (int) config('literacy.submission_queue.poll_middle_seconds', 12));
+        }
+
+        return $this->pollSeconds();
     }
 
     protected function waitTtlMinutes(): int
@@ -478,7 +552,12 @@ class LiteracySubmissionQueue
 
     protected function admissionTtlSeconds(): int
     {
-        return max(10, (int) config('literacy.submission_queue.admission_ttl_seconds', 20));
+        return max(30, (int) config('literacy.submission_queue.admission_ttl_seconds', 60));
+    }
+
+    protected function analysisIdleSeconds(): int
+    {
+        return max(30, (int) config('literacy.submission_queue.analysis_idle_seconds', 180));
     }
 
     protected function processingTtlSeconds(): int

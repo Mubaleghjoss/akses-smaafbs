@@ -75,12 +75,35 @@
                 const message = form.querySelector('[data-literacy-queue-message]');
                 const cancelButton = form.querySelector('[data-literacy-queue-cancel]');
                 const submitButton = form.querySelector('[data-literacy-submit-button]');
+                const massModeEnabled = form.dataset.literacyMassMode === '1';
+                const initialJitterSeconds = Math.max(0, Number.parseInt(
+                    massModeEnabled
+                        ? (form.dataset.literacyInitialJitterSeconds || '30')
+                        : (form.dataset.literacyNormalJitterSeconds || '2'),
+                    10
+                ));
+                const retryDelays = (form.dataset.literacyRetryDelays || '5,10,20,30')
+                    .split(',')
+                    .map((seconds) => Number.parseInt(seconds, 10))
+                    .filter((seconds) => Number.isFinite(seconds) && seconds > 0);
+                const retryWindowMs = Math.max(60, Number.parseInt(form.dataset.literacyRetryWindowSeconds || '600', 10)) * 1000;
+                const draftTtlMs = Math.max(1, Number.parseInt(form.dataset.literacyDraftTtlHours || '12', 10)) * 60 * 60 * 1000;
+                const draftStorageKey = `literacy.submission.draft.v2:${form.dataset.literacyDraftKey || window.location.pathname}`;
                 let queueRunning = false;
                 let cancelled = false;
                 let cancelUrl = '';
+                let statusUrl = '';
+                let queueSnapshot = null;
+                let retryStartedAt = 0;
+                let persistTimer = null;
+                let storageAvailable = true;
+                let finalSubmissionRunning = false;
 
                 const wait = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
                 const csrfToken = () => form.querySelector('input[name="_token"]')?.value || '';
+                const draftSafetyText = () => storageAvailable
+                    ? 'Jawaban tersimpan sebagai draf di tab ini.'
+                    : 'Jawaban tetap tersimpan selama halaman ini tidak ditutup.';
                 const waitLabel = (seconds) => {
                     const safeSeconds = Math.max(1, Number.parseInt(seconds || '1', 10));
 
@@ -106,10 +129,8 @@
                     }
                 };
 
-                const resetQueue = () => {
+                const stopQueue = () => {
                     queueRunning = false;
-                    cancelled = false;
-                    cancelUrl = '';
                     form.dataset.literacyQueueAdmitted = '0';
 
                     if (submitButton) {
@@ -117,24 +138,194 @@
                     }
                 };
 
-                const requestJson = async (url, options = {}) => {
-                    const response = await fetch(url, {
-                        credentials: 'same-origin',
-                        headers: {
-                            Accept: 'application/json',
-                            'X-CSRF-TOKEN': csrfToken(),
-                            ...(options.headers || {}),
-                        },
-                        ...options,
-                    });
-                    const payload = await response.json().catch(() => ({}));
+                const draftFields = () => Array.from(form.querySelectorAll([
+                    '[data-literacy-answer-input]',
+                    '[data-student-search]',
+                    '[data-student-id]',
+                    '[data-student-verification]',
+                ].join(',')));
 
-                    if (!response.ok) {
-                        const validationMessage = Object.values(payload.errors || {}).flat()[0];
-                        throw new Error(validationMessage || payload.message || 'Antrean belum dapat dihubungi.');
+                const removeDraft = () => {
+                    try {
+                        window.sessionStorage.removeItem(draftStorageKey);
+                    } catch (error) {
+                        storageAvailable = false;
+                    }
+                };
+
+                const persistDraft = () => {
+                    const fields = {};
+
+                    draftFields().forEach((field) => {
+                        if (field.name) {
+                            fields[field.name] = field.value;
+                        }
+                    });
+
+                    try {
+                        window.sessionStorage.setItem(draftStorageKey, JSON.stringify({
+                            saved_at: Date.now(),
+                            request_id: requestIdInput?.value || '',
+                            ticket: ticketInput?.value || '',
+                            fields,
+                            queue: queueSnapshot,
+                        }));
+                        storageAvailable = true;
+                    } catch (error) {
+                        storageAvailable = false;
+                    }
+                };
+
+                const scheduleDraftPersistence = () => {
+                    if (persistTimer !== null) {
+                        window.clearTimeout(persistTimer);
                     }
 
-                    return payload;
+                    persistTimer = window.setTimeout(() => {
+                        persistTimer = null;
+                        persistDraft();
+                    }, 250);
+                };
+
+                const restoreDraft = () => {
+                    if (form.dataset.literacySubmissionSuccess === '1') {
+                        removeDraft();
+
+                        return false;
+                    }
+
+                    try {
+                        const rawDraft = window.sessionStorage.getItem(draftStorageKey);
+
+                        if (!rawDraft) {
+                            return false;
+                        }
+
+                        const draft = JSON.parse(rawDraft);
+
+                        if (!draft?.saved_at || Date.now() - draft.saved_at > draftTtlMs) {
+                            removeDraft();
+
+                            return false;
+                        }
+
+                        draftFields().forEach((field) => {
+                            if (field.name && Object.hasOwn(draft.fields || {}, field.name)) {
+                                field.value = String(draft.fields[field.name] ?? '');
+                            }
+                        });
+
+                        if (requestIdInput && draft.request_id) {
+                            requestIdInput.value = draft.request_id;
+                        }
+
+                        if (ticketInput && draft.ticket) {
+                            ticketInput.value = draft.ticket;
+                        }
+
+                        queueSnapshot = draft.queue || null;
+                        cancelUrl = queueSnapshot?.cancel_url || '';
+                        statusUrl = queueSnapshot?.status_url || '';
+
+                        return true;
+                    } catch (error) {
+                        removeDraft();
+
+                        return false;
+                    }
+                };
+
+                const clearTicketState = () => {
+                    queueSnapshot = null;
+                    cancelUrl = '';
+                    statusUrl = '';
+
+                    if (ticketInput) {
+                        ticketInput.value = '';
+                    }
+
+                    persistDraft();
+                };
+
+                const countdownWait = async (seconds, onTick = null) => {
+                    for (let remaining = Math.max(0, Math.ceil(seconds)); remaining > 0; remaining -= 1) {
+                        if (cancelled) {
+                            return;
+                        }
+
+                        onTick?.(remaining);
+                        await wait(1000);
+                    }
+                };
+
+                const requestJson = async (url, options = {}) => {
+                    try {
+                        const response = await fetch(url, {
+                            credentials: 'same-origin',
+                            headers: {
+                                Accept: 'application/json',
+                                'X-CSRF-TOKEN': csrfToken(),
+                                ...(options.headers || {}),
+                            },
+                            ...options,
+                        });
+                        const payload = await response.json().catch(() => ({}));
+
+                        if (!response.ok) {
+                            const validationMessage = Object.values(payload.errors || {}).flat()[0];
+                            const error = new Error(validationMessage || payload.message || 'Antrean belum dapat dihubungi.');
+                            error.status = response.status;
+                            error.retryAfter = Number.parseInt(response.headers.get('Retry-After') || '0', 10);
+                            error.retryable = [408, 425, 429, 500, 502, 503, 504].includes(response.status);
+                            throw error;
+                        }
+
+                        return payload;
+                    } catch (error) {
+                        if (typeof error?.retryable === 'boolean') {
+                            throw error;
+                        }
+
+                        const networkError = new Error('Koneksi ke antrean terputus sementara.');
+                        networkError.status = 0;
+                        networkError.retryAfter = 0;
+                        networkError.retryable = true;
+                        throw networkError;
+                    }
+                };
+
+                const requestWithRetry = async (url, options = {}) => {
+                    let failureCount = 0;
+
+                    while (!cancelled) {
+                        try {
+                            return await requestJson(url, options);
+                        } catch (error) {
+                            if (!error?.retryable) {
+                                throw error;
+                            }
+
+                            if (Date.now() - retryStartedAt >= retryWindowMs) {
+                                const exhaustedError = new Error(`Belum berhasil terhubung setelah ${waitLabel(Math.ceil(retryWindowMs / 1000))}. ${draftSafetyText()}`);
+                                exhaustedError.exhausted = true;
+                                throw exhaustedError;
+                            }
+
+                            const configuredDelay = retryDelays[Math.min(failureCount, Math.max(0, retryDelays.length - 1))] || 30;
+                            const baseDelay = Math.max(2, error.retryAfter || configuredDelay);
+                            const delaySeconds = Math.ceil(baseDelay * (1 + (Math.random() * 0.3)));
+                            failureCount += 1;
+
+                            await countdownWait(delaySeconds, (remaining) => {
+                                showQueue(
+                                    'Server sedang ramai - tidak perlu menekan Kirim lagi',
+                                    `Percobaan otomatis ke-${failureCount + 1} dilakukan dalam ${remaining} detik. ${draftSafetyText()}`
+                                );
+                            });
+                        }
+                    }
+
+                    return null;
                 };
 
                 const renderQueuePayload = (payload) => {
@@ -143,11 +334,18 @@
                     }
 
                     cancelUrl = payload.cancel_url || cancelUrl;
+                    statusUrl = payload.status_url || statusUrl;
+                    queueSnapshot = {
+                        ...payload,
+                        cancel_url: cancelUrl,
+                        status_url: statusUrl,
+                    };
+                    persistDraft();
 
                     if (payload.status === 'waiting') {
                         showQueue(
-                            `Harap tunggu - antrean ke-${Math.max(1, payload.position || 1)}`,
-                            `Perkiraan ${waitLabel(payload.estimated_wait_seconds)}. Jawaban tetap tersimpan di halaman ini.`
+                            `Anda sudah masuk antrean - urutan ke-${Math.max(1, payload.position || 1)}`,
+                            `Perkiraan ${waitLabel(payload.estimated_wait_seconds)}. ${draftSafetyText()}`
                         );
 
                         return false;
@@ -159,48 +357,170 @@
                         return true;
                     }
 
-                    throw new Error('Tiket antrean berakhir. Tekan tombol Kirim untuk mengambil antrean baru.');
+                    if (['cancelled', 'expired'].includes(payload.status)) {
+                        clearTicketState();
+
+                        return null;
+                    }
+
+                    const statusError = new Error('Status tiket antrean tidak dikenali.');
+                    statusError.retryable = true;
+                    throw statusError;
                 };
 
-                const runQueue = async () => {
-                    queueRunning = true;
-                    cancelled = false;
+                const createTicket = async () => {
+                    const body = new FormData();
+                    body.append('_token', csrfToken());
+                    body.append('submission_request_id', requestIdInput?.value || '');
+
+                    if (studentIdInput) {
+                        body.append('student_id', studentIdInput.value || '');
+                    }
+
+                    return requestWithRetry(form.dataset.literacyTicketEndpoint, {
+                        method: 'POST',
+                        body,
+                    });
+                };
+
+                const submitFinal = async () => {
+                    if (finalSubmissionRunning) {
+                        return;
+                    }
+
+                    finalSubmissionRunning = true;
+                    retryStartedAt = Date.now();
 
                     if (submitButton) {
                         submitButton.disabled = true;
                     }
 
-                    showQueue('Menyiapkan antrean pengiriman...', 'Jawaban tetap tersimpan di halaman ini. Jangan tutup halaman.');
+                    if (cancelButton) {
+                        cancelButton.disabled = true;
+                    }
+
+                    showQueue('Menyimpan jawaban...', `Mohon tunggu. ${draftSafetyText()}`);
+                    form.dispatchEvent(new CustomEvent('literacy:final-submit-start'));
+
+                    try {
+                        const payload = await requestWithRetry(form.action, {
+                            method: (form.method || 'POST').toUpperCase(),
+                            body: new FormData(form),
+                            headers: {
+                                Accept: 'application/json',
+                            },
+                        });
+
+                        if (!payload?.redirect_url) {
+                            throw new Error('Server tidak mengirim tujuan halaman hasil.');
+                        }
+
+                        removeDraft();
+                        showQueue('Jawaban berhasil disimpan', 'Halaman hasil sedang dibuka...');
+                        window.location.assign(payload.redirect_url);
+                    } catch (error) {
+                        showQueue(
+                            error?.exhausted ? 'Belum berhasil menyimpan jawaban' : 'Jawaban belum dapat disimpan',
+                            error?.message || `Silakan periksa jawaban lalu coba lagi. ${draftSafetyText()}`
+                        );
+                        form.dataset.literacyQueueAdmitted = '0';
+                        finalSubmissionRunning = false;
+                        form.dispatchEvent(new CustomEvent('literacy:final-submit-failed'));
+
+                        if (submitButton) {
+                            submitButton.disabled = false;
+                        }
+
+                        if (cancelButton) {
+                            cancelButton.disabled = false;
+                        }
+                    }
+                };
+
+                const runQueue = async ({ resume = false } = {}) => {
+                    if (queueRunning) {
+                        return;
+                    }
+
+                    queueRunning = true;
+                    cancelled = false;
+                    retryStartedAt = Date.now();
+                    persistDraft();
+
+                    if (submitButton) {
+                        submitButton.disabled = true;
+                    }
+
+                    showQueue('Menyiapkan jalur antrean...', draftSafetyText());
                     panel?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
                     try {
-                        await wait(Math.floor(Math.random() * 1500));
+                        let payload = null;
 
-                        if (cancelled) {
-                            return;
+                        if (resume && statusUrl) {
+                            showQueue('Melanjutkan antrean sebelumnya...', `${draftSafetyText()} Posisi sedang diperbarui.`);
+
+                            try {
+                                payload = await requestWithRetry(statusUrl, { method: 'GET' });
+                            } catch (error) {
+                                if (![404, 410, 422].includes(error?.status)) {
+                                    throw error;
+                                }
+
+                                clearTicketState();
+                            }
                         }
 
-                        const body = new FormData();
-                        body.append('_token', csrfToken());
-                        body.append('submission_request_id', requestIdInput?.value || '');
+                        if (!payload) {
+                            const gateSeconds = Math.floor(Math.random() * (initialJitterSeconds + 1));
 
-                        if (studentIdInput) {
-                            body.append('student_id', studentIdInput.value || '');
-                        }
-
-                        let payload = await requestJson(form.dataset.literacyTicketEndpoint, {
-                            method: 'POST',
-                            body,
-                        });
-
-                        while (!cancelled && !renderQueuePayload(payload)) {
-                            await wait(Math.max(2, payload.retry_after_seconds || 5) * 1000);
+                            await countdownWait(gateSeconds, (remaining) => {
+                                showQueue(
+                                    'Menyiapkan jalur antrean',
+                                    `Permintaan akan dikirim dalam ${remaining} detik. ${draftSafetyText()}`
+                                );
+                            });
 
                             if (cancelled) {
                                 return;
                             }
 
-                            payload = await requestJson(payload.status_url, { method: 'GET' });
+                            payload = await createTicket();
+                        }
+
+                        if (cancelled) {
+                            return;
+                        }
+
+                        let admitted = renderQueuePayload(payload);
+
+                        if (admitted === null) {
+                            payload = await createTicket();
+                            admitted = renderQueuePayload(payload);
+                        }
+
+                        while (!cancelled && admitted === false) {
+                            const basePollSeconds = Math.max(2, Number.parseInt(payload.retry_after_seconds || '5', 10));
+                            const pollSeconds = Math.ceil(basePollSeconds * (1 + (Math.random() * 0.25)));
+
+                            await countdownWait(pollSeconds, (remaining) => {
+                                showQueue(
+                                    `Anda sudah masuk antrean - urutan ke-${Math.max(1, payload.position || 1)}`,
+                                    `Perkiraan ${waitLabel(payload.estimated_wait_seconds)}. Pemeriksaan berikutnya dalam ${remaining} detik. ${draftSafetyText()}`
+                                );
+                            });
+
+                            if (cancelled) {
+                                return;
+                            }
+
+                            payload = await requestWithRetry(payload.status_url || statusUrl, { method: 'GET' });
+                            admitted = renderQueuePayload(payload);
+
+                            if (admitted === null) {
+                                payload = await createTicket();
+                                admitted = renderQueuePayload(payload);
+                            }
                         }
 
                         if (cancelled) {
@@ -214,25 +534,38 @@
                             submitButton.disabled = false;
                         }
 
+                        persistDraft();
                         form.requestSubmit(submitButton || undefined);
                     } catch (error) {
-                        showQueue('Pengiriman belum dapat dilanjutkan', error?.message || 'Antrean belum dapat dihubungi. Silakan coba lagi.');
-                        resetQueue();
+                        showQueue(
+                            error?.exhausted ? 'Belum berhasil terhubung ke antrean' : 'Pengiriman belum dapat dilanjutkan',
+                            error?.message || `Antrean belum dapat dihubungi. ${draftSafetyText()}`
+                        );
+                        stopQueue();
                     }
                 };
 
+                const restoredDraft = restoreDraft();
+
+                form.addEventListener('input', scheduleDraftPersistence);
+                form.addEventListener('change', scheduleDraftPersistence);
+
                 form.addEventListener('submit', (event) => {
                     if (form.dataset.literacyQueueAdmitted === '1') {
+                        event.preventDefault();
+                        submitFinal();
+
                         return;
                     }
 
                     event.preventDefault();
 
-                    if (queueRunning || !form.reportValidity()) {
+                    if (queueRunning || (studentIdInput && studentIdInput.value === '') || !form.reportValidity()) {
                         return;
                     }
 
-                    runQueue();
+                    const canResume = Boolean(queueSnapshot?.status_url && ticketInput?.value);
+                    runQueue({ resume: canResume });
                 });
 
                 cancelButton?.addEventListener('click', async () => {
@@ -242,13 +575,23 @@
                         requestJson(cancelUrl, { method: 'DELETE' }).catch(() => {});
                     }
 
-                    if (ticketInput) {
-                        ticketInput.value = '';
-                    }
-
+                    clearTicketState();
                     panel?.classList.add('hidden');
-                    resetQueue();
+                    stopQueue();
                 });
+
+                if (restoredDraft) {
+                    if (queueSnapshot?.status_url && ticketInput?.value) {
+                        window.setTimeout(() => runQueue({ resume: true }), 0);
+                    } else {
+                        showQueue('Draf sebelumnya dipulihkan', 'Jawaban dari tab ini sudah dikembalikan. Silakan periksa sebelum mengirim.');
+                        window.setTimeout(() => {
+                            if (!queueRunning) {
+                                panel?.classList.add('hidden');
+                            }
+                        }, 5000);
+                    }
+                }
             }
 
             form.querySelectorAll('[data-literacy-answer-input]').forEach((textarea) => {
@@ -486,15 +829,24 @@
                     }).catch(() => {});
                 };
 
+                const beginFinalSubmission = () => {
+                    submitting = true;
+                    leavingPage = true;
+                    clearPendingIntegrityTimers();
+                    syncIntegrityFields();
+                };
+
+                form.addEventListener('literacy:final-submit-start', beginFinalSubmission);
+                form.addEventListener('literacy:final-submit-failed', () => {
+                    submitting = false;
+                    leavingPage = false;
+                });
                 form.addEventListener('submit', (event) => {
                     if (event.defaultPrevented) {
                         return;
                     }
 
-                    submitting = true;
-                    leavingPage = true;
-                    clearPendingIntegrityTimers();
-                    syncIntegrityFields();
+                    beginFinalSubmission();
                 });
 
                 document.addEventListener('click', (event) => {

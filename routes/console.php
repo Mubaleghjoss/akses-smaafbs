@@ -7,6 +7,7 @@ use App\Models\BerkasGuru;
 use App\Models\BerkasSiswa;
 use App\Models\User;
 use App\Support\Admin\AdminModuleAccess;
+use App\Support\Perpustakaan\LiteracySubmissionQueue;
 use App\Support\ServerSync\ServerDataPuller;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Inspiring;
@@ -134,11 +135,15 @@ Artisan::command('app:admin-performance-report {--limit=10 : Jumlah baris terata
 })->purpose('Ringkas log request dan query lambat admin');
 
 Schedule::call(function (): void {
+    if (app(LiteracySubmissionQueue::class)->analysisShouldWait()) {
+        return;
+    }
+
     Artisan::call('queue:work', [
         '--queue' => 'literacy-analysis,default',
         '--stop-when-empty' => true,
-        '--max-jobs' => 10,
-        '--max-time' => 50,
+        '--max-jobs' => 3,
+        '--max-time' => 20,
         '--tries' => 3,
         '--sleep' => 1,
         '--timeout' => 120,
