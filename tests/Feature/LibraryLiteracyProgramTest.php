@@ -1607,6 +1607,8 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('Durasi Soal')
             ->assertSee('Status Materi')
             ->assertSee('Tidak Aktif')
+            ->assertSee('literasi-status-button--active', false)
+            ->assertSee('literasi-status-button--inactive', false)
             ->assertSee('Literacy Habituation Programme')
             ->assertSee('Numeracy Excellence Programme')
             ->assertSee('Sigap 29 Karakter')
