@@ -32,6 +32,7 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Tests\Feature\Concerns\BootstrapsAdminFeatureTables;
 use Tests\TestCase;
@@ -77,7 +78,7 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertOk()
             ->assertSee('Literasi Numerasi')
             ->assertSee('Materi Aktif Literasi')
-            ->assertSee('Belum Berkategori')
+            ->assertSee('Literacy Habituation Programme')
             ->assertSee('Tutup '.$active->closes_at->format('d/m/Y H:i'))
             ->assertSee('tex-chtml.js', false)
             ->assertSee('\(x^{2}\)', false)
@@ -1604,11 +1605,13 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('Ringkasan Literasi')
             ->assertSee('Daftar Materi')
             ->assertSee('Durasi Soal')
-            ->assertSee('Semua Aktif')
+            ->assertSee('Status Materi')
+            ->assertSee('Tidak Aktif')
             ->assertSee('Literacy Habituation Programme')
             ->assertSee('Numeracy Excellence Programme')
             ->assertSee('Sigap 29 Karakter')
-            ->assertSee('Soal Non Aktif')
+            ->assertDontSee('Semua Aktif')
+            ->assertDontSee('Soal Non Aktif')
             ->assertSee('Keseluruhan Soal Selama 1 Bulan')
             ->assertSee('Kategori analisa literasi', false)
             ->assertSee('Belum Berkategori')
@@ -1622,6 +1625,15 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('Ranking Siswa Per Kelas Berdasarkan Jawaban Benar')
             ->assertSee('Siswa Banyak Salah')
             ->assertSee('Siswa Tidak Mengisi');
+
+        $materialList = Livewire::actingAs($admin)
+            ->test(ListPerpustakaanLiterasiMaterials::class);
+
+        $this->assertSame([
+            PerpustakaanLiterasiMaterial::CATEGORY_LITERACY_HABITUATION,
+            PerpustakaanLiterasiMaterial::CATEGORY_NUMERACY_EXCELLENCE,
+            PerpustakaanLiterasiMaterial::CATEGORY_SIGAP_29_KARAKTER,
+        ], array_keys($materialList->instance()->getTabs()));
 
         Livewire::actingAs($admin)
             ->test(PerpustakaanLiterasiGlobalAnalytics::class)
@@ -1681,12 +1693,18 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertTableActionVisible('setProgramCategory', $material)
             ->assertTableActionVisible('setInstructions', $material)
             ->assertTableActionVisible('toggleActive', $material)
-            ->callTableAction('setProgramCategory', $material, [
-                'program_category' => PerpustakaanLiterasiMaterial::CATEGORY_SIGAP_29_KARAKTER,
-            ])
             ->callTableAction('setInstructions', $material, [
                 'instructions' => "Baca arahan dari admin.\nJangan keluar halaman.",
             ])
+            ->callTableAction('setProgramCategory', $material, [
+                'program_category' => PerpustakaanLiterasiMaterial::CATEGORY_SIGAP_29_KARAKTER,
+            ]);
+
+        Livewire::actingAs($admin)
+            ->test(ListPerpustakaanLiterasiMaterials::class)
+            ->set('activeTab', PerpustakaanLiterasiMaterial::CATEGORY_SIGAP_29_KARAKTER)
+            ->call('loadTable')
+            ->assertCanSeeTableRecords([$material])
             ->callTableAction('toggleActive', $material);
 
         $material->refresh();
@@ -1721,13 +1739,39 @@ class LibraryLiteracyProgramTest extends TestCase
 
         Livewire::actingAs($admin)
             ->test(ListPerpustakaanLiterasiMaterials::class)
+            ->assertSet('activeTab', PerpustakaanLiterasiMaterial::CATEGORY_LITERACY_HABITUATION)
+            ->assertSet('materialStatus', 'active')
             ->call('loadTable')
             ->assertCanSeeTableRecords([$active])
             ->assertCanNotSeeTableRecords([$expired, $manualInactive])
-            ->set('activeTab', 'inactive')
+            ->call('setMaterialStatus', 'inactive')
+            ->assertSet('materialStatus', 'inactive')
             ->call('loadTable')
             ->assertCanSeeTableRecords([$expired, $manualInactive])
             ->assertCanNotSeeTableRecords([$active]);
+    }
+
+    public function test_literacy_material_cannot_be_saved_without_valid_category(): void
+    {
+        try {
+            PerpustakaanLiterasiMaterial::query()->create([
+                'title' => 'Materi Tanpa Kategori',
+                'reading_content' => 'Materi ini tidak boleh tersimpan tanpa kategori.',
+                'program_category' => null,
+                'is_active' => true,
+            ]);
+
+            $this->fail('Materi tanpa kategori seharusnya ditolak.');
+        } catch (ValidationException $exception) {
+            $this->assertSame(
+                'Kategori soal wajib dipilih sebelum materi dapat disimpan.',
+                $exception->errors()['program_category'][0] ?? null,
+            );
+        }
+
+        $this->assertDatabaseMissing('perpustakaan_literasi_materials', [
+            'title' => 'Materi Tanpa Kategori',
+        ]);
     }
 
     public function test_deleted_literacy_material_moves_student_history_to_deleted_and_restore_brings_responses_back(): void
@@ -2075,6 +2119,7 @@ class LibraryLiteracyProgramTest extends TestCase
         return PerpustakaanLiterasiMaterial::query()->create(array_merge([
             'title' => $title,
             'reading_content' => 'Bacaan literasi untuk pengujian fitur.',
+            'program_category' => PerpustakaanLiterasiMaterial::CATEGORY_LITERACY_HABITUATION,
             'is_active' => true,
         ], $attributes));
     }

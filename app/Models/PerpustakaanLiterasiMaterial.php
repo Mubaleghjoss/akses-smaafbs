@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class PerpustakaanLiterasiMaterial extends Model implements HasRichContent
 {
@@ -41,6 +42,18 @@ class PerpustakaanLiterasiMaterial extends Model implements HasRichContent
 
     protected static function booted(): void
     {
+        static::saving(function (self $material): void {
+            $category = trim((string) $material->program_category);
+
+            if (! array_key_exists($category, static::programCategoryOptions())) {
+                throw ValidationException::withMessages([
+                    'program_category' => 'Kategori soal wajib dipilih sebelum materi dapat disimpan.',
+                ]);
+            }
+
+            $material->program_category = $category;
+        });
+
         static::creating(function (self $material): void {
             $material->slug = static::uniqueSlug($material->title, $material->slug);
             $material->created_by ??= auth()->id();

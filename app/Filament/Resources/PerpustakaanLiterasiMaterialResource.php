@@ -36,6 +36,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema as SchemaFacade;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class PerpustakaanLiterasiMaterialResource extends Resource
 {
@@ -82,6 +83,11 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                             ->options(PerpustakaanLiterasiMaterial::programCategoryOptions())
                             ->native(false)
                             ->required()
+                            ->rules([Rule::in(array_keys(PerpustakaanLiterasiMaterial::programCategoryOptions()))])
+                            ->validationMessages([
+                                'required' => 'Kategori soal wajib dipilih.',
+                                'in' => 'Kategori soal yang dipilih tidak valid.',
+                            ])
                             ->helperText('Pilih kategori program agar siswa dan guru bisa membedakan jenis soal.')
                             ->columnSpanFull(),
                         Forms\Components\Checkbox::make('show_reading_latex_tools')
