@@ -22,6 +22,16 @@ class PerpustakaanLiterasiResponse extends Model
 
     public const SIMILARITY_STATUS_FAILED = 'failed';
 
+    public const SUBMISSION_DELIVERY_DIRECT = 'OK-LANGSUNG';
+
+    public const SUBMISSION_DELIVERY_QUEUED = 'Q-ANTRE';
+
+    public const SUBMISSION_DELIVERY_RETRY_429 = 'R-429';
+
+    public const SUBMISSION_DELIVERY_RETRY_503 = 'R-503';
+
+    public const SUBMISSION_DELIVERY_RETRY_OTHER = 'R-RETRY';
+
     protected $table = 'perpustakaan_literasi_responses';
 
     protected $guarded = [];
@@ -38,6 +48,8 @@ class PerpustakaanLiterasiResponse extends Model
         'similarity_analysis_version' => 'integer',
         'similarity_analysis_queued_at' => 'datetime',
         'similarity_analyzed_at' => 'datetime',
+        'submission_queue_wait_seconds' => 'integer',
+        'submission_retry_statuses' => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
@@ -136,6 +148,52 @@ class PerpustakaanLiterasiResponse extends Model
     public function editUrl(): string
     {
         return route('library.literacy.edit', $this->shortEditCode());
+    }
+
+    public function submissionDeliveryLabel(): string
+    {
+        return match ($this->submission_delivery_code) {
+            self::SUBMISSION_DELIVERY_DIRECT => 'Submit langsung',
+            self::SUBMISSION_DELIVERY_QUEUED => 'Sempat mengantre',
+            self::SUBMISSION_DELIVERY_RETRY_429 => 'Pulih setelah 429',
+            self::SUBMISSION_DELIVERY_RETRY_503 => 'Pulih setelah 503',
+            self::SUBMISSION_DELIVERY_RETRY_OTHER => 'Pulih setelah gangguan',
+            default => 'Data lama',
+        };
+    }
+
+    public function submissionDeliveryDescription(): string
+    {
+        $parts = [];
+
+        if ((int) $this->submission_queue_wait_seconds > 0) {
+            $parts[] = 'Antre '.number_format((int) $this->submission_queue_wait_seconds, 0, ',', '.').' detik';
+        }
+
+        $retryStatuses = collect($this->submission_retry_statuses ?? [])
+            ->map(fn (mixed $status): string => (string) $status)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($retryStatuses !== []) {
+            $parts[] = 'Retry '.implode(', ', $retryStatuses);
+        }
+
+        return $parts !== [] ? implode(' | ', $parts) : $this->submissionDeliveryLabel();
+    }
+
+    public function submissionDeliveryColor(): string
+    {
+        return match ($this->submission_delivery_code) {
+            self::SUBMISSION_DELIVERY_DIRECT => 'success',
+            self::SUBMISSION_DELIVERY_QUEUED => 'info',
+            self::SUBMISSION_DELIVERY_RETRY_429 => 'warning',
+            self::SUBMISSION_DELIVERY_RETRY_503 => 'danger',
+            self::SUBMISSION_DELIVERY_RETRY_OTHER => 'warning',
+            default => 'gray',
+        };
     }
 
     /**

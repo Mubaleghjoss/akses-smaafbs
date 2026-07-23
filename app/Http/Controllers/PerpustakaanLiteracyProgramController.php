@@ -9,6 +9,7 @@ use App\Models\PerpustakaanLiterasiAnswer;
 use App\Models\PerpustakaanLiterasiMaterial;
 use App\Models\PerpustakaanLiterasiQuestion;
 use App\Models\PerpustakaanLiterasiResponse;
+use App\Models\PerpustakaanLiterasiSubmissionTicket;
 use App\Support\Perpustakaan\LiteracySubmissionQueue;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -41,11 +42,27 @@ class PerpustakaanLiteracyProgramController extends Controller
     {
         $material = $this->resolvePublicMaterial($slug);
         $material->loadMissing('questions');
+        $description = $material->readingContentPreview(180);
+
+        if ($description === '') {
+            $description = 'Materi '.$material->programCategoryLabel().' SMA AFBS. Baca materi dan kerjakan pertanyaannya melalui halaman ini.';
+        }
 
         return view('library.literacy.show', [
             'title' => $material->title,
             'material' => $material,
             'students' => $this->studentOptions(),
+            'meta' => [
+                'description' => $description,
+                'canonical_url' => $material->publicUrl(),
+                'og_title' => $material->title,
+                'og_description' => $description,
+                'og_image' => $material->imageUrl(),
+                'og_url' => $material->publicUrl(),
+                'twitter_title' => $material->title,
+                'twitter_description' => $description,
+                'twitter_image' => $material->imageUrl(),
+            ],
         ]);
     }
 
@@ -82,6 +99,8 @@ class PerpustakaanLiteracyProgramController extends Controller
                 $completedResponse = PerpustakaanLiterasiResponse::query()->find($ticket->result_response_id);
 
                 if ($completedResponse) {
+                    $this->recordSubmissionDelivery($completedResponse, $ticket, $request);
+
                     return $this->successfulSubmissionRedirect($completedResponse, 'Jawaban sudah berhasil dikirim.');
                 }
             }
@@ -92,6 +111,8 @@ class PerpustakaanLiteracyProgramController extends Controller
                     'student_verification' => ['nullable', 'string', 'max:80'],
                     'submission_request_id' => ['nullable', 'uuid'],
                     'submission_ticket' => ['nullable', 'string', 'max:64'],
+                    'submission_queue_waited' => ['nullable', 'boolean'],
+                    'submission_retry_statuses' => ['nullable', 'string', 'max:120'],
                 ] + $this->integrityValidationRules(),
                 [],
                 $this->answerValidationAttributes($questions),
@@ -150,6 +171,7 @@ class PerpustakaanLiteracyProgramController extends Controller
             });
 
             AnalyzeLiteracyResponseSimilarity::queueFor($response);
+            $this->recordSubmissionDelivery($response, $ticket, $request);
             $submissionQueue->complete($ticket, $response);
             $ticketCompleted = true;
 
@@ -228,6 +250,8 @@ class PerpustakaanLiteracyProgramController extends Controller
                 $this->answerValidationRules($questions) + [
                     'submission_request_id' => ['nullable', 'uuid'],
                     'submission_ticket' => ['nullable', 'string', 'max:64'],
+                    'submission_queue_waited' => ['nullable', 'boolean'],
+                    'submission_retry_statuses' => ['nullable', 'string', 'max:120'],
                 ] + $this->integrityValidationRules(),
                 [],
                 $this->answerValidationAttributes($questions),
@@ -251,6 +275,47 @@ class PerpustakaanLiteracyProgramController extends Controller
                 $submissionQueue->release($ticket);
             }
         }
+    }
+
+    protected function recordSubmissionDelivery(
+        PerpustakaanLiterasiResponse $response,
+        ?PerpustakaanLiterasiSubmissionTicket $ticket,
+        Request $request,
+    ): void {
+        $reportedStatuses = collect(explode(',', (string) $request->input('submission_retry_statuses', '')))
+            ->map(fn (string $status): string => trim($status))
+            ->filter(fn (string $status): bool => preg_match('/^(?:0|[1-5][0-9]{2})$/', $status) === 1)
+            ->merge($response->submission_retry_statuses ?? [])
+            ->unique()
+            ->take(12)
+            ->values();
+
+        $queueWaitSeconds = (int) ($response->submission_queue_wait_seconds ?? 0);
+
+        if ($ticket?->requested_at && $ticket?->admitted_at) {
+            $queueWaitSeconds = max(
+                $queueWaitSeconds,
+                (int) $ticket->requested_at->diffInSeconds($ticket->admitted_at),
+            );
+        }
+
+        if ($request->boolean('submission_queue_waited')) {
+            $queueWaitSeconds = max(1, $queueWaitSeconds);
+        }
+
+        $deliveryCode = match (true) {
+            $reportedStatuses->contains('503') => PerpustakaanLiterasiResponse::SUBMISSION_DELIVERY_RETRY_503,
+            $reportedStatuses->contains('429') => PerpustakaanLiterasiResponse::SUBMISSION_DELIVERY_RETRY_429,
+            $reportedStatuses->isNotEmpty() => PerpustakaanLiterasiResponse::SUBMISSION_DELIVERY_RETRY_OTHER,
+            $queueWaitSeconds > 0 => PerpustakaanLiterasiResponse::SUBMISSION_DELIVERY_QUEUED,
+            default => PerpustakaanLiterasiResponse::SUBMISSION_DELIVERY_DIRECT,
+        };
+
+        $response->forceFill([
+            'submission_delivery_code' => $deliveryCode,
+            'submission_queue_wait_seconds' => $queueWaitSeconds,
+            'submission_retry_statuses' => $reportedStatuses->all() ?: null,
+        ])->save();
     }
 
     public function requestStoreTicket(

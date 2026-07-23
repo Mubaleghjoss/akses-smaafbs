@@ -70,6 +70,8 @@
                 const ticketInput = form.querySelector('[data-literacy-ticket]');
                 const requestIdInput = form.querySelector('[data-literacy-request-id]');
                 const studentIdInput = form.querySelector('[data-student-id]');
+                const queueWaitedInput = form.querySelector('[data-literacy-queue-waited]');
+                const retryStatusesInput = form.querySelector('[data-literacy-retry-statuses]');
                 const panel = form.querySelector('[data-literacy-queue-panel]');
                 const title = form.querySelector('[data-literacy-queue-title]');
                 const message = form.querySelector('[data-literacy-queue-message]');
@@ -116,6 +118,24 @@
 
                     return remainder > 0 ? `${minutes} menit ${remainder} detik` : `${minutes} menit`;
                 };
+                const recordRetryStatus = (status) => {
+                    if (!retryStatusesInput) {
+                        return;
+                    }
+
+                    const normalizedStatus = Number.isFinite(Number(status)) ? String(Number(status)) : '0';
+                    const statuses = retryStatusesInput.value
+                        .split(',')
+                        .map((value) => value.trim())
+                        .filter(Boolean);
+
+                    if (!statuses.includes(normalizedStatus)) {
+                        statuses.push(normalizedStatus);
+                    }
+
+                    retryStatusesInput.value = statuses.slice(-12).join(',');
+                    persistDraft();
+                };
 
                 const showQueue = (heading, detail) => {
                     panel?.classList.remove('hidden');
@@ -143,6 +163,8 @@
                     '[data-student-search]',
                     '[data-student-id]',
                     '[data-student-verification]',
+                    '[data-literacy-queue-waited]',
+                    '[data-literacy-retry-statuses]',
                 ].join(',')));
 
                 const removeDraft = () => {
@@ -305,6 +327,8 @@
                                 throw error;
                             }
 
+                            recordRetryStatus(error.status);
+
                             if (Date.now() - retryStartedAt >= retryWindowMs) {
                                 const exhaustedError = new Error(`Belum berhasil terhubung setelah ${waitLabel(Math.ceil(retryWindowMs / 1000))}. ${draftSafetyText()}`);
                                 exhaustedError.exhausted = true;
@@ -343,6 +367,10 @@
                     persistDraft();
 
                     if (payload.status === 'waiting') {
+                        if (queueWaitedInput) {
+                            queueWaitedInput.value = '1';
+                        }
+
                         showQueue(
                             `Anda sudah masuk antrean - urutan ke-${Math.max(1, payload.position || 1)}`,
                             `Perkiraan ${waitLabel(payload.estimated_wait_seconds)}. ${draftSafetyText()}`

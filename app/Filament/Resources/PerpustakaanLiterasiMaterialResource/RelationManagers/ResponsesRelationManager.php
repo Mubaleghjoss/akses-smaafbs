@@ -55,6 +55,12 @@ class ResponsesRelationManager extends RelationManager
                     ->badge()
                     ->placeholder('-')
                     ->visibleFrom('md'),
+                Tables\Columns\TextColumn::make('submission_delivery_code')
+                    ->label('Jalur Submit')
+                    ->state(fn (PerpustakaanLiterasiResponse $record): string => $record->submission_delivery_code ?: 'LEGACY')
+                    ->description(fn (PerpustakaanLiterasiResponse $record): string => $record->submissionDeliveryDescription())
+                    ->badge()
+                    ->color(fn (PerpustakaanLiterasiResponse $record): string => $record->submissionDeliveryColor()),
                 Tables\Columns\TextColumn::make('answers_count')
                     ->label('Jawaban')
                     ->badge()
@@ -117,6 +123,15 @@ class ResponsesRelationManager extends RelationManager
                 Tables\Filters\Filter::make('submitted_today')
                     ->label('Dikirim Hari Ini')
                     ->query(fn (Builder $query): Builder => $query->whereDate('submitted_at', now()->toDateString())),
+                Tables\Filters\SelectFilter::make('submission_delivery_code')
+                    ->label('Jalur Submit')
+                    ->options([
+                        PerpustakaanLiterasiResponse::SUBMISSION_DELIVERY_DIRECT => 'OK-LANGSUNG - submit langsung',
+                        PerpustakaanLiterasiResponse::SUBMISSION_DELIVERY_QUEUED => 'Q-ANTRE - sempat mengantre',
+                        PerpustakaanLiterasiResponse::SUBMISSION_DELIVERY_RETRY_429 => 'R-429 - pulih setelah 429',
+                        PerpustakaanLiterasiResponse::SUBMISSION_DELIVERY_RETRY_503 => 'R-503 - pulih setelah 503',
+                        PerpustakaanLiterasiResponse::SUBMISSION_DELIVERY_RETRY_OTHER => 'R-RETRY - gangguan lain',
+                    ]),
                 Tables\Filters\TernaryFilter::make('grading_complete')
                     ->label('Status Penilaian')
                     ->trueLabel('Sudah dinilai')

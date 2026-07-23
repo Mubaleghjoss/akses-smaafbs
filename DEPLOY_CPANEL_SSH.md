@@ -310,7 +310,7 @@ Script itu akan menjalankan:
 - pull kode terbaru dari GitHub,
 - install/update Composer dependency,
 - install/build asset frontend,
-- menyalin `public/build` ke document root publik jika document root memakai `/home/CPANEL_USER/public_html/web/app`,
+- menyalin `public/build` dan `public/css/filament-admin-responsive.css` ke document root publik jika document root memakai `/home/CPANEL_USER/public_html/web/app`,
 - migrate database,
 - refresh cache Laravel.
 

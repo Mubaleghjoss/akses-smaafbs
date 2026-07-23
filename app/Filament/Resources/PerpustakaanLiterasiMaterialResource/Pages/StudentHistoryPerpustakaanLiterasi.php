@@ -175,6 +175,14 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
                     ->dateTime('d/m/Y H:i')
                     ->sortable()
                     ->visibleFrom('md'),
+                Tables\Columns\TextColumn::make('submission_delivery_code')
+                    ->label('Jalur Submit')
+                    ->state(fn (PerpustakaanLiterasiResponse $record): string => $record->submission_delivery_code ?: 'LEGACY')
+                    ->description(fn (PerpustakaanLiterasiResponse $record): string => $record->submissionDeliveryDescription())
+                    ->badge()
+                    ->color(fn (PerpustakaanLiterasiResponse $record): string => $record->submissionDeliveryColor())
+                    ->visibleFrom('md')
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('grading_summary')
                     ->label('Nilai')
                     ->state(fn (PerpustakaanLiterasiResponse $record): string => number_format((int) ($record->correct_answers_count ?? 0), 0, ',', '.')

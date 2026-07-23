@@ -17,10 +17,12 @@ use App\Models\PerpustakaanLiterasiResponse;
 use App\Models\PerpustakaanLiterasiSimilarityMatch;
 use App\Models\PerpustakaanLiterasiSubmissionQueueState;
 use App\Models\PerpustakaanLiterasiSubmissionTicket;
+use App\Models\Pengaturan;
 use App\Models\User;
 use App\Support\Admin\AdminModuleAccess;
 use App\Support\Perpustakaan\LiteracySubmissionQueue;
 use App\Support\Perpustakaan\LiterasiAnalytics;
+use App\Support\SiteSettings\SiteSettingKeys;
 use Filament\Facades\Filament;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -56,6 +58,8 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->runLiteracyInstructionsMigration();
         $this->runLiteracyStudentVerificationSettingMigration();
         $this->runLiteracySubmissionQueueMigration();
+        $this->runLiteracySubmissionDeliveryMigration();
+        $this->bootstrapPengaturanTable();
         $this->bootstrapLibraryHubTables();
     }
 
@@ -166,7 +170,25 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->get(route('library.literacy.show', $material->slug))
             ->assertOk()
             ->assertSee('/storage/literasi/materials/legacy-material.png', false)
+            ->assertSee('<meta property="og:title" content="Materi Gambar Legacy">', false)
+            ->assertSee('<meta property="og:image" content="'.asset('storage/literasi/materials/legacy-material.png').'">', false)
             ->assertSee('/storage/literasi/questions/legacy-question.png', false);
+    }
+
+    public function test_public_literacy_material_without_image_uses_school_logo_for_social_thumbnail(): void
+    {
+        Pengaturan::query()->updateOrCreate(
+            ['nama_pengaturan' => SiteSettingKeys::LOGO_PATH],
+            ['nilai_pengaturan' => 'site-branding/logo/logo-sma-afbs.png'],
+        );
+
+        $material = $this->createMaterial('Materi Tanpa Gambar');
+
+        $this->get(route('library.literacy.show', $material->slug))
+            ->assertOk()
+            ->assertSee('<meta property="og:title" content="Materi Tanpa Gambar">', false)
+            ->assertSee('<meta property="og:image" content="/storage/site-branding/logo/logo-sma-afbs.png">', false)
+            ->assertSee('<meta name="twitter:image" content="/storage/site-branding/logo/logo-sma-afbs.png">', false);
     }
 
     public function test_public_literacy_reading_content_renders_rich_text_and_inline_images(): void
@@ -222,6 +244,8 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('data-literacy-queue-panel', false)
             ->assertSee('Menyiapkan jalur antrean')
             ->assertSee('data-literacy-ticket-endpoint', false)
+            ->assertSee('data-literacy-queue-waited', false)
+            ->assertSee('data-literacy-retry-statuses', false)
             ->assertSee('data-literacy-mass-mode="1"', false)
             ->assertSee('literacy.submission.draft.v2:', false)
             ->assertSee('Server sedang ramai - tidak perlu menekan Kirim lagi');
@@ -243,6 +267,7 @@ class LibraryLiteracyProgramTest extends TestCase
             ->firstOrFail();
 
         $this->assertNotNull($response->edit_code);
+        $this->assertSame(PerpustakaanLiterasiResponse::SUBMISSION_DELIVERY_DIRECT, $response->submission_delivery_code);
         $this->assertDatabaseHas('perpustakaan_literasi_answers', [
             'response_id' => $response->getKey(),
             'question_id' => $question->getKey(),
@@ -477,6 +502,8 @@ class LibraryLiteracyProgramTest extends TestCase
             'submission_request_id' => $requestId,
         ])->assertCreated()->json('ticket');
         $payload['submission_ticket'] = $ticket;
+        $payload['submission_queue_waited'] = '1';
+        $payload['submission_retry_statuses'] = '429,503';
 
         $this->postJson(route('library.literacy.store', $material->slug), $payload)
             ->assertOk()
@@ -487,6 +514,13 @@ class LibraryLiteracyProgramTest extends TestCase
             ->where('material_id', $material->getKey())
             ->where('data_siswa_id', $student->getKey())
             ->count());
+        $response = PerpustakaanLiterasiResponse::query()
+            ->where('material_id', $material->getKey())
+            ->where('data_siswa_id', $student->getKey())
+            ->firstOrFail();
+        $this->assertSame(PerpustakaanLiterasiResponse::SUBMISSION_DELIVERY_RETRY_503, $response->submission_delivery_code);
+        $this->assertGreaterThanOrEqual(1, $response->submission_queue_wait_seconds);
+        $this->assertSame(['429', '503'], $response->submission_retry_statuses);
     }
 
     public function test_completed_submission_ticket_is_idempotent_for_the_same_browser(): void
@@ -2065,6 +2099,34 @@ class LibraryLiteracyProgramTest extends TestCase
             $migration = require database_path('migrations/2026_07_22_090000_add_activity_to_literacy_submission_queue_states.php');
             $migration->up();
         }
+    }
+
+    protected function runLiteracySubmissionDeliveryMigration(): void
+    {
+        if (Schema::hasTable('perpustakaan_literasi_responses')
+            && Schema::hasColumn('perpustakaan_literasi_responses', 'submission_delivery_code')
+            && Schema::hasColumn('perpustakaan_literasi_responses', 'submission_queue_wait_seconds')
+            && Schema::hasColumn('perpustakaan_literasi_responses', 'submission_retry_statuses')) {
+            return;
+        }
+
+        $migration = require database_path('migrations/2026_07_23_193000_add_submission_delivery_status_to_literacy_responses.php');
+        $migration->up();
+    }
+
+    protected function bootstrapPengaturanTable(): void
+    {
+        if (Schema::hasTable('pengaturan')) {
+            return;
+        }
+
+        Schema::create('pengaturan', function (Blueprint $table): void {
+            $table->id();
+            $table->string('nama_pengaturan')->unique();
+            $table->text('nilai_pengaturan')->nullable();
+        });
+
+        Pengaturan::flushRuntimeSchemaCache();
     }
 
     protected function literacyQueueRequest(string $sessionId): HttpRequest

@@ -74,6 +74,8 @@
                 @csrf
                 <input type="hidden" name="submission_request_id" value="{{ old('submission_request_id', (string) \Illuminate\Support\Str::uuid()) }}" data-literacy-request-id>
                 <input type="hidden" name="submission_ticket" value="{{ old('submission_ticket') }}" data-literacy-ticket>
+                <input type="hidden" name="submission_queue_waited" value="{{ old('submission_queue_waited', '0') }}" data-literacy-queue-waited>
+                <input type="hidden" name="submission_retry_statuses" value="{{ old('submission_retry_statuses') }}" data-literacy-retry-statuses>
                 <input type="hidden" name="integrity[tab_switch_count]" value="0" data-integrity-field="tab_switch_count">
                 <input type="hidden" name="integrity[app_hidden_count]" value="0" data-integrity-field="app_hidden_count">
                 <input type="hidden" name="integrity[page_leave_attempt_count]" value="0" data-integrity-field="page_leave_attempt_count">

@@ -31,6 +31,12 @@ if [ -d "${PUBLIC_WEB_ROOT}" ] && [ "${PUBLIC_WEB_ROOT}" != "$(pwd)/public" ]; t
     echo "==> Sinkron asset frontend ke document root (${PUBLIC_WEB_ROOT})"
     mkdir -p "${PUBLIC_WEB_ROOT}/build"
     cp -a public/build/. "${PUBLIC_WEB_ROOT}/build/"
+
+    # CSS ini dimuat langsung oleh AdminPanelProvider dan tidak masuk bundel Vite.
+    # Document root produksi terpisah dari public/ repo, jadi file harus ikut disalin.
+    mkdir -p "${PUBLIC_WEB_ROOT}/css"
+    cp public/css/filament-admin-responsive.css "${PUBLIC_WEB_ROOT}/css/filament-admin-responsive.css"
+
     rm -f "${PUBLIC_WEB_ROOT}/hot"
 fi
 
