@@ -33,6 +33,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
@@ -152,6 +153,9 @@ class LibraryLiteracyProgramTest extends TestCase
 
     public function test_public_literacy_images_normalize_legacy_filename_only_paths(): void
     {
+        Storage::fake('public');
+        Storage::disk('public')->put('literasi/materials/legacy-material.png', $this->testPng(900, 600));
+
         $this->createStudent('Codex Literasi Siswa Gambar', 'X IPA');
         $material = $this->createMaterial('Materi Gambar Legacy', [
             'image_path' => 'legacy-material.png',
@@ -167,28 +171,54 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertOk()
             ->assertSee('/storage/literasi/materials/legacy-material.png', false);
 
+        $thumbnailUrl = route('library.literacy.social-thumbnail', [
+            'slug' => $material->slug,
+            'v' => $material->updated_at?->timestamp,
+        ]);
+
         $this->get(route('library.literacy.show', $material->slug))
             ->assertOk()
             ->assertSee('/storage/literasi/materials/legacy-material.png', false)
             ->assertSee('<meta property="og:title" content="Materi Gambar Legacy">', false)
-            ->assertSee('<meta property="og:image" content="'.asset('storage/literasi/materials/legacy-material.png').'">', false)
+            ->assertSee('<meta property="og:image" content="'.$thumbnailUrl.'">', false)
+            ->assertSee('<meta property="og:image:type" content="image/jpeg">', false)
+            ->assertSee('<meta property="og:image:width" content="1200">', false)
+            ->assertSee('<meta property="og:image:height" content="630">', false)
             ->assertSee('/storage/literasi/questions/legacy-question.png', false);
+
+        $thumbnail = $this->get($thumbnailUrl)
+            ->assertOk()
+            ->assertHeader('content-type', 'image/jpeg');
+        $size = getimagesize($thumbnail->baseResponse->getFile()->getPathname());
+        $this->assertSame(1200, $size[0] ?? null);
+        $this->assertSame(630, $size[1] ?? null);
     }
 
     public function test_public_literacy_material_without_image_uses_school_logo_for_social_thumbnail(): void
     {
+        Storage::fake('public');
+        Storage::disk('public')->put('site-branding/logo/logo-sma-afbs.png', $this->testPng(400, 400));
+
         Pengaturan::query()->updateOrCreate(
             ['nama_pengaturan' => SiteSettingKeys::LOGO_PATH],
             ['nilai_pengaturan' => 'site-branding/logo/logo-sma-afbs.png'],
         );
 
         $material = $this->createMaterial('Materi Tanpa Gambar');
+        $thumbnailUrl = route('library.literacy.social-thumbnail', [
+            'slug' => $material->slug,
+            'v' => $material->updated_at?->timestamp,
+        ]);
 
         $this->get(route('library.literacy.show', $material->slug))
             ->assertOk()
             ->assertSee('<meta property="og:title" content="Materi Tanpa Gambar">', false)
-            ->assertSee('<meta property="og:image" content="/storage/site-branding/logo/logo-sma-afbs.png">', false)
-            ->assertSee('<meta name="twitter:image" content="/storage/site-branding/logo/logo-sma-afbs.png">', false);
+            ->assertSee('<meta property="og:image" content="'.$thumbnailUrl.'">', false)
+            ->assertSee('<meta name="twitter:image" content="'.$thumbnailUrl.'">', false);
+
+        $this->get($thumbnailUrl)
+            ->assertOk()
+            ->assertHeader('content-type', 'image/jpeg');
     }
 
     public function test_public_literacy_reading_content_renders_rich_text_and_inline_images(): void
@@ -552,6 +582,44 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertSame($ticket->getKey(), $retried->getKey());
         $this->assertSame('completed', $retried->status);
         $this->assertSame(1, PerpustakaanLiterasiSubmissionTicket::query()->count());
+    }
+
+    public function test_completed_queue_tickets_backfill_existing_response_delivery_status(): void
+    {
+        $student = $this->createStudent('Codex Backfill Submit', 'XI Backfill');
+        $material = $this->createMaterial('Materi Backfill Submit');
+        $response = PerpustakaanLiterasiResponse::query()->create([
+            'material_id' => $material->getKey(),
+            'data_siswa_id' => $student->getKey(),
+            'student_name_snapshot' => $student->nama,
+            'student_class_snapshot' => $student->rombel_saat_ini,
+            'submitted_at' => now(),
+        ]);
+
+        PerpustakaanLiterasiSubmissionTicket::query()->create([
+            'public_token' => Str::random(64),
+            'scope' => LiteracySubmissionQueue::SCOPE,
+            'owner_hash' => hash('sha256', 'backfill-owner'),
+            'operation_key' => 'create:'.$material->getKey().':'.$student->getKey().':'.Str::uuid(),
+            'operation' => 'create',
+            'material_id' => $material->getKey(),
+            'response_id' => null,
+            'data_siswa_id' => $student->getKey(),
+            'status' => PerpustakaanLiterasiSubmissionTicket::STATUS_COMPLETED,
+            'requested_at' => now()->subSeconds(8),
+            'admitted_at' => now(),
+            'started_at' => now(),
+            'completed_at' => now(),
+            'expires_at' => now()->addDay(),
+            'result_response_id' => $response->getKey(),
+        ]);
+
+        $migration = require database_path('migrations/2026_07_23_214500_backfill_literacy_submission_delivery_codes.php');
+        $migration->up();
+
+        $response->refresh();
+        $this->assertSame(PerpustakaanLiterasiResponse::SUBMISSION_DELIVERY_QUEUED, $response->submission_delivery_code);
+        $this->assertGreaterThanOrEqual(8, $response->submission_queue_wait_seconds);
     }
 
     public function test_submit_only_queues_similarity_analysis_instead_of_running_it_in_request(): void
@@ -1114,6 +1182,9 @@ class LibraryLiteracyProgramTest extends TestCase
             'tab_switch_count' => 2,
             'app_hidden_count' => 1,
             'page_leave_attempt_count' => 3,
+            'submission_delivery_code' => PerpustakaanLiterasiResponse::SUBMISSION_DELIVERY_RETRY_503,
+            'submission_queue_wait_seconds' => 6,
+            'submission_retry_statuses' => ['503'],
         ])->save();
 
         $detailHtml = view(
@@ -1147,7 +1218,10 @@ class LibraryLiteracyProgramTest extends TestCase
             ->test(ResponsesRelationManager::class, [
                 'ownerRecord' => $material,
                 'pageClass' => ViewPerpustakaanLiterasiMaterial::class,
-            ]);
+            ])
+            ->assertSee('Status Submit')
+            ->assertSee(PerpustakaanLiterasiResponse::SUBMISSION_DELIVERY_RETRY_503)
+            ->assertSee('Antre 6 detik | Retry 503');
 
         $schemaMethod = new \ReflectionMethod(ResponsesRelationManager::class, 'gradingFormSchema');
         $schemaMethod->setAccessible(true);
@@ -2112,6 +2186,20 @@ class LibraryLiteracyProgramTest extends TestCase
 
         $migration = require database_path('migrations/2026_07_23_193000_add_submission_delivery_status_to_literacy_responses.php');
         $migration->up();
+    }
+
+    protected function testPng(int $width, int $height): string
+    {
+        $image = imagecreatetruecolor($width, $height);
+        $background = imagecolorallocate($image, 22, 163, 74);
+        imagefill($image, 0, 0, $background);
+
+        ob_start();
+        imagepng($image);
+        $contents = (string) ob_get_clean();
+        imagedestroy($image);
+
+        return $contents;
     }
 
     protected function bootstrapPengaturanTable(): void

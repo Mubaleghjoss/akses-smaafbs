@@ -151,6 +151,11 @@ class PerpustakaanLiterasiMaterial extends Model implements HasRichContent
         return route('library.literacy.show', $this->slug);
     }
 
+    public function socialThumbnailUrl(): string
+    {
+        return app(\App\Support\Perpustakaan\LiteracySocialThumbnail::class)->url($this);
+    }
+
     /**
      * @return array<string, string>
      */

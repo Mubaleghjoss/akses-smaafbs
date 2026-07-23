@@ -10,6 +10,7 @@ use App\Models\PerpustakaanLiterasiMaterial;
 use App\Models\PerpustakaanLiterasiQuestion;
 use App\Models\PerpustakaanLiterasiResponse;
 use App\Models\PerpustakaanLiterasiSubmissionTicket;
+use App\Support\Perpustakaan\LiteracySocialThumbnail;
 use App\Support\Perpustakaan\LiteracySubmissionQueue;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -20,6 +21,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class PerpustakaanLiteracyProgramController extends Controller
 {
@@ -57,13 +59,25 @@ class PerpustakaanLiteracyProgramController extends Controller
                 'canonical_url' => $material->publicUrl(),
                 'og_title' => $material->title,
                 'og_description' => $description,
-                'og_image' => $material->imageUrl(),
+                'og_image' => $material->socialThumbnailUrl(),
+                'og_image_secure_url' => $material->socialThumbnailUrl(),
+                'og_image_type' => 'image/jpeg',
+                'og_image_width' => LiteracySocialThumbnail::WIDTH,
+                'og_image_height' => LiteracySocialThumbnail::HEIGHT,
+                'og_image_alt' => 'Thumbnail materi '.$material->title,
                 'og_url' => $material->publicUrl(),
                 'twitter_title' => $material->title,
                 'twitter_description' => $description,
-                'twitter_image' => $material->imageUrl(),
+                'twitter_image' => $material->socialThumbnailUrl(),
             ],
         ]);
+    }
+
+    public function socialThumbnail(
+        string $slug,
+        LiteracySocialThumbnail $thumbnail,
+    ): BinaryFileResponse|RedirectResponse {
+        return $thumbnail->response($this->resolvePublicMaterial($slug));
     }
 
     public function store(Request $request, string $slug, LiteracySubmissionQueue $submissionQueue): RedirectResponse|JsonResponse

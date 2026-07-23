@@ -419,6 +419,8 @@ Route::post('/perpustakaan/program-literasi-numerasi/edit/{code}/integrity', [Pe
 Route::get('/perpustakaan/program-literasi-numerasi/edit/{code}', [PerpustakaanLiteracyProgramController::class, 'edit'])
     ->where('code', '[A-Za-z0-9-]+')
     ->name('library.literacy.edit');
+Route::get('/perpustakaan/program-literasi-numerasi/{slug}/social-thumbnail.jpg', [PerpustakaanLiteracyProgramController::class, 'socialThumbnail'])
+    ->name('library.literacy.social-thumbnail');
 Route::post('/perpustakaan/program-literasi-numerasi/edit/{code}', [PerpustakaanLiteracyProgramController::class, 'update'])
     ->middleware('throttle:literacy_submit')
     ->where('code', '[A-Za-z0-9-]+')

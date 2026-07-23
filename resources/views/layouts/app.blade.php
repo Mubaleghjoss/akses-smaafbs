@@ -34,6 +34,19 @@
     <meta property="og:description" content="{{ $meta['og_description'] }}">
     <meta property="og:url" content="{{ $meta['og_url'] }}">
     <meta property="og:image" content="{{ $meta['og_image'] }}">
+    @if(filled($meta['og_image_secure_url']))
+        <meta property="og:image:secure_url" content="{{ $meta['og_image_secure_url'] }}">
+    @endif
+    @if(filled($meta['og_image_type']))
+        <meta property="og:image:type" content="{{ $meta['og_image_type'] }}">
+    @endif
+    @if(filled($meta['og_image_width']) && filled($meta['og_image_height']))
+        <meta property="og:image:width" content="{{ $meta['og_image_width'] }}">
+        <meta property="og:image:height" content="{{ $meta['og_image_height'] }}">
+    @endif
+    @if(filled($meta['og_image_alt']))
+        <meta property="og:image:alt" content="{{ $meta['og_image_alt'] }}">
+    @endif
 
     <meta name="twitter:card" content="{{ $meta['twitter_card'] }}">
     <meta name="twitter:title" content="{{ $meta['twitter_title'] }}">

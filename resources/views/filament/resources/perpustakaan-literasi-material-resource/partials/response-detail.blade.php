@@ -67,7 +67,7 @@
                 <dd>{{ $response->submitted_at?->format('d/m/Y H:i') ?? '-' }}</dd>
             </div>
             <div>
-                <dt>Jalur Submit</dt>
+                <dt>Status Submit</dt>
                 <dd>{{ $response->submission_delivery_code ?: 'LEGACY' }} - {{ $response->submissionDeliveryDescription() }}</dd>
             </div>
             <div>

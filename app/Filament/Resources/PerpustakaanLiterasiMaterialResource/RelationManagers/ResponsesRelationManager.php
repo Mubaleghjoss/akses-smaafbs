@@ -48,6 +48,7 @@ class ResponsesRelationManager extends RelationManager
                     ->description(fn (PerpustakaanLiterasiResponse $record): string => collect([
                         $record->student_class_snapshot,
                         'Kode: '.$record->shortEditCode(),
+                        'Submit: '.($record->submission_delivery_code ?: 'LEGACY'),
                     ])->filter()->implode(' | '))
                     ->wrap(),
                 Tables\Columns\TextColumn::make('student_class_snapshot')
@@ -56,7 +57,7 @@ class ResponsesRelationManager extends RelationManager
                     ->placeholder('-')
                     ->visibleFrom('md'),
                 Tables\Columns\TextColumn::make('submission_delivery_code')
-                    ->label('Jalur Submit')
+                    ->label('Status Submit')
                     ->state(fn (PerpustakaanLiterasiResponse $record): string => $record->submission_delivery_code ?: 'LEGACY')
                     ->description(fn (PerpustakaanLiterasiResponse $record): string => $record->submissionDeliveryDescription())
                     ->badge()
@@ -124,7 +125,7 @@ class ResponsesRelationManager extends RelationManager
                     ->label('Dikirim Hari Ini')
                     ->query(fn (Builder $query): Builder => $query->whereDate('submitted_at', now()->toDateString())),
                 Tables\Filters\SelectFilter::make('submission_delivery_code')
-                    ->label('Jalur Submit')
+                    ->label('Status Submit')
                     ->options([
                         PerpustakaanLiterasiResponse::SUBMISSION_DELIVERY_DIRECT => 'OK-LANGSUNG - submit langsung',
                         PerpustakaanLiterasiResponse::SUBMISSION_DELIVERY_QUEUED => 'Q-ANTRE - sempat mengantre',

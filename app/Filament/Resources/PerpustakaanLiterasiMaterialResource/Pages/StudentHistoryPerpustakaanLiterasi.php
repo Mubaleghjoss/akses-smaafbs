@@ -176,7 +176,7 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
                     ->sortable()
                     ->visibleFrom('md'),
                 Tables\Columns\TextColumn::make('submission_delivery_code')
-                    ->label('Jalur Submit')
+                    ->label('Status Submit')
                     ->state(fn (PerpustakaanLiterasiResponse $record): string => $record->submission_delivery_code ?: 'LEGACY')
                     ->description(fn (PerpustakaanLiterasiResponse $record): string => $record->submissionDeliveryDescription())
                     ->badge()
