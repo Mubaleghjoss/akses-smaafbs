@@ -220,7 +220,14 @@ Route::get('/manifest.webmanifest', function () {
         'Content-Type' => 'application/manifest+json',
         'Cache-Control' => 'public, max-age=86400',
     ]);
-})->name('manifest.webmanifest');
+})->withoutMiddleware([
+    EncryptCookies::class,
+    AddQueuedCookiesToResponse::class,
+    StartSession::class,
+    ShareErrorsFromSession::class,
+    AdminAwareVerifyCsrfToken::class,
+    ValidateCsrfToken::class,
+])->name('manifest.webmanifest');
 
 Route::get('/service-worker.js', function () {
     $script = <<<'JS'
@@ -308,7 +315,14 @@ JS;
         ->header('Content-Type', 'application/javascript; charset=UTF-8')
         ->header('Service-Worker-Allowed', '/')
         ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-})->name('service-worker');
+})->withoutMiddleware([
+    EncryptCookies::class,
+    AddQueuedCookiesToResponse::class,
+    StartSession::class,
+    ShareErrorsFromSession::class,
+    AdminAwareVerifyCsrfToken::class,
+    ValidateCsrfToken::class,
+])->name('service-worker');
 
 Route::get('/', HomeController::class)->name('home');
 Route::get('/student-search', [HomeController::class, 'studentSearch'])

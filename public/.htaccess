@@ -35,10 +35,12 @@
 
     <IfModule mod_setenvif.c>
         SetEnvIf Request_URI "^/build/" akses_build_asset=1
-        SetEnvIf Request_URI "/(?:[^/]+-)?(?:favicon|pwa-192|pwa-512)\.png$" akses_pwa_icon=1
     </IfModule>
     Header set Cache-Control "public, max-age=31536000, immutable" env=akses_build_asset
-    Header set Cache-Control "public, max-age=86400" env=akses_pwa_icon
+
+    <FilesMatch "(?:favicon|pwa-192|pwa-512)\.png$">
+        Header set Cache-Control "public, max-age=86400"
+    </FilesMatch>
 
     <Files "service-worker.js">
         Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"

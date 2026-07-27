@@ -13,6 +13,7 @@ class PwaServiceWorkerScopeTest extends TestCase
         $response->assertOk();
         $this->assertStringContainsString('application/javascript', (string) $response->headers->get('content-type'));
         $this->assertSame('/', $response->headers->get('Service-Worker-Allowed'));
+        $this->assertFalse($response->headers->has('Set-Cookie'));
     }
 
     public function test_service_worker_explicitly_bypasses_admin_auth_livewire_and_upload_paths(): void
