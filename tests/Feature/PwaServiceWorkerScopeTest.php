@@ -19,19 +19,34 @@ class PwaServiceWorkerScopeTest extends TestCase
     {
         $this->get('/service-worker.js')
             ->assertOk()
+            ->assertSee("const CACHE_NAME = 'akses-public-shell-v6'", false)
             ->assertSee("request.method !== 'GET'", false)
             ->assertSee("'/admin'", false)
             ->assertSee("'/livewire'", false)
             ->assertSee("'/storage'", false)
+            ->assertSee("'/build'", false)
             ->assertSee("'/login'", false)
             ->assertSee("'/logout'", false)
-            ->assertSee('shouldBypassCache', false)
-            ->assertSee("fetch(request, { cache: 'no-store' })", false)
-            ->assertSee('networkErrorResponse', false)
+            ->assertSee('shouldPassThrough', false)
+            ->assertSee('if (shouldPassThrough(request, url))', false)
+            ->assertSee('return;', false)
+            ->assertSee('offlineResponse', false)
             ->assertSee("status: 503", false)
             ->assertSee("request.mode === 'navigate'", false)
-            ->assertDontSee("cached || caches.match('/')", false)
-            ->assertSee('event.respondWith(fetchNetworkOnly(request));', false);
+            ->assertSee("fetch(request, { cache: 'no-store' }).catch(offlineResponse)", false)
+            ->assertDontSee("cache.addAll(['/'])", false)
+            ->assertDontSee('cache.put(request', false);
+    }
+
+    public function test_manifest_can_be_cached_for_one_day(): void
+    {
+        $response = $this->get('/manifest.webmanifest');
+
+        $response->assertOk();
+        $this->assertStringContainsString(
+            'max-age=86400',
+            (string) $response->headers->get('Cache-Control'),
+        );
     }
 
     public function test_admin_responses_disable_browser_cache(): void

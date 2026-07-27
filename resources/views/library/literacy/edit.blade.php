@@ -89,7 +89,15 @@
                         {{ $question->prompt }}
                     </label>
                     @if($question->imageUrl())
-                        <img src="{{ $question->imageUrl() }}" alt="" class="mt-3 max-h-80 w-full rounded-2xl border border-slate-200 object-contain">
+                        <img
+                            src="{{ $question->imageUrl() }}"
+                            alt=""
+                            class="mt-3 max-h-80 w-full rounded-2xl border border-slate-200 object-contain"
+                            width="1280"
+                            height="1280"
+                            loading="lazy"
+                            decoding="async"
+                        >
                     @endif
                     @if($question->google_drive_url)
                         <a class="chip mt-3 inline-flex" href="{{ $question->google_drive_url }}" target="_blank" rel="noopener">Buka Lampiran</a>
@@ -157,6 +165,8 @@
 @endsection
 
 @push('scripts')
-    @include('library.literacy._mathjax')
+    @if($hasLatex ?? false)
+        @include('library.literacy._mathjax')
+    @endif
     @include('library.literacy._answer_tools')
 @endpush

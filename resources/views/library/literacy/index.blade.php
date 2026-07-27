@@ -35,10 +35,22 @@
         @forelse($materials as $material)
             @php
                 $readingPreview = $material->readingContentPreview();
+                $materialImageUrl = $material->imageUrl();
+                $materialThumbnailUrl = $material->imageUrl('thumbnail');
             @endphp
             <article class="card flex h-full flex-col overflow-hidden">
-                @if($material->imageUrl())
-                    <img src="{{ $material->imageUrl() }}" alt="" class="h-44 w-full object-cover">
+                @if($materialImageUrl)
+                    <img
+                        src="{{ $materialThumbnailUrl }}"
+                        srcset="{{ $materialThumbnailUrl }} 640w, {{ $materialImageUrl }} 1280w"
+                        sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
+                        alt=""
+                        class="h-44 w-full object-cover"
+                        width="640"
+                        height="360"
+                        loading="lazy"
+                        decoding="async"
+                    >
                 @endif
                 <div class="flex flex-1 flex-col p-5">
                     <div class="flex flex-wrap items-center gap-2">
@@ -66,7 +78,3 @@
 
     <div class="mt-6">{{ $materials->links() }}</div>
 @endsection
-
-@push('scripts')
-    @include('library.literacy._mathjax')
-@endpush

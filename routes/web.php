@@ -187,10 +187,13 @@ Route::get('/manifest.webmanifest', function () {
     /** @var SiteSettingsAccessor $settings */
     $settings = app(SiteSettingsAccessor::class);
     $siteSettings = $settings->all();
+    $imageOptimizer = app(\App\Support\Media\PublicImageOptimizer::class);
 
     $iconUrl = $siteSettings['favicon_path']
         ?? $siteSettings['logo_path']
         ?? asset('favicon.ico');
+    $icon192Url = $imageOptimizer->pwaIconUrl($iconUrl, 192) ?? $iconUrl;
+    $icon512Url = $imageOptimizer->pwaIconUrl($iconUrl, 512) ?? $iconUrl;
 
     return response()->json([
         'name' => $siteSettings['pwa_app_name'],
@@ -203,26 +206,30 @@ Route::get('/manifest.webmanifest', function () {
         'theme_color' => $siteSettings['theme_color'],
         'icons' => [
             [
-                'src' => $iconUrl,
+                'src' => $icon192Url,
                 'sizes' => '192x192',
                 'type' => 'image/png',
             ],
             [
-                'src' => $iconUrl,
+                'src' => $icon512Url,
                 'sizes' => '512x512',
                 'type' => 'image/png',
             ],
         ],
-    ])->header('Content-Type', 'application/manifest+json');
+    ])->withHeaders([
+        'Content-Type' => 'application/manifest+json',
+        'Cache-Control' => 'public, max-age=86400',
+    ]);
 })->name('manifest.webmanifest');
 
 Route::get('/service-worker.js', function () {
     $script = <<<'JS'
-const CACHE_NAME = 'akses-public-shell-v5';
-const NETWORK_ONLY_PREFIXES = [
+const CACHE_NAME = 'akses-public-shell-v6';
+const PASSTHROUGH_PREFIXES = [
     '/admin',
     '/livewire',
     '/storage',
+    '/build',
     '/login',
     '/logout',
     '/register',
@@ -233,9 +240,7 @@ const NETWORK_ONLY_PREFIXES = [
     '/tagihan',
 ];
 
-const AUTH_POST_PATHS = ['/login', '/logout', '/register', '/password', '/forgot-password', '/reset-password'];
-
-const shouldBypassCache = (request, url) => {
+const shouldPassThrough = (request, url) => {
     if (request.method !== 'GET') {
         return true;
     }
@@ -244,57 +249,35 @@ const shouldBypassCache = (request, url) => {
         return true;
     }
 
-    if (NETWORK_ONLY_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) {
-        return true;
-    }
-
-    if (AUTH_POST_PATHS.some((prefix) => url.pathname.startsWith(prefix))) {
+    if (PASSTHROUGH_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) {
         return true;
     }
 
     return false;
 };
 
-const networkErrorResponse = (request) => {
-    const headers = {
-        'Cache-Control': 'no-store',
-        'Content-Type': request.mode === 'navigate' ? 'text/html; charset=UTF-8' : 'text/plain; charset=UTF-8',
-    };
-
-    if (request.mode === 'navigate') {
-        return new Response(
-            '<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Koneksi gagal</title></head><body><main style="font-family:system-ui,sans-serif;max-width:36rem;margin:3rem auto;padding:0 1rem;line-height:1.6"><h1 style="font-size:1.25rem">Koneksi ke server gagal</h1><p>Halaman ini membutuhkan koneksi langsung ke server. Periksa server lokal atau koneksi jaringan, lalu muat ulang halaman.</p></main></body></html>',
-            { status: 503, statusText: 'Service Unavailable', headers },
-        );
-    }
-
-    return new Response('Network request failed.', {
+const offlineResponse = () => new Response(
+    '<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#16a34a"><title>Koneksi terputus</title></head><body style="margin:0;background:#f8fafc;color:#0f172a"><main style="font-family:system-ui,sans-serif;max-width:36rem;margin:12vh auto;padding:1.25rem;line-height:1.6"><section style="border:1px solid #cbd5e1;border-radius:1rem;background:#fff;padding:1.25rem"><h1 style="margin:0;font-size:1.25rem">Koneksi ke server terputus</h1><p style="margin:.75rem 0 0">Jawaban tidak dikirim dari halaman offline. Periksa Wi-Fi atau jaringan seluler, lalu muat ulang halaman.</p><button type="button" onclick="location.reload()" style="margin-top:1rem;border:0;border-radius:.75rem;background:#16a34a;color:#fff;padding:.7rem 1rem;font-weight:700">Muat ulang</button></section></main></body></html>',
+    {
         status: 503,
         statusText: 'Service Unavailable',
-        headers,
-    });
-};
-
-const fetchNetworkOnly = (request) => {
-    if (request.method === 'GET') {
-        return fetch(request, { cache: 'no-store' }).catch(() => networkErrorResponse(request));
-    }
-
-    return fetch(request).catch(() => networkErrorResponse(request));
-};
+        headers: {
+        'Cache-Control': 'no-store',
+            'Content-Type': 'text/html; charset=UTF-8',
+        },
+    },
+);
 
 self.addEventListener('install', (event) => {
     self.skipWaiting();
-
-    event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => cache.addAll(['/']))
-    );
 });
 
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((keys) => Promise.all(
-            keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+            keys
+                .filter((key) => key.startsWith('akses-public-shell-') && key !== CACHE_NAME)
+                .map((key) => caches.delete(key))
         )).then(() => self.clients.claim())
     );
 });
@@ -307,36 +290,17 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    if (shouldBypassCache(request, url)) {
-        event.respondWith(fetchNetworkOnly(request));
-
+    // Admin, Livewire, uploaded files, and hashed build assets use the browser's
+    // native HTTP cache. Returning here is important: no forced no-store fetch.
+    if (shouldPassThrough(request, url)) {
         return;
     }
 
-    event.respondWith(
-        fetch(request)
-            .then((response) => {
-                if (!response || response.status !== 200 || response.type !== 'basic') {
-                    return response;
-                }
-
-                const responseClone = response.clone();
-                caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
-
-                return response;
-            })
-            .catch(() => caches.match(request).then((cached) => {
-                if (cached) {
-                    return cached;
-                }
-
-                if (request.mode === 'navigate') {
-                    return caches.match('/').then((fallback) => fallback || networkErrorResponse(request));
-                }
-
-                return networkErrorResponse(request);
-            }))
-    );
+    // Dynamic HTML (including literacy forms and CSRF tokens) is never cached.
+    // Only provide a tiny offline explanation when a public navigation fails.
+    if (request.mode === 'navigate') {
+        event.respondWith(fetch(request, { cache: 'no-store' }).catch(offlineResponse));
+    }
 });
 JS;
 

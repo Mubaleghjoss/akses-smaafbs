@@ -37,6 +37,9 @@ if [ -d "${PUBLIC_WEB_ROOT}" ] && [ "${PUBLIC_WEB_ROOT}" != "$(pwd)/public" ]; t
     mkdir -p "${PUBLIC_WEB_ROOT}/css"
     cp public/css/filament-admin-responsive.css "${PUBLIC_WEB_ROOT}/css/filament-admin-responsive.css"
 
+    # Header cache aset publik harus ikut aktif pada document root produksi.
+    cp public/.htaccess "${PUBLIC_WEB_ROOT}/.htaccess"
+
     rm -f "${PUBLIC_WEB_ROOT}/hot"
 fi
 

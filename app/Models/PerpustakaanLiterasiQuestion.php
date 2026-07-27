@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Support\Media\PublicImageOptimizer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 class PerpustakaanLiterasiQuestion extends Model
 {
@@ -28,8 +31,25 @@ class PerpustakaanLiterasiQuestion extends Model
 
     protected static function booted(): void
     {
+        static::saving(function (self $question): void {
+            if (! $question->isDirty('image_path') || blank($question->image_path)) {
+                return;
+            }
+
+            try {
+                $question->image_path = app(PublicImageOptimizer::class)
+                    ->optimizeUploadedPath((string) $question->image_path, 'question');
+            } catch (RuntimeException $exception) {
+                throw ValidationException::withMessages([
+                    'image_path' => 'Gambar pertanyaan gagal dioptimalkan: '.$exception->getMessage(),
+                ]);
+            }
+        });
+
         static::deleting(function (self $question): void {
             if ($question->isForceDeleting()) {
+                app(PublicImageOptimizer::class)->removeAll($question->image_path);
+
                 return;
             }
 
@@ -69,15 +89,7 @@ class PerpustakaanLiterasiQuestion extends Model
             return null;
         }
 
-        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, '/storage/')) {
-            return $path;
-        }
-
-        if (str_starts_with($path, 'storage/')) {
-            return asset($path);
-        }
-
-        return asset('storage/'.$path);
+        return app(PublicImageOptimizer::class)->url($path);
     }
 
     public function plagiarismDetectionEnabled(): bool

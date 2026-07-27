@@ -85,7 +85,7 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('Materi Aktif Literasi')
             ->assertSee('Literacy Habituation Programme')
             ->assertSee('Tutup '.$active->closes_at->format('d/m/Y H:i'))
-            ->assertSee('tex-chtml.js', false)
+            ->assertDontSee('tex-chtml.js', false)
             ->assertSee('\(x^{2}\)', false)
             ->assertSee('\(\frac{a}{b}\)', false)
             ->assertDontSee('Materi Nonaktif')

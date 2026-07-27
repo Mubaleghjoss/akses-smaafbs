@@ -83,7 +83,7 @@
                 <a href="{{ route('home') }}" class="public-navigation-brand flex min-w-0 items-center gap-3" aria-label="Kembali ke beranda">
                     @if(filled($logoPath))
                         <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white p-1 shadow-sm sm:h-12 sm:w-12 sm:rounded-2xl">
-                            <img src="{{ $logoPath }}" alt="Logo {{ $siteName }}" class="h-full w-full object-contain">
+                            <img src="{{ $logoPath }}" alt="Logo {{ $siteName }}" width="48" height="48" decoding="async" class="h-full w-full object-contain">
                         </span>
                     @else
                         <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-sm font-semibold text-white sm:h-11 sm:w-11 sm:rounded-2xl sm:text-base">{{ $brandInitials }}</span>
@@ -145,7 +145,7 @@
             <div class="public-mobile-menu-header">
                 <div class="flex min-w-0 items-center gap-3">
                     @if(filled($logoPath))
-                        <img src="{{ $logoPath }}" alt="" width="44" height="44" class="h-11 w-11 shrink-0 rounded-xl border border-slate-200 bg-white object-contain p-1">
+                        <img src="{{ $logoPath }}" alt="" width="44" height="44" decoding="async" class="h-11 w-11 shrink-0 rounded-xl border border-slate-200 bg-white object-contain p-1">
                     @else
                         <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-sm font-semibold text-white">{{ $brandInitials }}</span>
                     @endif

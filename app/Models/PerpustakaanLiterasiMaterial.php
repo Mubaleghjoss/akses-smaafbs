@@ -2,14 +2,17 @@
 
 namespace App\Models;
 
+use App\Support\Media\PublicImageOptimizer;
 use Filament\Forms\Components\RichEditor\Models\Concerns\InteractsWithRichContent;
 use Filament\Forms\Components\RichEditor\Models\Contracts\HasRichContent;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 class PerpustakaanLiterasiMaterial extends Model implements HasRichContent
 {
@@ -43,6 +46,31 @@ class PerpustakaanLiterasiMaterial extends Model implements HasRichContent
     protected static function booted(): void
     {
         static::saving(function (self $material): void {
+            if ($material->isDirty('image_path') && filled($material->image_path)) {
+                try {
+                    $material->image_path = app(PublicImageOptimizer::class)
+                        ->optimizeUploadedPath((string) $material->image_path, 'material');
+                } catch (RuntimeException $exception) {
+                    throw ValidationException::withMessages([
+                        'image_path' => 'Gambar materi gagal dioptimalkan: '.$exception->getMessage(),
+                    ]);
+                }
+            }
+
+            if ($material->isDirty('reading_content') && filled($material->reading_content)) {
+                try {
+                    $material->reading_content = app(PublicImageOptimizer::class)
+                        ->optimizeEmbeddedPaths(
+                            (string) $material->reading_content,
+                            'literasi/materials/reading',
+                        );
+                } catch (RuntimeException $exception) {
+                    throw ValidationException::withMessages([
+                        'reading_content' => 'Gambar isi bacaan gagal dioptimalkan: '.$exception->getMessage(),
+                    ]);
+                }
+            }
+
             $category = trim((string) $material->program_category);
 
             if (! array_key_exists($category, static::programCategoryOptions())) {
@@ -68,8 +96,12 @@ class PerpustakaanLiterasiMaterial extends Model implements HasRichContent
             $material->updated_by = auth()->id() ?: $material->updated_by;
         });
 
+        static::saved(fn () => static::forgetPublicListCache());
+
         static::deleting(function (self $material): void {
             if ($material->isForceDeleting()) {
+                app(PublicImageOptimizer::class)->removeAll($material->image_path);
+
                 return;
             }
 
@@ -83,6 +115,16 @@ class PerpustakaanLiterasiMaterial extends Model implements HasRichContent
             $material->responses()->withTrashed()->get()->each->restore();
             $material->similarityMatches()->withTrashed()->get()->each->restore();
         });
+
+        static::deleted(fn () => static::forgetPublicListCache());
+        static::restored(fn () => static::forgetPublicListCache());
+    }
+
+    protected static function forgetPublicListCache(): void
+    {
+        foreach (range(1, 20) as $page) {
+            Cache::forget('literacy:public-materials:page-'.$page);
+        }
     }
 
     protected function setUpRichContent(): void
@@ -127,7 +169,7 @@ class PerpustakaanLiterasiMaterial extends Model implements HasRichContent
         return $this->responses()->exists();
     }
 
-    public function imageUrl(): ?string
+    public function imageUrl(string $variant = 'display'): ?string
     {
         $path = static::normalizeImagePath($this->image_path, 'literasi/materials');
 
@@ -135,15 +177,10 @@ class PerpustakaanLiterasiMaterial extends Model implements HasRichContent
             return null;
         }
 
-        if (Str::startsWith($path, ['http://', 'https://', '/storage/'])) {
-            return $path;
-        }
-
-        if (Str::startsWith($path, 'storage/')) {
-            return asset($path);
-        }
-
-        return asset('storage/'.$path);
+        return app(PublicImageOptimizer::class)->url(
+            $path,
+            $variant === 'thumbnail' ? 'thumbnail' : 'display',
+        );
     }
 
     public function publicUrl(): string
@@ -304,7 +341,19 @@ class PerpustakaanLiterasiMaterial extends Model implements HasRichContent
             return nl2br(e($content));
         }
 
-        return $html;
+        return preg_replace_callback('/<img\b([^>]*)>/i', static function (array $matches): string {
+            $attributes = $matches[1];
+
+            if (! preg_match('/\bloading\s*=/i', $attributes)) {
+                $attributes .= ' loading="lazy"';
+            }
+
+            if (! preg_match('/\bdecoding\s*=/i', $attributes)) {
+                $attributes .= ' decoding="async"';
+            }
+
+            return '<img'.$attributes.'>';
+        }, $html) ?? $html;
     }
 
     public function readingContentPreview(int $limit = 180): string
@@ -330,6 +379,24 @@ class PerpustakaanLiterasiMaterial extends Model implements HasRichContent
         }
 
         return Str::limit($text, $limit);
+    }
+
+    public function containsLatex(): bool
+    {
+        if (Str::contains((string) $this->reading_content, ['\\(', '\\[', '$$'])) {
+            return true;
+        }
+
+        if (! $this->relationLoaded('questions')) {
+            return false;
+        }
+
+        return $this->questions->contains(
+            fn (PerpustakaanLiterasiQuestion $question): bool => Str::contains(
+                (string) $question->prompt,
+                ['\\(', '\\[', '$$'],
+            ),
+        );
     }
 
     public static function normalizeImagePath(mixed $value, string $defaultDirectory): ?string

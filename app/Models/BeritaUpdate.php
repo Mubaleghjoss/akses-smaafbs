@@ -2,8 +2,11 @@
 
 namespace App\Models;
 
+use App\Support\Media\PublicImageOptimizer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 class BeritaUpdate extends Model
 {
@@ -27,6 +30,25 @@ class BeritaUpdate extends Model
 
     protected static function booted(): void
     {
+        static::saving(function (self $update): void {
+            if (! $update->isDirty('documentation_media')) {
+                return;
+            }
+
+            try {
+                $update->documentation_media = collect($update->documentation_media ?? [])
+                    ->map(fn ($path) => app(PublicImageOptimizer::class)
+                        ->optimizeUploadedPath((string) $path, 'content'))
+                    ->filter()
+                    ->values()
+                    ->all();
+            } catch (RuntimeException $exception) {
+                throw ValidationException::withMessages([
+                    'documentation_media' => 'Dokumentasi berita gagal dioptimalkan: '.$exception->getMessage(),
+                ]);
+            }
+        });
+
         static::saved(function (self $update): void {
             $update->berita?->syncTrackerSnapshotFromUpdates();
         });

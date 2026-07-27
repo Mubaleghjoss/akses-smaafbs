@@ -14,6 +14,7 @@ use App\Models\StrukturOrganisasi;
 use App\Models\VisiMisi;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -500,6 +501,22 @@ class HomeController extends Controller
      * @return array{0: Collection<int, StrukturOrganisasi>, 1: Collection<int, StrukturOrganisasi>, 2: Collection<int, array{year:int|null, label:string|null, count:int, nodes:Collection<int, StrukturOrganisasi>}>}
      */
     protected function loadHomepageProfileBranches(): array
+    {
+        if (! app()->environment('testing')) {
+            return Cache::remember(
+                'public-home:profile-branches:v1',
+                now()->addMinutes(5),
+                fn (): array => $this->resolveHomepageProfileBranches(),
+            );
+        }
+
+        return $this->resolveHomepageProfileBranches();
+    }
+
+    /**
+     * @return array{0: Collection<int, StrukturOrganisasi>, 1: Collection<int, StrukturOrganisasi>, 2: Collection<int, array{year:int|null, label:string|null, count:int, nodes:Collection<int, StrukturOrganisasi>}>}
+     */
+    protected function resolveHomepageProfileBranches(): array
     {
         if (StrukturOrganisasi::categoryColumnAvailable()) {
             $komitePeriods = $this->loadCommitteeHomepagePeriods();

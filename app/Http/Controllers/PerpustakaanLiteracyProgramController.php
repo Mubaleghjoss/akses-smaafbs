@@ -18,6 +18,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -27,11 +28,19 @@ class PerpustakaanLiteracyProgramController extends Controller
 {
     public function index(): View
     {
-        $materials = PerpustakaanLiterasiMaterial::query()
+        $resolveMaterials = fn () => PerpustakaanLiterasiMaterial::query()
             ->availableForPublic()
             ->withCount('questions')
             ->orderByDesc('created_at')
             ->paginate(12);
+
+        $materials = app()->environment('testing')
+            ? $resolveMaterials()
+            : Cache::remember(
+                'literacy:public-materials:page-'.max(1, (int) request()->query('page', 1)),
+                now()->addSeconds(45),
+                $resolveMaterials,
+            );
 
         return view('library.literacy.index', [
             'title' => 'Literasi Numerasi',
@@ -54,6 +63,7 @@ class PerpustakaanLiteracyProgramController extends Controller
             'title' => $material->title,
             'material' => $material,
             'students' => $this->studentOptions(),
+            'hasLatex' => $material->containsLatex(),
             'meta' => [
                 'description' => $description,
                 'canonical_url' => $material->publicUrl(),
@@ -228,6 +238,7 @@ class PerpustakaanLiteracyProgramController extends Controller
             'response' => $response,
             'material' => $response->material,
             'answerMap' => $response->answers->keyBy('question_id'),
+            'hasLatex' => $response->material->containsLatex(),
         ]);
     }
 
@@ -578,6 +589,22 @@ class PerpustakaanLiteracyProgramController extends Controller
             return [];
         }
 
+        if (! app()->environment('testing')) {
+            return Cache::remember(
+                'literacy:active-student-options:v1',
+                now()->addMinutes(5),
+                fn (): array => $this->queryStudentOptions(),
+            );
+        }
+
+        return $this->queryStudentOptions();
+    }
+
+    /**
+     * @return array<int, array{id:int,label:string,name:string,class:string,verification_required:bool}>
+     */
+    protected function queryStudentOptions(): array
+    {
         return DataSiswa::query()
             ->select(['id', 'nama', 'rombel_saat_ini', 'status', 'nisn', 'tanggal_lahir'])
             ->where('status', 'aktif')

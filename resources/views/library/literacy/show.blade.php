@@ -3,6 +3,8 @@
 @section('content')
     @php
         $videoEmbedUrl = $material->videoEmbedUrl();
+        $materialImageUrl = $material->imageUrl();
+        $materialThumbnailUrl = $material->imageUrl('thumbnail');
     @endphp
 
     <div class="flex flex-wrap gap-2">
@@ -12,8 +14,18 @@
     <div class="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <section class="space-y-6">
             <article class="card overflow-hidden">
-                @if($material->imageUrl())
-                    <img src="{{ $material->imageUrl() }}" alt="" class="max-h-[28rem] w-full object-cover">
+                @if($materialImageUrl)
+                    <img
+                        src="{{ $materialImageUrl }}"
+                        srcset="{{ $materialThumbnailUrl }} 640w, {{ $materialImageUrl }} 1280w"
+                        sizes="(min-width: 1024px) calc(100vw - 26rem), 100vw"
+                        alt=""
+                        class="max-h-[28rem] w-full object-cover"
+                        width="1280"
+                        height="720"
+                        decoding="async"
+                        fetchpriority="high"
+                    >
                 @endif
                 <div class="p-6 md:p-7">
                     <div class="flex flex-wrap items-center gap-2">
@@ -193,7 +205,15 @@
                             {{ $question->prompt }}
                         </label>
                         @if($question->imageUrl())
-                            <img src="{{ $question->imageUrl() }}" alt="" class="mt-3 max-h-80 w-full rounded-2xl border border-slate-200 object-contain">
+                            <img
+                                src="{{ $question->imageUrl() }}"
+                                alt=""
+                                class="mt-3 max-h-80 w-full rounded-2xl border border-slate-200 object-contain"
+                                width="1280"
+                                height="1280"
+                                loading="lazy"
+                                decoding="async"
+                            >
                         @endif
                         @if($question->google_drive_url)
                             <a class="chip mt-3 inline-flex" href="{{ $question->google_drive_url }}" target="_blank" rel="noopener">Buka Lampiran</a>
@@ -256,6 +276,8 @@
 @endsection
 
 @push('scripts')
-    @include('library.literacy._mathjax')
+    @if($hasLatex ?? false)
+        @include('library.literacy._mathjax')
+    @endif
     @include('library.literacy._answer_tools', ['students' => $students])
 @endpush

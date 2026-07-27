@@ -445,14 +445,21 @@
                         <div class="mt-4 grid grid-cols-3 gap-3">
                             @foreach($documentation as $imagePath)
                                 @php
+                                    $documentationStoragePath = str_contains((string) $imagePath, '/')
+                                        ? (string) $imagePath
+                                        : 'news/documentation/'.$imagePath;
                                     $documentationUrl = str_starts_with((string) $imagePath, 'http://') || str_starts_with((string) $imagePath, 'https://')
                                         ? $imagePath
-                                        : asset('storage/'.(str_contains((string) $imagePath, '/') ? $imagePath : 'news/documentation/'.$imagePath));
+                                        : app(\App\Support\Media\PublicImageOptimizer::class)->url($documentationStoragePath);
                                 @endphp
                                 <img
                                     class="h-24 w-full rounded-2xl border border-slate-100 object-cover"
                                     src="{{ $documentationUrl }}"
                                     alt="Dokumentasi {{ $news->judul }}"
+                                    width="320"
+                                    height="192"
+                                    loading="lazy"
+                                    decoding="async"
                                 />
                             @endforeach
                         </div>
@@ -667,6 +674,19 @@
             const photoName = document.getElementById('org-photo-name');
             const photoRole = document.getElementById('org-photo-role');
 
+            const loadVisibleDeferredImages = (root = document) => {
+                window.requestAnimationFrame(() => {
+                    root.querySelectorAll('img[data-public-lazy-image][data-src]').forEach((image) => {
+                        if (image.offsetParent === null || image.hasAttribute('src')) {
+                            return;
+                        }
+
+                        image.src = image.dataset.src;
+                        image.removeAttribute('data-src');
+                    });
+                });
+            };
+
             const profileTabsContainer = document.querySelector('[data-home-profile-tabs]');
             if (profileTabsContainer) {
                 const profileTabButtons = profileTabsContainer.querySelectorAll('[data-home-profile-tab-trigger]');
@@ -682,6 +702,14 @@
                     profileTabPanels.forEach((panel) => {
                         panel.hidden = panel.dataset.homeProfileTabPanel !== tabName;
                     });
+
+                    const activePanel = profileTabsContainer.querySelector(
+                        `[data-home-profile-tab-panel="${tabName}"]`,
+                    );
+
+                    if (activePanel) {
+                        loadVisibleDeferredImages(activePanel);
+                    }
                 };
 
                 profileTabButtons.forEach((button) => {
@@ -691,7 +719,29 @@
                 });
 
                 activateProfileTab('struktur');
+
+                let imageResizeTimer = null;
+                window.addEventListener('resize', () => {
+                    window.clearTimeout(imageResizeTimer);
+                    imageResizeTimer = window.setTimeout(() => {
+                        const activePanel = profileTabsContainer.querySelector(
+                            '[data-home-profile-tab-panel]:not([hidden])',
+                        );
+
+                        if (activePanel) {
+                            loadVisibleDeferredImages(activePanel);
+                        }
+                    }, 150);
+                });
             }
+
+            document.querySelectorAll('details').forEach((details) => {
+                details.addEventListener('toggle', () => {
+                    if (details.open) {
+                        loadVisibleDeferredImages(details);
+                    }
+                });
+            });
 
             document.querySelectorAll('[data-achievement-filter-root]').forEach((achievementRoot) => {
                 const filterButtons = achievementRoot.querySelectorAll('[data-achievement-filter-trigger]');

@@ -89,9 +89,8 @@
                 }
             }
         </style>
-        <script src="{{ asset('vendor/fullcalendar/index.global.min.js') }}"></script>
         <script>
-            document.addEventListener('DOMContentLoaded', () => {
+            const initializePublicAgendaCalendars = () => {
                 document.querySelectorAll('[data-public-agenda-calendar]').forEach((calendarEl) => {
                     if (!window.FullCalendar || calendarEl.dataset.calendarReady === 'true') {
                         return;
@@ -191,7 +190,51 @@
 
                     calendar.render();
                 });
-            });
+            };
+
+            const loadPublicAgendaCalendarAsset = () => {
+                if (window.FullCalendar) {
+                    initializePublicAgendaCalendars();
+
+                    return;
+                }
+
+                if (document.querySelector('script[data-public-agenda-asset]')) {
+                    return;
+                }
+
+                const script = document.createElement('script');
+                script.src = @js(asset('vendor/fullcalendar/index.global.min.js'));
+                script.async = true;
+                script.dataset.publicAgendaAsset = '1';
+                script.addEventListener('load', initializePublicAgendaCalendars, { once: true });
+                document.head.appendChild(script);
+            };
+
+            document.addEventListener('DOMContentLoaded', () => {
+                const calendars = document.querySelectorAll('[data-public-agenda-calendar]');
+
+                if (!calendars.length) {
+                    return;
+                }
+
+                if (!('IntersectionObserver' in window)) {
+                    loadPublicAgendaCalendarAsset();
+
+                    return;
+                }
+
+                const observer = new IntersectionObserver((entries) => {
+                    if (!entries.some((entry) => entry.isIntersecting)) {
+                        return;
+                    }
+
+                    observer.disconnect();
+                    loadPublicAgendaCalendarAsset();
+                }, { rootMargin: '400px 0px' });
+
+                calendars.forEach((calendar) => observer.observe(calendar));
+            }, { once: true });
         </script>
     @endpush
 @endonce

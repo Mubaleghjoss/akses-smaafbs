@@ -3,10 +3,13 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasGoogleDriveSyncState;
+use App\Support\Media\PublicImageOptimizer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 class ProfilSekolah extends Model
 {
@@ -63,6 +66,27 @@ class ProfilSekolah extends Model
             $record->tiktok_url = $record->normalizeUrl($record->tiktok_url);
             $record->identitas_tambahan = $record->normalizeAdditionalIdentityItems($record->identitas_tambahan);
             $record->fasilitas = $record->normalizeFacilities($record->fasilitas);
+
+            try {
+                $record->fasilitas = collect($record->fasilitas ?? [])
+                    ->map(function (array $facility): array {
+                        $path = trim((string) ($facility['foto'] ?? ''));
+
+                        if ($path !== '') {
+                            $facility['foto'] = app(PublicImageOptimizer::class)
+                                ->optimizeUploadedPath($path, 'content');
+                        }
+
+                        return $facility;
+                    })
+                    ->values()
+                    ->all();
+            } catch (RuntimeException $exception) {
+                throw ValidationException::withMessages([
+                    'fasilitas' => 'Foto fasilitas gagal dioptimalkan: '.$exception->getMessage(),
+                ]);
+            }
+
             $record->jadwal_kbm = $record->normalizeScheduleItems($record->jadwal_kbm);
             $record->menu_makan = $record->normalizeMealItems($record->menu_makan);
         });

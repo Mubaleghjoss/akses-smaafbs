@@ -1,4 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
@@ -8,7 +7,7 @@
 
 @theme {
     --font-sans:
-        "Manrope", "Segoe UI", system-ui, sans-serif, "Apple Color Emoji",
+        "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif, "Apple Color Emoji",
         "Segoe UI Emoji", "Segoe UI Symbol";
 }
 
@@ -25,7 +24,7 @@
     h2,
     h3,
     .font-display {
-        font-family: "Fraunces", ui-serif, Georgia, serif;
+        font-family: Georgia, Cambria, "Times New Roman", ui-serif, serif;
     }
 
     html.public-mobile-menu-open,
