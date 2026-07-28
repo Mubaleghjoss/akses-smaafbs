@@ -256,7 +256,8 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                                     ->numeric()
                                     ->minValue(fn (Get $get): int => max(1, (int) ($get('min_characters') ?: 0)))
                                     ->maxValue(8000)
-                                    ->default(1000),
+                                    ->default(1000)
+                                    ->helperText('Naikkan batas ini bila soal membutuhkan jawaban esai panjang. Siswa akan melihat penghitung dan batas maksimal sebelum mengirim.'),
                                 Forms\Components\Toggle::make('is_required')
                                     ->label('Wajib diisi')
                                     ->default(true),

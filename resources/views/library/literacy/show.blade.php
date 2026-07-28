@@ -227,11 +227,12 @@
                             data-literacy-answer-input
                             data-min-characters="{{ $minCharacters }}"
                             data-max-characters="{{ $maxCharacters }}"
+                            aria-describedby="question-{{ $question->getKey() }}-status question-{{ $question->getKey() }}-count"
                             @required($question->is_required)
                         >{{ old('answers.'.$question->getKey()) }}</textarea>
                         <div class="mt-2 flex flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between">
-                            <div class="text-slate-500" data-literacy-answer-status></div>
-                            <div class="font-semibold text-slate-700" data-literacy-answer-count></div>
+                            <div id="question-{{ $question->getKey() }}-status" class="text-slate-500" aria-live="polite" data-literacy-answer-status></div>
+                            <div id="question-{{ $question->getKey() }}-count" class="font-semibold text-slate-700" data-literacy-answer-count></div>
                         </div>
                         <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
                             <div class="h-full rounded-full bg-slate-400 transition-all" style="width: 0%" data-literacy-answer-bar></div>

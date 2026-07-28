@@ -278,7 +278,10 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('data-literacy-retry-statuses', false)
             ->assertSee('data-literacy-mass-mode="1"', false)
             ->assertSee('literacy.submission.draft.v2:', false)
-            ->assertSee('Server sedang ramai - tidak perlu menekan Kirim lagi');
+            ->assertSee('Server sedang ramai - tidak perlu menekan Kirim lagi')
+            ->assertSee('Perbaiki jawaban')
+            ->assertSee('literacyAnswerLimitValid', false)
+            ->assertSee('aria-live="polite"', false);
 
         $this->from(route('library.literacy.show', $material->slug))
             ->get(route('library.literacy.edit.lookup', ['code' => 'SALAH1']))
@@ -841,12 +844,21 @@ class LibraryLiteracyProgramTest extends TestCase
             'max_characters' => 20,
         ]);
 
-        $this->post(route('library.literacy.store', $material->slug), [
+        $validationResponse = $this->postJson(route('library.literacy.store', $material->slug), [
             'student_id' => $student->getKey(),
             'answers' => [
-                $question->getKey() => 'Jawaban ini melebihi batas karakter yang sudah ditentukan.',
+                $question->getKey() => str_repeat('a', 21),
             ],
-        ])->assertSessionHasErrors(['answers.'.$question->getKey()]);
+        ]);
+
+        $validationResponse
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['answers.'.$question->getKey()]);
+
+        $this->assertSame(
+            'Jawaban pertanyaan 1 maksimal 20 karakter. Saat ini jawaban Anda berisi 21 karakter.',
+            $validationResponse->json('errors')['answers.'.$question->getKey()][0] ?? null,
+        );
     }
 
     public function test_answer_minimum_character_limit_is_validated(): void

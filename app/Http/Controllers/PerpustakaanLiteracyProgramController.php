@@ -138,7 +138,7 @@ class PerpustakaanLiteracyProgramController extends Controller
                     'submission_queue_waited' => ['nullable', 'boolean'],
                     'submission_retry_statuses' => ['nullable', 'string', 'max:120'],
                 ] + $this->integrityValidationRules(),
-                [],
+                $this->answerValidationMessages($questions, $request),
                 $this->answerValidationAttributes($questions),
             );
 
@@ -278,7 +278,7 @@ class PerpustakaanLiteracyProgramController extends Controller
                     'submission_queue_waited' => ['nullable', 'boolean'],
                     'submission_retry_statuses' => ['nullable', 'string', 'max:120'],
                 ] + $this->integrityValidationRules(),
-                [],
+                $this->answerValidationMessages($questions, $request),
                 $this->answerValidationAttributes($questions),
             );
 
@@ -480,6 +480,43 @@ class PerpustakaanLiteracyProgramController extends Controller
         return $questions->mapWithKeys(fn (PerpustakaanLiterasiQuestion $question): array => [
             'answers.'.$question->getKey() => 'jawaban untuk pertanyaan '.$question->sort_order,
         ])->all();
+    }
+
+    /**
+     * @param  Collection<int, PerpustakaanLiterasiQuestion>  $questions
+     * @return array<string, string>
+     */
+    protected function answerValidationMessages($questions, Request $request): array
+    {
+        $messages = [
+            'answers.required' => 'Jawaban belum diisi.',
+            'answers.array' => 'Format jawaban tidak sesuai. Muat ulang halaman lalu coba lagi.',
+        ];
+
+        foreach ($questions as $question) {
+            $field = 'answers.'.$question->getKey();
+            $position = max(1, (int) $question->sort_order);
+            $max = max(1, (int) ($question->max_characters ?: 1000));
+            $min = min($max, max(0, (int) ($question->min_characters ?: 0)));
+            $length = mb_strlen((string) $request->input($field, ''));
+
+            $messages[$field.'.required'] = "Jawaban pertanyaan {$position} wajib diisi.";
+            $messages[$field.'.string'] = "Jawaban pertanyaan {$position} harus berupa teks.";
+            $messages[$field.'.min'] = sprintf(
+                'Jawaban pertanyaan %d minimal %s karakter. Saat ini jawaban Anda berisi %s karakter.',
+                $position,
+                number_format($min, 0, ',', '.'),
+                number_format($length, 0, ',', '.'),
+            );
+            $messages[$field.'.max'] = sprintf(
+                'Jawaban pertanyaan %d maksimal %s karakter. Saat ini jawaban Anda berisi %s karakter.',
+                $position,
+                number_format($max, 0, ',', '.'),
+                number_format($length, 0, ',', '.'),
+            );
+        }
+
+        return $messages;
     }
 
     protected function integrityValidationRules(): array

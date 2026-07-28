@@ -62,8 +62,56 @@
             }
 
             form.dataset.literacyAnswerReady = '1';
-            form.addEventListener('submit', () => {
+            const answerInputs = Array.from(form.querySelectorAll('[data-literacy-answer-input]'));
+            const submitButton = form.querySelector('[data-literacy-submit-button]');
+            const submitInitiallyDisabled = submitButton?.disabled === true;
+            let queueSubmitLocked = false;
+
+            const answerLength = (textarea) => Array.from(textarea.value || '').length;
+            const answerMaximum = (textarea) => Math.max(
+                1,
+                Number.parseInt(textarea.dataset.maxCharacters || '1', 10)
+            );
+            const firstAnswerOverLimit = () => answerInputs.find(
+                (textarea) => answerLength(textarea) > answerMaximum(textarea)
+            ) || null;
+            const syncSubmitAvailability = () => {
+                const overLimit = firstAnswerOverLimit() !== null;
+
+                form.dataset.literacyAnswerLimitValid = overLimit ? '0' : '1';
+
+                if (submitButton) {
+                    submitButton.disabled = submitInitiallyDisabled || queueSubmitLocked || overLimit;
+                    submitButton.setAttribute('aria-disabled', submitButton.disabled ? 'true' : 'false');
+                }
+
+                return !overLimit;
+            };
+            const setQueueSubmitLocked = (locked) => {
+                queueSubmitLocked = locked;
+                syncSubmitAvailability();
+            };
+            const focusFirstAnswerOverLimit = () => {
+                const textarea = firstAnswerOverLimit();
+
+                if (!textarea) {
+                    return false;
+                }
+
+                textarea.setAttribute('aria-invalid', 'true');
+                textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                textarea.focus({ preventScroll: true });
+
+                return true;
+            };
+
+            form.addEventListener('submit', (event) => {
                 rememberSubmitScrollTarget(form.dataset.literacyScrollTarget || '[data-literacy-submit-status]');
+
+                if (!syncSubmitAvailability()) {
+                    event.preventDefault();
+                    focusFirstAnswerOverLimit();
+                }
             });
 
             if (form.dataset.literacyQueueEnabled === '1' && form.dataset.literacyTicketEndpoint) {
@@ -76,7 +124,6 @@
                 const title = form.querySelector('[data-literacy-queue-title]');
                 const message = form.querySelector('[data-literacy-queue-message]');
                 const cancelButton = form.querySelector('[data-literacy-queue-cancel]');
-                const submitButton = form.querySelector('[data-literacy-submit-button]');
                 const massModeEnabled = form.dataset.literacyMassMode === '1';
                 const initialJitterSeconds = Math.max(0, Number.parseInt(
                     massModeEnabled
@@ -100,6 +147,8 @@
                 let persistTimer = null;
                 let storageAvailable = true;
                 let finalSubmissionRunning = false;
+                let queueAction = 'cancel';
+                let lastValidationField = '';
 
                 const wait = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
                 const csrfToken = () => form.querySelector('input[name="_token"]')?.value || '';
@@ -148,14 +197,37 @@
                         message.textContent = detail;
                     }
                 };
+                const setQueueAction = (action) => {
+                    queueAction = action;
+
+                    if (!cancelButton) {
+                        return;
+                    }
+
+                    cancelButton.dataset.literacyQueueAction = action;
+                    cancelButton.textContent = action === 'repair' ? 'Perbaiki jawaban' : 'Batal menunggu';
+                };
+                const focusValidationField = (validationField) => {
+                    const fieldName = validationField?.startsWith('answers.')
+                        ? `answers[${validationField.slice('answers.'.length)}]`
+                        : validationField;
+                    const field = Array.from(form.elements).find((element) => element.name === fieldName);
+
+                    if (!field) {
+                        return focusFirstAnswerOverLimit();
+                    }
+
+                    field.setAttribute('aria-invalid', 'true');
+                    field.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    field.focus({ preventScroll: true });
+
+                    return true;
+                };
 
                 const stopQueue = () => {
                     queueRunning = false;
                     form.dataset.literacyQueueAdmitted = '0';
-
-                    if (submitButton) {
-                        submitButton.disabled = false;
-                    }
+                    setQueueSubmitLocked(false);
                 };
 
                 const draftFields = () => Array.from(form.querySelectorAll([
@@ -294,11 +366,15 @@
                         const payload = await response.json().catch(() => ({}));
 
                         if (!response.ok) {
-                            const validationMessage = Object.values(payload.errors || {}).flat()[0];
+                            const validationEntry = Object.entries(payload.errors || {})[0];
+                            const validationMessage = Array.isArray(validationEntry?.[1])
+                                ? validationEntry[1][0]
+                                : validationEntry?.[1];
                             const error = new Error(validationMessage || payload.message || 'Antrean belum dapat dihubungi.');
                             error.status = response.status;
                             error.retryAfter = Number.parseInt(response.headers.get('Retry-After') || '0', 10);
                             error.retryable = [408, 425, 429, 500, 502, 503, 504].includes(response.status);
+                            error.validationField = validationEntry?.[0] || '';
                             throw error;
                         }
 
@@ -418,10 +494,7 @@
 
                     finalSubmissionRunning = true;
                     retryStartedAt = Date.now();
-
-                    if (submitButton) {
-                        submitButton.disabled = true;
-                    }
+                    setQueueSubmitLocked(true);
 
                     if (cancelButton) {
                         cancelButton.disabled = true;
@@ -451,13 +524,20 @@
                             error?.exhausted ? 'Belum berhasil menyimpan jawaban' : 'Jawaban belum dapat disimpan',
                             error?.message || `Silakan periksa jawaban lalu coba lagi. ${draftSafetyText()}`
                         );
+                        const isValidationError = error?.status === 422;
+
+                        if (isValidationError) {
+                            lastValidationField = error?.validationField || '';
+                            clearTicketState();
+                            setQueueAction('repair');
+                        } else {
+                            setQueueAction('cancel');
+                        }
+
                         form.dataset.literacyQueueAdmitted = '0';
                         finalSubmissionRunning = false;
                         form.dispatchEvent(new CustomEvent('literacy:final-submit-failed'));
-
-                        if (submitButton) {
-                            submitButton.disabled = false;
-                        }
+                        setQueueSubmitLocked(false);
 
                         if (cancelButton) {
                             cancelButton.disabled = false;
@@ -473,11 +553,9 @@
                     queueRunning = true;
                     cancelled = false;
                     retryStartedAt = Date.now();
+                    setQueueAction('cancel');
                     persistDraft();
-
-                    if (submitButton) {
-                        submitButton.disabled = true;
-                    }
+                    setQueueSubmitLocked(true);
 
                     showQueue('Menyiapkan jalur antrean...', draftSafetyText());
                     panel?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -557,9 +635,24 @@
 
                         form.dataset.literacyQueueAdmitted = '1';
                         queueRunning = false;
+                        setQueueSubmitLocked(false);
 
-                        if (submitButton) {
-                            submitButton.disabled = false;
+                        if (!syncSubmitAvailability()) {
+                            form.dataset.literacyQueueAdmitted = '0';
+                            lastValidationField = '';
+                            setQueueAction('repair');
+                            showQueue(
+                                'Jawaban perlu diperbaiki',
+                                `Ada jawaban yang melewati batas karakter. ${draftSafetyText()}`
+                            );
+
+                            if (cancelUrl) {
+                                requestJson(cancelUrl, { method: 'DELETE' }).catch(() => {});
+                            }
+
+                            clearTicketState();
+
+                            return;
                         }
 
                         persistDraft();
@@ -579,6 +672,10 @@
                 form.addEventListener('change', scheduleDraftPersistence);
 
                 form.addEventListener('submit', (event) => {
+                    if (event.defaultPrevented) {
+                        return;
+                    }
+
                     if (form.dataset.literacyQueueAdmitted === '1') {
                         event.preventDefault();
                         submitFinal();
@@ -597,6 +694,14 @@
                 });
 
                 cancelButton?.addEventListener('click', async () => {
+                    if (queueAction === 'repair') {
+                        panel?.classList.add('hidden');
+                        setQueueAction('cancel');
+                        focusValidationField(lastValidationField);
+
+                        return;
+                    }
+
                     cancelled = true;
 
                     if (cancelUrl) {
@@ -660,7 +765,7 @@
                 };
 
                 const refresh = () => {
-                    const length = Array.from(textarea.value || '').length;
+                    const length = answerLength(textarea);
                     const remainingMin = Math.max(0, min - length);
                     const remainingMax = max - length;
                     const percent = Math.min(100, Math.max(0, (length / max) * 100));
@@ -675,13 +780,18 @@
                     }
 
                     if (length > max) {
+                        textarea.setAttribute('aria-invalid', 'true');
                         setTone('danger');
                         if (status) {
-                            status.textContent = `Melebihi ${formatNumber(length - max)} karakter dari batas maksimal.`;
+                            status.textContent = `Jawaban berisi ${formatNumber(length)} karakter dan melebihi batas ${formatNumber(max)} karakter. Kurangi ${formatNumber(length - max)} karakter.`;
                         }
+                        syncSubmitAvailability();
 
                         return;
                     }
+
+                    textarea.removeAttribute('aria-invalid');
+                    syncSubmitAvailability();
 
                     if (remainingMin > 0) {
                         setTone('warning');
