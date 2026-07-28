@@ -53,23 +53,34 @@ if ($dnsOk) {
 }
 
 if ($tcpOk) {
-    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
-    try {
-        $response = Invoke-WebRequest -Uri ($BaseUrl.TrimEnd('/') + '/up') -Method Get -TimeoutSec 20 -UseBasicParsing
-        $httpStatus = [int]$response.StatusCode
-        if ($httpStatus -lt 200 -or $httpStatus -ge 400) {
-            $errorCode = 'HTTP_' + $httpStatus
+    $nodeProbe = Join-Path $PSScriptRoot 'monitor-school-http-probe.cjs'
+
+    if ((Get-Command node -ErrorAction SilentlyContinue) -and (Test-Path -LiteralPath $nodeProbe)) {
+        try {
+            $probeResult = (& node $nodeProbe probe ($BaseUrl.TrimEnd('/') + '/up') 2>$null) | ConvertFrom-Json
+            $httpStatus = [int]$probeResult.status
+            $durationMs = [int]$probeResult.duration_ms
+            if ($LASTEXITCODE -ne 0 -or $httpStatus -lt 200 -or $httpStatus -ge 400) {
+                $errorCode = if ($httpStatus -gt 0) { 'HTTP_' + $httpStatus } else { 'CONNECTION_RESET_OR_TIMEOUT' }
+            }
+        } catch {
+            $errorCode = 'NODE_HTTPS_PROBE_FAILED'
         }
-    } catch {
-        if ($_.Exception.Response -and $_.Exception.Response.StatusCode) {
-            $httpStatus = [int]$_.Exception.Response.StatusCode
-            $errorCode = 'HTTP_' + $httpStatus
-        } else {
+    } else {
+        $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            $response = Invoke-WebRequest -Uri ($BaseUrl.TrimEnd('/') + '/up') -Method Get -TimeoutSec 20 -UseBasicParsing
+            $httpStatus = [int]$response.StatusCode
+            if ($httpStatus -lt 200 -or $httpStatus -ge 400) {
+                $errorCode = 'HTTP_' + $httpStatus
+            }
+        } catch {
             $errorCode = 'CONNECTION_RESET_OR_TIMEOUT'
+        } finally {
+            $stopwatch.Stop()
+            $durationMs = [int]$stopwatch.ElapsedMilliseconds
         }
-    } finally {
-        $stopwatch.Stop()
-        $durationMs = [int]$stopwatch.ElapsedMilliseconds
     }
 }
 
@@ -130,16 +141,31 @@ if ($isOk -and (Test-Path -LiteralPath $TokenFile)) {
             context = @{ client_version = '1.0' }
         } | ConvertTo-Json -Depth 3
 
+        $nodeProbe = Join-Path $PSScriptRoot 'monitor-school-http-probe.cjs'
+        $payloadFile = Join-Path $stateDirectory 'literacy-school-monitor-payload.json'
+
         try {
-            Invoke-RestMethod `
-                -Uri ($BaseUrl.TrimEnd('/') + '/api/v1/monitoring/school-network') `
-                -Method Post `
-                -Headers @{ Authorization = 'Bearer ' + $token; Accept = 'application/json' } `
-                -ContentType 'application/json' `
-                -Body $body `
-                -TimeoutSec 20 | Out-Null
+            [IO.File]::WriteAllText($payloadFile, $body, [Text.UTF8Encoding]::new($false))
+            if ((Get-Command node -ErrorAction SilentlyContinue) -and (Test-Path -LiteralPath $nodeProbe)) {
+                & node $nodeProbe post ($BaseUrl.TrimEnd('/') + '/api/v1/monitoring/school-network') $TokenFile $payloadFile | Out-Null
+                if ($LASTEXITCODE -ne 0) {
+                    throw 'Endpoint monitor menolak data.'
+                }
+            } else {
+                Invoke-RestMethod `
+                    -Uri ($BaseUrl.TrimEnd('/') + '/api/v1/monitoring/school-network') `
+                    -Method Post `
+                    -Headers @{ Authorization = 'Bearer ' + $token; Accept = 'application/json' } `
+                    -ContentType 'application/json' `
+                    -Body $body `
+                    -TimeoutSec 20 | Out-Null
+            }
         } catch {
             Write-Warning ('Hasil lokal tersimpan, tetapi belum dapat dikirim ke server: ' + $_.Exception.Message)
+        } finally {
+            if (Test-Path -LiteralPath $payloadFile) {
+                Remove-Item -LiteralPath $payloadFile -Force
+            }
         }
     }
 }
