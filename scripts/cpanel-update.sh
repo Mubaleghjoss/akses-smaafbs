@@ -36,6 +36,7 @@ if [ -d "${PUBLIC_WEB_ROOT}" ] && [ "${PUBLIC_WEB_ROOT}" != "$(pwd)/public" ]; t
     # Document root produksi terpisah dari public/ repo, jadi file harus ikut disalin.
     mkdir -p "${PUBLIC_WEB_ROOT}/css"
     cp public/css/filament-admin-responsive.css "${PUBLIC_WEB_ROOT}/css/filament-admin-responsive.css"
+    cp public/css/filament-admin-auth.css "${PUBLIC_WEB_ROOT}/css/filament-admin-auth.css"
 
     # Header cache aset publik harus ikut aktif pada document root produksi.
     cp public/.htaccess "${PUBLIC_WEB_ROOT}/.htaccess"

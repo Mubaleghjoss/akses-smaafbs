@@ -206,6 +206,93 @@ html.dark .fi-panel-admin,
     color: color-mix(in srgb, var(--auth-accent) 68%, var(--auth-ink)) !important;
 }
 
+.fi-panel-admin .admin-login-alert {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: flex-start;
+    gap: 0.7rem;
+    margin-bottom: 1rem;
+    overflow-wrap: anywhere;
+    border: 1px solid rgba(225, 29, 72, 0.32);
+    border-radius: 1rem;
+    background: #fff1f2;
+    padding: 0.85rem;
+    color: #881337 !important;
+    box-shadow: 0 14px 30px -25px rgba(190, 18, 60, 0.75);
+    outline: none;
+}
+
+.fi-panel-admin .admin-login-alert:focus-visible {
+    box-shadow: 0 0 0 4px rgba(244, 63, 94, 0.18);
+}
+
+.fi-panel-admin .admin-login-alert__icon {
+    display: grid;
+    flex: none;
+    width: 1.7rem;
+    height: 1.7rem;
+    place-items: center;
+    border-radius: 999px;
+    background: #be123c;
+    color: #ffffff !important;
+    font-size: 0.85rem;
+    font-weight: 900;
+}
+
+.fi-panel-admin .admin-login-alert__content {
+    display: grid;
+    min-width: 0;
+    gap: 0.2rem;
+    color: #881337 !important;
+}
+
+.fi-panel-admin .admin-login-alert__content strong,
+.fi-panel-admin .admin-login-alert__content span {
+    color: #881337 !important;
+}
+
+.fi-panel-admin .admin-login-alert__content strong {
+    font-size: 0.85rem;
+    font-weight: 850;
+}
+
+.fi-panel-admin .admin-login-alert__content span {
+    font-size: 0.78rem;
+    line-height: 1.5;
+}
+
+.fi-panel-admin .fi-fo-field-wrp-error-message,
+.fi-panel-admin [data-validation-error] {
+    color: #be123c !important;
+    font-size: 0.78rem;
+    font-weight: 750;
+    line-height: 1.45;
+}
+
+.fi-panel-admin .fi-input-wrp.fi-invalid,
+.fi-panel-admin .fi-input-wrp:has(input[aria-invalid="true"]),
+.fi-panel-admin .fi-input-wrp:has(select[aria-invalid="true"]) {
+    border-color: rgba(225, 29, 72, 0.65) !important;
+    box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.12);
+}
+
+.dark .fi-panel-admin .admin-login-alert,
+.fi-theme-dark .fi-panel-admin .admin-login-alert {
+    border-color: rgba(251, 113, 133, 0.4);
+    background: rgba(136, 19, 55, 0.3);
+    color: #ffe4e6 !important;
+}
+
+.dark .fi-panel-admin .admin-login-alert__content,
+.dark .fi-panel-admin .admin-login-alert__content strong,
+.dark .fi-panel-admin .admin-login-alert__content span,
+.fi-theme-dark .fi-panel-admin .admin-login-alert__content,
+.fi-theme-dark .fi-panel-admin .admin-login-alert__content strong,
+.fi-theme-dark .fi-panel-admin .admin-login-alert__content span {
+    color: #ffe4e6 !important;
+}
+
 @media (max-width: 640px) {
     .fi-panel-admin .fi-simple-layout {
         padding: 1rem;
@@ -218,5 +305,9 @@ html.dark .fi-panel-admin,
 
     .fi-panel-admin .fi-simple-header-heading {
         font-size: 1.45rem;
+    }
+
+    .fi-panel-admin .admin-login-alert {
+        padding: 0.75rem;
     }
 }

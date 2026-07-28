@@ -20,6 +20,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Utilities\Set;
+use Filament\Schemas\Components\View as SchemaView;
 use Filament\Schemas\Schema;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Cookie;
@@ -49,6 +50,8 @@ class Login extends BaseLogin
 
     public bool $passkeyCanFallbackToPassword = true;
 
+    public ?string $loginErrorMessage = null;
+
     public function mount(): void
     {
         parent::mount();
@@ -59,6 +62,8 @@ class Login extends BaseLogin
 
     public function authenticate(): ?LoginResponse
     {
+        $this->loginErrorMessage = null;
+
         try {
             $this->rateLimit(
                 EndpointProtectionPolicy::adminLoginAttempts(),
@@ -355,6 +360,10 @@ class Login extends BaseLogin
     protected function throwUsernameValidationException(
         string $message = 'Username tidak ditemukan.'
     ): never {
+        $this->loginErrorMessage = $message === 'Akun ini tidak memiliki akses ke panel admin.'
+            ? $message
+            : 'Username atau password tidak sesuai. Periksa kembali lalu coba login.';
+
         throw ValidationException::withMessages([
             'data.username' => $message,
         ]);
@@ -362,6 +371,8 @@ class Login extends BaseLogin
 
     protected function throwPasswordValidationException(): never
     {
+        $this->loginErrorMessage = 'Username atau password tidak sesuai. Periksa kembali lalu coba login.';
+
         throw ValidationException::withMessages([
             'data.password' => 'Password yang Anda masukkan salah.',
         ]);
@@ -382,6 +393,8 @@ class Login extends BaseLogin
     {
         return $schema
             ->components([
+                SchemaView::make('filament.components.auth.login-alert')
+                    ->visible(fn (): bool => filled($this->loginErrorMessage)),
                 Select::make('remembered_username')
                     ->label('Username tersimpan')
                     ->options(fn (): array => collect($this->rememberedUsernames)

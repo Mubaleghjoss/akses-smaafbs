@@ -74,6 +74,43 @@ class RememberedAdminUsernameTest extends TestCase
             ->assertSet('data.username', 'admin.tersimpan');
     }
 
+    public function test_wrong_password_shows_visible_login_notice_and_field_error(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Admin Wrong Password',
+            'username' => 'admin.wrong.password',
+            'password' => Hash::make('password-benar'),
+        ]);
+        $user->assignRole('admin');
+
+        Livewire::test(Login::class)
+            ->set('data.username', $user->username)
+            ->set('data.password', 'password-salah')
+            ->call('authenticate')
+            ->assertHasErrors(['data.password'])
+            ->assertSet(
+                'loginErrorMessage',
+                'Username atau password tidak sesuai. Periksa kembali lalu coba login.',
+            )
+            ->assertSee('Login belum berhasil')
+            ->assertSee('Periksa kembali lalu coba login.');
+    }
+
+    public function test_unknown_username_shows_visible_login_notice_and_field_error(): void
+    {
+        Livewire::test(Login::class)
+            ->set('data.username', 'username.tidak.ada')
+            ->set('data.password', 'password-apapun')
+            ->call('authenticate')
+            ->assertHasErrors(['data.username'])
+            ->assertSet(
+                'loginErrorMessage',
+                'Username atau password tidak sesuai. Periksa kembali lalu coba login.',
+            )
+            ->assertSee('Login belum berhasil')
+            ->assertSee('Username atau password tidak sesuai.');
+    }
+
     private function queuedCookieValue(string $cookieName): ?string
     {
         /** @var CookieJar $cookieJar */
