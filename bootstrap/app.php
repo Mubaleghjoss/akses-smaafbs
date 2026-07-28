@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\AdminAwareVerifyCsrfToken;
 use App\Http\Middleware\AuthenticateTagihanStudentIntegration;
+use App\Http\Middleware\AuthenticateLiteracySchoolMonitor;
 use App\Http\Middleware\LogSlowAdminRequests;
 use App\Http\Middleware\PreventAdminResponseCaching;
 use App\Http\Middleware\TrustProxies;
@@ -25,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'tagihan.student.integration' => AuthenticateTagihanStudentIntegration::class,
+            'literacy.school.monitor' => AuthenticateLiteracySchoolMonitor::class,
         ]);
 
         $middleware->replace(

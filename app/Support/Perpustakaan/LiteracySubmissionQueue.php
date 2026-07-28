@@ -142,11 +142,23 @@ class LiteracySubmissionQueue
             if (! in_array($ticket->status, [
                 PerpustakaanLiterasiSubmissionTicket::STATUS_COMPLETED,
                 PerpustakaanLiterasiSubmissionTicket::STATUS_EXPIRED,
+                PerpustakaanLiterasiSubmissionTicket::STATUS_CANCELLED,
             ], true)) {
                 $ticket->forceFill([
                     'status' => PerpustakaanLiterasiSubmissionTicket::STATUS_CANCELLED,
                     'expires_at' => now()->addHours($this->completedTtlHours()),
                 ])->save();
+
+                app(LiteracySubmissionEventRecorder::class)->record('cancelled', [
+                    'material_id' => $ticket->material_id,
+                    'response_id' => $ticket->response_id,
+                    'data_siswa_id' => $ticket->data_siswa_id,
+                    'ticket_id' => $ticket->getKey(),
+                    'context' => [
+                        'operation' => $ticket->operation,
+                        'queue_status' => PerpustakaanLiterasiSubmissionTicket::STATUS_CANCELLED,
+                    ],
+                ]);
             }
 
             $this->promoteWaitingTickets();
@@ -406,7 +418,7 @@ class LiteracySubmissionQueue
 
     protected function expireStaleTickets(): void
     {
-        PerpustakaanLiterasiSubmissionTicket::query()
+        $expiredTickets = PerpustakaanLiterasiSubmissionTicket::query()
             ->where('scope', self::SCOPE)
             ->whereIn('status', [
                 PerpustakaanLiterasiSubmissionTicket::STATUS_WAITING,
@@ -414,11 +426,37 @@ class LiteracySubmissionQueue
                 PerpustakaanLiterasiSubmissionTicket::STATUS_PROCESSING,
             ])
             ->where('expires_at', '<=', now())
+            ->get([
+                'id',
+                'material_id',
+                'response_id',
+                'data_siswa_id',
+                'operation',
+                'status',
+            ]);
+
+        if ($expiredTickets->isNotEmpty()) {
+            PerpustakaanLiterasiSubmissionTicket::query()
+                ->whereKey($expiredTickets->pluck('id'))
             ->update([
                 'status' => PerpustakaanLiterasiSubmissionTicket::STATUS_EXPIRED,
                 'expires_at' => now()->addHours($this->completedTtlHours()),
                 'updated_at' => now(),
             ]);
+
+            $expiredTickets->each(function (PerpustakaanLiterasiSubmissionTicket $ticket): void {
+                app(LiteracySubmissionEventRecorder::class)->record('expired', [
+                    'material_id' => $ticket->material_id,
+                    'response_id' => $ticket->response_id,
+                    'data_siswa_id' => $ticket->data_siswa_id,
+                    'ticket_id' => $ticket->getKey(),
+                    'context' => [
+                        'operation' => $ticket->operation,
+                        'queue_status' => $ticket->status,
+                    ],
+                ]);
+            });
+        }
 
         PerpustakaanLiterasiSubmissionTicket::query()
             ->whereIn('status', [

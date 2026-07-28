@@ -149,6 +149,7 @@
                 let finalSubmissionRunning = false;
                 let queueAction = 'cancel';
                 let lastValidationField = '';
+                let clientFailureReported = false;
 
                 const wait = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
                 const csrfToken = () => form.querySelector('input[name="_token"]')?.value || '';
@@ -185,6 +186,11 @@
                     retryStatusesInput.value = statuses.slice(-12).join(',');
                     persistDraft();
                 };
+                const currentRetryStatuses = () => (retryStatusesInput?.value || '')
+                    .split(',')
+                    .map((status) => status.trim())
+                    .filter(Boolean)
+                    .slice(-12);
 
                 const showQueue = (heading, detail) => {
                     panel?.classList.remove('hidden');
@@ -222,6 +228,70 @@
                     field.focus({ preventScroll: true });
 
                     return true;
+                };
+                const validationContainer = (fieldName) => Array.from(
+                    form.querySelectorAll('[data-literacy-validation-for]')
+                ).find((element) => element.dataset.literacyValidationFor === fieldName);
+                const clearValidationError = (fieldName) => {
+                    const container = validationContainer(fieldName);
+
+                    if (container) {
+                        container.textContent = '';
+                        container.classList.add('hidden');
+                    }
+
+                    const inputName = fieldName?.startsWith('answers.')
+                        ? `answers[${fieldName.slice('answers.'.length)}]`
+                        : fieldName;
+                    Array.from(form.elements)
+                        .find((element) => element.name === inputName)
+                        ?.removeAttribute('aria-invalid');
+                };
+                const clearValidationErrors = () => {
+                    form.querySelectorAll('[data-literacy-validation-for]').forEach((container) => {
+                        container.textContent = '';
+                        container.classList.add('hidden');
+                    });
+                    form.querySelectorAll('[aria-invalid="true"]').forEach((field) => field.removeAttribute('aria-invalid'));
+                };
+                const renderValidationErrors = (errors = {}) => {
+                    clearValidationErrors();
+
+                    Object.entries(errors).forEach(([fieldName, messages]) => {
+                        const messageText = Array.isArray(messages) ? messages[0] : messages;
+                        const container = validationContainer(fieldName);
+
+                        if (!container || !messageText) {
+                            return;
+                        }
+
+                        container.textContent = String(messageText);
+                        container.classList.remove('hidden');
+                    });
+                };
+                const reportClientFailure = (retryStatuses = []) => {
+                    if (clientFailureReported || !form.dataset.literacyEventEndpoint) {
+                        return;
+                    }
+
+                    clientFailureReported = true;
+                    const body = new FormData();
+                    body.append('_token', csrfToken());
+                    body.append('event_code', 'client_retry_exhausted');
+                    body.append('submission_ticket', ticketInput?.value || '');
+                    body.append('submission_request_id', requestIdInput?.value || '');
+                    body.append('retry_statuses', retryStatuses.join(','));
+
+                    fetch(form.dataset.literacyEventEndpoint, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        keepalive: true,
+                        headers: {
+                            Accept: 'application/json',
+                            'X-CSRF-TOKEN': csrfToken(),
+                        },
+                        body,
+                    }).catch(() => {});
                 };
 
                 const stopQueue = () => {
@@ -375,6 +445,7 @@
                             error.retryAfter = Number.parseInt(response.headers.get('Retry-After') || '0', 10);
                             error.retryable = [408, 425, 429, 500, 502, 503, 504].includes(response.status);
                             error.validationField = validationEntry?.[0] || '';
+                            error.validationErrors = payload.errors || {};
                             throw error;
                         }
 
@@ -528,10 +599,15 @@
 
                         if (isValidationError) {
                             lastValidationField = error?.validationField || '';
+                            renderValidationErrors(error?.validationErrors || {});
                             clearTicketState();
                             setQueueAction('repair');
                         } else {
                             setQueueAction('cancel');
+                        }
+
+                        if (error?.exhausted) {
+                            reportClientFailure(currentRetryStatuses());
                         }
 
                         form.dataset.literacyQueueAdmitted = '0';
@@ -662,6 +738,9 @@
                             error?.exhausted ? 'Belum berhasil terhubung ke antrean' : 'Pengiriman belum dapat dilanjutkan',
                             error?.message || `Antrean belum dapat dihubungi. ${draftSafetyText()}`
                         );
+                        if (error?.exhausted) {
+                            reportClientFailure(currentRetryStatuses());
+                        }
                         stopQueue();
                     }
                 };
@@ -669,6 +748,18 @@
                 const restoredDraft = restoreDraft();
 
                 form.addEventListener('input', scheduleDraftPersistence);
+                form.addEventListener('input', (event) => {
+                    const fieldName = event.target?.name;
+
+                    if (!fieldName) {
+                        return;
+                    }
+
+                    const validationName = /^answers\[(.+)]$/.test(fieldName)
+                        ? `answers.${fieldName.match(/^answers\[(.+)]$/)?.[1]}`
+                        : fieldName;
+                    clearValidationError(validationName);
+                });
                 form.addEventListener('change', scheduleDraftPersistence);
 
                 form.addEventListener('submit', (event) => {
@@ -1049,6 +1140,65 @@
                 syncIntegrityFields();
             }
         });
+
+        const imageTriggers = Array.from(document.querySelectorAll(
+            '[data-literacy-image-open], .literacy-reading-content img'
+        ));
+
+        if (imageTriggers.length > 0) {
+            const dialog = document.createElement('dialog');
+            dialog.setAttribute('aria-label', 'Pratinjau gambar');
+            dialog.style.cssText = 'width:min(96vw,72rem);max-width:72rem;border:0;border-radius:1rem;padding:0;background:#0f172a;color:#fff;box-shadow:0 24px 80px rgba(15,23,42,.5)';
+            dialog.innerHTML = `
+                <div style="position:relative;padding:2.75rem .75rem 1rem">
+                    <button type="button" data-literacy-image-close aria-label="Tutup pratinjau" style="position:absolute;right:.75rem;top:.65rem;min-width:2.25rem;min-height:2.25rem;border:1px solid rgba(255,255,255,.35);border-radius:999px;background:rgba(15,23,42,.8);color:#fff;font-size:1.25rem;cursor:pointer">×</button>
+                    <img data-literacy-image-preview alt="" style="display:block;width:auto;max-width:100%;max-height:82vh;margin:auto;object-fit:contain;border-radius:.65rem">
+                    <div data-literacy-image-caption style="margin-top:.75rem;text-align:center;font-size:.875rem;line-height:1.5;color:#e2e8f0"></div>
+                </div>
+            `;
+            document.body.appendChild(dialog);
+
+            const preview = dialog.querySelector('[data-literacy-image-preview]');
+            const caption = dialog.querySelector('[data-literacy-image-caption]');
+            const closeDialog = () => dialog.open && dialog.close();
+            const openDialog = (trigger) => {
+                const sourceImage = trigger.matches('img') ? trigger : trigger.querySelector('img');
+                const source = sourceImage?.currentSrc || sourceImage?.src;
+
+                if (!source) {
+                    return;
+                }
+
+                preview.src = source;
+                preview.alt = sourceImage?.alt || '';
+                caption.textContent = trigger.dataset.literacyImageCaption || sourceImage?.alt || 'Pratinjau gambar';
+                dialog.showModal();
+            };
+
+            dialog.querySelector('[data-literacy-image-close]')?.addEventListener('click', closeDialog);
+            dialog.addEventListener('click', (event) => {
+                if (event.target === dialog) {
+                    closeDialog();
+                }
+            });
+
+            imageTriggers.forEach((trigger) => {
+                trigger.style.cursor = 'zoom-in';
+
+                if (trigger.matches('img')) {
+                    trigger.setAttribute('role', 'button');
+                    trigger.setAttribute('tabindex', '0');
+                }
+
+                trigger.addEventListener('click', () => openDialog(trigger));
+                trigger.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openDialog(trigger);
+                    }
+                });
+            });
+        }
 
         const combobox = document.querySelector('[data-literacy-student-combobox]');
 

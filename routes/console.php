@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schedule;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 Artisan::command('inspire', function () {
@@ -135,23 +136,78 @@ Artisan::command('app:admin-performance-report {--limit=10 : Jumlah baris terata
 })->purpose('Ringkas log request dan query lambat admin');
 
 Schedule::call(function (): void {
+    $updateWorkerState = function (array $values): void {
+        if (! Schema::hasTable('perpustakaan_literasi_submission_queue_states')) {
+            return;
+        }
+
+        $availableValues = collect($values)
+            ->filter(fn (mixed $value, string $column): bool => Schema::hasColumn(
+                'perpustakaan_literasi_submission_queue_states',
+                $column,
+            ))
+            ->all();
+
+        if ($availableValues !== []) {
+            DB::table('perpustakaan_literasi_submission_queue_states')
+                ->where('scope', LiteracySubmissionQueue::SCOPE)
+                ->update($availableValues + ['updated_at' => now()]);
+        }
+    };
+
+    $updateWorkerState(['scheduler_heartbeat_at' => now()]);
+
     if (app(LiteracySubmissionQueue::class)->analysisShouldWait()) {
+        $updateWorkerState(['worker_status' => 'paused_for_submissions']);
+
         return;
     }
 
-    Artisan::call('queue:work', [
-        '--queue' => 'literacy-analysis,default',
-        '--stop-when-empty' => true,
-        '--max-jobs' => 3,
-        '--max-time' => 20,
-        '--tries' => 3,
-        '--sleep' => 1,
-        '--timeout' => 120,
-        '--no-interaction' => true,
+    $updateWorkerState([
+        'worker_started_at' => now(),
+        'worker_status' => 'running',
     ]);
+
+    try {
+        Artisan::call('queue:work', [
+            '--queue' => 'literacy-analysis,default',
+            '--stop-when-empty' => true,
+            '--max-jobs' => 3,
+            '--max-time' => 20,
+            '--tries' => 3,
+            '--sleep' => 1,
+            '--timeout' => 120,
+            '--no-interaction' => true,
+        ]);
+
+        $updateWorkerState(['worker_status' => 'idle']);
+    } catch (Throwable $exception) {
+        $updateWorkerState(['worker_status' => 'error']);
+
+        throw $exception;
+    } finally {
+        $updateWorkerState(['worker_finished_at' => now()]);
+    }
 })
     ->everyMinute()
     ->name('queue-controlled-worker')
+    ->withoutOverlapping();
+
+Schedule::call(function (): void {
+    if (Schema::hasTable('perpustakaan_literasi_submission_events')) {
+        DB::table('perpustakaan_literasi_submission_events')
+            ->where('occurred_at', '<', now()->subDays(30))
+            ->delete();
+    }
+
+    if (Schema::hasTable('perpustakaan_literasi_network_checks')) {
+        DB::table('perpustakaan_literasi_network_checks')
+            ->where('checked_at', '<', now()->subDays(90))
+            ->delete();
+    }
+})
+    ->dailyAt('02:15')
+    ->name('literacy-operational-log-cleanup')
     ->withoutOverlapping();
 
 Artisan::command('app:backfill-module-access-levels {--dry-run : Tampilkan perubahan tanpa menyimpan} {--force : Paksa tulis ulang user yang sudah punya module_access_levels}', function () {

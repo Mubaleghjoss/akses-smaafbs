@@ -5,6 +5,7 @@ namespace App\Filament\Widgets;
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource;
 use App\Models\PerpustakaanLiterasiMaterial;
 use App\Support\Perpustakaan\LiterasiAnalytics;
+use App\Support\Perpustakaan\LiteracyOperationalHealth;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\Schema;
 
@@ -48,6 +49,7 @@ class PerpustakaanLiterasiGlobalAnalytics extends Widget
             'analyticsDescription' => $activeTab === 'all'
                 ? 'Rekap semua materi Literasi Numerasi pada bulan berjalan.'
                 : 'Rekap bulan berjalan khusus kategori '.$tabs[$activeTab].'.',
+            'operationalHealth' => app(LiteracyOperationalHealth::class)->snapshot(),
         ];
     }
 

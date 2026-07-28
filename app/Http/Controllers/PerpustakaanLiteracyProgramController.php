@@ -11,6 +11,7 @@ use App\Models\PerpustakaanLiterasiQuestion;
 use App\Models\PerpustakaanLiterasiResponse;
 use App\Models\PerpustakaanLiterasiSubmissionTicket;
 use App\Support\Perpustakaan\LiteracySocialThumbnail;
+use App\Support\Perpustakaan\LiteracySubmissionEventRecorder;
 use App\Support\Perpustakaan\LiteracySubmissionQueue;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -21,6 +22,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -200,6 +202,19 @@ class PerpustakaanLiteracyProgramController extends Controller
             $ticketCompleted = true;
 
             return $this->successfulSubmissionRedirect($response, 'Jawaban berhasil dikirim. Simpan kode unik untuk mengedit jawaban.');
+        } catch (ValidationException $exception) {
+            app(LiteracySubmissionEventRecorder::class)->record('validation_failed', [
+                'material_id' => $material->getKey(),
+                'data_siswa_id' => $studentId,
+                'ticket_id' => $ticket?->getKey(),
+                'http_status' => 422,
+                'context' => [
+                    'operation' => 'create',
+                    'fields' => array_keys($exception->errors()),
+                ],
+            ]);
+
+            throw $exception;
         } finally {
             if (! $ticketCompleted) {
                 $submissionQueue->release($ticket);
@@ -295,6 +310,20 @@ class PerpustakaanLiteracyProgramController extends Controller
             $ticketCompleted = true;
 
             return $this->successfulSubmissionRedirect($response, 'Jawaban berhasil diperbarui.');
+        } catch (ValidationException $exception) {
+            app(LiteracySubmissionEventRecorder::class)->record('validation_failed', [
+                'material_id' => $response->material_id,
+                'response_id' => $response->getKey(),
+                'data_siswa_id' => $response->data_siswa_id,
+                'ticket_id' => $ticket?->getKey(),
+                'http_status' => 422,
+                'context' => [
+                    'operation' => 'update',
+                    'fields' => array_keys($exception->errors()),
+                ],
+            ]);
+
+            throw $exception;
         } finally {
             if (! $ticketCompleted) {
                 $submissionQueue->release($ticket);
@@ -402,6 +431,43 @@ class PerpustakaanLiteracyProgramController extends Controller
         LiteracySubmissionQueue $submissionQueue,
     ): JsonResponse {
         return response()->json($submissionQueue->cancel($request, $token));
+    }
+
+    public function recordSubmissionEvent(
+        Request $request,
+        string $slug,
+        LiteracySubmissionEventRecorder $recorder,
+    ) {
+        $material = $this->resolvePublicMaterial($slug);
+        $validated = $request->validate([
+            'event_code' => ['required', 'in:client_retry_exhausted'],
+            'submission_ticket' => ['nullable', 'string', 'max:64'],
+            'submission_request_id' => ['nullable', 'uuid'],
+            'retry_statuses' => ['nullable', 'string', 'max:120'],
+        ]);
+        $ticket = filled($validated['submission_ticket'] ?? null)
+            ? PerpustakaanLiterasiSubmissionTicket::query()
+                ->where('public_token', $validated['submission_ticket'])
+                ->where('material_id', $material->getKey())
+                ->first()
+            : null;
+
+        $recorder->record('client_retry_exhausted', [
+            'material_id' => $material->getKey(),
+            'data_siswa_id' => $ticket?->data_siswa_id,
+            'ticket_id' => $ticket?->getKey(),
+            'http_status' => collect(explode(',', (string) ($validated['retry_statuses'] ?? '')))
+                ->map(fn (string $status): int => (int) trim($status))
+                ->filter()
+                ->last(),
+            'retry_statuses' => $validated['retry_statuses'] ?? null,
+            'context' => [
+                'operation' => $ticket?->operation ?? 'unknown',
+                'reason' => 'retry_window_exhausted',
+            ],
+        ]);
+
+        return response()->noContent();
     }
 
     public function recordIntegrity(Request $request, string $code)

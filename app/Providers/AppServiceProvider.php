@@ -147,6 +147,15 @@ class AppServiceProvider extends ServiceProvider
             Limit::perMinute(60)->by('literacy-integrity-session|'.$this->literacySessionKey($request)),
             Limit::perMinute(1200)->by('literacy-integrity-ip|'.$request->ip()),
         ]);
+
+        RateLimiter::for('literacy_events', fn (Request $request): array => [
+            Limit::perMinute(30)->by('literacy-events-session|'.$this->literacySessionKey($request)),
+            Limit::perMinute(600)->by('literacy-events-ip|'.$request->ip()),
+        ]);
+
+        RateLimiter::for('literacy_school_monitor', fn (Request $request): array => [
+            Limit::perMinute(30)->by('literacy-school-monitor|'.$request->ip()),
+        ]);
     }
 
     protected function literacySessionKey(Request $request): string

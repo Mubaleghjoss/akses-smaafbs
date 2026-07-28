@@ -403,6 +403,9 @@ Route::post('/perpustakaan/program-literasi-numerasi/edit/{code}', [Perpustakaan
     ->middleware('throttle:literacy_submit')
     ->where('code', '[A-Za-z0-9-]+')
     ->name('library.literacy.update');
+Route::post('/perpustakaan/program-literasi-numerasi/{slug}/submission-event', [PerpustakaanLiteracyProgramController::class, 'recordSubmissionEvent'])
+    ->middleware('throttle:literacy_events')
+    ->name('library.literacy.submission-event');
 Route::get('/perpustakaan/program-literasi-numerasi/{slug}', [PerpustakaanLiteracyProgramController::class, 'show'])
     ->name('library.literacy.show');
 Route::post('/perpustakaan/program-literasi-numerasi/{slug}/submission-ticket', [PerpustakaanLiteracyProgramController::class, 'requestStoreTicket'])

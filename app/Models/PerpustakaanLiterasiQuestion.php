@@ -32,6 +32,28 @@ class PerpustakaanLiterasiQuestion extends Model
     protected static function booted(): void
     {
         static::saving(function (self $question): void {
+            if ($question->exists && $question->isDirty('max_characters')) {
+                $previousMax = (int) $question->getOriginal('max_characters');
+                $newMax = max(1, (int) $question->max_characters);
+
+                if ($newMax < $previousMax) {
+                    $longestSavedAnswer = (int) $question->answers()
+                        ->withTrashed()
+                        ->max('character_count');
+
+                    if ($longestSavedAnswer > $newMax) {
+                        throw ValidationException::withMessages([
+                            'max_characters' => sprintf(
+                                'Batas tidak dapat diturunkan menjadi %s karakter karena ada jawaban tersimpan sepanjang %s karakter. Gunakan batas minimal %s atau lebih.',
+                                number_format($newMax, 0, ',', '.'),
+                                number_format($longestSavedAnswer, 0, ',', '.'),
+                                number_format($longestSavedAnswer, 0, ',', '.'),
+                            ),
+                        ]);
+                    }
+                }
+            }
+
             if (! $question->isDirty('image_path') || blank($question->image_path)) {
                 return;
             }

@@ -12,9 +12,11 @@ use App\Jobs\AnalyzeLiteracyResponseSimilarity;
 use App\Models\DataSiswa;
 use App\Models\PerpustakaanLiterasiAnswer;
 use App\Models\PerpustakaanLiterasiMaterial;
+use App\Models\PerpustakaanLiterasiNetworkCheck;
 use App\Models\PerpustakaanLiterasiQuestion;
 use App\Models\PerpustakaanLiterasiResponse;
 use App\Models\PerpustakaanLiterasiSimilarityMatch;
+use App\Models\PerpustakaanLiterasiSubmissionEvent;
 use App\Models\PerpustakaanLiterasiSubmissionQueueState;
 use App\Models\PerpustakaanLiterasiSubmissionTicket;
 use App\Models\Pengaturan;
@@ -60,6 +62,7 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->runLiteracyStudentVerificationSettingMigration();
         $this->runLiteracySubmissionQueueMigration();
         $this->runLiteracySubmissionDeliveryMigration();
+        $this->runLiteracyOperationalMonitoringMigration();
         $this->bootstrapPengaturanTable();
         $this->bootstrapLibraryHubTables();
     }
@@ -882,6 +885,99 @@ class LibraryLiteracyProgramTest extends TestCase
                 $question->getKey() => 'Terlalu pendek.',
             ],
         ])->assertSessionHasErrors(['answers.'.$question->getKey()]);
+    }
+
+    public function test_public_question_keeps_line_breaks_and_images_open_in_preview(): void
+    {
+        $this->createStudent('Codex Tampilan Soal', 'XI 1');
+        $material = $this->createMaterial('Materi Tampilan Soal');
+        $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => "Baris pertama\nBaris kedua",
+            'image_path' => 'literasi/questions/contoh.webp',
+            'max_characters' => 1000,
+        ]);
+
+        $this->get(route('library.literacy.show', $material->slug))
+            ->assertOk()
+            ->assertSee('whitespace-pre-line', false)
+            ->assertSee("Baris pertama\nBaris kedua")
+            ->assertSee('data-literacy-image-open', false)
+            ->assertSee('Ketuk gambar untuk memperbesar')
+            ->assertSee('data-literacy-image-preview', false)
+            ->assertSee('data-literacy-validation-for="answers.', false);
+    }
+
+    public function test_failed_answer_validation_is_recorded_without_answer_contents(): void
+    {
+        config()->set('literacy.submission_queue.enabled', false);
+        $student = $this->createStudent('Codex Validasi Event', 'XI 2');
+        $material = $this->createMaterial('Materi Validasi Event', [
+            'student_verification_enabled' => false,
+        ]);
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Jawab maksimal lima karakter.',
+            'min_characters' => 0,
+            'max_characters' => 5,
+            'is_required' => true,
+        ]);
+
+        $this->postJson(route('library.literacy.store', $material->slug), [
+            'student_id' => $student->getKey(),
+            'answers' => [$question->getKey() => 'jawaban-rahasia-siswa'],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['answers.'.$question->getKey()]);
+
+        $event = PerpustakaanLiterasiSubmissionEvent::query()->sole();
+        $this->assertSame('validation_failed', $event->event_code);
+        $this->assertSame(['answers.'.$question->getKey()], $event->context['fields']);
+        $this->assertStringNotContainsString('jawaban-rahasia-siswa', json_encode($event->toArray()));
+    }
+
+    public function test_question_limit_cannot_be_lowered_below_saved_answer(): void
+    {
+        $student = $this->createStudent('Codex Batas Tersimpan', 'XI 3');
+        $material = $this->createMaterial('Materi Batas Tersimpan');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Tuliskan esai.',
+            'min_characters' => 0,
+            'max_characters' => 1000,
+        ]);
+        $this->createResponseWithAnswer($material, $student, $question, str_repeat('a', 600));
+
+        $this->expectException(ValidationException::class);
+        $question->forceFill(['max_characters' => 500])->save();
+    }
+
+    public function test_school_network_monitor_requires_token_and_records_health_check(): void
+    {
+        config()->set('literacy.school_monitor.token', 'monitor-token-test');
+        $payload = [
+            'source' => 'school-test',
+            'status' => 'ok',
+            'dns_ok' => true,
+            'tcp_ok' => true,
+            'http_status' => 200,
+            'duration_ms' => 245,
+            'consecutive_failures' => 0,
+            'checked_at' => now()->toIso8601String(),
+            'context' => ['client_version' => 'test'],
+        ];
+
+        $this->postJson(route('api.monitoring.school-network'), $payload)
+            ->assertUnauthorized();
+
+        $this->withToken('monitor-token-test')
+            ->postJson(route('api.monitoring.school-network'), $payload)
+            ->assertCreated()
+            ->assertJson(['recorded' => true]);
+
+        $check = PerpustakaanLiterasiNetworkCheck::query()->sole();
+        $this->assertSame('school-test', $check->source);
+        $this->assertTrue($check->dns_ok);
+        $this->assertSame(200, $check->http_status);
     }
 
     public function test_public_literacy_page_includes_math_renderer_for_formula_content(): void
@@ -2197,6 +2293,18 @@ class LibraryLiteracyProgramTest extends TestCase
         }
 
         $migration = require database_path('migrations/2026_07_23_193000_add_submission_delivery_status_to_literacy_responses.php');
+        $migration->up();
+    }
+
+    protected function runLiteracyOperationalMonitoringMigration(): void
+    {
+        if (Schema::hasTable('perpustakaan_literasi_submission_events')
+            && Schema::hasTable('perpustakaan_literasi_network_checks')
+            && Schema::hasColumn('perpustakaan_literasi_submission_queue_states', 'scheduler_heartbeat_at')) {
+            return;
+        }
+
+        $migration = require database_path('migrations/2026_07_28_080000_add_literacy_operational_monitoring.php');
         $migration->up();
     }
 

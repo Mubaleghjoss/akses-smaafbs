@@ -28,6 +28,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Components\View as SchemaView;
 use Filament\Schemas\Schema;
 use Filament\Tables;
@@ -243,6 +244,30 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                                         ? 'Mode deteksi aktif: jawaban yang sama dengan kunci otomatis Benar, dan tetap dicek plagiasi terhadap jawaban siswa lain.'
                                         : 'Mode deteksi tidak aktif: jawaban yang sama dengan kunci otomatis Benar dan tidak masuk Daftar Plagiat Per Kelas; jawaban berbeda tetap Belum dinilai.')
                                     ->columnSpanFull(),
+                                Forms\Components\Select::make('answer_length_preset')
+                                    ->label('Preset Panjang Jawaban')
+                                    ->options([
+                                        '500' => 'Singkat - 500 karakter',
+                                        '1000' => 'Sedang - 1.000 karakter',
+                                        '2000' => 'Esai - 2.000 karakter',
+                                        '4000' => 'Panjang - 4.000 karakter',
+                                        'custom' => 'Atur sendiri',
+                                    ])
+                                    ->default('1000')
+                                    ->dehydrated(false)
+                                    ->live()
+                                    ->afterStateHydrated(function (Forms\Components\Select $component, mixed $record): void {
+                                        $max = $record instanceof PerpustakaanLiterasiQuestion
+                                            ? (int) $record->max_characters
+                                            : 1000;
+                                        $component->state(in_array($max, [500, 1000, 2000, 4000], true) ? (string) $max : 'custom');
+                                    })
+                                    ->afterStateUpdated(function (mixed $state, Set $set): void {
+                                        if ($state !== 'custom' && is_numeric($state)) {
+                                            $set('max_characters', (int) $state);
+                                        }
+                                    })
+                                    ->helperText('Pilih cepat sesuai jenis soal. Gunakan Atur sendiri untuk kebutuhan khusus.'),
                                 Forms\Components\TextInput::make('min_characters')
                                     ->label('Minimal Karakter Jawaban')
                                     ->required()
@@ -257,7 +282,7 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                                     ->minValue(fn (Get $get): int => max(1, (int) ($get('min_characters') ?: 0)))
                                     ->maxValue(8000)
                                     ->default(1000)
-                                    ->helperText('Naikkan batas ini bila soal membutuhkan jawaban esai panjang. Siswa akan melihat penghitung dan batas maksimal sebelum mengirim.'),
+                                    ->helperText('Sistem menolak penurunan batas jika ada jawaban tersimpan yang lebih panjang. Siswa melihat penghitung sebelum mengirim.'),
                                 Forms\Components\Toggle::make('is_required')
                                     ->label('Wajib diisi')
                                     ->default(true),

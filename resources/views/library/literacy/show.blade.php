@@ -25,6 +25,8 @@
                         height="720"
                         decoding="async"
                         fetchpriority="high"
+                        data-literacy-image-open
+                        data-literacy-image-caption="{{ $material->title }}"
                     >
                 @endif
                 <div class="p-6 md:p-7">
@@ -82,6 +84,7 @@
                 data-literacy-retry-delays="{{ implode(',', config('literacy.submission_queue.retry_delays_seconds', [5, 10, 20, 30])) }}"
                 data-literacy-retry-window-seconds="{{ config('literacy.submission_queue.retry_window_seconds', 600) }}"
                 data-literacy-draft-ttl-hours="{{ config('literacy.submission_queue.draft_ttl_hours', 12) }}"
+                data-literacy-event-endpoint="{{ route('library.literacy.submission-event', $material->slug) }}"
             >
                 @csrf
                 <input type="hidden" name="submission_request_id" value="{{ old('submission_request_id', (string) \Illuminate\Support\Str::uuid()) }}" data-literacy-request-id>
@@ -161,9 +164,11 @@
                                 Terpilih: {{ $selectedStudent['label'] }}
                             @endif
                         </div>
-                        @error('student_id')
-                            <div class="mt-1 text-xs text-rose-600">{{ $message }}</div>
-                        @enderror
+                        <div
+                            @class(['mt-1 text-xs text-rose-600', 'hidden' => ! $errors->has('student_id')])
+                            role="alert"
+                            data-literacy-validation-for="student_id"
+                        >{{ $errors->first('student_id') }}</div>
                     </div>
 
                     @if($material->student_verification_enabled ?? true)
@@ -181,9 +186,11 @@
                             <div class="mt-1 text-xs text-slate-500" data-student-verification-help>
                                 Isi NISN atau tanggal lahir siswa yang dipilih. Ini membantu mencegah nama dipakai oleh siswa lain.
                             </div>
-                            @error('student_verification')
-                                <div class="mt-1 text-xs text-rose-600">{{ $message }}</div>
-                            @enderror
+                            <div
+                                @class(['mt-1 text-xs text-rose-600', 'hidden' => ! $errors->has('student_verification')])
+                                role="alert"
+                                data-literacy-validation-for="student_verification"
+                            >{{ $errors->first('student_verification') }}</div>
                         </div>
                     @endif
                 @endif
@@ -201,19 +208,22 @@
                             <span class="chip">Min. {{ number_format($minCharacters, 0, ',', '.') }} karakter</span>
                             <span class="chip">Maks. {{ number_format($maxCharacters, 0, ',', '.') }} karakter</span>
                         </div>
-                        <label class="mt-3 block text-sm font-semibold leading-6 text-slate-900" for="question-{{ $question->getKey() }}">
+                        <label class="mt-3 block whitespace-pre-line break-words text-sm font-semibold leading-6 text-slate-900" for="question-{{ $question->getKey() }}">
                             {{ $question->prompt }}
                         </label>
                         @if($question->imageUrl())
-                            <img
-                                src="{{ $question->imageUrl() }}"
-                                alt=""
-                                class="mt-3 max-h-80 w-full rounded-2xl border border-slate-200 object-contain"
-                                width="1280"
-                                height="1280"
-                                loading="lazy"
-                                decoding="async"
-                            >
+                            <button type="button" class="mt-3 block w-full cursor-zoom-in rounded-2xl text-left focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2" data-literacy-image-open data-literacy-image-caption="Gambar pertanyaan {{ $index + 1 }}">
+                                <img
+                                    src="{{ $question->imageUrl() }}"
+                                    alt="Gambar pendukung pertanyaan {{ $index + 1 }}"
+                                    class="max-h-80 w-full rounded-2xl border border-slate-200 object-contain"
+                                    width="1280"
+                                    height="1280"
+                                    loading="lazy"
+                                    decoding="async"
+                                >
+                                <span class="mt-1 block text-center text-xs font-semibold text-sky-700">Ketuk gambar untuk memperbesar</span>
+                            </button>
                         @endif
                         @if($question->google_drive_url)
                             <a class="chip mt-3 inline-flex" href="{{ $question->google_drive_url }}" target="_blank" rel="noopener">Buka Lampiran</a>
@@ -237,9 +247,11 @@
                         <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
                             <div class="h-full rounded-full bg-slate-400 transition-all" style="width: 0%" data-literacy-answer-bar></div>
                         </div>
-                        @error($fieldName)
-                            <div class="mt-2 text-xs text-rose-600">{{ $message }}</div>
-                        @enderror
+                        <div
+                            @class(['mt-2 text-xs text-rose-600', 'hidden' => ! $errors->has($fieldName)])
+                            role="alert"
+                            data-literacy-validation-for="{{ $fieldName }}"
+                        >{{ $errors->first($fieldName) }}</div>
                     </section>
                 @empty
                     <div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">

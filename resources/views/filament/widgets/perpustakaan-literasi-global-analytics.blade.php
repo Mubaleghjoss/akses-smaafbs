@@ -8,6 +8,57 @@
         </summary>
 
         <div class="literasi-index-summary__content">
+            <section class="literasi-health" aria-labelledby="literasi-health-title">
+                <div class="literasi-health__heading">
+                    <span>
+                        <strong id="literasi-health-title">Kesehatan Pengiriman</strong>
+                        <small>Antrean, retry, worker, dan pantauan jaringan sekolah. Data diperbarui saat panel dimuat.</small>
+                    </span>
+                    <span class="literasi-health__updated">{{ $operationalHealth['updated_at']->format('H:i:s') }}</span>
+                </div>
+
+                <div class="literasi-health__grid">
+                    <article class="literasi-health-card">
+                        <span>Antrean Sekarang</span>
+                        <strong>{{ number_format($operationalHealth['waiting'], 0, ',', '.') }} menunggu</strong>
+                        <small>{{ $operationalHealth['active'] }}/{{ $operationalHealth['active_slots'] }} slot aktif · rata-rata {{ number_format($operationalHealth['average_seconds'], 1, ',', '.') }} dtk</small>
+                    </article>
+                    <article class="literasi-health-card">
+                        <span>Masuk 24 Jam</span>
+                        <strong>{{ number_format($operationalHealth['direct_24h'] + $operationalHealth['queued_24h'], 0, ',', '.') }} jawaban</strong>
+                        <small>Langsung {{ $operationalHealth['direct_24h'] }} · sempat antre {{ $operationalHealth['queued_24h'] }}</small>
+                    </article>
+                    <article @class(['literasi-health-card', 'is-warning' => $operationalHealth['retry_429_24h'] + $operationalHealth['retry_503_24h'] > 0])>
+                        <span>Retry 24 Jam</span>
+                        <strong>429: {{ $operationalHealth['retry_429_24h'] }} · 503: {{ $operationalHealth['retry_503_24h'] }}</strong>
+                        <small>Gagal setelah semua retry: {{ $operationalHealth['retry_exhausted_24h'] }}</small>
+                    </article>
+                    <article @class(['literasi-health-card', 'is-warning' => $operationalHealth['validation_failed_24h'] + $operationalHealth['expired_24h'] > 0])>
+                        <span>Kejadian 24 Jam</span>
+                        <strong>{{ $operationalHealth['validation_failed_24h'] }} validasi gagal</strong>
+                        <small>Batal {{ $operationalHealth['cancelled_24h'] }} · tiket kedaluwarsa {{ $operationalHealth['expired_24h'] }}</small>
+                    </article>
+                    <article @class(['literasi-health-card', 'is-danger' => $operationalHealth['failed_jobs'] > 0, 'is-warning' => ! $operationalHealth['scheduler_healthy'] && $operationalHealth['failed_jobs'] === 0])>
+                        <span>Analisis Background</span>
+                        <strong>{{ $operationalHealth['pending_jobs'] }} menunggu · {{ $operationalHealth['failed_jobs'] }} gagal</strong>
+                        <small>Worker: {{ str($operationalHealth['worker_status'])->replace('_', ' ')->headline() }} · cron {{ $operationalHealth['scheduler_label'] }}</small>
+                    </article>
+                    <article @class(['literasi-health-card', 'is-danger' => ! $operationalHealth['network_healthy']])>
+                        <span>Jaringan Sekolah</span>
+                        <strong>{{ str($operationalHealth['network_status'])->headline() }}</strong>
+                        <small>
+                            {{ $operationalHealth['network_label'] }}
+                            @if($operationalHealth['network_duration_ms'])
+                                · {{ number_format($operationalHealth['network_duration_ms'], 0, ',', '.') }} ms
+                            @endif
+                            @if($operationalHealth['network_error_code'])
+                                · {{ $operationalHealth['network_error_code'] }}
+                            @endif
+                        </small>
+                    </article>
+                </div>
+            </section>
+
             <a
                 href="{{ \App\Filament\Resources\PerpustakaanLiterasiMaterialResource::getUrl('student-history') }}"
                 class="literasi-history-link-card"

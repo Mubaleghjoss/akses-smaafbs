@@ -26,4 +26,9 @@ return [
     ],
 
     'similarity_queue' => env('LITERACY_SIMILARITY_QUEUE', 'literacy-analysis'),
+
+    'school_monitor' => [
+        'token' => env('LITERACY_SCHOOL_MONITOR_TOKEN'),
+        'stale_minutes' => max(2, (int) env('LITERACY_SCHOOL_MONITOR_STALE_MINUTES', 10)),
+    ],
 ];
