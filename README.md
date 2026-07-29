@@ -5,6 +5,8 @@ Portal sekolah berbasis Laravel dengan dua area utama:
 - website publik untuk konten dan layanan sekolah,
 - panel admin Filament di `/admin` untuk pengelolaan data internal.
 
+Dokumentasi teknis dan runbook Literasi Numerasi tersedia di [`docs/literacy-numeracy/README.md`](docs/literacy-numeracy/README.md).
+
 Dokumen ini sengaja dibuat ringkas dan hanya memuat hal yang bisa dicek langsung dari repo saat ini.
 
 ## Stack

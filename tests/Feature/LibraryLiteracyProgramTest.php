@@ -24,6 +24,7 @@ use App\Models\User;
 use App\Support\Admin\AdminModuleAccess;
 use App\Support\Perpustakaan\LiteracySubmissionQueue;
 use App\Support\Perpustakaan\LiterasiAnalytics;
+use App\Support\Perpustakaan\LiterasiSimilarityAnalyzer;
 use App\Support\SiteSettings\SiteSettingKeys;
 use Filament\Facades\Filament;
 use Illuminate\Database\Schema\Blueprint;
@@ -63,6 +64,7 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->runLiteracySubmissionQueueMigration();
         $this->runLiteracySubmissionDeliveryMigration();
         $this->runLiteracyOperationalMonitoringMigration();
+        $this->runLiteracyObjectiveQuestionMigration();
         $this->bootstrapPengaturanTable();
         $this->bootstrapLibraryHubTables();
     }
@@ -675,6 +677,207 @@ class LibraryLiteracyProgramTest extends TestCase
         }
     }
 
+    public function test_public_form_renders_three_question_types_and_speech_fallback(): void
+    {
+        $this->createStudent('Codex Tiga Jenis', 'XI 1');
+        $material = $this->createMaterial('Materi Tiga Jenis Soal');
+        $material->questions()->create([
+            'sort_order' => 1,
+            'question_type' => PerpustakaanLiterasiQuestion::TYPE_ESSAY,
+            'prompt' => "Jelaskan isi bacaan.\nGunakan bahasa sendiri.",
+            'speech_input_enabled' => true,
+            'min_characters' => 10,
+            'max_characters' => 500,
+        ]);
+        $material->questions()->create([
+            'sort_order' => 2,
+            'question_type' => PerpustakaanLiterasiQuestion::TYPE_TRUE_FALSE,
+            'prompt' => 'Tentukan Benar atau Salah.',
+            'configuration' => [
+                'items' => [
+                    ['id' => 'tf-a', 'statement' => 'Pernyataan pertama', 'correct' => true],
+                    ['id' => 'tf-b', 'statement' => 'Pernyataan kedua', 'correct' => false],
+                ],
+            ],
+        ]);
+        $material->questions()->create([
+            'sort_order' => 3,
+            'question_type' => PerpustakaanLiterasiQuestion::TYPE_MATCHING,
+            'prompt' => 'Jodohkan pasangan berikut.',
+            'configuration' => [
+                'left' => [
+                    ['id' => 'left-a', 'label' => 'Satu', 'correct_target_id' => 'right-a'],
+                    ['id' => 'left-b', 'label' => 'Dua', 'correct_target_id' => 'right-b'],
+                ],
+                'right' => [
+                    ['id' => 'right-a', 'label' => 'Pertama'],
+                    ['id' => 'right-b', 'label' => 'Kedua'],
+                ],
+            ],
+        ]);
+
+        $this->get(route('library.literacy.show', $material->slug))
+            ->assertOk()
+            ->assertSee('Esai / jawaban tertulis')
+            ->assertSee('Tabel Benar / Salah')
+            ->assertSee('Menjodohkan')
+            ->assertSee('Pernyataan pertama')
+            ->assertSee('Pilih pasangan...')
+            ->assertSee('Jawab dengan Suara')
+            ->assertSee('window.webkitSpeechRecognition', false)
+            ->assertSee("Jelaskan isi bacaan.\nGunakan bahasa sendiri.");
+    }
+
+    public function test_objective_answers_are_validated_stored_and_scored_per_item(): void
+    {
+        Queue::fake();
+
+        $student = $this->createStudent('Codex Nilai Objektif', 'XI 2');
+        $material = $this->createMaterial('Materi Nilai Objektif');
+        $trueFalse = $material->questions()->create([
+            'sort_order' => 1,
+            'question_type' => PerpustakaanLiterasiQuestion::TYPE_TRUE_FALSE,
+            'prompt' => 'Pilih Benar atau Salah.',
+            'configuration' => [
+                'items' => [
+                    ['id' => 'tf-1', 'statement' => 'Langit terlihat biru', 'correct' => true],
+                    ['id' => 'tf-2', 'statement' => 'Dua tambah dua sama dengan lima', 'correct' => false],
+                ],
+            ],
+        ]);
+        $matching = $material->questions()->create([
+            'sort_order' => 2,
+            'question_type' => PerpustakaanLiterasiQuestion::TYPE_MATCHING,
+            'prompt' => 'Pilih pasangan.',
+            'configuration' => [
+                'left' => [
+                    ['id' => 'left-1', 'label' => 'Indonesia', 'correct_target_id' => 'right-1'],
+                    ['id' => 'left-2', 'label' => 'Jepang', 'correct_target_id' => 'right-2'],
+                ],
+                'right' => [
+                    ['id' => 'right-1', 'label' => 'Jakarta'],
+                    ['id' => 'right-2', 'label' => 'Tokyo'],
+                ],
+            ],
+        ]);
+
+        $this->post(route('library.literacy.store', $material->slug), [
+            'student_id' => $student->getKey(),
+            'submission_request_id' => (string) Str::uuid(),
+            'answers' => [
+                $trueFalse->getKey() => [
+                    'items' => ['tf-1' => '1', 'tf-2' => '1'],
+                ],
+                $matching->getKey() => [
+                    'pairs' => ['left-1' => 'right-1', 'left-2' => 'right-2'],
+                ],
+            ],
+        ])->assertRedirect();
+
+        $response = PerpustakaanLiterasiResponse::query()
+            ->where('data_siswa_id', $student->getKey())
+            ->with('answers')
+            ->firstOrFail();
+        $trueFalseAnswer = $response->answers->firstWhere('question_id', $trueFalse->getKey());
+        $matchingAnswer = $response->answers->firstWhere('question_id', $matching->getKey());
+
+        $this->assertSame(1, $trueFalseAnswer->score_earned);
+        $this->assertSame(2, $trueFalseAnswer->score_possible);
+        $this->assertFalse($trueFalseAnswer->is_correct);
+        $this->assertSame('automatic', $trueFalseAnswer->grading_source);
+        $this->assertSame(['tf-1' => true, 'tf-2' => true], $trueFalseAnswer->answer_payload['items']);
+        $this->assertSame(2, $matchingAnswer->score_earned);
+        $this->assertSame(2, $matchingAnswer->score_possible);
+        $this->assertTrue($matchingAnswer->is_correct);
+        Queue::assertPushedOn('literacy-analysis', AnalyzeLiteracyResponseSimilarity::class);
+    }
+
+    public function test_matching_rejects_duplicate_or_manipulated_targets(): void
+    {
+        Queue::fake();
+
+        $student = $this->createStudent('Codex Pasangan Ganda', 'XI 3');
+        $material = $this->createMaterial('Materi Validasi Pasangan');
+        $matching = $material->questions()->create([
+            'sort_order' => 1,
+            'question_type' => PerpustakaanLiterasiQuestion::TYPE_MATCHING,
+            'prompt' => 'Jodohkan.',
+            'configuration' => [
+                'left' => [
+                    ['id' => 'left-1', 'label' => 'A', 'correct_target_id' => 'right-1'],
+                    ['id' => 'left-2', 'label' => 'B', 'correct_target_id' => 'right-2'],
+                ],
+                'right' => [
+                    ['id' => 'right-1', 'label' => 'Satu'],
+                    ['id' => 'right-2', 'label' => 'Dua'],
+                ],
+            ],
+        ]);
+
+        $this->from(route('library.literacy.show', $material->slug))
+            ->post(route('library.literacy.store', $material->slug), [
+                'student_id' => $student->getKey(),
+                'submission_request_id' => (string) Str::uuid(),
+                'answers' => [
+                    $matching->getKey() => [
+                        'pairs' => ['left-1' => 'right-1', 'left-2' => 'right-1'],
+                    ],
+                ],
+            ])
+            ->assertRedirect(route('library.literacy.show', $material->slug))
+            ->assertSessionHasErrors('answers.'.$matching->getKey());
+
+        $this->assertDatabaseMissing('perpustakaan_literasi_responses', [
+            'data_siswa_id' => $student->getKey(),
+        ]);
+    }
+
+    public function test_objective_answers_are_never_compared_as_plagiarism(): void
+    {
+        Queue::fake();
+
+        $studentA = $this->createStudent('Codex Objektif A', 'XI 4');
+        $studentB = $this->createStudent('Codex Objektif B', 'XI 4');
+        $material = $this->createMaterial('Materi Objektif Tanpa Plagiasi');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'question_type' => PerpustakaanLiterasiQuestion::TYPE_TRUE_FALSE,
+            'prompt' => 'Pilih jawaban.',
+            'plagiarism_detection_enabled' => true,
+            'configuration' => [
+                'items' => [
+                    ['id' => 'tf-1', 'statement' => 'Pernyataan A', 'correct' => true],
+                    ['id' => 'tf-2', 'statement' => 'Pernyataan B', 'correct' => false],
+                ],
+            ],
+        ]);
+        $payload = [
+            'answers' => [
+                $question->getKey() => [
+                    'items' => ['tf-1' => '1', 'tf-2' => '0'],
+                ],
+            ],
+        ];
+
+        $this->post(route('library.literacy.store', $material->slug), $payload + [
+            'student_id' => $studentA->getKey(),
+            'submission_request_id' => (string) Str::uuid(),
+        ])->assertRedirect();
+        $this->post(route('library.literacy.store', $material->slug), $payload + [
+            'student_id' => $studentB->getKey(),
+            'submission_request_id' => (string) Str::uuid(),
+        ])->assertRedirect();
+
+        $responseB = PerpustakaanLiterasiResponse::query()
+            ->where('data_siswa_id', $studentB->getKey())
+            ->firstOrFail();
+
+        app(LiterasiSimilarityAnalyzer::class)->analyzeResponse($responseB);
+
+        $this->assertFalse($question->fresh()->plagiarismDetectionEnabled());
+        $this->assertDatabaseCount('perpustakaan_literasi_similarity_matches', 0);
+    }
+
     public function test_edit_code_prefix_follows_material_program_category(): void
     {
         $cases = [
@@ -963,7 +1166,11 @@ class LibraryLiteracyProgramTest extends TestCase
             'duration_ms' => 245,
             'consecutive_failures' => 0,
             'checked_at' => now()->toIso8601String(),
-            'context' => ['client_version' => 'test'],
+            'context' => [
+                'client_version' => 'test',
+                'monitor_enabled' => false,
+                'event_type' => 'state_change',
+            ],
         ];
 
         $this->postJson(route('api.monitoring.school-network'), $payload)
@@ -978,6 +1185,10 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertSame('school-test', $check->source);
         $this->assertTrue($check->dns_ok);
         $this->assertSame(200, $check->http_status);
+        $this->assertFalse(data_get($check->context, 'monitor_enabled'));
+
+        $health = app(\App\Support\Perpustakaan\LiteracyOperationalHealth::class)->snapshot();
+        $this->assertSame('disabled', $health['network_monitor_state']);
     }
 
     public function test_public_literacy_page_includes_math_renderer_for_formula_content(): void
@@ -2305,6 +2516,17 @@ class LibraryLiteracyProgramTest extends TestCase
         }
 
         $migration = require database_path('migrations/2026_07_28_080000_add_literacy_operational_monitoring.php');
+        $migration->up();
+    }
+
+    protected function runLiteracyObjectiveQuestionMigration(): void
+    {
+        if (Schema::hasColumn('perpustakaan_literasi_questions', 'question_type')
+            && Schema::hasColumn('perpustakaan_literasi_answers', 'score_earned')) {
+            return;
+        }
+
+        $migration = require database_path('migrations/2026_07_29_080000_add_objective_question_types_to_literacy.php');
         $migration->up();
     }
 

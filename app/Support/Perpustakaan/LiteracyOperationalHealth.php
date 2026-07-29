@@ -73,6 +73,13 @@ class LiteracyOperationalHealth
         $networkStaleMinutes = (int) config('literacy.school_monitor.stale_minutes', 10);
         $networkFresh = $network?->checked_at?->greaterThan(now()->subMinutes($networkStaleMinutes)) ?? false;
         $networkHealthy = $networkFresh && in_array($network?->status, ['ok', 'recovered'], true);
+        $monitorEnabled = $network ? data_get($network->context, 'monitor_enabled', true) !== false : null;
+        $monitorState = match (true) {
+            $monitorEnabled === false => 'disabled',
+            $network === null => 'not_installed',
+            ! $networkFresh => 'stale',
+            default => 'active',
+        };
 
         return [
             'queue_enabled' => (bool) config('literacy.submission_queue.enabled', true),
@@ -97,6 +104,13 @@ class LiteracyOperationalHealth
                 : 'Belum tercatat',
             'worker_status' => $state?->worker_status ?: 'belum tercatat',
             'network_healthy' => $networkHealthy,
+            'network_monitor_state' => $monitorState,
+            'network_monitor_label' => match ($monitorState) {
+                'active' => 'Monitor aktif',
+                'disabled' => 'Monitor dinonaktifkan',
+                'stale' => 'Monitor terlambat',
+                default => 'Monitor belum terpasang',
+            },
             'network_status' => $network?->status ?: 'belum ada data',
             'network_label' => $network?->checked_at
                 ? $network->checked_at->locale('id')->diffForHumans()

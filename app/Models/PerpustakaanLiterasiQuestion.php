@@ -15,6 +15,12 @@ class PerpustakaanLiterasiQuestion extends Model
 {
     use SoftDeletes;
 
+    public const TYPE_ESSAY = 'essay';
+
+    public const TYPE_TRUE_FALSE = 'true_false';
+
+    public const TYPE_MATCHING = 'matching';
+
     protected $table = 'perpustakaan_literasi_questions';
 
     protected $guarded = [];
@@ -22,6 +28,8 @@ class PerpustakaanLiterasiQuestion extends Model
     protected $casts = [
         'is_required' => 'boolean',
         'plagiarism_detection_enabled' => 'boolean',
+        'speech_input_enabled' => 'boolean',
+        'configuration' => 'array',
         'min_characters' => 'integer',
         'max_characters' => 'integer',
         'created_at' => 'datetime',
@@ -32,6 +40,15 @@ class PerpustakaanLiterasiQuestion extends Model
     protected static function booted(): void
     {
         static::saving(function (self $question): void {
+            $question->question_type = static::normalizeType($question->question_type);
+            $question->configuration = $question->validatedConfiguration();
+
+            if (! $question->isEssay()) {
+                $question->speech_input_enabled = false;
+                $question->plagiarism_detection_enabled = false;
+                $question->answer_key = null;
+            }
+
             if ($question->exists && $question->isDirty('max_characters')) {
                 $previousMax = (int) $question->getOriginal('max_characters');
                 $newMax = max(1, (int) $question->max_characters);
@@ -116,6 +133,10 @@ class PerpustakaanLiterasiQuestion extends Model
 
     public function plagiarismDetectionEnabled(): bool
     {
+        if (! $this->isEssay()) {
+            return false;
+        }
+
         if (! array_key_exists('plagiarism_detection_enabled', $this->attributes)) {
             return true;
         }
@@ -125,7 +146,7 @@ class PerpustakaanLiterasiQuestion extends Model
 
     public function hasAnswerKey(): bool
     {
-        return filled($this->answerKey());
+        return $this->isEssay() && filled($this->answerKey());
     }
 
     public function shouldAutoGradeByAnswerKey(): bool
@@ -157,5 +178,169 @@ class PerpustakaanLiterasiQuestion extends Model
             ->lower()
             ->squish()
             ->toString();
+    }
+
+    public static function typeOptions(): array
+    {
+        return [
+            self::TYPE_ESSAY => 'Esai / jawaban tertulis',
+            self::TYPE_TRUE_FALSE => 'Tabel Benar / Salah',
+            self::TYPE_MATCHING => 'Menjodohkan',
+        ];
+    }
+
+    public static function typeLabel(?string $type): string
+    {
+        $type = static::normalizeType($type);
+
+        return static::typeOptions()[$type];
+    }
+
+    public static function normalizeType(mixed $type): string
+    {
+        $type = trim((string) $type);
+
+        return array_key_exists($type, static::typeOptions()) ? $type : self::TYPE_ESSAY;
+    }
+
+    public function isEssay(): bool
+    {
+        return static::normalizeType($this->question_type) === self::TYPE_ESSAY;
+    }
+
+    public function isTrueFalse(): bool
+    {
+        return static::normalizeType($this->question_type) === self::TYPE_TRUE_FALSE;
+    }
+
+    public function isMatching(): bool
+    {
+        return static::normalizeType($this->question_type) === self::TYPE_MATCHING;
+    }
+
+    public function objectiveItemCount(): int
+    {
+        return match (static::normalizeType($this->question_type)) {
+            self::TYPE_TRUE_FALSE => count($this->trueFalseItems()),
+            self::TYPE_MATCHING => count($this->matchingLeftItems()),
+            default => 1,
+        };
+    }
+
+    /**
+     * @return array<int, array{id:string,statement:string,correct:bool}>
+     */
+    public function trueFalseItems(): array
+    {
+        return collect(data_get($this->configuration, 'items', []))
+            ->filter(fn (mixed $item): bool => is_array($item))
+            ->map(fn (array $item): array => [
+                'id' => trim((string) ($item['id'] ?? '')),
+                'statement' => trim((string) ($item['statement'] ?? '')),
+                'correct' => filter_var($item['correct'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, array{id:string,label:string,correct_target_id:string}>
+     */
+    public function matchingLeftItems(): array
+    {
+        return collect(data_get($this->configuration, 'left', []))
+            ->filter(fn (mixed $item): bool => is_array($item))
+            ->map(fn (array $item): array => [
+                'id' => trim((string) ($item['id'] ?? '')),
+                'label' => trim((string) ($item['label'] ?? '')),
+                'correct_target_id' => trim((string) ($item['correct_target_id'] ?? '')),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, array{id:string,label:string}>
+     */
+    public function matchingRightItems(): array
+    {
+        return collect(data_get($this->configuration, 'right', []))
+            ->filter(fn (mixed $item): bool => is_array($item))
+            ->map(fn (array $item): array => [
+                'id' => trim((string) ($item['id'] ?? '')),
+                'label' => trim((string) ($item['label'] ?? '')),
+            ])
+            ->values()
+            ->all();
+    }
+
+    public function validatedConfiguration(): ?array
+    {
+        if ($this->isEssay()) {
+            return null;
+        }
+
+        if ($this->isTrueFalse()) {
+            $items = collect(data_get($this->configuration, 'items', []))
+                ->filter(fn (mixed $item): bool => is_array($item))
+                ->map(fn (array $item): array => [
+                    'id' => trim((string) ($item['id'] ?? '')) ?: (string) Str::uuid(),
+                    'statement' => trim((string) ($item['statement'] ?? '')),
+                    'correct' => filter_var($item['correct'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                ])
+                ->values();
+
+            if ($items->count() < 2 || $items->contains(fn (array $item): bool => $item['statement'] === '')) {
+                throw ValidationException::withMessages([
+                    'configuration.items' => 'Soal Benar/Salah membutuhkan minimal dua pernyataan yang terisi.',
+                ]);
+            }
+
+            if ($items->pluck('id')->duplicates()->isNotEmpty()) {
+                throw ValidationException::withMessages([
+                    'configuration.items' => 'ID pernyataan Benar/Salah harus unik.',
+                ]);
+            }
+
+            return ['version' => 1, 'items' => $items->all()];
+        }
+
+        $right = collect(data_get($this->configuration, 'right', []))
+            ->filter(fn (mixed $item): bool => is_array($item))
+            ->map(fn (array $item): array => [
+                'id' => trim((string) ($item['id'] ?? '')) ?: (string) Str::uuid(),
+                'label' => trim((string) ($item['label'] ?? '')),
+            ])
+            ->values();
+        $rightIds = $right->pluck('id');
+        $left = collect(data_get($this->configuration, 'left', []))
+            ->filter(fn (mixed $item): bool => is_array($item))
+            ->map(fn (array $item): array => [
+                'id' => trim((string) ($item['id'] ?? '')) ?: (string) Str::uuid(),
+                'label' => trim((string) ($item['label'] ?? '')),
+                'correct_target_id' => trim((string) ($item['correct_target_id'] ?? '')),
+            ])
+            ->values();
+
+        $invalid = $left->count() < 2
+            || $right->count() < 2
+            || $left->count() !== $right->count()
+            || $left->contains(fn (array $item): bool => $item['label'] === '' || ! $rightIds->contains($item['correct_target_id']))
+            || $right->contains(fn (array $item): bool => $item['label'] === '')
+            || $left->pluck('id')->duplicates()->isNotEmpty()
+            || $rightIds->duplicates()->isNotEmpty()
+            || $left->pluck('correct_target_id')->duplicates()->isNotEmpty();
+
+        if ($invalid) {
+            throw ValidationException::withMessages([
+                'configuration' => 'Soal Menjodohkan membutuhkan minimal dua pasangan lengkap, jumlah sisi kiri dan kanan yang sama, serta setiap tujuan hanya boleh menjadi satu kunci.',
+            ]);
+        }
+
+        return [
+            'version' => 1,
+            'left' => $left->all(),
+            'right' => $right->all(),
+        ];
     }
 }

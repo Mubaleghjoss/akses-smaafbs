@@ -40,7 +40,16 @@ class ResponsesRelationManager extends RelationManager
                     'answers' => fn (Builder $query): Builder => $query->withTrashed(),
                     'answers as graded_answers_count' => fn (Builder $query): Builder => $query->withTrashed()->whereNotNull('is_correct'),
                     'answers as correct_answers_count' => fn (Builder $query): Builder => $query->withTrashed()->where('is_correct', true),
-                ]))
+                ])
+                ->withSum([
+                    'answers as score_earned_total' => fn (Builder $query): Builder => $query->withTrashed(),
+                ], 'score_earned')
+                ->withSum([
+                    'answers as score_possible_total' => fn (Builder $query): Builder => $query->withTrashed(),
+                ], 'score_possible')
+                ->withSum([
+                    'answers as graded_points_total' => fn (Builder $query): Builder => $query->withTrashed()->whereNotNull('score_earned'),
+                ], 'score_possible'))
             ->columns([
                 Tables\Columns\TextColumn::make('student_name_snapshot')
                     ->label('Siswa')
@@ -68,12 +77,12 @@ class ResponsesRelationManager extends RelationManager
                     ->visibleFrom('md'),
                 Tables\Columns\TextColumn::make('grading_summary')
                     ->label('Nilai')
-                    ->state(fn (PerpustakaanLiterasiResponse $record): string => number_format((int) ($record->correct_answers_count ?? 0), 0, ',', '.')
-                        .'/'.number_format((int) ($record->graded_answers_count ?? 0), 0, ',', '.').' benar')
-                    ->description(fn (PerpustakaanLiterasiResponse $record): string => number_format((int) ($record->graded_answers_count ?? 0), 0, ',', '.')
-                        .'/'.number_format((int) ($record->answers_count ?? 0), 0, ',', '.').' dinilai')
+                    ->state(fn (PerpustakaanLiterasiResponse $record): string => number_format((int) ($record->score_earned_total ?? 0), 0, ',', '.')
+                        .'/'.number_format((int) ($record->graded_points_total ?? 0), 0, ',', '.').' poin')
+                    ->description(fn (PerpustakaanLiterasiResponse $record): string => number_format((int) ($record->graded_points_total ?? 0), 0, ',', '.')
+                        .'/'.number_format((int) ($record->score_possible_total ?? 0), 0, ',', '.').' poin dinilai')
                     ->badge()
-                    ->color(fn (PerpustakaanLiterasiResponse $record): string => ((int) ($record->answers_count ?? 0) > 0 && (int) ($record->graded_answers_count ?? 0) >= (int) ($record->answers_count ?? 0)) ? 'success' : 'warning')
+                    ->color(fn (PerpustakaanLiterasiResponse $record): string => ((int) ($record->score_possible_total ?? 0) > 0 && (int) ($record->graded_points_total ?? 0) >= (int) ($record->score_possible_total ?? 0)) ? 'success' : 'warning')
                     ->visibleFrom('md'),
                 Tables\Columns\TextColumn::make('submitted_at')
                     ->label('Dikirim')
@@ -435,6 +444,8 @@ class ResponsesRelationManager extends RelationManager
                     if ($status === 'ungraded') {
                         $answer->forceFill([
                             'is_correct' => null,
+                            'score_earned' => null,
+                            'grading_source' => null,
                             'graded_by' => null,
                             'graded_at' => null,
                             'grading_note' => null,
@@ -442,6 +453,11 @@ class ResponsesRelationManager extends RelationManager
                     } else {
                         $answer->forceFill([
                             'is_correct' => $status === 'correct',
+                            'score_earned' => $status === 'correct'
+                                ? max(1, (int) ($answer->score_possible ?? 1))
+                                : 0,
+                            'score_possible' => max(1, (int) ($answer->score_possible ?? 1)),
+                            'grading_source' => 'manual',
                             'graded_by' => auth()->id(),
                             'graded_at' => now(),
                             'grading_note' => $note !== '' ? $note : null,
@@ -613,16 +629,31 @@ class ResponsesRelationManager extends RelationManager
                         ->columnSpanFull();
                 }
 
-                $schema[] = Forms\Components\Radio::make('answer_'.$answerId.'_status')
-                    ->label('Penilaian')
-                    ->options([
-                        'ungraded' => 'Belum dinilai',
-                        'correct' => 'Benar',
-                        'wrong' => 'Salah',
-                    ])
-                    ->default('ungraded')
-                    ->inline()
-                    ->required();
+                if (! $question->isEssay()) {
+                    $possible = max(1, (int) ($answer?->score_possible ?? $question->objectiveItemCount()));
+                    $schema[] = Forms\Components\Placeholder::make('answer_'.$answerId.'_automatic_score')
+                        ->label('Nilai Otomatis')
+                        ->content(number_format((int) ($answer?->score_earned ?? 0), 0, ',', '.').'/'.number_format($possible, 0, ',', '.').' poin');
+                    $schema[] = Forms\Components\TextInput::make('answer_'.$answerId.'_score')
+                        ->label('Koreksi Poin')
+                        ->numeric()
+                        ->integer()
+                        ->minValue(0)
+                        ->maxValue($possible)
+                        ->required()
+                        ->helperText('Isi 0 sampai '.$possible.'. Penyimpanan dari admin dicatat sebagai koreksi manual.');
+                } else {
+                    $schema[] = Forms\Components\Radio::make('answer_'.$answerId.'_status')
+                        ->label('Penilaian')
+                        ->options([
+                            'ungraded' => 'Belum dinilai',
+                            'correct' => 'Benar',
+                            'wrong' => 'Salah',
+                        ])
+                        ->default('ungraded')
+                        ->inline()
+                        ->required();
+                }
                 $schema[] = Forms\Components\Textarea::make('answer_'.$answerId.'_note')
                     ->label('Catatan')
                     ->rows(2)
@@ -665,6 +696,7 @@ class ResponsesRelationManager extends RelationManager
 
         foreach ($record->answers as $answer) {
             $key = 'answer_'.$answer->getKey();
+            $data[$key.'_score'] = $answer->score_earned;
             $data[$key.'_status'] = match ($answer->is_correct) {
                 true => 'correct',
                 false => 'wrong',
@@ -684,7 +716,7 @@ class ResponsesRelationManager extends RelationManager
 
     protected function saveGrades(PerpustakaanLiterasiResponse $record, array $data): void
     {
-        $record->loadMissing('answers');
+        $record->loadMissing('answers.question');
         $userId = auth()->id();
 
         DB::transaction(function () use ($data, $record, $userId): void {
@@ -695,9 +727,28 @@ class ResponsesRelationManager extends RelationManager
 
                 $this->savePlagiarismReview($record, $answer, $data, $userId);
 
+                if ($answer->question && ! $answer->question->isEssay()) {
+                    $possible = max(1, (int) ($answer->score_possible ?? $answer->question->objectiveItemCount()));
+                    $score = min($possible, max(0, (int) ($data[$key.'_score'] ?? 0)));
+                    $answer->forceFill([
+                        'score_earned' => $score,
+                        'score_possible' => $possible,
+                        'grading_source' => 'manual',
+                        'is_correct' => $score === $possible,
+                        'graded_by' => $userId,
+                        'graded_at' => now(),
+                        'grading_note' => $note !== '' ? $note : 'Poin dikoreksi manual oleh admin/guru.',
+                    ])->save();
+
+                    continue;
+                }
+
                 if (! in_array($status, ['correct', 'wrong'], true)) {
                     $answer->forceFill([
                         'is_correct' => null,
+                        'score_earned' => null,
+                        'score_possible' => 1,
+                        'grading_source' => null,
                         'graded_by' => null,
                         'graded_at' => null,
                         'grading_note' => null,
@@ -708,6 +759,9 @@ class ResponsesRelationManager extends RelationManager
 
                 $answer->forceFill([
                     'is_correct' => $status === 'correct',
+                    'score_earned' => $status === 'correct' ? 1 : 0,
+                    'score_possible' => 1,
+                    'grading_source' => 'manual',
                     'graded_by' => $userId,
                     'graded_at' => now(),
                     'grading_note' => $note !== '' ? $note : null,
@@ -723,8 +777,8 @@ class ResponsesRelationManager extends RelationManager
 
     protected function isResponseFullyGraded(PerpustakaanLiterasiResponse $record): bool
     {
-        $total = (int) ($record->answers_count ?? $record->answers()->count());
-        $graded = (int) ($record->graded_answers_count ?? $record->answers()->whereNotNull('is_correct')->count());
+        $total = (int) ($record->score_possible_total ?? $record->answers()->sum('score_possible'));
+        $graded = (int) ($record->graded_points_total ?? $record->answers()->whereNotNull('score_earned')->sum('score_possible'));
 
         return $total > 0 && $graded >= $total;
     }

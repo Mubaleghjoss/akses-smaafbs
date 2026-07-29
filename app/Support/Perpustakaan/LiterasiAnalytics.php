@@ -242,10 +242,10 @@ class LiterasiAnalytics
             ->where('responses.student_class_snapshot', '!=', '')
             ->select('responses.student_class_snapshot')
             ->selectRaw('count(distinct responses.id) as response_count')
-            ->selectRaw('sum(case when perpustakaan_literasi_answers.is_correct is not null then 1 else 0 end) as graded_answers')
-            ->selectRaw('sum(case when perpustakaan_literasi_answers.is_correct = 1 then 1 else 0 end) as correct_answers')
+            ->selectRaw('sum(case when perpustakaan_literasi_answers.score_earned is not null or perpustakaan_literasi_answers.is_correct is not null then coalesce(perpustakaan_literasi_answers.score_possible, 1) else 0 end) as graded_answers')
+            ->selectRaw('sum(coalesce(perpustakaan_literasi_answers.score_earned, case when perpustakaan_literasi_answers.is_correct = 1 then 1 else 0 end)) as correct_answers')
             ->groupBy('responses.student_class_snapshot')
-            ->havingRaw('sum(case when perpustakaan_literasi_answers.is_correct = 1 then 1 else 0 end) > 0')
+            ->havingRaw('sum(coalesce(perpustakaan_literasi_answers.score_earned, case when perpustakaan_literasi_answers.is_correct = 1 then 1 else 0 end)) > 0')
             ->orderByDesc('correct_answers')
             ->orderByDesc('graded_answers')
             ->orderBy('responses.student_class_snapshot')
@@ -323,10 +323,10 @@ class LiterasiAnalytics
                 'responses.student_name_snapshot',
                 'responses.student_class_snapshot',
             ])
-            ->selectRaw('count(perpustakaan_literasi_answers.id) as total_answers')
+            ->selectRaw('sum(coalesce(perpustakaan_literasi_answers.score_possible, 1)) as total_answers')
             ->selectRaw('count(distinct responses.id) as response_count')
-            ->selectRaw('sum(case when perpustakaan_literasi_answers.is_correct is not null then 1 else 0 end) as graded_answers')
-            ->selectRaw('sum(case when perpustakaan_literasi_answers.is_correct = 1 then 1 else 0 end) as correct_answers')
+            ->selectRaw('sum(case when perpustakaan_literasi_answers.score_earned is not null or perpustakaan_literasi_answers.is_correct is not null then coalesce(perpustakaan_literasi_answers.score_possible, 1) else 0 end) as graded_answers')
+            ->selectRaw('sum(coalesce(perpustakaan_literasi_answers.score_earned, case when perpustakaan_literasi_answers.is_correct = 1 then 1 else 0 end)) as correct_answers')
             ->whereNotNull('responses.student_class_snapshot')
             ->where('responses.student_class_snapshot', '!=', '')
             ->groupBy([
@@ -334,7 +334,7 @@ class LiterasiAnalytics
                 'responses.student_name_snapshot',
                 'responses.student_class_snapshot',
             ])
-            ->havingRaw('sum(case when perpustakaan_literasi_answers.is_correct is not null then 1 else 0 end) > 0')
+            ->havingRaw('sum(case when perpustakaan_literasi_answers.score_earned is not null or perpustakaan_literasi_answers.is_correct is not null then coalesce(perpustakaan_literasi_answers.score_possible, 1) else 0 end) > 0')
             ->get()
             ->map(function ($row): array {
                 $graded = (int) $row->graded_answers;
@@ -442,18 +442,23 @@ class LiterasiAnalytics
             ->whereBetween('responses.submitted_at', [$start, $end])
             ->when($material, fn (Builder $query): Builder => $query->where('responses.material_id', $material->getKey()))
             ->when($programCategory, fn (Builder $query): Builder => static::constrainJoinedResponseCategory($query, $programCategory))
-            ->where('perpustakaan_literasi_answers.is_correct', false)
+            ->where(function (Builder $query): void {
+                $query
+                    ->whereNotNull('perpustakaan_literasi_answers.score_earned')
+                    ->orWhere('perpustakaan_literasi_answers.is_correct', false);
+            })
             ->select([
                 'responses.data_siswa_id',
                 'responses.student_name_snapshot',
                 'responses.student_class_snapshot',
             ])
-            ->selectRaw('count(perpustakaan_literasi_answers.id) as wrong_answers')
+            ->selectRaw('sum(case when coalesce(perpustakaan_literasi_answers.score_possible, 1) > coalesce(perpustakaan_literasi_answers.score_earned, 0) then coalesce(perpustakaan_literasi_answers.score_possible, 1) - coalesce(perpustakaan_literasi_answers.score_earned, 0) else 0 end) as wrong_answers')
             ->groupBy([
                 'responses.data_siswa_id',
                 'responses.student_name_snapshot',
                 'responses.student_class_snapshot',
             ])
+            ->havingRaw('sum(case when coalesce(perpustakaan_literasi_answers.score_possible, 1) > coalesce(perpustakaan_literasi_answers.score_earned, 0) then coalesce(perpustakaan_literasi_answers.score_possible, 1) - coalesce(perpustakaan_literasi_answers.score_earned, 0) else 0 end) > 0')
             ->orderByDesc('wrong_answers')
             ->orderBy('responses.student_class_snapshot')
             ->orderBy('responses.student_name_snapshot')
@@ -520,9 +525,9 @@ class LiterasiAnalytics
             ->whereBetween('responses.submitted_at', [$start, $end])
             ->when($material, fn (Builder $query): Builder => $query->where('responses.material_id', $material->getKey()))
             ->when($programCategory, fn (Builder $query): Builder => static::constrainJoinedResponseCategory($query, $programCategory))
-            ->selectRaw('count(perpustakaan_literasi_answers.id) as total_answers')
-            ->selectRaw('sum(case when perpustakaan_literasi_answers.is_correct is not null then 1 else 0 end) as graded_answers')
-            ->selectRaw('sum(case when perpustakaan_literasi_answers.is_correct = 1 then 1 else 0 end) as correct_answers')
+            ->selectRaw('sum(coalesce(perpustakaan_literasi_answers.score_possible, 1)) as total_answers')
+            ->selectRaw('sum(case when perpustakaan_literasi_answers.score_earned is not null or perpustakaan_literasi_answers.is_correct is not null then coalesce(perpustakaan_literasi_answers.score_possible, 1) else 0 end) as graded_answers')
+            ->selectRaw('sum(coalesce(perpustakaan_literasi_answers.score_earned, case when perpustakaan_literasi_answers.is_correct = 1 then 1 else 0 end)) as correct_answers')
             ->first();
 
         $responses = static::responseQuery($material, $programCategory)
@@ -657,7 +662,9 @@ class LiterasiAnalytics
     protected static function gradingColumnsAvailable(): bool
     {
         return Schema::hasTable('perpustakaan_literasi_answers')
-            && Schema::hasColumn('perpustakaan_literasi_answers', 'is_correct');
+            && Schema::hasColumn('perpustakaan_literasi_answers', 'is_correct')
+            && Schema::hasColumn('perpustakaan_literasi_answers', 'score_earned')
+            && Schema::hasColumn('perpustakaan_literasi_answers', 'score_possible');
     }
 
     protected static function similarityReviewColumnsAvailable(): bool

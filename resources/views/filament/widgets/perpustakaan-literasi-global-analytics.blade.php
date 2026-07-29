@@ -43,9 +43,13 @@
                         <strong>{{ $operationalHealth['pending_jobs'] }} menunggu · {{ $operationalHealth['failed_jobs'] }} gagal</strong>
                         <small>Worker: {{ str($operationalHealth['worker_status'])->replace('_', ' ')->headline() }} · cron {{ $operationalHealth['scheduler_label'] }}</small>
                     </article>
-                    <article @class(['literasi-health-card', 'is-danger' => ! $operationalHealth['network_healthy']])>
+                    <article @class([
+                        'literasi-health-card',
+                        'is-warning' => $operationalHealth['network_monitor_state'] === 'disabled',
+                        'is-danger' => $operationalHealth['network_monitor_state'] !== 'disabled' && ! $operationalHealth['network_healthy'],
+                    ])>
                         <span>Jaringan Sekolah</span>
-                        <strong>{{ str($operationalHealth['network_status'])->headline() }}</strong>
+                        <strong>{{ $operationalHealth['network_monitor_label'] }} · {{ str($operationalHealth['network_status'])->headline() }}</strong>
                         <small>
                             {{ $operationalHealth['network_label'] }}
                             @if($operationalHealth['network_duration_ms'])
@@ -54,6 +58,7 @@
                             @if($operationalHealth['network_error_code'])
                                 · {{ $operationalHealth['network_error_code'] }}
                             @endif
+                            · Aktif/nonaktifkan dari shortcut di desktop laptop sekolah.
                         </small>
                     </article>
                 </div>

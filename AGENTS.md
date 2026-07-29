@@ -1,5 +1,10 @@
 # Project Rules
 
+## Literacy Numeracy
+
+- Before changing the literacy/numeracy module, read `docs/literacy-numeracy/README.md` and the linked document for the subsystem being changed.
+- Keep submit queue work, question types, scoring, similarity analysis, and the school-network monitor compatible with the invariants documented there.
+
 ## Admin UI responsiveness
 
 - Every admin feature in `/admin` must be usable on phone-width screens.

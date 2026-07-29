@@ -113,7 +113,7 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
                         ->with([
                             'question' => fn ($questionQuery) => $questionQuery
                                 ->withTrashed()
-                                ->select('id', 'material_id', 'sort_order', 'prompt'),
+                                ->select('id', 'material_id', 'sort_order', 'prompt', 'question_type', 'configuration'),
                             'gradedBy:id,name',
                         ]),
                     'laterSimilarityMatches' => fn ($query) => $query->withTrashed(),
@@ -125,7 +125,16 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
                     'laterSimilarityMatches as confirmed_plagiarism_count' => fn (Builder $query): Builder => $query
                         ->withTrashed()
                         ->where('review_status', PerpustakaanLiterasiSimilarityMatch::REVIEW_CONFIRMED),
-                ]))
+                ])
+                ->withSum([
+                    'answers as score_earned_total' => fn (Builder $query): Builder => $query->withTrashed(),
+                ], 'score_earned')
+                ->withSum([
+                    'answers as score_possible_total' => fn (Builder $query): Builder => $query->withTrashed(),
+                ], 'score_possible')
+                ->withSum([
+                    'answers as graded_points_total' => fn (Builder $query): Builder => $query->withTrashed()->whereNotNull('score_earned'),
+                ], 'score_possible'))
             ->defaultSort('submitted_at', 'desc')
             ->striped()
             ->deferLoading()
@@ -185,10 +194,10 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('grading_summary')
                     ->label('Nilai')
-                    ->state(fn (PerpustakaanLiterasiResponse $record): string => number_format((int) ($record->correct_answers_count ?? 0), 0, ',', '.')
-                        .'/'.number_format((int) ($record->graded_answers_count ?? 0), 0, ',', '.').' benar')
-                    ->description(fn (PerpustakaanLiterasiResponse $record): string => number_format((int) ($record->graded_answers_count ?? 0), 0, ',', '.')
-                        .'/'.number_format((int) ($record->answers_count ?? 0), 0, ',', '.').' dinilai')
+                    ->state(fn (PerpustakaanLiterasiResponse $record): string => number_format((int) ($record->score_earned_total ?? 0), 0, ',', '.')
+                        .'/'.number_format((int) ($record->graded_points_total ?? 0), 0, ',', '.').' poin')
+                    ->description(fn (PerpustakaanLiterasiResponse $record): string => number_format((int) ($record->graded_points_total ?? 0), 0, ',', '.')
+                        .'/'.number_format((int) ($record->score_possible_total ?? 0), 0, ',', '.').' poin dinilai')
                     ->badge()
                     ->color(fn (PerpustakaanLiterasiResponse $record): string => $this->isResponseFullyGraded($record) ? 'success' : 'warning'),
                 Tables\Columns\TextColumn::make('graders')
@@ -605,8 +614,8 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
 
     protected function isResponseFullyGraded(PerpustakaanLiterasiResponse $record): bool
     {
-        $total = (int) ($record->answers_count ?? 0);
-        $graded = (int) ($record->graded_answers_count ?? 0);
+        $total = (int) ($record->score_possible_total ?? 0);
+        $graded = (int) ($record->graded_points_total ?? 0);
 
         return $total > 0 && $graded >= $total;
     }
@@ -653,16 +662,30 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
                         ->columnSpanFull();
                 }
 
-                $schema[] = Forms\Components\Radio::make('answer_'.$answerId.'_status')
-                    ->label('Penilaian')
-                    ->options([
-                        'ungraded' => 'Belum dinilai',
-                        'correct' => 'Benar',
-                        'wrong' => 'Salah',
-                    ])
-                    ->default('ungraded')
-                    ->inline()
-                    ->required();
+                if (! $question->isEssay()) {
+                    $possible = max(1, (int) ($answer?->score_possible ?? $question->objectiveItemCount()));
+                    $schema[] = Forms\Components\Placeholder::make('answer_'.$answerId.'_automatic_score')
+                        ->label('Nilai Otomatis')
+                        ->content(number_format((int) ($answer?->score_earned ?? 0), 0, ',', '.').'/'.number_format($possible, 0, ',', '.').' poin');
+                    $schema[] = Forms\Components\TextInput::make('answer_'.$answerId.'_score')
+                        ->label('Koreksi Poin')
+                        ->numeric()
+                        ->integer()
+                        ->minValue(0)
+                        ->maxValue($possible)
+                        ->required();
+                } else {
+                    $schema[] = Forms\Components\Radio::make('answer_'.$answerId.'_status')
+                        ->label('Penilaian')
+                        ->options([
+                            'ungraded' => 'Belum dinilai',
+                            'correct' => 'Benar',
+                            'wrong' => 'Salah',
+                        ])
+                        ->default('ungraded')
+                        ->inline()
+                        ->required();
+                }
                 $schema[] = Forms\Components\Textarea::make('answer_'.$answerId.'_note')
                     ->label('Catatan')
                     ->rows(2)
@@ -705,6 +728,7 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
 
         foreach ($record->answers as $answer) {
             $key = 'answer_'.$answer->getKey();
+            $data[$key.'_score'] = $answer->score_earned;
             $data[$key.'_status'] = match ($answer->is_correct) {
                 true => 'correct',
                 false => 'wrong',
@@ -724,7 +748,7 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
 
     protected function saveGrades(PerpustakaanLiterasiResponse $record, array $data): void
     {
-        $record->loadMissing('answers');
+        $record->loadMissing('answers.question');
         $userId = auth()->id();
 
         DB::transaction(function () use ($data, $record, $userId): void {
@@ -735,9 +759,28 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
 
                 $this->savePlagiarismReview($record, $answer, $data, $userId);
 
+                if ($answer->question && ! $answer->question->isEssay()) {
+                    $possible = max(1, (int) ($answer->score_possible ?? $answer->question->objectiveItemCount()));
+                    $score = min($possible, max(0, (int) ($data[$key.'_score'] ?? 0)));
+                    $answer->forceFill([
+                        'score_earned' => $score,
+                        'score_possible' => $possible,
+                        'grading_source' => 'manual',
+                        'is_correct' => $score === $possible,
+                        'graded_by' => $userId,
+                        'graded_at' => now(),
+                        'grading_note' => $note !== '' ? $note : 'Poin dikoreksi manual oleh admin/guru.',
+                    ])->save();
+
+                    continue;
+                }
+
                 if (! in_array($status, ['correct', 'wrong'], true)) {
                     $answer->forceFill([
                         'is_correct' => null,
+                        'score_earned' => null,
+                        'score_possible' => 1,
+                        'grading_source' => null,
                         'graded_by' => null,
                         'graded_at' => null,
                         'grading_note' => null,
@@ -748,6 +791,9 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
 
                 $answer->forceFill([
                     'is_correct' => $status === 'correct',
+                    'score_earned' => $status === 'correct' ? 1 : 0,
+                    'score_possible' => 1,
+                    'grading_source' => 'manual',
                     'graded_by' => $userId,
                     'graded_at' => now(),
                     'grading_note' => $note !== '' ? $note : null,
@@ -769,7 +815,15 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
             ->unique()
             ->values();
 
-        return $names->isNotEmpty() ? $names->implode(', ') : 'Belum dinilai';
+        if ($names->isNotEmpty()) {
+            return $names->implode(', ');
+        }
+
+        return $record->answers->contains(fn (PerpustakaanLiterasiAnswer $answer): bool => in_array(
+            $answer->grading_source,
+            ['automatic', 'answer_key'],
+            true,
+        )) ? 'Sistem otomatis' : 'Belum dinilai';
     }
 
     protected function plagiarismMatchesHtml($matches): HtmlString

@@ -23,6 +23,8 @@ class LiteracySchoolNetworkMonitorController extends Controller
             'checked_at' => ['required', 'date'],
             'context' => ['nullable', 'array'],
             'context.client_version' => ['nullable', 'string', 'max:30'],
+            'context.monitor_enabled' => ['nullable', 'boolean'],
+            'context.event_type' => ['nullable', 'in:heartbeat,state_change'],
         ]);
 
         $check = PerpustakaanLiterasiNetworkCheck::query()->create([

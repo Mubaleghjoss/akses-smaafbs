@@ -149,6 +149,11 @@
                     false => 'Salah',
                     default => 'Belum dinilai',
                 };
+                if (! $question->isEssay() && $answer?->score_earned !== null) {
+                    $statusLabel = number_format((int) $answer->score_earned, 0, ',', '.')
+                        .'/'.number_format((int) ($answer->score_possible ?: $question->objectiveItemCount()), 0, ',', '.')
+                        .' poin';
+                }
                 $statusTone = match ($answer?->is_correct) {
                     true => 'success',
                     false => 'danger',
@@ -158,8 +163,14 @@
             <article class="literasi-response-detail__answer">
                 <header class="literasi-response-detail__answer-head">
                     <div>
-                        <span>Pertanyaan {{ $index + 1 }}</span>
-                        <strong>{{ number_format((int) ($answer?->character_count ?? 0), 0, ',', '.') }} karakter</strong>
+                        <span>Pertanyaan {{ $index + 1 }} · {{ \App\Models\PerpustakaanLiterasiQuestion::typeLabel($question->question_type) }}</span>
+                        <strong>
+                            @if($question->isEssay())
+                                {{ number_format((int) ($answer?->character_count ?? 0), 0, ',', '.') }} karakter
+                            @else
+                                {{ number_format($question->objectiveItemCount(), 0, ',', '.') }} butir
+                            @endif
+                        </strong>
                     </div>
                     <span class="literasi-response-detail__status literasi-response-detail__status--{{ $statusTone }}">
                         {{ $statusLabel }}

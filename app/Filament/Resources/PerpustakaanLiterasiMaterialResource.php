@@ -190,6 +190,17 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                                 : 'Pertanyaan baru')
                             ->disabled(fn (?PerpustakaanLiterasiMaterial $record): bool => $record?->hasResponses() ?? false)
                             ->schema([
+                                Forms\Components\Select::make('question_type')
+                                    ->label('Jenis Pertanyaan')
+                                    ->options(PerpustakaanLiterasiQuestion::typeOptions())
+                                    ->default(PerpustakaanLiterasiQuestion::TYPE_ESSAY)
+                                    ->required()
+                                    ->live()
+                                    ->afterStateUpdated(function (Set $set): void {
+                                        $set('configuration', null);
+                                    })
+                                    ->helperText('Pilih Esai, tabel Benar/Salah, atau Menjodohkan. Jenis pertanyaan dikunci setelah ada responden.')
+                                    ->columnSpanFull(),
                                 Forms\Components\Checkbox::make('show_question_latex_tools')
                                     ->label('Tampilkan template rumus LaTeX')
                                     ->live()
@@ -209,6 +220,82 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                                 SchemaView::make('filament.resources.perpustakaan-literasi-material-resource.partials.latex-picker')
                                     ->visible(fn (Get $get): bool => (bool) $get('show_question_latex_tools'))
                                     ->columnSpanFull(),
+                                Forms\Components\Repeater::make('configuration.items')
+                                    ->label('Pernyataan Benar / Salah')
+                                    ->visible(fn (Get $get): bool => $get('question_type') === PerpustakaanLiterasiQuestion::TYPE_TRUE_FALSE)
+                                    ->required(fn (Get $get): bool => $get('question_type') === PerpustakaanLiterasiQuestion::TYPE_TRUE_FALSE)
+                                    ->defaultItems(2)
+                                    ->minItems(2)
+                                    ->reorderableWithButtons()
+                                    ->addActionLabel('Tambah Pernyataan')
+                                    ->itemLabel(fn (array $state): string => filled($state['statement'] ?? null)
+                                        ? Str::limit((string) $state['statement'], 60)
+                                        : 'Pernyataan baru')
+                                    ->schema([
+                                        Forms\Components\Hidden::make('id')
+                                            ->default(fn (): string => (string) Str::uuid()),
+                                        Forms\Components\Textarea::make('statement')
+                                            ->label('Pernyataan')
+                                            ->required()
+                                            ->rows(2)
+                                            ->columnSpanFull(),
+                                        Forms\Components\Toggle::make('correct')
+                                            ->label('Kunci: pernyataan ini Benar')
+                                            ->default(true)
+                                            ->helperText('Nonaktif berarti jawaban yang benar adalah Salah.'),
+                                    ])
+                                    ->columns(1)
+                                    ->columnSpanFull(),
+                                Forms\Components\Repeater::make('configuration.right')
+                                    ->label('Kolom Kanan / Pilihan Tujuan')
+                                    ->visible(fn (Get $get): bool => $get('question_type') === PerpustakaanLiterasiQuestion::TYPE_MATCHING)
+                                    ->required(fn (Get $get): bool => $get('question_type') === PerpustakaanLiterasiQuestion::TYPE_MATCHING)
+                                    ->defaultItems(2)
+                                    ->minItems(2)
+                                    ->reorderableWithButtons()
+                                    ->addActionLabel('Tambah Pilihan Kanan')
+                                    ->schema([
+                                        Forms\Components\Hidden::make('id')
+                                            ->default(fn (): string => (string) Str::uuid()),
+                                        Forms\Components\Textarea::make('label')
+                                            ->label('Isi kolom kanan')
+                                            ->required()
+                                            ->rows(2),
+                                    ])
+                                    ->columns(1)
+                                    ->columnSpanFull(),
+                                Forms\Components\Repeater::make('configuration.left')
+                                    ->label('Kolom Kiri dan Kunci Pasangan')
+                                    ->visible(fn (Get $get): bool => $get('question_type') === PerpustakaanLiterasiQuestion::TYPE_MATCHING)
+                                    ->required(fn (Get $get): bool => $get('question_type') === PerpustakaanLiterasiQuestion::TYPE_MATCHING)
+                                    ->defaultItems(2)
+                                    ->minItems(2)
+                                    ->reorderableWithButtons()
+                                    ->addActionLabel('Tambah Item Kiri')
+                                    ->schema([
+                                        Forms\Components\Hidden::make('id')
+                                            ->default(fn (): string => (string) Str::uuid()),
+                                        Forms\Components\Textarea::make('label')
+                                            ->label('Isi kolom kiri')
+                                            ->required()
+                                            ->rows(2)
+                                            ->columnSpanFull(),
+                                        Forms\Components\Select::make('correct_target_id')
+                                            ->label('Pasangkan dengan')
+                                            ->options(function (Get $get): array {
+                                                return collect($get('../../right') ?? [])
+                                                    ->filter(fn (mixed $item): bool => is_array($item) && filled($item['id'] ?? null))
+                                                    ->mapWithKeys(fn (array $item): array => [
+                                                        (string) $item['id'] => trim((string) ($item['label'] ?? '')) ?: 'Pilihan kanan belum diisi',
+                                                    ])
+                                                    ->all();
+                                            })
+                                            ->required()
+                                            ->live()
+                                            ->helperText('Setiap pilihan kanan hanya boleh menjadi kunci untuk satu item kiri.'),
+                                    ])
+                                    ->columns(1)
+                                    ->columnSpanFull(),
                                 Forms\Components\FileUpload::make('image_path')
                                     ->label('Gambar Pertanyaan')
                                     ->disk('public')
@@ -223,6 +310,7 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                                     ->label('Aktifkan deteksi plagiasi')
                                     ->default(true)
                                     ->live()
+                                    ->visible(fn (Get $get): bool => ($get('question_type') ?: PerpustakaanLiterasiQuestion::TYPE_ESSAY) === PerpustakaanLiterasiQuestion::TYPE_ESSAY)
                                     ->helperText('Aktif: jawaban soal ini dibandingkan dengan jawaban siswa lain pada materi yang sama. Jawaban sama persis selalu muncul sebagai 100%; jawaban mirip muncul mulai 50%.'),
                                 Forms\Components\Placeholder::make('plagiarism_detection_help')
                                     ->label('Cara kerja deteksi dan kunci jawaban')
@@ -235,6 +323,7 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                                             '<strong>Deteksi tidak aktif:</strong> sistem tidak membuat indikasi plagiasi untuk soal ini. '.
                                             'Jika kunci jawaban diisi, jawaban yang sama dengan kunci otomatis dinilai Benar dan tidak masuk Daftar Plagiat Per Kelas; jawaban berbeda tetap Belum dinilai untuk diperiksa guru.'.
                                         '</div>'))
+                                    ->visible(fn (Get $get): bool => ($get('question_type') ?: PerpustakaanLiterasiQuestion::TYPE_ESSAY) === PerpustakaanLiterasiQuestion::TYPE_ESSAY)
                                     ->columnSpanFull(),
                                 Forms\Components\Textarea::make('answer_key')
                                     ->label('Kunci Jawaban')
@@ -243,6 +332,13 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                                     ->helperText(fn (Get $get): string => (bool) $get('plagiarism_detection_enabled')
                                         ? 'Mode deteksi aktif: jawaban yang sama dengan kunci otomatis Benar, dan tetap dicek plagiasi terhadap jawaban siswa lain.'
                                         : 'Mode deteksi tidak aktif: jawaban yang sama dengan kunci otomatis Benar dan tidak masuk Daftar Plagiat Per Kelas; jawaban berbeda tetap Belum dinilai.')
+                                    ->visible(fn (Get $get): bool => ($get('question_type') ?: PerpustakaanLiterasiQuestion::TYPE_ESSAY) === PerpustakaanLiterasiQuestion::TYPE_ESSAY)
+                                    ->columnSpanFull(),
+                                Forms\Components\Toggle::make('speech_input_enabled')
+                                    ->label('Izinkan murid menjawab dengan suara')
+                                    ->default(false)
+                                    ->visible(fn (Get $get): bool => ($get('question_type') ?: PerpustakaanLiterasiQuestion::TYPE_ESSAY) === PerpustakaanLiterasiQuestion::TYPE_ESSAY)
+                                    ->helperText('Bahasa Indonesia. Aplikasi hanya menyimpan teks hasil dikte, bukan rekaman suara.')
                                     ->columnSpanFull(),
                                 Forms\Components\Select::make('answer_length_preset')
                                     ->label('Preset Panjang Jawaban')
@@ -267,14 +363,16 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                                             $set('max_characters', (int) $state);
                                         }
                                     })
-                                    ->helperText('Pilih cepat sesuai jenis soal. Gunakan Atur sendiri untuk kebutuhan khusus.'),
+                                    ->helperText('Pilih cepat sesuai jenis soal. Gunakan Atur sendiri untuk kebutuhan khusus.')
+                                    ->visible(fn (Get $get): bool => ($get('question_type') ?: PerpustakaanLiterasiQuestion::TYPE_ESSAY) === PerpustakaanLiterasiQuestion::TYPE_ESSAY),
                                 Forms\Components\TextInput::make('min_characters')
                                     ->label('Minimal Karakter Jawaban')
                                     ->required()
                                     ->numeric()
                                     ->minValue(0)
                                     ->maxValue(8000)
-                                    ->default(20),
+                                    ->default(20)
+                                    ->visible(fn (Get $get): bool => ($get('question_type') ?: PerpustakaanLiterasiQuestion::TYPE_ESSAY) === PerpustakaanLiterasiQuestion::TYPE_ESSAY),
                                 Forms\Components\TextInput::make('max_characters')
                                     ->label('Maksimal Karakter Jawaban')
                                     ->required()
@@ -282,7 +380,8 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                                     ->minValue(fn (Get $get): int => max(1, (int) ($get('min_characters') ?: 0)))
                                     ->maxValue(8000)
                                     ->default(1000)
-                                    ->helperText('Sistem menolak penurunan batas jika ada jawaban tersimpan yang lebih panjang. Siswa melihat penghitung sebelum mengirim.'),
+                                    ->helperText('Sistem menolak penurunan batas jika ada jawaban tersimpan yang lebih panjang. Siswa melihat penghitung sebelum mengirim.')
+                                    ->visible(fn (Get $get): bool => ($get('question_type') ?: PerpustakaanLiterasiQuestion::TYPE_ESSAY) === PerpustakaanLiterasiQuestion::TYPE_ESSAY),
                                 Forms\Components\Toggle::make('is_required')
                                     ->label('Wajib diisi')
                                     ->default(true),

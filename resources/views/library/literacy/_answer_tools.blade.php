@@ -217,7 +217,10 @@
                     const fieldName = validationField?.startsWith('answers.')
                         ? `answers[${validationField.slice('answers.'.length)}]`
                         : validationField;
-                    const field = Array.from(form.elements).find((element) => element.name === fieldName);
+                    const field = Array.from(form.elements).find((element) => element.name === fieldName)
+                        || (validationField?.startsWith('answers.')
+                            ? Array.from(form.elements).find((element) => element.name?.startsWith(`${fieldName}[`))
+                            : null);
 
                     if (!field) {
                         return focusFirstAnswerOverLimit();
@@ -301,7 +304,7 @@
                 };
 
                 const draftFields = () => Array.from(form.querySelectorAll([
-                    '[data-literacy-answer-input]',
+                    '[data-literacy-answer-control]',
                     '[data-student-search]',
                     '[data-student-id]',
                     '[data-student-verification]',
@@ -321,9 +324,15 @@
                     const fields = {};
 
                     draftFields().forEach((field) => {
-                        if (field.name) {
-                            fields[field.name] = field.value;
+                        if (!field.name) {
+                            return;
                         }
+
+                        if ((field.type === 'radio' || field.type === 'checkbox') && !field.checked) {
+                            return;
+                        }
+
+                        fields[field.name] = field.value;
                     });
 
                     try {
@@ -375,7 +384,13 @@
 
                         draftFields().forEach((field) => {
                             if (field.name && Object.hasOwn(draft.fields || {}, field.name)) {
-                                field.value = String(draft.fields[field.name] ?? '');
+                                const value = String(draft.fields[field.name] ?? '');
+
+                                if (field.type === 'radio' || field.type === 'checkbox') {
+                                    field.checked = field.value === value;
+                                } else {
+                                    field.value = value;
+                                }
                             }
                         });
 
@@ -910,6 +925,158 @@
 
                 textarea.addEventListener('input', refresh);
                 refresh();
+            });
+
+            form.querySelectorAll('[data-literacy-matching-group]').forEach((group) => {
+                const selects = Array.from(group.querySelectorAll('[data-literacy-matching-select]'));
+
+                const syncMatchingOptions = () => {
+                    const selectedValues = selects
+                        .map((select) => select.value)
+                        .filter(Boolean);
+
+                    selects.forEach((select) => {
+                        Array.from(select.options).forEach((option) => {
+                            if (option.value === '' || option.value === select.value) {
+                                option.disabled = false;
+                                return;
+                            }
+
+                            option.disabled = selectedValues.includes(option.value);
+                        });
+                    });
+                };
+
+                selects.forEach((select) => select.addEventListener('change', syncMatchingOptions));
+                syncMatchingOptions();
+            });
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+            form.querySelectorAll('[data-literacy-speech]').forEach((container) => {
+                const button = container.querySelector('[data-literacy-speech-toggle]');
+                const status = container.querySelector('[data-literacy-speech-status]');
+                const target = document.getElementById(button?.dataset.speechTarget || '');
+
+                if (!button || !status || !target) {
+                    return;
+                }
+
+                if (!SpeechRecognition) {
+                    button.disabled = true;
+                    button.classList.add('opacity-60');
+                    status.textContent = 'Browser ini belum mendukung jawaban suara. Silakan ketik jawaban seperti biasa.';
+                    return;
+                }
+
+                const recognition = new SpeechRecognition();
+                recognition.lang = container.dataset.speechLanguage || 'id-ID';
+                recognition.continuous = true;
+                recognition.interimResults = true;
+
+                let listening = false;
+                let stopTimer = null;
+
+                const stopRecognition = () => {
+                    if (!listening) {
+                        return;
+                    }
+
+                    try {
+                        recognition.stop();
+                    } catch (error) {
+                        // The browser can already be stopping the recognizer.
+                    }
+                };
+
+                const appendTranscript = (transcript) => {
+                    const addition = String(transcript || '').trim();
+
+                    if (addition === '') {
+                        return;
+                    }
+
+                    const current = target.value.trim();
+                    target.value = current === '' ? addition : `${current} ${addition}`;
+                    target.dispatchEvent(new Event('input', { bubbles: true }));
+
+                    const max = Math.max(1, Number.parseInt(target.dataset.maxCharacters || '1', 10));
+
+                    if (Array.from(target.value).length > max) {
+                        status.textContent = 'Teks hasil suara melewati batas karakter. Dikte dihentikan; perbaiki teks sebelum mengirim.';
+                        stopRecognition();
+                    }
+                };
+
+                recognition.onstart = () => {
+                    listening = true;
+                    button.textContent = 'Berhenti';
+                    status.textContent = 'Mendengarkan. Bicara dengan jelas, lalu tekan Berhenti jika selesai.';
+                    stopTimer = window.setTimeout(() => {
+                        status.textContent = 'Dikte dihentikan otomatis setelah 45 detik. Tekan Jawab dengan Suara untuk melanjutkan.';
+                        stopRecognition();
+                    }, 45000);
+                };
+
+                recognition.onend = () => {
+                    listening = false;
+                    window.clearTimeout(stopTimer);
+                    stopTimer = null;
+                    button.textContent = 'Jawab dengan Suara';
+
+                    if (!status.textContent.includes('otomatis') && !status.textContent.includes('batas karakter')) {
+                        status.textContent = 'Dikte selesai. Periksa dan edit teks sebelum mengirim.';
+                    }
+                };
+
+                recognition.onerror = (event) => {
+                    status.textContent = event.error === 'not-allowed'
+                        ? 'Izin mikrofon ditolak. Aktifkan izin mikrofon di browser atau ketik jawaban.'
+                        : 'Layanan suara tidak dapat digunakan saat ini. Jawaban tetap dapat diketik.';
+                };
+
+                recognition.onresult = (event) => {
+                    let finalTranscript = '';
+                    let interimTranscript = '';
+
+                    for (let index = event.resultIndex; index < event.results.length; index += 1) {
+                        const transcript = event.results[index][0].transcript;
+
+                        if (event.results[index].isFinal) {
+                            finalTranscript += transcript;
+                        } else {
+                            interimTranscript += transcript;
+                        }
+                    }
+
+                    if (finalTranscript.trim() !== '') {
+                        appendTranscript(finalTranscript);
+                    }
+
+                    if (interimTranscript.trim() !== '') {
+                        status.textContent = `Mendengarkan: ${interimTranscript.trim()}`;
+                    }
+                };
+
+                button.addEventListener('click', () => {
+                    if (listening) {
+                        stopRecognition();
+                        return;
+                    }
+
+                    try {
+                        recognition.start();
+                    } catch (error) {
+                        status.textContent = 'Dikte sudah berjalan. Tekan Berhenti jika ingin mengakhirinya.';
+                    }
+                });
+
+                form.addEventListener('literacy:final-submit-start', stopRecognition);
+                document.addEventListener('visibilitychange', () => {
+                    if (document.visibilityState === 'hidden') {
+                        stopRecognition();
+                    }
+                });
             });
 
             const integrityFields = {

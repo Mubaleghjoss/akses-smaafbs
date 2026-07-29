@@ -15,7 +15,10 @@ class PerpustakaanLiterasiAnswer extends Model
     protected $guarded = [];
 
     protected $casts = [
+        'answer_payload' => 'array',
         'character_count' => 'integer',
+        'score_earned' => 'integer',
+        'score_possible' => 'integer',
         'is_correct' => 'boolean',
         'graded_at' => 'datetime',
         'created_at' => 'datetime',

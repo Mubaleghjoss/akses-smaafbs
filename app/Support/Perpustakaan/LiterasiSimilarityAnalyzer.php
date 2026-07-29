@@ -42,6 +42,10 @@ class LiterasiSimilarityAnalyzer
         PerpustakaanLiterasiAnswer $answer,
         float $threshold
     ): void {
+        if ($answer->question && ! $answer->question->isEssay()) {
+            return;
+        }
+
         if ($answer->question && ! $answer->question->plagiarismDetectionEnabled()) {
             return;
         }

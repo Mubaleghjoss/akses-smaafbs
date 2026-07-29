@@ -196,63 +196,7 @@
                 @endif
 
                 @forelse($material->questions as $index => $question)
-                    @php
-                        $fieldName = 'answers.'.$question->getKey();
-                        $maxCharacters = max(1, (int) ($question->max_characters ?: 1000));
-                        $minCharacters = min($maxCharacters, max(0, (int) ($question->min_characters ?: 0)));
-                    @endphp
-                    <section class="rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
-                        <div class="flex flex-wrap items-center gap-2">
-                            <span class="chip {{ $material->programCategoryBadgeClasses() }}">{{ $material->programCategoryLabel() }}</span>
-                            <span class="chip">Pertanyaan {{ $index + 1 }}</span>
-                            <span class="chip">Min. {{ number_format($minCharacters, 0, ',', '.') }} karakter</span>
-                            <span class="chip">Maks. {{ number_format($maxCharacters, 0, ',', '.') }} karakter</span>
-                        </div>
-                        <label class="mt-3 block whitespace-pre-line break-words text-sm font-semibold leading-6 text-slate-900" for="question-{{ $question->getKey() }}">
-                            {{ $question->prompt }}
-                        </label>
-                        @if($question->imageUrl())
-                            <button type="button" class="mt-3 block w-full cursor-zoom-in rounded-2xl text-left focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2" data-literacy-image-open data-literacy-image-caption="Gambar pertanyaan {{ $index + 1 }}">
-                                <img
-                                    src="{{ $question->imageUrl() }}"
-                                    alt="Gambar pendukung pertanyaan {{ $index + 1 }}"
-                                    class="max-h-80 w-full rounded-2xl border border-slate-200 object-contain"
-                                    width="1280"
-                                    height="1280"
-                                    loading="lazy"
-                                    decoding="async"
-                                >
-                                <span class="mt-1 block text-center text-xs font-semibold text-sky-700">Ketuk gambar untuk memperbesar</span>
-                            </button>
-                        @endif
-                        @if($question->google_drive_url)
-                            <a class="chip mt-3 inline-flex" href="{{ $question->google_drive_url }}" target="_blank" rel="noopener">Buka Lampiran</a>
-                        @endif
-                        <textarea
-                            id="question-{{ $question->getKey() }}"
-                            class="input mt-3 min-h-40"
-                            name="answers[{{ $question->getKey() }}]"
-                            minlength="{{ $minCharacters }}"
-                            maxlength="{{ $maxCharacters }}"
-                            data-literacy-answer-input
-                            data-min-characters="{{ $minCharacters }}"
-                            data-max-characters="{{ $maxCharacters }}"
-                            aria-describedby="question-{{ $question->getKey() }}-status question-{{ $question->getKey() }}-count"
-                            @required($question->is_required)
-                        >{{ old('answers.'.$question->getKey()) }}</textarea>
-                        <div class="mt-2 flex flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between">
-                            <div id="question-{{ $question->getKey() }}-status" class="text-slate-500" aria-live="polite" data-literacy-answer-status></div>
-                            <div id="question-{{ $question->getKey() }}-count" class="font-semibold text-slate-700" data-literacy-answer-count></div>
-                        </div>
-                        <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                            <div class="h-full rounded-full bg-slate-400 transition-all" style="width: 0%" data-literacy-answer-bar></div>
-                        </div>
-                        <div
-                            @class(['mt-2 text-xs text-rose-600', 'hidden' => ! $errors->has($fieldName)])
-                            role="alert"
-                            data-literacy-validation-for="{{ $fieldName }}"
-                        >{{ $errors->first($fieldName) }}</div>
-                    </section>
+                    @include('library.literacy._question_field', ['savedAnswer' => null])
                 @empty
                     <div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                         Materi ini belum memiliki pertanyaan.

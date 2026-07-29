@@ -3,7 +3,9 @@ param(
     [string]$Source = 'school-main',
     [string]$TokenFile = '',
     [string]$LogFile = '',
-    [string]$StateFile = ''
+    [string]$StateFile = '',
+    [bool]$MonitorEnabled = $true,
+    [string]$EventType = 'heartbeat'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -101,6 +103,7 @@ $status = if ($isOk -and $previousFailures -gt 0) { 'recovered' } elseif ($isOk)
 $state = [ordered]@{
     checked_at = $checkedAt.ToString('o')
     status = $status
+    monitor_enabled = $MonitorEnabled
     consecutive_failures = $consecutiveFailures
     last_error_code = $errorCode
 }
@@ -138,7 +141,11 @@ if ($isOk -and (Test-Path -LiteralPath $TokenFile)) {
             consecutive_failures = $previousFailures
             error_code = if ($status -eq 'recovered') { 'RECOVERED_AFTER_FAILURES' } else { $null }
             checked_at = $checkedAt.ToString('o')
-            context = @{ client_version = '1.0' }
+            context = @{
+                client_version = '1.1'
+                monitor_enabled = $MonitorEnabled
+                event_type = $EventType
+            }
         } | ConvertTo-Json -Depth 3
 
         $nodeProbe = Join-Path $PSScriptRoot 'monitor-school-http-probe.cjs'
@@ -169,5 +176,3 @@ if ($isOk -and (Test-Path -LiteralPath $TokenFile)) {
         }
     }
 }
-
-$logRow

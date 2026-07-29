@@ -528,6 +528,69 @@ class PerpustakaanLiteracyProgramController extends Controller
 
         foreach ($questions as $question) {
             $base = $question->is_required ? ['required'] : ['nullable'];
+
+            if ($question->isTrueFalse()) {
+                $expectedIds = collect($question->trueFalseItems())->pluck('id')->sort()->values();
+                $rules['answers.'.$question->getKey()] = array_merge($base, [
+                    'array',
+                    function (string $attribute, mixed $value, \Closure $fail) use ($expectedIds): void {
+                        $items = is_array($value) && is_array($value['items'] ?? null)
+                            ? collect($value['items'])
+                            : collect();
+
+                        if ($items->isEmpty()) {
+                            $fail('Pilih Benar atau Salah untuk setiap pernyataan.');
+
+                            return;
+                        }
+
+                        $submittedIds = $items->keys()->map(fn (mixed $id): string => (string) $id)->sort()->values();
+                        $validValues = $items->every(fn (mixed $answer): bool => in_array((string) $answer, ['0', '1'], true));
+
+                        if (! $validValues || $submittedIds->all() !== $expectedIds->all()) {
+                            $fail('Jawaban Benar/Salah harus lengkap dan sesuai dengan pernyataan yang tersedia.');
+                        }
+                    },
+                ]);
+
+                continue;
+            }
+
+            if ($question->isMatching()) {
+                $expectedLeftIds = collect($question->matchingLeftItems())->pluck('id')->sort()->values();
+                $availableRightIds = collect($question->matchingRightItems())->pluck('id');
+                $rules['answers.'.$question->getKey()] = array_merge($base, [
+                    'array',
+                    function (string $attribute, mixed $value, \Closure $fail) use ($expectedLeftIds, $availableRightIds): void {
+                        $pairs = is_array($value) && is_array($value['pairs'] ?? null)
+                            ? collect($value['pairs'])
+                            : collect();
+
+                        if ($pairs->isEmpty()) {
+                            $fail('Pilih pasangan untuk setiap item.');
+
+                            return;
+                        }
+
+                        $submittedLeftIds = $pairs->keys()->map(fn (mixed $id): string => (string) $id)->sort()->values();
+                        $selectedRightIds = $pairs->values()->map(fn (mixed $id): string => (string) $id);
+                        $validTargets = $selectedRightIds->every(fn (string $id): bool => $availableRightIds->contains($id));
+
+                        if ($submittedLeftIds->all() !== $expectedLeftIds->all() || ! $validTargets) {
+                            $fail('Jawaban Menjodohkan harus lengkap dan sesuai dengan pilihan yang tersedia.');
+
+                            return;
+                        }
+
+                        if ($selectedRightIds->duplicates()->isNotEmpty()) {
+                            $fail('Satu pilihan kanan hanya boleh digunakan untuk satu pasangan.');
+                        }
+                    },
+                ]);
+
+                continue;
+            }
+
             $max = max(1, (int) ($question->max_characters ?: 1000));
             $min = min($max, max(0, (int) ($question->min_characters ?: 0)));
 
@@ -562,6 +625,14 @@ class PerpustakaanLiteracyProgramController extends Controller
         foreach ($questions as $question) {
             $field = 'answers.'.$question->getKey();
             $position = max(1, (int) $question->sort_order);
+
+            if (! $question->isEssay()) {
+                $messages[$field.'.required'] = "Jawaban pertanyaan {$position} wajib diisi lengkap.";
+                $messages[$field.'.array'] = "Format jawaban pertanyaan {$position} tidak sesuai. Muat ulang halaman lalu coba lagi.";
+
+                continue;
+            }
+
             $max = max(1, (int) ($question->max_characters ?: 1000));
             $min = min($max, max(0, (int) ($question->min_characters ?: 0)));
             $length = mb_strlen((string) $request->input($field, ''));
@@ -616,22 +687,79 @@ class PerpustakaanLiteracyProgramController extends Controller
     protected function syncAnswers(PerpustakaanLiterasiResponse $response, $questions, array $answers): void
     {
         $gradingColumnsAvailable = Schema::hasColumn('perpustakaan_literasi_answers', 'is_correct');
+        $structuredColumnsAvailable = Schema::hasColumn('perpustakaan_literasi_answers', 'answer_payload');
+        $scoreColumnsAvailable = Schema::hasColumn('perpustakaan_literasi_answers', 'score_earned');
 
         foreach ($questions as $question) {
-            $answerText = trim((string) ($answers[$question->getKey()] ?? ''));
             $existingAnswer = $response->answers()
                 ->where('question_id', $question->getKey())
                 ->first();
+
+            if (! $question->isEssay()) {
+                $objective = $this->objectiveAnswerPayload(
+                    $question,
+                    $answers[$question->getKey()] ?? null,
+                );
+                $payload = [
+                    'answer_text' => $objective['answer_text'],
+                    'character_count' => mb_strlen($objective['answer_text']),
+                ];
+
+                if ($structuredColumnsAvailable) {
+                    $payload['answer_payload'] = $objective['answer_payload'];
+                }
+
+                if ($gradingColumnsAvailable) {
+                    $payload = array_merge($payload, [
+                        'is_correct' => $objective['score_earned'] !== null
+                            ? $objective['score_earned'] === $objective['score_possible']
+                            : null,
+                        'graded_by' => null,
+                        'graded_at' => $objective['score_earned'] !== null ? now() : null,
+                        'grading_note' => $objective['score_earned'] !== null
+                            ? 'Dinilai otomatis per butir soal objektif.'
+                            : null,
+                    ]);
+                }
+
+                if ($scoreColumnsAvailable) {
+                    $payload = array_merge($payload, [
+                        'score_earned' => $objective['score_earned'],
+                        'score_possible' => $objective['score_possible'],
+                        'grading_source' => $objective['score_earned'] !== null ? 'automatic' : null,
+                    ]);
+                }
+
+                $response->answers()->updateOrCreate(['question_id' => $question->getKey()], $payload);
+
+                continue;
+            }
+
+            $answerText = trim((string) ($answers[$question->getKey()] ?? ''));
             $payload = [
                 'answer_text' => $answerText,
                 'character_count' => mb_strlen($answerText),
             ];
+
+            if ($structuredColumnsAvailable) {
+                $payload['answer_payload'] = null;
+            }
+
+            if ($scoreColumnsAvailable) {
+                $payload['score_possible'] = 1;
+            }
+
             $answerKeyGradingPayload = $gradingColumnsAvailable
                 ? $this->answerKeyGradingPayload($question, $answerText, $existingAnswer)
                 : null;
 
             if ($answerKeyGradingPayload !== null) {
                 $payload = array_merge($payload, $answerKeyGradingPayload);
+
+                if ($scoreColumnsAvailable) {
+                    $payload['score_earned'] = $answerKeyGradingPayload['is_correct'] === true ? 1 : null;
+                    $payload['grading_source'] = $answerKeyGradingPayload['is_correct'] === true ? 'answer_key' : null;
+                }
             } elseif ($gradingColumnsAvailable
                 && $existingAnswer
                 && (string) $existingAnswer->answer_text !== $answerText) {
@@ -641,10 +769,73 @@ class PerpustakaanLiteracyProgramController extends Controller
                     'graded_at' => null,
                     'grading_note' => null,
                 ]);
+
+                if ($scoreColumnsAvailable) {
+                    $payload['score_earned'] = null;
+                    $payload['grading_source'] = null;
+                }
+            } elseif (! $existingAnswer && $scoreColumnsAvailable) {
+                $payload['score_earned'] = null;
+                $payload['grading_source'] = null;
             }
 
             $response->answers()->updateOrCreate(['question_id' => $question->getKey()], $payload);
         }
+    }
+
+    /**
+     * @return array{answer_text:string,answer_payload:?array,score_earned:?int,score_possible:int}
+     */
+    protected function objectiveAnswerPayload(PerpustakaanLiterasiQuestion $question, mixed $answer): array
+    {
+        if ($question->isTrueFalse()) {
+            $submitted = is_array($answer) && is_array($answer['items'] ?? null)
+                ? collect($answer['items'])
+                : collect();
+            $items = collect($question->trueFalseItems());
+            $complete = $submitted->count() === $items->count();
+            $score = $complete
+                ? $items->sum(fn (array $item): int => (string) $submitted->get($item['id']) === ($item['correct'] ? '1' : '0') ? 1 : 0)
+                : null;
+            $stored = $submitted->mapWithKeys(fn (mixed $value, mixed $id): array => [
+                (string) $id => (string) $value === '1',
+            ])->all();
+            $text = $items->map(function (array $item, int $index) use ($submitted): string {
+                $value = $submitted->get($item['id']);
+                $label = $value === null ? 'Belum dijawab' : ((string) $value === '1' ? 'Benar' : 'Salah');
+
+                return ($index + 1).'. '.$item['statement'].': '.$label;
+            })->implode("\n");
+
+            return [
+                'answer_text' => $text,
+                'answer_payload' => $submitted->isEmpty() ? null : ['version' => 1, 'items' => $stored],
+                'score_earned' => $score,
+                'score_possible' => $items->count(),
+            ];
+        }
+
+        $submitted = is_array($answer) && is_array($answer['pairs'] ?? null)
+            ? collect($answer['pairs'])->mapWithKeys(fn (mixed $value, mixed $id): array => [(string) $id => (string) $value])
+            : collect();
+        $leftItems = collect($question->matchingLeftItems());
+        $rightItems = collect($question->matchingRightItems())->keyBy('id');
+        $complete = $submitted->count() === $leftItems->count();
+        $score = $complete
+            ? $leftItems->sum(fn (array $item): int => $submitted->get($item['id']) === $item['correct_target_id'] ? 1 : 0)
+            : null;
+        $text = $leftItems->map(function (array $item, int $index) use ($submitted, $rightItems): string {
+            $target = $rightItems->get($submitted->get($item['id']));
+
+            return ($index + 1).'. '.$item['label'].' → '.($target['label'] ?? 'Belum dipilih');
+        })->implode("\n");
+
+        return [
+            'answer_text' => $text,
+            'answer_payload' => $submitted->isEmpty() ? null : ['version' => 1, 'pairs' => $submitted->all()],
+            'score_earned' => $score,
+            'score_possible' => $leftItems->count(),
+        ];
     }
 
     /**
