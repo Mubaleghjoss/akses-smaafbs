@@ -6,7 +6,7 @@ Modul mempunyai tepat tiga tipe:
 | --- | --- | --- |
 | `essay` | Textarea, opsional dikte | Kunci jawaban atau guru |
 | `true_false` | Tabel/kartu Benar dan Salah | Otomatis per pernyataan |
-| `matching` | Item kiri dan dropdown tujuan | Otomatis per pasangan |
+| `matching` | Garis berpanah pada layar lebar, dropdown berpanah pada HP/no-JS | Otomatis per pasangan |
 
 Semua record lama memakai default `essay`.
 
@@ -38,6 +38,21 @@ Menjodohkan:
 ```
 
 ID tidak boleh berubah setelah disimpan. Menjodohkan bersifat satu-ke-satu: jumlah sisi kiri dan kanan sama dan satu target hanya menjadi kunci satu item.
+
+## Editor admin
+
+- Benar/Salah diisi sebagai tabel `Kolom A · Pernyataan | Kolom B · Kunci Jawaban`.
+- Menjodohkan diisi sebagai tabel `Kolom A · Soal | Kolom B · Jawaban`.
+- Setiap baris Menjodohkan merupakan satu pasangan kunci. Lapisan form mengubah baris tersebut kembali menjadi struktur `left` dan `right` dengan ID stabil saat disimpan.
+- Record lama dengan struktur `left`/`right` otomatis dipetakan ke tabel pasangan saat diedit.
+- Filament menampilkan tabel pada area lebar dan kartu berlabel pada area sempit agar form admin tidak menyebabkan overflow halaman.
+
+## Garis pasangan di frontend
+
+- Pada layar minimal 768 px, murid memilih item kiri lalu jawaban kanan. SVG lokal menggambar garis berpanah dan tidak membuat request server.
+- Pilihan kanan ditampilkan dengan pergeseran urutan yang tetap satu posisi agar kunci tidak tampak sejajar, bukan pengacakan acak.
+- Pada HP, tanpa JavaScript, atau ketika validasi browser perlu difokuskan, sistem memakai dropdown berpanah yang tetap mengirim payload yang sama.
+- Garis hanya representasi visual. Nilai sumber tetap berada pada field `answers[question-id][pairs][left-id]` dan selalu divalidasi server.
 
 ## Payload jawaban
 

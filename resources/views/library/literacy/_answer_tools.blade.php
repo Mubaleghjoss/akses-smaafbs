@@ -226,6 +226,16 @@
                         return focusFirstAnswerOverLimit();
                     }
 
+                    const matchingFallback = field.closest?.('[data-literacy-matching-fallback]');
+
+                    if (matchingFallback?.classList.contains('sr-only')) {
+                        matchingFallback.classList.remove('sr-only');
+                        matchingFallback
+                            .closest('[data-literacy-matching-group]')
+                            ?.querySelector('[data-literacy-matching-board]')
+                            ?.classList.add('hidden');
+                    }
+
                     field.setAttribute('aria-invalid', 'true');
                     field.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     field.focus({ preventScroll: true });
@@ -929,6 +939,20 @@
 
             form.querySelectorAll('[data-literacy-matching-group]').forEach((group) => {
                 const selects = Array.from(group.querySelectorAll('[data-literacy-matching-select]'));
+                const board = group.querySelector('[data-literacy-matching-board]');
+                const fallback = group.querySelector('[data-literacy-matching-fallback]');
+                const surface = group.querySelector('[data-literacy-matching-surface]');
+                const canvas = group.querySelector('[data-literacy-matching-canvas]');
+                const lines = group.querySelector('[data-literacy-matching-lines]');
+                const status = group.querySelector('[data-literacy-matching-status]');
+                const leftButtons = Array.from(group.querySelectorAll('[data-literacy-matching-left]'));
+                const targetButtons = Array.from(group.querySelectorAll('[data-literacy-matching-target]'));
+                const resetButton = group.querySelector('[data-literacy-matching-reset]');
+                const desktopMedia = window.matchMedia('(min-width: 768px)');
+                const colors = ['#0284c7', '#7c3aed', '#059669', '#d97706', '#e11d48', '#0891b2'];
+                let selectedLeftId = '';
+                let forceFallback = false;
+                let drawingFrame = null;
 
                 const syncMatchingOptions = () => {
                     const selectedValues = selects
@@ -947,8 +971,239 @@
                     });
                 };
 
-                selects.forEach((select) => select.addEventListener('change', syncMatchingOptions));
-                syncMatchingOptions();
+                const resetButtonStyle = (button) => {
+                    button.style.borderColor = '';
+                    button.style.backgroundColor = '';
+                    button.style.boxShadow = '';
+                };
+
+                const colorForLeft = (leftId) => {
+                    const leftButton = leftButtons.find((button) => button.dataset.leftId === leftId);
+                    const colorIndex = Number.parseInt(leftButton?.dataset.colorIndex || '0', 10);
+
+                    return colors[Math.abs(colorIndex) % colors.length];
+                };
+
+                const syncMatchingButtons = () => {
+                    leftButtons.forEach((button) => {
+                        const select = selects.find((item) => item.dataset.leftId === button.dataset.leftId);
+                        const isSelected = selectedLeftId === button.dataset.leftId;
+
+                        resetButtonStyle(button);
+                        button.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+
+                        if (isSelected) {
+                            button.style.borderColor = '#0284c7';
+                            button.style.backgroundColor = '#e0f2fe';
+                            button.style.boxShadow = '0 0 0 3px rgba(14, 165, 233, 0.2)';
+                        } else if (select?.value) {
+                            const color = colorForLeft(button.dataset.leftId);
+                            button.style.borderColor = color;
+                            button.style.backgroundColor = `${color}12`;
+                        }
+                    });
+
+                    targetButtons.forEach((button) => {
+                        const connectedSelect = selects.find((select) => select.value === button.dataset.targetId);
+
+                        resetButtonStyle(button);
+                        button.setAttribute('aria-pressed', connectedSelect ? 'true' : 'false');
+
+                        if (connectedSelect) {
+                            const color = colorForLeft(connectedSelect.dataset.leftId);
+                            button.style.borderColor = color;
+                            button.style.backgroundColor = `${color}12`;
+                        }
+                    });
+                };
+
+                const drawMatchingLines = () => {
+                    drawingFrame = null;
+
+                    if (!surface || !canvas || !lines || board?.classList.contains('hidden')) {
+                        return;
+                    }
+
+                    const surfaceRect = surface.getBoundingClientRect();
+                    const width = Math.max(1, surface.clientWidth);
+                    const height = Math.max(1, surface.clientHeight);
+                    const markerId = lines.dataset.markerId || '';
+
+                    canvas.setAttribute('viewBox', `0 0 ${width} ${height}`);
+                    canvas.setAttribute('width', String(width));
+                    canvas.setAttribute('height', String(height));
+                    lines.replaceChildren();
+
+                    selects.forEach((select) => {
+                        if (!select.value) {
+                            return;
+                        }
+
+                        const leftButton = leftButtons.find((button) => button.dataset.leftId === select.dataset.leftId);
+                        const targetButton = targetButtons.find((button) => button.dataset.targetId === select.value);
+
+                        if (!leftButton || !targetButton) {
+                            return;
+                        }
+
+                        const leftRect = leftButton.getBoundingClientRect();
+                        const targetRect = targetButton.getBoundingClientRect();
+                        const startX = leftRect.right - surfaceRect.left;
+                        const startY = leftRect.top - surfaceRect.top + (leftRect.height / 2);
+                        const endX = targetRect.left - surfaceRect.left - 7;
+                        const endY = targetRect.top - surfaceRect.top + (targetRect.height / 2);
+                        const bend = Math.max(18, (endX - startX) * 0.45);
+                        const color = colorForLeft(select.dataset.leftId);
+                        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+
+                        path.setAttribute('d', `M ${startX} ${startY} C ${startX + bend} ${startY}, ${endX - bend} ${endY}, ${endX} ${endY}`);
+                        path.setAttribute('fill', 'none');
+                        path.setAttribute('stroke', color);
+                        path.setAttribute('stroke-width', '3');
+                        path.setAttribute('stroke-linecap', 'round');
+                        path.setAttribute('opacity', '0.9');
+
+                        if (markerId) {
+                            path.setAttribute('marker-end', `url(#${markerId})`);
+                        }
+
+                        lines.appendChild(path);
+                    });
+                };
+
+                const scheduleMatchingLines = () => {
+                    if (drawingFrame !== null) {
+                        window.cancelAnimationFrame(drawingFrame);
+                    }
+
+                    drawingFrame = window.requestAnimationFrame(drawMatchingLines);
+                };
+
+                const refreshMatching = () => {
+                    syncMatchingOptions();
+                    syncMatchingButtons();
+                    scheduleMatchingLines();
+                };
+
+                const syncMatchingMode = () => {
+                    const useBoard = desktopMedia.matches && !forceFallback && board && fallback;
+
+                    board?.classList.toggle('hidden', !useBoard);
+                    fallback?.classList.toggle('sr-only', Boolean(useBoard));
+
+                    if (!useBoard) {
+                        lines?.replaceChildren();
+                    }
+
+                    scheduleMatchingLines();
+                };
+
+                leftButtons.forEach((button) => {
+                    button.addEventListener('click', () => {
+                        selectedLeftId = selectedLeftId === button.dataset.leftId
+                            ? ''
+                            : button.dataset.leftId;
+
+                        if (status) {
+                            status.textContent = selectedLeftId
+                                ? 'Sekarang klik jawaban yang sesuai di Kolom B.'
+                                : 'Pilih salah satu item di Kolom A untuk mulai menghubungkan.';
+                        }
+
+                        syncMatchingButtons();
+                    });
+                });
+
+                targetButtons.forEach((button) => {
+                    button.addEventListener('click', () => {
+                        if (!selectedLeftId) {
+                            const connectedSelect = selects.find((select) => select.value === button.dataset.targetId);
+
+                            if (connectedSelect) {
+                                selectedLeftId = connectedSelect.dataset.leftId;
+                                status.textContent = 'Jawaban ini sudah terhubung. Pilih jawaban lain untuk mengubah pasangannya.';
+                                syncMatchingButtons();
+                            } else if (status) {
+                                status.textContent = 'Pilih item di Kolom A terlebih dahulu, lalu pilih jawaban ini.';
+                            }
+
+                            return;
+                        }
+
+                        const selected = selects.find((select) => select.dataset.leftId === selectedLeftId);
+                        const previouslyConnected = selects.find(
+                            (select) => select !== selected && select.value === button.dataset.targetId
+                        );
+
+                        if (!selected) {
+                            return;
+                        }
+
+                        if (previouslyConnected) {
+                            previouslyConnected.value = '';
+                            previouslyConnected.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+
+                        selected.value = button.dataset.targetId;
+                        selected.dispatchEvent(new Event('change', { bubbles: true }));
+                        selectedLeftId = '';
+
+                        if (status) {
+                            const completed = selects.filter((select) => select.value !== '').length;
+                            status.textContent = `${formatNumber(completed)} dari ${formatNumber(selects.length)} pasangan sudah dihubungkan.`;
+                        }
+
+                        refreshMatching();
+                    });
+                });
+
+                resetButton?.addEventListener('click', () => {
+                    selects.forEach((select) => {
+                        select.value = '';
+                        select.dispatchEvent(new Event('change', { bubbles: true }));
+                    });
+                    selectedLeftId = '';
+
+                    if (status) {
+                        status.textContent = 'Semua garis dihapus. Pilih item di Kolom A untuk mulai lagi.';
+                    }
+
+                    refreshMatching();
+                });
+
+                selects.forEach((select) => {
+                    select.addEventListener('change', refreshMatching);
+                    select.addEventListener('invalid', () => {
+                        forceFallback = true;
+                        syncMatchingMode();
+
+                        if (status) {
+                            status.textContent = 'Lengkapi semua pasangan yang wajib diisi melalui pilihan di bawah.';
+                        }
+                    });
+                });
+
+                if (typeof desktopMedia.addEventListener === 'function') {
+                    desktopMedia.addEventListener('change', () => {
+                        forceFallback = false;
+                        syncMatchingMode();
+                    });
+                } else {
+                    desktopMedia.addListener(() => {
+                        forceFallback = false;
+                        syncMatchingMode();
+                    });
+                }
+
+                if (typeof ResizeObserver === 'function' && surface) {
+                    new ResizeObserver(scheduleMatchingLines).observe(surface);
+                } else {
+                    window.addEventListener('resize', scheduleMatchingLines);
+                }
+
+                document.fonts?.ready.then(scheduleMatchingLines).catch(() => {});
+                syncMatchingMode();
+                refreshMatching();
             });
 
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;

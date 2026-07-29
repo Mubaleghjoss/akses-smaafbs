@@ -89,7 +89,95 @@
         <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
             Baca setiap pernyataan dan pasangan dengan teliti. Jangan memilih secara acak; jawaban tiap butir diperiksa otomatis.
         </div>
-        <div class="mt-3 space-y-3" data-literacy-matching-group>
+        @php
+            $matchingRightItems = $question->matchingRightItems();
+
+            // Keep the order stable while preventing the answer key from
+            // appearing visually aligned row-for-row with the left column.
+            if (count($matchingRightItems) > 1) {
+                $matchingRightItems = [
+                    ...array_slice($matchingRightItems, 1),
+                    ...array_slice($matchingRightItems, 0, 1),
+                ];
+            }
+
+            $matchingMarkerId = 'literacy-matching-arrow-'.$question->getKey();
+        @endphp
+        <div
+            class="mt-3"
+            data-literacy-matching-group
+            data-literacy-matching-required="{{ $question->is_required ? '1' : '0' }}"
+        >
+            <div class="hidden" data-literacy-matching-board>
+                <p class="mb-2 text-xs font-semibold leading-5 text-sky-800" data-literacy-matching-status aria-live="polite">
+                    Klik item Kolom A, lalu klik jawabannya di Kolom B. Garis berpanah menunjukkan pasangan yang dipilih.
+                </p>
+                <button
+                    type="button"
+                    class="mb-2 inline-flex min-h-9 items-center rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm hover:border-sky-400 hover:text-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    data-literacy-matching-reset
+                >
+                    Hapus semua garis
+                </button>
+                <div class="relative overflow-hidden rounded-2xl border border-sky-200 bg-sky-50/50 p-3" data-literacy-matching-surface>
+                    <svg
+                        class="pointer-events-none absolute inset-0 z-0 h-full w-full"
+                        aria-hidden="true"
+                        preserveAspectRatio="none"
+                        data-literacy-matching-canvas
+                    >
+                        <defs>
+                            <marker id="{{ $matchingMarkerId }}" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+                                <path d="M0,0 L8,4 L0,8 z" fill="#0284c7"></path>
+                            </marker>
+                        </defs>
+                        <g data-literacy-matching-lines data-marker-id="{{ $matchingMarkerId }}"></g>
+                    </svg>
+
+                    <div class="relative z-10 grid grid-cols-[minmax(0,1fr)_2.75rem_minmax(0,1fr)] gap-2">
+                        <div>
+                            <div class="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">Kolom A · Soal</div>
+                            <div class="space-y-3">
+                                @foreach($question->matchingLeftItems() as $itemIndex => $item)
+                                    <button
+                                        type="button"
+                                        class="min-h-14 w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-left text-sm font-semibold leading-5 text-slate-800 shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sky-500"
+                                        data-literacy-matching-left
+                                        data-left-id="{{ $item['id'] }}"
+                                        data-color-index="{{ $itemIndex }}"
+                                        aria-pressed="false"
+                                    >
+                                        <span class="mr-1 font-extrabold text-slate-500">{{ $itemIndex + 1 }}.</span>{{ $item['label'] }}
+                                    </button>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col items-center">
+                            <div class="mb-2 text-center text-[0.65rem] font-extrabold uppercase tracking-wide text-sky-700">Hubungkan</div>
+                            <div class="flex flex-1 items-center text-2xl font-black text-sky-500" aria-hidden="true">&harr;</div>
+                        </div>
+
+                        <div>
+                            <div class="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">Kolom B · Jawaban</div>
+                            <div class="space-y-3">
+                                @foreach($matchingRightItems as $targetIndex => $target)
+                                    <button
+                                        type="button"
+                                        class="min-h-14 w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-left text-sm font-semibold leading-5 text-slate-800 shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sky-500"
+                                        data-literacy-matching-target
+                                        data-target-id="{{ $target['id'] }}"
+                                    >
+                                        <span class="mr-1 font-extrabold text-slate-500">{{ chr(65 + $targetIndex) }}.</span>{{ $target['label'] }}
+                                    </button>
+                                @endforeach
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-3" data-literacy-matching-fallback>
             @foreach($question->matchingLeftItems() as $itemIndex => $item)
                 @php
                     $selectedTarget = old(
@@ -101,7 +189,7 @@
                     <div class="whitespace-pre-line break-words text-sm font-medium leading-6 text-slate-800">
                         <span class="mr-1 font-bold text-slate-500">{{ $itemIndex + 1 }}.</span>{{ $item['label'] }}
                     </div>
-                    <div class="hidden text-center text-xl font-bold text-sky-600 md:block" aria-hidden="true">→</div>
+                    <div class="hidden text-center text-xl font-bold text-sky-600 md:block" aria-hidden="true">&rarr;</div>
                     <label class="mt-2 block md:mt-0">
                         <span class="mb-1 block text-xs font-semibold text-slate-500 md:hidden">Pilih pasangan</span>
                         <select
@@ -109,6 +197,7 @@
                             name="answers[{{ $question->getKey() }}][pairs][{{ $item['id'] }}]"
                             data-literacy-answer-control
                             data-literacy-matching-select
+                            data-left-id="{{ $item['id'] }}"
                             @required($question->is_required)
                         >
                             <option value="">Pilih pasangan...</option>
@@ -121,6 +210,7 @@
                     </label>
                 </div>
             @endforeach
+            </div>
         </div>
     @else
         <textarea

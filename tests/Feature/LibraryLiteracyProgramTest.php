@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource;
+use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\Pages\CreatePerpustakaanLiterasiMaterial;
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\Pages\ListPerpustakaanLiterasiMaterials;
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\Pages\StudentHistoryPerpustakaanLiterasi;
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\Pages\ViewPerpustakaanLiterasiMaterial;
@@ -723,9 +724,167 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('Menjodohkan')
             ->assertSee('Pernyataan pertama')
             ->assertSee('Pilih pasangan...')
+            ->assertSee('Klik item Kolom A, lalu klik jawabannya di Kolom B.')
+            ->assertSee('Hapus semua garis')
+            ->assertSee('data-literacy-matching-board', false)
+            ->assertSee('data-literacy-matching-canvas', false)
+            ->assertSee('new ResizeObserver', false)
             ->assertSee('Jawab dengan Suara')
             ->assertSee('window.webkitSpeechRecognition', false)
             ->assertSee("Jelaskan isi bacaan.\nGunakan bahasa sendiri.");
+    }
+
+    public function test_admin_objective_tables_preserve_stable_ids_and_canonical_configuration(): void
+    {
+        $canonical = [
+            'question_type' => PerpustakaanLiterasiQuestion::TYPE_MATCHING,
+            'configuration' => [
+                'version' => 1,
+                'left' => [
+                    ['id' => 'left-a', 'label' => 'Indonesia', 'correct_target_id' => 'right-a'],
+                    ['id' => 'left-b', 'label' => 'Jepang', 'correct_target_id' => 'right-b'],
+                ],
+                'right' => [
+                    ['id' => 'right-a', 'label' => 'Jakarta'],
+                    ['id' => 'right-b', 'label' => 'Tokyo'],
+                ],
+            ],
+        ];
+
+        $formData = PerpustakaanLiterasiMaterialResource::prepareQuestionDataForForm($canonical);
+
+        $this->assertSame([
+            [
+                'left_id' => 'left-a',
+                'left_label' => 'Indonesia',
+                'right_id' => 'right-a',
+                'right_label' => 'Jakarta',
+            ],
+            [
+                'left_id' => 'left-b',
+                'left_label' => 'Jepang',
+                'right_id' => 'right-b',
+                'right_label' => 'Tokyo',
+            ],
+        ], data_get($formData, 'configuration.pairs'));
+
+        $persisted = PerpustakaanLiterasiMaterialResource::prepareQuestionDataForPersistence($formData);
+
+        $this->assertSame($canonical['configuration'], $persisted['configuration']);
+
+        $trueFalseForm = PerpustakaanLiterasiMaterialResource::prepareQuestionDataForForm([
+            'question_type' => PerpustakaanLiterasiQuestion::TYPE_TRUE_FALSE,
+            'configuration' => [
+                'items' => [
+                    ['id' => 'tf-true', 'statement' => 'Benar', 'correct' => true],
+                    ['id' => 'tf-false', 'statement' => 'Salah', 'correct' => false],
+                ],
+            ],
+        ]);
+
+        $this->assertSame('1', data_get($trueFalseForm, 'configuration.items.0.correct'));
+        $this->assertSame('0', data_get($trueFalseForm, 'configuration.items.1.correct'));
+
+        $trueFalsePersisted = PerpustakaanLiterasiMaterialResource::prepareQuestionDataForPersistence($trueFalseForm);
+
+        $this->assertTrue(data_get($trueFalsePersisted, 'configuration.items.0.correct'));
+        $this->assertFalse(data_get($trueFalsePersisted, 'configuration.items.1.correct'));
+        $this->assertCount(
+            2,
+            data_get(
+                PerpustakaanLiterasiMaterialResource::defaultQuestionConfiguration(
+                    PerpustakaanLiterasiQuestion::TYPE_MATCHING,
+                ),
+                'pairs',
+            ),
+        );
+    }
+
+    public function test_admin_can_create_matching_question_from_two_column_table(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $admin = User::query()->create([
+            'name' => 'Admin Tabel Menjodohkan',
+            'username' => 'admin-tabel-menjodohkan',
+            'password' => bcrypt('password'),
+        ]);
+        $admin->assignRole('admin');
+
+        Livewire::actingAs($admin)
+            ->test(CreatePerpustakaanLiterasiMaterial::class)
+            ->fillForm([
+                'title' => 'Materi Tabel Menjodohkan',
+                'program_category' => PerpustakaanLiterasiMaterial::CATEGORY_NUMERACY_EXCELLENCE,
+                'reading_content' => 'Bacaan untuk menguji editor tabel dua kolom.',
+                'is_active' => true,
+                'questions' => [
+                    [
+                        'question_type' => PerpustakaanLiterasiQuestion::TYPE_MATCHING,
+                        'prompt' => 'Hubungkan negara dan ibu kotanya.',
+                        'configuration' => [
+                            'pairs' => [
+                                [
+                                    'left_id' => 'left-indonesia',
+                                    'left_label' => 'Indonesia',
+                                    'right_id' => 'right-jakarta',
+                                    'right_label' => 'Jakarta',
+                                ],
+                                [
+                                    'left_id' => 'left-jepang',
+                                    'left_label' => 'Jepang',
+                                    'right_id' => 'right-tokyo',
+                                    'right_label' => 'Tokyo',
+                                ],
+                            ],
+                        ],
+                        'is_required' => true,
+                    ],
+                    [
+                        'question_type' => PerpustakaanLiterasiQuestion::TYPE_TRUE_FALSE,
+                        'prompt' => 'Tentukan kebenaran pernyataan berikut.',
+                        'configuration' => [
+                            'items' => [
+                                [
+                                    'id' => 'tf-jakarta',
+                                    'statement' => 'Jakarta adalah ibu kota Indonesia.',
+                                    'correct' => '1',
+                                ],
+                                [
+                                    'id' => 'tf-tokyo',
+                                    'statement' => 'Tokyo berada di Indonesia.',
+                                    'correct' => '0',
+                                ],
+                            ],
+                        ],
+                        'is_required' => true,
+                    ],
+                ],
+            ])
+            ->assertSee('Kolom A · Pernyataan')
+            ->assertSee('Kolom B · Kunci Jawaban')
+            ->assertSee('Kolom A · Soal')
+            ->assertSee('Kolom B · Jawaban')
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $material = PerpustakaanLiterasiMaterial::query()
+            ->where('title', 'Materi Tabel Menjodohkan')
+            ->firstOrFail();
+        $question = $material
+            ->questions()
+            ->where('question_type', PerpustakaanLiterasiQuestion::TYPE_MATCHING)
+            ->firstOrFail();
+        $trueFalseQuestion = $material
+            ->questions()
+            ->where('question_type', PerpustakaanLiterasiQuestion::TYPE_TRUE_FALSE)
+            ->firstOrFail();
+
+        $this->assertSame('left-indonesia', data_get($question->configuration, 'left.0.id'));
+        $this->assertSame('right-jakarta', data_get($question->configuration, 'left.0.correct_target_id'));
+        $this->assertSame('Jakarta', data_get($question->configuration, 'right.0.label'));
+        $this->assertTrue(data_get($trueFalseQuestion->configuration, 'items.0.correct'));
+        $this->assertFalse(data_get($trueFalseQuestion->configuration, 'items.1.correct'));
     }
 
     public function test_objective_answers_are_validated_stored_and_scored_per_item(): void

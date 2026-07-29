@@ -23,6 +23,7 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms;
+use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -179,6 +180,15 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                     ->schema([
                         Forms\Components\Repeater::make('questions')
                             ->relationship()
+                            ->mutateRelationshipDataBeforeFillUsing(
+                                fn (array $data): array => static::prepareQuestionDataForForm($data),
+                            )
+                            ->mutateRelationshipDataBeforeCreateUsing(
+                                fn (array $data): array => static::prepareQuestionDataForPersistence($data),
+                            )
+                            ->mutateRelationshipDataBeforeSaveUsing(
+                                fn (array $data): array => static::prepareQuestionDataForPersistence($data),
+                            )
                             ->orderColumn('sort_order')
                             ->collapsed()
                             ->reorderableWithButtons()
@@ -196,8 +206,8 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                                     ->default(PerpustakaanLiterasiQuestion::TYPE_ESSAY)
                                     ->required()
                                     ->live()
-                                    ->afterStateUpdated(function (Set $set): void {
-                                        $set('configuration', null);
+                                    ->afterStateUpdated(function (mixed $state, Set $set): void {
+                                        $set('configuration', static::defaultQuestionConfiguration((string) $state));
                                     })
                                     ->helperText('Pilih Esai, tabel Benar/Salah, atau Menjodohkan. Jenis pertanyaan dikunci setelah ada responden.')
                                     ->columnSpanFull(),
@@ -228,71 +238,65 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                                     ->minItems(2)
                                     ->reorderableWithButtons()
                                     ->addActionLabel('Tambah Pernyataan')
-                                    ->itemLabel(fn (array $state): string => filled($state['statement'] ?? null)
-                                        ? Str::limit((string) $state['statement'], 60)
-                                        : 'Pernyataan baru')
+                                    ->table([
+                                        TableColumn::make('Kolom A · Pernyataan')
+                                            ->markAsRequired()
+                                            ->width('70%'),
+                                        TableColumn::make('Kolom B · Kunci Jawaban')
+                                            ->markAsRequired()
+                                            ->width('30%'),
+                                    ])
+                                    ->compact()
                                     ->schema([
                                         Forms\Components\Hidden::make('id')
                                             ->default(fn (): string => (string) Str::uuid()),
                                         Forms\Components\Textarea::make('statement')
                                             ->label('Pernyataan')
                                             ->required()
-                                            ->rows(2)
-                                            ->columnSpanFull(),
-                                        Forms\Components\Toggle::make('correct')
-                                            ->label('Kunci: pernyataan ini Benar')
-                                            ->default(true)
-                                            ->helperText('Nonaktif berarti jawaban yang benar adalah Salah.'),
+                                            ->rows(2),
+                                        Forms\Components\Select::make('correct')
+                                            ->label('Kunci Jawaban')
+                                            ->options([
+                                                '1' => 'Benar',
+                                                '0' => 'Salah',
+                                            ])
+                                            ->default('1')
+                                            ->required()
+                                            ->native(false),
                                     ])
                                     ->columns(1)
                                     ->columnSpanFull(),
-                                Forms\Components\Repeater::make('configuration.right')
-                                    ->label('Kolom Kanan / Pilihan Tujuan')
+                                Forms\Components\Repeater::make('configuration.pairs')
+                                    ->label('Tabel Pasangan Soal dan Jawaban')
                                     ->visible(fn (Get $get): bool => $get('question_type') === PerpustakaanLiterasiQuestion::TYPE_MATCHING)
                                     ->required(fn (Get $get): bool => $get('question_type') === PerpustakaanLiterasiQuestion::TYPE_MATCHING)
                                     ->defaultItems(2)
                                     ->minItems(2)
                                     ->reorderableWithButtons()
-                                    ->addActionLabel('Tambah Pilihan Kanan')
+                                    ->addActionLabel('Tambah Pasangan')
+                                    ->helperText('Setiap baris adalah satu kunci pasangan. Murid hanya melihat item kiri dan kanan, bukan susunan kuncinya.')
+                                    ->table([
+                                        TableColumn::make('Kolom A · Soal')
+                                            ->markAsRequired()
+                                            ->width('50%'),
+                                        TableColumn::make('Kolom B · Jawaban')
+                                            ->markAsRequired()
+                                            ->width('50%'),
+                                    ])
+                                    ->compact()
                                     ->schema([
-                                        Forms\Components\Hidden::make('id')
+                                        Forms\Components\Hidden::make('left_id')
                                             ->default(fn (): string => (string) Str::uuid()),
-                                        Forms\Components\Textarea::make('label')
-                                            ->label('Isi kolom kanan')
+                                        Forms\Components\Hidden::make('right_id')
+                                            ->default(fn (): string => (string) Str::uuid()),
+                                        Forms\Components\Textarea::make('left_label')
+                                            ->label('Kolom A · Soal')
                                             ->required()
                                             ->rows(2),
-                                    ])
-                                    ->columns(1)
-                                    ->columnSpanFull(),
-                                Forms\Components\Repeater::make('configuration.left')
-                                    ->label('Kolom Kiri dan Kunci Pasangan')
-                                    ->visible(fn (Get $get): bool => $get('question_type') === PerpustakaanLiterasiQuestion::TYPE_MATCHING)
-                                    ->required(fn (Get $get): bool => $get('question_type') === PerpustakaanLiterasiQuestion::TYPE_MATCHING)
-                                    ->defaultItems(2)
-                                    ->minItems(2)
-                                    ->reorderableWithButtons()
-                                    ->addActionLabel('Tambah Item Kiri')
-                                    ->schema([
-                                        Forms\Components\Hidden::make('id')
-                                            ->default(fn (): string => (string) Str::uuid()),
-                                        Forms\Components\Textarea::make('label')
-                                            ->label('Isi kolom kiri')
+                                        Forms\Components\Textarea::make('right_label')
+                                            ->label('Kolom B · Jawaban')
                                             ->required()
-                                            ->rows(2)
-                                            ->columnSpanFull(),
-                                        Forms\Components\Select::make('correct_target_id')
-                                            ->label('Pasangkan dengan')
-                                            ->options(function (Get $get): array {
-                                                return collect($get('../../right') ?? [])
-                                                    ->filter(fn (mixed $item): bool => is_array($item) && filled($item['id'] ?? null))
-                                                    ->mapWithKeys(fn (array $item): array => [
-                                                        (string) $item['id'] => trim((string) ($item['label'] ?? '')) ?: 'Pilihan kanan belum diisi',
-                                                    ])
-                                                    ->all();
-                                            })
-                                            ->required()
-                                            ->live()
-                                            ->helperText('Setiap pilihan kanan hanya boleh menjadi kunci untuk satu item kiri.'),
+                                            ->rows(2),
                                     ])
                                     ->columns(1)
                                     ->columnSpanFull(),
@@ -390,6 +394,156 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                     ]),
                 SchemaView::make('filament.resources.perpustakaan-literasi-material-resource.partials.latex-picker-assets'),
             ]);
+    }
+
+    public static function defaultQuestionConfiguration(string $questionType): ?array
+    {
+        return match (PerpustakaanLiterasiQuestion::normalizeType($questionType)) {
+            PerpustakaanLiterasiQuestion::TYPE_TRUE_FALSE => [
+                'items' => collect(range(1, 2))
+                    ->map(fn (): array => [
+                        'id' => (string) Str::uuid(),
+                        'statement' => '',
+                        'correct' => '1',
+                    ])
+                    ->all(),
+            ],
+            PerpustakaanLiterasiQuestion::TYPE_MATCHING => [
+                'pairs' => collect(range(1, 2))
+                    ->map(fn (): array => [
+                        'left_id' => (string) Str::uuid(),
+                        'left_label' => '',
+                        'right_id' => (string) Str::uuid(),
+                        'right_label' => '',
+                    ])
+                    ->all(),
+            ],
+            default => null,
+        };
+    }
+
+    /**
+     * Convert the canonical matching JSON into one editable table row per pair.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public static function prepareQuestionDataForForm(array $data): array
+    {
+        $questionType = PerpustakaanLiterasiQuestion::normalizeType($data['question_type'] ?? null);
+        $configuration = is_array($data['configuration'] ?? null) ? $data['configuration'] : [];
+
+        if ($questionType === PerpustakaanLiterasiQuestion::TYPE_MATCHING) {
+            $rightById = collect($configuration['right'] ?? [])
+                ->filter(fn (mixed $item): bool => is_array($item) && filled($item['id'] ?? null))
+                ->keyBy(fn (array $item): string => (string) $item['id']);
+
+            $pairs = collect($configuration['left'] ?? [])
+                ->filter(fn (mixed $item): bool => is_array($item))
+                ->map(function (array $left) use ($rightById): array {
+                    $rightId = trim((string) ($left['correct_target_id'] ?? ''));
+                    $right = $rightById->get($rightId, []);
+
+                    return [
+                        'left_id' => trim((string) ($left['id'] ?? '')) ?: (string) Str::uuid(),
+                        'left_label' => (string) ($left['label'] ?? ''),
+                        'right_id' => $rightId ?: (string) Str::uuid(),
+                        'right_label' => is_array($right) ? (string) ($right['label'] ?? '') : '',
+                    ];
+                })
+                ->values()
+                ->all();
+
+            $data['configuration'] = [
+                'pairs' => $pairs !== [] ? $pairs : static::defaultQuestionConfiguration($questionType)['pairs'],
+            ];
+
+            return $data;
+        }
+
+        if ($questionType === PerpustakaanLiterasiQuestion::TYPE_TRUE_FALSE) {
+            $data['configuration'] = [
+                'items' => collect($configuration['items'] ?? [])
+                    ->filter(fn (mixed $item): bool => is_array($item))
+                    ->map(fn (array $item): array => [
+                        'id' => trim((string) ($item['id'] ?? '')) ?: (string) Str::uuid(),
+                        'statement' => (string) ($item['statement'] ?? ''),
+                        'correct' => filter_var($item['correct'] ?? false, FILTER_VALIDATE_BOOLEAN) ? '1' : '0',
+                    ])
+                    ->values()
+                    ->all(),
+            ];
+
+            return $data;
+        }
+
+        $data['configuration'] = null;
+
+        return $data;
+    }
+
+    /**
+     * Convert the compact admin table back into the canonical objective JSON.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public static function prepareQuestionDataForPersistence(array $data): array
+    {
+        $questionType = PerpustakaanLiterasiQuestion::normalizeType($data['question_type'] ?? null);
+        $configuration = is_array($data['configuration'] ?? null) ? $data['configuration'] : [];
+
+        if ($questionType === PerpustakaanLiterasiQuestion::TYPE_MATCHING) {
+            $pairs = collect($configuration['pairs'] ?? [])
+                ->filter(fn (mixed $item): bool => is_array($item))
+                ->map(fn (array $item): array => [
+                    'left_id' => trim((string) ($item['left_id'] ?? '')) ?: (string) Str::uuid(),
+                    'left_label' => trim((string) ($item['left_label'] ?? '')),
+                    'right_id' => trim((string) ($item['right_id'] ?? '')) ?: (string) Str::uuid(),
+                    'right_label' => trim((string) ($item['right_label'] ?? '')),
+                ])
+                ->values();
+
+            $data['configuration'] = [
+                'version' => 1,
+                'left' => $pairs
+                    ->map(fn (array $pair): array => [
+                        'id' => $pair['left_id'],
+                        'label' => $pair['left_label'],
+                        'correct_target_id' => $pair['right_id'],
+                    ])
+                    ->all(),
+                'right' => $pairs
+                    ->map(fn (array $pair): array => [
+                        'id' => $pair['right_id'],
+                        'label' => $pair['right_label'],
+                    ])
+                    ->all(),
+            ];
+
+            return $data;
+        }
+
+        if ($questionType === PerpustakaanLiterasiQuestion::TYPE_TRUE_FALSE) {
+            $data['configuration'] = [
+                'version' => 1,
+                'items' => collect($configuration['items'] ?? [])
+                    ->filter(fn (mixed $item): bool => is_array($item))
+                    ->map(fn (array $item): array => [
+                        'id' => trim((string) ($item['id'] ?? '')) ?: (string) Str::uuid(),
+                        'statement' => trim((string) ($item['statement'] ?? '')),
+                        'correct' => filter_var($item['correct'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                    ])
+                    ->values()
+                    ->all(),
+            ];
+
+            return $data;
+        }
+
+        $data['configuration'] = null;
+
+        return $data;
     }
 
     public static function table(Table $table): Table

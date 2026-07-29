@@ -1,5 +1,12 @@
 # Riwayat Literasi Numerasi
 
+## 2026-07-29 - Editor tabel dan garis Menjodohkan
+
+- Form admin Benar/Salah dan Menjodohkan diubah menjadi tabel dua kolom yang responsif.
+- Konfigurasi Menjodohkan lama tetap kompatibel melalui konversi form dua arah dengan ID pasangan stabil.
+- Frontend Menjodohkan menampilkan koneksi SVG berpanah pada layar lebar dan fallback dropdown pada HP/no-JS.
+- Koneksi SVG hanya bekerja di browser dan tidak menambah request maupun beban antrean submit.
+
 ## 2026-07-29
 
 - Menambahkan tipe Esai, tabel Benar/Salah, dan Menjodohkan.
