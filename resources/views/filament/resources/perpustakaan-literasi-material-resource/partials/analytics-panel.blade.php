@@ -14,6 +14,12 @@
 
     $formatNumber = fn (int|float $value): string => number_format($value, 0, ',', '.');
     $formatPercent = fn (int|float $value): string => number_format((float) $value, 1, ',', '.').'%';
+    $completionShareText = is_array($materialCompletion) && isset($material)
+        ? \App\Support\Perpustakaan\LiteracyCompletionShareText::make($material, $materialCompletion)
+        : null;
+    $completionShareId = isset($material)
+        ? 'literasi-completion-share-'.(int) $material->getKey()
+        : null;
 @endphp
 
 <section class="literasi-analytics{{ $compact ? ' literasi-analytics--compact' : '' }}" aria-label="{{ $title ?? 'Analisa Literasi' }}">
@@ -84,7 +90,28 @@
                     <h3 class="literasi-panel__title">Status Pengisian Materi</h3>
                     <p class="literasi-analytics__description">Seluruh waktu untuk semua siswa aktif. Responden adalah jawaban nyata + dispensasi; jawaban di Sampah tetap dipisahkan.</p>
                 </div>
-                <span class="literasi-analytics__period">Penyelesaian: {{ $formatPercent((float) ($materialCompletion['completion_percentage'] ?? 0)) }}</span>
+                <div class="literasi-completion__header-tools">
+                    <span class="literasi-analytics__period">Penyelesaian: {{ $formatPercent((float) ($materialCompletion['completion_percentage'] ?? 0)) }}</span>
+
+                    @if($completionShareText !== null && $completionShareId !== null)
+                        <div class="literasi-completion__share">
+                            <button
+                                type="button"
+                                class="literasi-completion__copy-button js-literacy-completion-copy"
+                                data-copy-target="{{ $completionShareId }}"
+                                data-default-label="Salin daftar untuk WhatsApp"
+                                aria-describedby="{{ $completionShareId }}-status"
+                            >
+                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M8 7V5.75A2.75 2.75 0 0 1 10.75 3h7.5A2.75 2.75 0 0 1 21 5.75v7.5A2.75 2.75 0 0 1 18.25 16H17v1.25A2.75 2.75 0 0 1 14.25 20h-7.5A2.75 2.75 0 0 1 4 17.25v-7.5A2.75 2.75 0 0 1 6.75 7H8Zm2 0h4.25A2.75 2.75 0 0 1 17 9.75V14h1.25c.97 0 1.75-.78 1.75-1.75v-6.5C20 4.78 19.22 4 18.25 4h-7.5C9.78 4 9 4.78 9 5.75V7h1Zm-3.25 1C5.78 8 5 8.78 5 9.75v7.5C5 18.22 5.78 19 6.75 19h7.5c.97 0 1.75-.78 1.75-1.75v-7.5C16 8.78 15.22 8 14.25 8h-7.5Z" fill="currentColor"/>
+                                </svg>
+                                <span>Salin daftar untuk WhatsApp</span>
+                            </button>
+                            <span class="literasi-completion__copy-status" id="{{ $completionShareId }}-status" aria-live="polite"></span>
+                            <textarea id="{{ $completionShareId }}" class="js-literacy-completion-share-text" hidden readonly>{{ $completionShareText }}</textarea>
+                        </div>
+                    @endif
+                </div>
             </div>
 
             <div class="literasi-completion__metrics">

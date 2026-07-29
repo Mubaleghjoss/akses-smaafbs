@@ -2,6 +2,7 @@
 
 ## 2026-07-30 - Struk aman, direct link, dan dispensasi
 
+- Menambahkan salin daftar WhatsApp pada Status Pengisian Materi, dikelompokkan per kelas dengan kode `[SAKIT]` dan `[TES MT]`.
 - Membedakan pesan retry koneksi, 429, timeout, 500, dan 503 agar gangguan jaringan tidak keliru disebut antrean penuh.
 - Menambahkan patokan status di panel murid: draf lokal, percobaan otomatis, serta struk dan kode edit sebagai bukti konfirmasi penyimpanan.
 - Submit dan edit berhasil menuju struk session tanpa soal/jawaban dengan cache `no-store` dan navigasi `location.replace()`.

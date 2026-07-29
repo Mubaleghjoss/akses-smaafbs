@@ -485,9 +485,13 @@
 
     async function copyTextToClipboard(text) {
         if (navigator.clipboard?.writeText) {
-            await navigator.clipboard.writeText(text);
+            try {
+                await navigator.clipboard.writeText(text);
 
-            return;
+                return;
+            } catch (error) {
+                // Continue to the selection-based fallback below.
+            }
         }
 
         const textarea = document.createElement('textarea');
@@ -497,8 +501,12 @@
         textarea.style.opacity = '0';
         document.body.appendChild(textarea);
         textarea.select();
-        document.execCommand('copy');
+        const copied = document.execCommand('copy');
         textarea.remove();
+
+        if (!copied) {
+            throw new Error('Clipboard tidak tersedia.');
+        }
     }
 
     document.addEventListener('click', async (event) => {
@@ -527,6 +535,57 @@
             }, 1600);
         } catch (error) {
             window.prompt('Salin manual teks berikut:', text);
+        }
+    });
+
+    document.addEventListener('click', async (event) => {
+        const button = event.target?.closest?.('.js-literacy-completion-copy');
+
+        if (!button) {
+            return;
+        }
+
+        const sourceId = button.dataset.copyTarget;
+        const source = sourceId ? document.getElementById(sourceId) : null;
+        const status = sourceId ? document.getElementById(`${sourceId}-status`) : null;
+        const text = source?.value?.trim();
+        const label = button.querySelector('span');
+        const defaultLabel = button.dataset.defaultLabel || 'Salin daftar untuk WhatsApp';
+
+        if (!text) {
+            if (status) {
+                status.textContent = 'Daftar belum tersedia.';
+            }
+
+            return;
+        }
+
+        button.disabled = true;
+
+        try {
+            await copyTextToClipboard(text);
+
+            if (label) {
+                label.textContent = 'Tersalin - siap ditempel';
+            }
+
+            if (status) {
+                status.textContent = 'Daftar berhasil disalin. Buka WhatsApp lalu pilih Tempel.';
+            }
+        } catch (error) {
+            window.prompt('Salin manual teks berikut:', text);
+
+            if (status) {
+                status.textContent = 'Clipboard otomatis tidak tersedia. Salin teks dari kotak yang muncul.';
+            }
+        } finally {
+            window.setTimeout(() => {
+                button.disabled = false;
+
+                if (label) {
+                    label.textContent = defaultLabel;
+                }
+            }, 2200);
         }
     });
 })();

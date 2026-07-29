@@ -24,10 +24,12 @@ use App\Models\PerpustakaanLiterasiSubmissionTicket;
 use App\Models\Pengaturan;
 use App\Models\User;
 use App\Support\Admin\AdminModuleAccess;
+use App\Support\Perpustakaan\LiteracyCompletionShareText;
 use App\Support\Perpustakaan\LiteracySubmissionQueue;
 use App\Support\Perpustakaan\LiterasiAnalytics;
 use App\Support\Perpustakaan\LiterasiSimilarityAnalyzer;
 use App\Support\SiteSettings\SiteSettingKeys;
+use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -2301,6 +2303,49 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertStringContainsString('Jawaban di Sampah', $html);
     }
 
+    public function test_material_completion_share_text_groups_missing_and_dispensated_students_by_class(): void
+    {
+        $material = $this->createMaterial('Materi Siap Dibagikan');
+        $text = LiteracyCompletionShareText::make($material, [
+            'classes' => [
+                [
+                    'class' => 'XI 2',
+                    'missing_students' => [
+                        ['name' => 'Zahra Belum Mengisi'],
+                    ],
+                    'dispensated_students' => [
+                        ['name' => 'Yusuf Tes MT', 'reason' => PerpustakaanLiterasiDispensation::REASON_MT_TEST],
+                    ],
+                ],
+                [
+                    'class' => 'X 1',
+                    'missing_students' => [
+                        ['name' => 'Budi Belum Mengisi'],
+                    ],
+                    'dispensated_students' => [
+                        ['name' => 'Aisyah Sakit', 'reason' => PerpustakaanLiterasiDispensation::REASON_SICK],
+                    ],
+                ],
+                [
+                    'class' => 'X Selesai',
+                    'missing_students' => [],
+                    'dispensated_students' => [],
+                ],
+            ],
+        ], CarbonImmutable::create(2026, 7, 30, 8, 15, 0, 'Asia/Jakarta'));
+
+        $this->assertSame(1, substr_count($text, '*Kelas X 1*'));
+        $this->assertSame(1, substr_count($text, '*Kelas XI 2*'));
+        $this->assertStringNotContainsString('X Selesai', $text);
+        $this->assertStringContainsString('*Materi:* Materi Siap Dibagikan', $text);
+        $this->assertStringContainsString('*Diperbarui:* 30/07/2026 08:15 WIB', $text);
+        $this->assertStringContainsString('*Ringkasan:* 2 belum mengisi | 2 dispensasi', $text);
+        $this->assertStringContainsString('*Kode:* [SAKIT] 1 siswa | [TES MT] 1 siswa', $text);
+        $this->assertStringContainsString("1. Aisyah Sakit [SAKIT]\n2. Budi Belum Mengisi", $text);
+        $this->assertStringContainsString("1. Yusuf Tes MT [TES MT]\n2. Zahra Belum Mengisi", $text);
+        $this->assertStringContainsString('Mohon siswa tanpa kode dispensasi segera mengisi materi.', $text);
+    }
+
     public function test_admin_can_manage_literacy_dispensations_and_real_submit_revokes_them(): void
     {
         Queue::fake();
@@ -2402,6 +2447,10 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertStringContainsString('Tes MT', $html);
         $this->assertStringContainsString('Batalkan', $html);
         $this->assertStringContainsString('jawaban +', $html);
+        $this->assertStringContainsString('Salin daftar untuk WhatsApp', $html);
+        $this->assertStringContainsString('js-literacy-completion-copy', $html);
+        $this->assertStringContainsString('[SAKIT]', $html);
+        $this->assertStringContainsString('[TES MT]', $html);
 
         $this->actingAs($admin)
             ->delete(route('admin.perpustakaan-literasi.dispensations.destroy', [$material, $cancelStudent]))

@@ -60,6 +60,8 @@ Retry memakai request ID dan tiket yang sama agar koneksi putus tidak membuat re
 - Jika siswa yang memiliki dispensasi kemudian submit, hook respons otomatis membatalkan dispensasi.
 - Metrik partisipasi dan ranking jumlah pengisi menghitung `jawaban + dispensasi`.
 - Nilai, jawaban benar/salah, akurasi, plagiasi, dan total jawaban selalu hanya memakai respons nyata.
+- Tombol **Salin daftar untuk WhatsApp** membuat teks per kelas dari siswa belum mengisi dan siswa dispensasi. Dispensasi tetap menampilkan nama dengan kode `[SAKIT]` atau `[TES MT]`; siswa dengan jawaban di Sampah tidak dicampurkan ke daftar ini.
+- Clipboard diproses sepenuhnya di browser tanpa request baru. Jika Clipboard API ditolak browser, tersedia fallback seleksi teks/manual copy.
 
 ## Analisis
 
