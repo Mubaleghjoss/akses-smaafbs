@@ -1,5 +1,14 @@
 # Riwayat Literasi Numerasi
 
+## 2026-07-30 - Struk aman, direct link, dan dispensasi
+
+- Submit dan edit berhasil menuju struk session tanpa soal/jawaban dengan cache `no-store` dan navigasi `location.replace()`.
+- Materi nonaktif atau melewati waktu tutup tetap dapat dibuka dan dikirim melalui direct link, tetapi tetap hilang dari daftar.
+- Materi sebelum waktu buka menampilkan halaman ramah tanpa bacaan, pertanyaan, tiket, atau form.
+- Sensor `window.blur` dan indikator Percobaan Keluar dihapus; hanya halaman tersembunyi lebih dari 10 detik yang dicatat.
+- Menambahkan dispensasi Sakit/Tes MT dengan izin admin, soft delete, pembatalan otomatis saat submit nyata, dan rincian jawaban + dispensasi pada metrik partisipasi.
+- Statistik akademik dan plagiasi tetap hanya memakai respons nyata.
+
 ## 2026-07-29 - Editor tabel dan garis Menjodohkan
 
 - Form admin Benar/Salah dan Menjodohkan diubah menjadi tabel dua kolom yang responsif.

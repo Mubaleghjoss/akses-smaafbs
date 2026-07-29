@@ -72,7 +72,7 @@ class PerpustakaanLiterasiMaterialResource extends Resource
         return $schema
             ->schema([
                 Section::make('Materi Bacaan')
-                    ->description('Materi aktif akan muncul di menu publik Literasi Numerasi.')
+                    ->description('Status Aktif mengatur kemunculan materi di daftar publik. Direct link tetap dapat dipakai setelah waktu buka.')
                     ->columns(['default' => 1, 'md' => 2])
                     ->schema([
                         Forms\Components\TextInput::make('title')
@@ -162,7 +162,8 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                             ->maxLength(1000)
                             ->helperText('Jika link YouTube atau file Google Drive valid, video ditampilkan sebagai frame di halaman publik.'),
                         Forms\Components\Toggle::make('is_active')
-                            ->label('Aktifkan materi')
+                            ->label('Tampilkan di daftar publik')
+                            ->helperText('Jika dimatikan, materi disembunyikan dari daftar tetapi direct link tetap dapat dibuka dan menerima jawaban setelah waktu buka.')
                             ->default(true),
                         Forms\Components\DateTimePicker::make('opens_at')
                             ->label('Mulai Dibuka')
@@ -854,13 +855,37 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                     ->schema([
                         TextEntry::make('responses_total')
                             ->label('Total Responden')
-                            ->state(fn (PerpustakaanLiterasiMaterial $record): int => $record->responses()->count()),
+                            ->state(fn (PerpustakaanLiterasiMaterial $record): int => $record->responses()->count()
+                                + (SchemaFacade::hasTable('perpustakaan_literasi_dispensations')
+                                    ? $record->dispensations()->count()
+                                    : 0))
+                            ->helperText('Jawaban nyata + dispensasi'),
                         TextEntry::make('responses_today')
                             ->label('Responden Hari Ini')
-                            ->state(fn (PerpustakaanLiterasiMaterial $record): int => $record->responses()->whereDate('submitted_at', now()->toDateString())->count()),
+                            ->state(fn (PerpustakaanLiterasiMaterial $record): int => $record->responses()
+                                ->whereDate('submitted_at', now()->toDateString())
+                                ->count()
+                                + (SchemaFacade::hasTable('perpustakaan_literasi_dispensations')
+                                    ? $record->dispensations()->whereDate('confirmed_at', now()->toDateString())->count()
+                                    : 0))
+                            ->helperText('Jawaban nyata + dispensasi'),
                         TextEntry::make('classes_total')
                             ->label('Kelas Mengisi')
-                            ->state(fn (PerpustakaanLiterasiMaterial $record): int => $record->responses()->whereNotNull('student_class_snapshot')->distinct()->count('student_class_snapshot')),
+                            ->state(function (PerpustakaanLiterasiMaterial $record): int {
+                                $classes = $record->responses()
+                                    ->whereNotNull('student_class_snapshot')
+                                    ->pluck('student_class_snapshot');
+
+                                if (SchemaFacade::hasTable('perpustakaan_literasi_dispensations')) {
+                                    $classes = $classes->merge(
+                                        $record->dispensations()
+                                            ->whereNotNull('student_class_snapshot')
+                                            ->pluck('student_class_snapshot'),
+                                    );
+                                }
+
+                                return $classes->filter()->unique()->count();
+                            }),
                         TextEntry::make('questions_total')
                             ->label('Jumlah Soal')
                             ->state(fn (PerpustakaanLiterasiMaterial $record): int => $record->questions()->count()),
@@ -1033,6 +1058,8 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                 'title' => 'Rekap Bulan Ini',
                 'description' => 'Nilai, responden, dan plagiasi untuk materi ini.',
                 'compact' => true,
+                'material' => $record,
+                'canManageDispensations' => static::canEdit($record),
             ]
         )->render());
     }

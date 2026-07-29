@@ -12,6 +12,7 @@ use App\Filament\Widgets\PerpustakaanLiterasiGlobalAnalytics;
 use App\Jobs\AnalyzeLiteracyResponseSimilarity;
 use App\Models\DataSiswa;
 use App\Models\PerpustakaanLiterasiAnswer;
+use App\Models\PerpustakaanLiterasiDispensation;
 use App\Models\PerpustakaanLiterasiMaterial;
 use App\Models\PerpustakaanLiterasiNetworkCheck;
 use App\Models\PerpustakaanLiterasiQuestion;
@@ -66,6 +67,7 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->runLiteracySubmissionDeliveryMigration();
         $this->runLiteracyOperationalMonitoringMigration();
         $this->runLiteracyObjectiveQuestionMigration();
+        $this->runLiteracyDispensationMigration();
         $this->bootstrapPengaturanTable();
         $this->bootstrapLibraryHubTables();
     }
@@ -105,6 +107,130 @@ class LibraryLiteracyProgramTest extends TestCase
 
         $this->get('/perpustakaan/literacy-habituation-program')
             ->assertRedirect('/perpustakaan/program-literasi-numerasi');
+    }
+
+    public function test_successful_submit_uses_private_receipt_without_questions_or_answers(): void
+    {
+        Queue::fake();
+
+        $student = $this->createStudent('Codex Struk Aman', 'XI Struk');
+        $material = $this->createMaterial('Materi Struk Aman', [
+            'student_verification_enabled' => false,
+        ]);
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Pertanyaan rahasia yang tidak boleh tampil di struk.',
+            'min_characters' => 10,
+            'max_characters' => 500,
+        ]);
+        $answer = 'Jawaban rahasia murid yang tidak boleh tampil di struk.';
+
+        $response = $this->post(route('library.literacy.store', $material->slug), [
+            'student_id' => $student->getKey(),
+            'answers' => [
+                $question->getKey() => $answer,
+            ],
+        ])->assertRedirect(route('library.literacy.completed'));
+
+        $response->assertSessionHas('literacy_submission_receipt.student_name', $student->nama);
+
+        $storedResponse = PerpustakaanLiterasiResponse::query()
+            ->where('material_id', $material->getKey())
+            ->where('data_siswa_id', $student->getKey())
+            ->firstOrFail();
+
+        $receipt = $this->get(route('library.literacy.completed'))
+            ->assertOk()
+            ->assertHeaderContains('cache-control', 'no-store')
+            ->assertSee('Jawaban berhasil disimpan')
+            ->assertSee($student->nama)
+            ->assertSee($storedResponse->edit_code)
+            ->assertSee('Salin Kode Edit')
+            ->assertSee('Isi Murid Berikutnya')
+            ->assertDontSee($question->prompt)
+            ->assertDontSee($answer)
+            ->assertDontSee(route('library.literacy.edit', $storedResponse->shortEditCode()), false);
+
+        $this->get(route('library.literacy.completed'))
+            ->assertOk()
+            ->assertDontSee($storedResponse->edit_code)
+            ->assertSee('Data struk sudah ditutup');
+
+        $this->get(route('library.literacy.show', $material->slug))
+            ->assertHeaderContains('cache-control', 'no-store')
+            ->assertSee('window.location.replace(payload.redirect_url);', false)
+            ->assertSee("window.addEventListener('pageshow'", false)
+            ->assertSee('if (!event.persisted)', false);
+    }
+
+    public function test_direct_link_accepts_inactive_and_closed_material_but_future_material_is_locked(): void
+    {
+        Queue::fake();
+
+        $student = $this->createStudent('Codex Direct Link', 'XI Direct');
+        $material = $this->createMaterial('Materi Direct Link Tertutup', [
+            'is_active' => false,
+            'opens_at' => now()->subDays(2),
+            'closes_at' => now()->subDay(),
+            'student_verification_enabled' => false,
+        ]);
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Jelaskan fungsi direct link.',
+            'min_characters' => 10,
+            'max_characters' => 500,
+        ]);
+
+        $this->get(route('library.literacy.index'))
+            ->assertOk()
+            ->assertDontSee($material->title);
+
+        $this->get(route('library.literacy.show', $material->slug))
+            ->assertOk()
+            ->assertSee('Materi dibuka melalui direct link')
+            ->assertSee($question->prompt);
+
+        $this->post(route('library.literacy.store', $material->slug), [
+            'student_id' => $student->getKey(),
+            'answers' => [
+                $question->getKey() => 'Direct link tetap menerima jawaban walaupun materi tidak ada di daftar.',
+            ],
+        ])->assertRedirect(route('library.literacy.completed'));
+
+        $future = $this->createMaterial('Materi Masa Depan Terkunci', [
+            'opens_at' => now()->addDay(),
+            'student_verification_enabled' => false,
+            'reading_content' => 'Isi bacaan rahasia sebelum waktu buka.',
+        ]);
+        $futureQuestion = $future->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Pertanyaan rahasia masa depan.',
+            'max_characters' => 500,
+        ]);
+
+        $this->get(route('library.literacy.show', $future->slug))
+            ->assertOk()
+            ->assertSee('Materi Belum Dibuka')
+            ->assertDontSee('Isi bacaan rahasia sebelum waktu buka.')
+            ->assertDontSee($futureQuestion->prompt)
+            ->assertDontSee('data-literacy-answer-form', false);
+
+        $this->postJson(route('library.literacy.queue.store', $future->slug), [
+            'student_id' => $student->getKey(),
+            'submission_request_id' => (string) Str::uuid(),
+        ])->assertUnprocessable()->assertJsonValidationErrors('material');
+
+        $this->postJson(route('library.literacy.store', $future->slug), [
+            'student_id' => $student->getKey(),
+            'answers' => [
+                $futureQuestion->getKey() => 'Tidak boleh masuk.',
+            ],
+        ])->assertUnprocessable()->assertJsonValidationErrors('material');
+
+        $deleted = $this->createMaterial('Materi Direct Link Dihapus');
+        $deleted->delete();
+
+        $this->get(route('library.literacy.show', $deleted->slug))->assertNotFound();
     }
 
     public function test_public_literasi_numerasi_page_shows_category_video_tatib_and_header_perpus_link(): void
@@ -149,11 +275,12 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('Jangan membuka tab lain selama mengerjakan.')
             ->assertSee('https://www.youtube.com/embed/dQw4w9WgXcQ', false)
             ->assertSee('data-literacy-integrity-form', false)
-            ->assertSee('data-integrity-field="tab_switch_count"', false)
-            ->assertSee('data-literacy-integrity-popup', false)
-            ->assertSee('Peringatan Integritas')
-            ->assertSee('Terdeteksi pindah tab atau fokus keluar dari halaman pengerjaan.')
-            ->assertSee('Terdeteksi keluar aplikasi atau menyembunyikan halaman pengerjaan.')
+            ->assertSee('data-integrity-field="app_hidden_count"', false)
+            ->assertDontSee('data-integrity-field="tab_switch_count"', false)
+            ->assertDontSee('data-integrity-field="page_leave_attempt_count"', false)
+            ->assertDontSee("window.addEventListener('blur'", false)
+            ->assertSee('}, 10000);', false)
+            ->assertDontSee('Peringatan Integritas')
             ->assertDontSee('Tetap keluar dari halaman pengerjaan?');
     }
 
@@ -327,7 +454,7 @@ class LibraryLiteracyProgramTest extends TestCase
             'answers' => [
                 $question->getKey() => 'Jawaban saya sudah diedit dengan tambahan refleksi setelah membaca ulang materi.',
             ],
-        ])->assertRedirect(route('library.literacy.edit', $response->shortEditCode()));
+        ])->assertRedirect(route('library.literacy.completed'));
 
         $this->assertDatabaseHas('perpustakaan_literasi_answers', [
             'response_id' => $response->getKey(),
@@ -1178,7 +1305,7 @@ class LibraryLiteracyProgramTest extends TestCase
                 'app_hidden_count' => 0,
                 'page_leave_attempt_count' => 2,
             ],
-        ])->assertRedirect(route('library.literacy.edit', $response->shortEditCode()));
+        ])->assertRedirect(route('library.literacy.completed'));
 
         $response->refresh();
         $this->assertSame(3, $response->tab_switch_count);
@@ -1679,7 +1806,10 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertStringContainsString('literasi-response-detail__identity', $detailHtml);
         $this->assertStringContainsString('Tindakan keluar halaman', $detailHtml);
         $this->assertStringContainsString('Total Indikator', $detailHtml);
-        $this->assertStringContainsString('6x', $detailHtml);
+        $this->assertStringContainsString('Halaman Disembunyikan', $detailHtml);
+        $this->assertStringContainsString('1x', $detailHtml);
+        $this->assertStringNotContainsString('Percobaan Keluar', $detailHtml);
+        $this->assertStringNotContainsString('Pindah Tab', $detailHtml);
         $this->assertStringContainsString('Terindikasi plagiasi', $detailHtml);
         $this->assertStringContainsString('94,25% mirip', $detailHtml);
         $this->assertStringContainsString('Codex Pembanding Nilai', $detailHtml);
@@ -2027,7 +2157,7 @@ class LibraryLiteracyProgramTest extends TestCase
             'answers' => [
                 $question->getKey() => 'Jawaban baru siswa setelah melakukan revisi materi.',
             ],
-        ])->assertRedirect(route('library.literacy.edit', $response->shortEditCode()));
+        ])->assertRedirect(route('library.literacy.completed'));
 
         $answer->refresh();
         $this->assertSame('Jawaban baru siswa setelah melakukan revisi materi.', $answer->answer_text);
@@ -2163,6 +2293,135 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertStringContainsString($missingStudent->nama, $html);
         $this->assertStringContainsString($trashedStudent->nama, $html);
         $this->assertStringContainsString('Jawaban di Sampah', $html);
+    }
+
+    public function test_admin_can_manage_literacy_dispensations_and_real_submit_revokes_them(): void
+    {
+        Queue::fake();
+
+        $admin = User::query()->create([
+            'name' => 'Admin Dispensasi Literasi',
+            'username' => 'admin-dispensasi-literasi',
+            'password' => bcrypt('password'),
+        ]);
+        $admin->assignRole('admin');
+        $viewer = User::query()->create([
+            'name' => 'Viewer Dispensasi Literasi',
+            'username' => 'viewer-dispensasi-literasi',
+            'password' => bcrypt('password'),
+        ]);
+        $sickStudent = $this->createStudent('Codex Sakit Literasi', 'X Dispensasi');
+        $cancelStudent = $this->createStudent('Codex Tes MT Literasi', 'X Dispensasi');
+        $trashedStudent = $this->createStudent('Codex Sampah Dispensasi', 'XI Dispensasi');
+        $material = $this->createMaterial('Materi Dispensasi', [
+            'student_verification_enabled' => false,
+        ]);
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Jelaskan pemahaman materi dispensasi.',
+            'min_characters' => 10,
+            'max_characters' => 500,
+        ]);
+        $trashedResponse = $this->createResponseWithAnswer(
+            $material,
+            $trashedStudent,
+            $question,
+            'Jawaban yang berada di Sampah.',
+        );
+        $trashedResponse->delete();
+
+        $storeRoute = fn (DataSiswa $student): string => route(
+            'admin.perpustakaan-literasi.dispensations.store',
+            [$material, $student],
+        );
+
+        $this->actingAs($viewer)
+            ->post($storeRoute($sickStudent), ['reason' => PerpustakaanLiterasiDispensation::REASON_SICK])
+            ->assertForbidden();
+
+        $this->actingAs($admin)
+            ->post($storeRoute($sickStudent), [
+                'reason' => PerpustakaanLiterasiDispensation::REASON_SICK,
+                'note' => 'Konfirmasi wali kelas.',
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($admin)
+            ->post($storeRoute($sickStudent), [
+                'reason' => PerpustakaanLiterasiDispensation::REASON_MT_TEST,
+            ])
+            ->assertRedirect();
+
+        $this->assertSame(1, PerpustakaanLiterasiDispensation::query()
+            ->where('material_id', $material->getKey())
+            ->where('data_siswa_id', $sickStudent->getKey())
+            ->count());
+        $this->assertDatabaseHas('perpustakaan_literasi_dispensations', [
+            'material_id' => $material->getKey(),
+            'data_siswa_id' => $sickStudent->getKey(),
+            'reason' => PerpustakaanLiterasiDispensation::REASON_MT_TEST,
+            'confirmed_by' => $admin->getKey(),
+            'deleted_at' => null,
+        ]);
+
+        $this->actingAs($admin)
+            ->post($storeRoute($cancelStudent), [
+                'reason' => PerpustakaanLiterasiDispensation::REASON_SICK,
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($admin)
+            ->post($storeRoute($trashedStudent), [
+                'reason' => PerpustakaanLiterasiDispensation::REASON_SICK,
+            ])
+            ->assertSessionHasErrors('student');
+
+        $analytics = LiterasiAnalytics::forMaterial($material);
+        $completion = $analytics['material_completion'];
+
+        $this->assertSame(2, $completion['dispensation_total']);
+        $this->assertSame(2, $completion['respondent_total']);
+        $this->assertSame(1, $completion['trashed_total']);
+        $this->assertSame(2, $analytics['grading_summary']['responses']);
+        $this->assertSame(0, $analytics['grading_summary']['response_records']);
+        $this->assertSame(2, $analytics['grading_summary']['dispensations']);
+        $this->assertSame(0, $analytics['grading_summary']['total_answers']);
+        $this->assertSame(0, $analytics['grading_summary']['correct_answers']);
+        $this->assertSame(2, collect($analytics['class_activity'])->firstWhere('class', 'X Dispensasi')['month']);
+        $this->assertSame(2, collect($analytics['class_response_ranking'])->firstWhere('class', 'X Dispensasi')['total']);
+
+        $html = (string) PerpustakaanLiterasiMaterialResource::monthlyRankingAnalysisHtml($material);
+        $this->assertStringContainsString('Dispensasi', $html);
+        $this->assertStringContainsString('Sakit', $html);
+        $this->assertStringContainsString('Tes MT', $html);
+        $this->assertStringContainsString('Batalkan', $html);
+        $this->assertStringContainsString('jawaban +', $html);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.perpustakaan-literasi.dispensations.destroy', [$material, $cancelStudent]))
+            ->assertRedirect();
+        $this->assertSoftDeleted('perpustakaan_literasi_dispensations', [
+            'material_id' => $material->getKey(),
+            'data_siswa_id' => $cancelStudent->getKey(),
+        ]);
+
+        auth()->logout();
+        $this->post(route('library.literacy.store', $material->slug), [
+            'student_id' => $sickStudent->getKey(),
+            'answers' => [
+                $question->getKey() => 'Jawaban nyata siswa otomatis membatalkan dispensasi sebelumnya.',
+            ],
+        ])->assertRedirect(route('library.literacy.completed'));
+
+        $this->assertSoftDeleted('perpustakaan_literasi_dispensations', [
+            'material_id' => $material->getKey(),
+            'data_siswa_id' => $sickStudent->getKey(),
+        ]);
+        $this->assertDatabaseHas('perpustakaan_literasi_responses', [
+            'material_id' => $material->getKey(),
+            'data_siswa_id' => $sickStudent->getKey(),
+            'deleted_at' => null,
+        ]);
     }
 
     public function test_literacy_admin_pages_show_monthly_analytics_panels(): void
@@ -2686,6 +2945,16 @@ class LibraryLiteracyProgramTest extends TestCase
         }
 
         $migration = require database_path('migrations/2026_07_29_080000_add_objective_question_types_to_literacy.php');
+        $migration->up();
+    }
+
+    protected function runLiteracyDispensationMigration(): void
+    {
+        if (Schema::hasTable('perpustakaan_literasi_dispensations')) {
+            return;
+        }
+
+        $migration = require database_path('migrations/2026_07_30_090000_create_perpustakaan_literasi_dispensations_table.php');
         $migration->up();
     }
 

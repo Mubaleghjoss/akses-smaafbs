@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class PerpustakaanLiterasiResponse extends Model
@@ -69,6 +70,17 @@ class PerpustakaanLiterasiResponse extends Model
             }
 
             $response->ai_detection_status ??= self::AI_STATUS_NOT_CHECKED;
+        });
+
+        static::created(function (self $response): void {
+            if (! Schema::hasTable('perpustakaan_literasi_dispensations')) {
+                return;
+            }
+
+            PerpustakaanLiterasiDispensation::query()
+                ->where('material_id', $response->material_id)
+                ->where('data_siswa_id', $response->data_siswa_id)
+                ->delete();
         });
 
         static::deleting(function (self $response): void {

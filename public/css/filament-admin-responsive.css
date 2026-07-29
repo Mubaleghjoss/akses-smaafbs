@@ -2165,7 +2165,7 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 
 .literasi-completion__metrics {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.65rem;
 }
 
@@ -2182,6 +2182,16 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .literasi-completion__metrics > .is-success {
     border-color: rgba(16, 185, 129, 0.3);
     background: #ecfdf5;
+}
+
+.literasi-completion__metrics > .is-info {
+    border-color: rgba(14, 165, 233, 0.3);
+    background: #f0f9ff;
+}
+
+.literasi-completion__metrics > .is-primary {
+    border-color: rgba(99, 102, 241, 0.3);
+    background: #eef2ff;
 }
 
 .literasi-completion__metrics > .is-warning {
@@ -2267,6 +2277,11 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
     background: #fff1f2;
 }
 
+.literasi-completion__lists section.is-dispensation {
+    border-color: rgba(14, 165, 233, 0.24);
+    background: #f0f9ff;
+}
+
 .literasi-completion__lists h4 {
     margin: 0 0 0.45rem;
     color: #0f172a;
@@ -2275,15 +2290,80 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 }
 
 .literasi-completion__student {
+    display: block;
+    min-width: 0;
     padding: 0.35rem 0;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
     color: #334155;
     font-size: 0.75rem;
     overflow-wrap: anywhere;
 }
 
-.literasi-completion__student:last-of-type {
+.literasi-completion__student small {
+    display: block;
+    margin-top: 0.15rem;
+    color: #64748b;
+    font-size: 0.67rem;
+}
+
+.literasi-completion__student-row {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.55rem;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.literasi-completion__student-row:last-child {
     border-bottom: 0;
+}
+
+.literasi-completion__actions {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.35rem;
+}
+
+.literasi-completion__action {
+    min-height: 2rem;
+    border: 1px solid transparent;
+    border-radius: 0.45rem;
+    padding: 0.35rem 0.55rem;
+    font-size: 0.68rem;
+    font-weight: 800;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.literasi-completion__action--sick {
+    border-color: #fbbf24;
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.literasi-completion__action--mt {
+    border-color: #38bdf8;
+    background: #e0f2fe;
+    color: #075985;
+}
+
+.literasi-completion__action--cancel {
+    border-color: #fda4af;
+    background: #fff1f2;
+    color: #9f1239;
+}
+
+.literasi-table td > small,
+.literasi-metric-card__detail {
+    display: block;
+    margin-top: 0.2rem;
+    color: #64748b;
+    font-size: 0.65rem;
+    font-weight: 600;
+    line-height: 1.35;
 }
 
 .literasi-completion__hint {
@@ -2301,6 +2381,11 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .fi-theme-dark .literasi-completion__lists section {
     border-color: rgba(148, 163, 184, 0.2);
     background: rgba(39, 39, 42, 0.8);
+}
+
+.dark .literasi-completion__lists section.is-dispensation,
+.fi-theme-dark .literasi-completion__lists section.is-dispensation {
+    background: rgba(14, 165, 233, 0.1);
 }
 
 .dark .literasi-completion__metrics strong,
@@ -3063,6 +3148,22 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 
     .literasi-completion__lists {
         grid-template-columns: minmax(0, 1fr);
+    }
+
+    .literasi-completion__student-row {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .literasi-completion__actions {
+        justify-content: stretch;
+    }
+
+    .literasi-completion__actions form,
+    .literasi-completion__actions .literasi-completion__action,
+    .literasi-completion__student-row > form,
+    .literasi-completion__student-row > form .literasi-completion__action {
+        width: 100%;
     }
 
     .literasi-panel,

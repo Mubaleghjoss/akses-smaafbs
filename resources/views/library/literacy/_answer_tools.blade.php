@@ -67,6 +67,35 @@
             const submitInitiallyDisabled = submitButton?.disabled === true;
             let queueSubmitLocked = false;
 
+            window.addEventListener('pageshow', (event) => {
+                if (!event.persisted) {
+                    return;
+                }
+
+                const requestId = form.querySelector('[data-literacy-request-id]')?.value || '';
+
+                if (requestId === '') {
+                    return;
+                }
+
+                try {
+                    const markerKey = `literacy.submission.completed.v1:${requestId}`;
+                    const rawMarker = window.sessionStorage.getItem(markerKey);
+
+                    if (!rawMarker) {
+                        return;
+                    }
+
+                    const marker = JSON.parse(rawMarker);
+                    window.sessionStorage.removeItem(markerKey);
+                    form.reset();
+                    window.location.replace(marker?.redirect_url || @js(route('library.literacy.index')));
+                } catch (error) {
+                    form.reset();
+                    window.location.reload();
+                }
+            });
+
             const answerLength = (textarea) => Array.from(textarea.value || '').length;
             const answerMaximum = (textarea) => Math.max(
                 1,
@@ -614,7 +643,7 @@
 
                         removeDraft();
                         showQueue('Jawaban berhasil disimpan', 'Halaman hasil sedang dibuka...');
-                        window.location.assign(payload.redirect_url);
+                        window.location.replace(payload.redirect_url);
                     } catch (error) {
                         showQueue(
                             error?.exhausted ? 'Belum berhasil menyimpan jawaban' : 'Jawaban belum dapat disimpan',
@@ -1335,101 +1364,25 @@
             });
 
             const integrityFields = {
-                tab_switch_count: form.querySelector('[data-integrity-field="tab_switch_count"]'),
                 app_hidden_count: form.querySelector('[data-integrity-field="app_hidden_count"]'),
-                page_leave_attempt_count: form.querySelector('[data-integrity-field="page_leave_attempt_count"]'),
             };
 
             if (Object.values(integrityFields).some(Boolean) && form.dataset.literacyIntegrityReady !== '1') {
                 form.dataset.literacyIntegrityReady = '1';
 
                 const counts = {
-                    tab_switch_count: 0,
                     app_hidden_count: 0,
-                    page_leave_attempt_count: 0,
                 };
                 let submitting = false;
                 let beaconSent = false;
                 let leavingPage = false;
-                let pendingPopupMessage = '';
-                const pendingTimers = new Set();
+                let hiddenTimer = null;
 
-                const clearPendingIntegrityTimers = () => {
-                    pendingTimers.forEach((timer) => window.clearTimeout(timer));
-                    pendingTimers.clear();
-                };
-
-                const createIntegrityPopup = () => {
-                    let popup = document.querySelector('[data-literacy-integrity-popup]');
-
-                    if (popup) {
-                        return popup;
+                const clearHiddenTimer = () => {
+                    if (hiddenTimer !== null) {
+                        window.clearTimeout(hiddenTimer);
+                        hiddenTimer = null;
                     }
-
-                    popup = document.createElement('div');
-                    popup.setAttribute('data-literacy-integrity-popup', '1');
-                    popup.setAttribute('role', 'alertdialog');
-                    popup.setAttribute('aria-modal', 'true');
-                    popup.style.cssText = [
-                        'position:fixed',
-                        'inset:0',
-                        'z-index:9999',
-                        'display:none',
-                        'align-items:center',
-                        'justify-content:center',
-                        'padding:1rem',
-                        'background:rgba(15,23,42,.48)',
-                    ].join(';');
-
-                    popup.innerHTML = `
-                        <div style="max-width:28rem;border-radius:1rem;background:#fff;padding:1.25rem;box-shadow:0 24px 70px rgba(15,23,42,.28);color:#0f172a">
-                            <div style="font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.14em;color:#dc2626">Peringatan Integritas</div>
-                            <div data-literacy-integrity-popup-message style="margin-top:.55rem;font-size:1rem;font-weight:800;line-height:1.45"></div>
-                            <p style="margin-top:.65rem;font-size:.9rem;line-height:1.6;color:#475569">Tetap kerjakan soal secara mandiri. Aktivitas keluar tab atau aplikasi akan tercatat pada laporan guru/admin.</p>
-                            <button type="button" data-literacy-integrity-popup-close style="margin-top:1rem;min-height:2.5rem;border:0;border-radius:999px;background:#0f172a;padding:.65rem 1rem;color:#fff;font-weight:800;cursor:pointer">Saya Mengerti</button>
-                        </div>
-                    `;
-
-                    popup.querySelector('[data-literacy-integrity-popup-close]')?.addEventListener('click', () => {
-                        popup.style.display = 'none';
-                    });
-
-                    document.body.appendChild(popup);
-
-                    return popup;
-                };
-
-                const showIntegrityPopup = (message) => {
-                    pendingPopupMessage = message;
-
-                    if (document.visibilityState === 'hidden') {
-                        return;
-                    }
-
-                    const popup = createIntegrityPopup();
-                    const messageElement = popup.querySelector('[data-literacy-integrity-popup-message]');
-
-                    if (messageElement) {
-                        messageElement.textContent = message;
-                    }
-
-                    popup.style.display = 'flex';
-                    pendingPopupMessage = '';
-                };
-
-                const scheduleIntegrityBump = (key, message) => {
-                    const timer = window.setTimeout(() => {
-                        pendingTimers.delete(timer);
-
-                        if (submitting || leavingPage) {
-                            return;
-                        }
-
-                        bumpIntegrity(key);
-                        showIntegrityPopup(message);
-                    }, 800);
-
-                    pendingTimers.add(timer);
                 };
 
                 const syncIntegrityFields = () => {
@@ -1483,7 +1436,7 @@
                 const beginFinalSubmission = () => {
                     submitting = true;
                     leavingPage = true;
-                    clearPendingIntegrityTimers();
+                    clearHiddenTimer();
                     syncIntegrityFields();
                 };
 
@@ -1518,45 +1471,40 @@
 
                         if (destination.origin === window.location.origin) {
                             leavingPage = true;
-                            clearPendingIntegrityTimers();
+                            clearHiddenTimer();
                         }
                     } catch (error) {
                         // Invalid hrefs are ignored; the browser will handle them.
                     }
                 }, true);
 
-                window.addEventListener('blur', () => {
-                    if (!submitting && !leavingPage) {
-                        scheduleIntegrityBump(
-                            'tab_switch_count',
-                            'Terdeteksi pindah tab atau fokus keluar dari halaman pengerjaan.'
-                        );
-                    }
-                });
-
                 document.addEventListener('visibilitychange', () => {
-                    if (document.visibilityState === 'visible' && pendingPopupMessage !== '') {
-                        showIntegrityPopup(pendingPopupMessage);
+                    if (document.visibilityState === 'visible') {
+                        clearHiddenTimer();
 
                         return;
                     }
 
                     if (!submitting && !leavingPage && document.visibilityState === 'hidden') {
-                        scheduleIntegrityBump(
-                            'app_hidden_count',
-                            'Terdeteksi keluar aplikasi atau menyembunyikan halaman pengerjaan.'
-                        );
+                        clearHiddenTimer();
+                        hiddenTimer = window.setTimeout(() => {
+                            hiddenTimer = null;
+
+                            if (!submitting && !leavingPage && document.visibilityState === 'hidden') {
+                                bumpIntegrity('app_hidden_count');
+                            }
+                        }, 10000);
                     }
                 });
 
                 window.addEventListener('beforeunload', () => {
                     leavingPage = true;
-                    clearPendingIntegrityTimers();
+                    clearHiddenTimer();
                 });
 
                 window.addEventListener('pagehide', () => {
                     leavingPage = true;
-                    clearPendingIntegrityTimers();
+                    clearHiddenTimer();
                     submitIntegrityBeacon();
                 });
                 syncIntegrityFields();

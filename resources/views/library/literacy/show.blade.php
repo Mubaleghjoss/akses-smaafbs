@@ -11,6 +11,13 @@
         <a class="chip" href="{{ route('library.literacy.index') }}"><- Kembali ke Literasi Numerasi</a>
     </div>
 
+    @if($isDirectLinkOnly ?? false)
+        <div class="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-900" role="status">
+            <strong>Materi dibuka melalui direct link.</strong>
+            Materi ini tidak sedang tampil di daftar umum, tetapi jawaban tetap dapat dikirim melalui halaman ini.
+        </div>
+    @endif
+
     <div class="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <section class="space-y-6">
             <article class="card overflow-hidden">
@@ -91,9 +98,7 @@
                 <input type="hidden" name="submission_ticket" value="{{ old('submission_ticket') }}" data-literacy-ticket>
                 <input type="hidden" name="submission_queue_waited" value="{{ old('submission_queue_waited', '0') }}" data-literacy-queue-waited>
                 <input type="hidden" name="submission_retry_statuses" value="{{ old('submission_retry_statuses') }}" data-literacy-retry-statuses>
-                <input type="hidden" name="integrity[tab_switch_count]" value="0" data-integrity-field="tab_switch_count">
                 <input type="hidden" name="integrity[app_hidden_count]" value="0" data-integrity-field="app_hidden_count">
-                <input type="hidden" name="integrity[page_leave_attempt_count]" value="0" data-integrity-field="page_leave_attempt_count">
 
                 <div>
                     <div class="text-xs uppercase tracking-[0.2em] text-slate-400">Jawaban</div>

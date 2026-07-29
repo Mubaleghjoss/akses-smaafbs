@@ -5,10 +5,8 @@
     $similarityMatches = $response->laterSimilarityMatches;
     $matchesByAnswer = $similarityMatches->groupBy('later_answer_id');
 
-    $tabSwitchCount = (int) ($response->tab_switch_count ?? 0);
     $appHiddenCount = (int) ($response->app_hidden_count ?? 0);
-    $pageLeaveCount = (int) ($response->page_leave_attempt_count ?? 0);
-    $integrityTotal = $tabSwitchCount + $appHiddenCount + $pageLeaveCount;
+    $integrityTotal = $appHiddenCount;
     [$integrityLabel, $integrityTone] = match (true) {
         $integrityTotal >= 5 => ['Aktivitas keluar halaman tinggi', 'danger'],
         $integrityTotal > 0 => ['Perlu perhatian', 'warning'],
@@ -94,24 +92,14 @@
 
         <div class="literasi-response-detail__metric-grid">
             <article class="literasi-response-detail__metric">
-                <span>Pindah Tab</span>
-                <strong>{{ number_format($tabSwitchCount, 0, ',', '.') }}x</strong>
-                <small>Tab browser kehilangan fokus.</small>
-            </article>
-            <article class="literasi-response-detail__metric">
-                <span>Keluar Aplikasi</span>
+                <span>Halaman Disembunyikan</span>
                 <strong>{{ number_format($appHiddenCount, 0, ',', '.') }}x</strong>
-                <small>Browser atau aplikasi disembunyikan.</small>
-            </article>
-            <article class="literasi-response-detail__metric">
-                <span>Percobaan Keluar</span>
-                <strong>{{ number_format($pageLeaveCount, 0, ',', '.') }}x</strong>
-                <small>Navigasi keluar dari halaman soal.</small>
+                <small>Halaman benar-benar tidak terlihat lebih dari 10 detik.</small>
             </article>
             <article class="literasi-response-detail__metric literasi-response-detail__metric--total">
                 <span>Total Indikator</span>
                 <strong>{{ number_format($integrityTotal, 0, ',', '.') }}x</strong>
-                <small>Indikator teknis, bukan keputusan akhir.</small>
+                <small>Perpindahan fokus singkat tidak dihitung. Indikator ini bukan keputusan akhir.</small>
             </article>
         </div>
     </section>

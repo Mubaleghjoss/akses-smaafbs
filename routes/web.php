@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\GuruTendikExportController;
 use App\Http\Controllers\Admin\GuruTendikImportTemplateController;
 use App\Http\Controllers\Admin\ProkerExportController;
 use App\Http\Controllers\Admin\ProkerImportTemplateController;
+use App\Http\Controllers\Admin\PerpustakaanLiterasiDispensationController;
 use App\Http\Controllers\Admin\SarprasActivityDocumentController;
 use App\Http\Controllers\Admin\SarprasBospInventoryDocumentController;
 use App\Http\Controllers\Admin\SarprasMonthlyAgendaDocumentController;
@@ -53,6 +54,15 @@ Route::middleware('auth')->get(
     '/admin/prokers/import-template',
     ProkerImportTemplateController::class
 )->name('admin.prokers.import-template');
+
+Route::middleware('auth')
+    ->prefix('/admin/perpustakaan-literasi-materials/{material}/dispensations/{student}')
+    ->group(function (): void {
+        Route::post('/', [PerpustakaanLiterasiDispensationController::class, 'store'])
+            ->name('admin.perpustakaan-literasi.dispensations.store');
+        Route::delete('/', [PerpustakaanLiterasiDispensationController::class, 'destroy'])
+            ->name('admin.perpustakaan-literasi.dispensations.destroy');
+    });
 
 Route::middleware('auth')->get(
     '/admin/prokers/export/{periode_tahun}',
@@ -397,6 +407,8 @@ Route::post('/perpustakaan/program-literasi-numerasi/edit/{code}/integrity', [Pe
 Route::get('/perpustakaan/program-literasi-numerasi/edit/{code}', [PerpustakaanLiteracyProgramController::class, 'edit'])
     ->where('code', '[A-Za-z0-9-]+')
     ->name('library.literacy.edit');
+Route::get('/perpustakaan/program-literasi-numerasi/selesai', [PerpustakaanLiteracyProgramController::class, 'completed'])
+    ->name('library.literacy.completed');
 Route::get('/perpustakaan/program-literasi-numerasi/{slug}/social-thumbnail.jpg', [PerpustakaanLiteracyProgramController::class, 'socialThumbnail'])
     ->name('library.literacy.social-thumbnail');
 Route::post('/perpustakaan/program-literasi-numerasi/edit/{code}', [PerpustakaanLiteracyProgramController::class, 'update'])

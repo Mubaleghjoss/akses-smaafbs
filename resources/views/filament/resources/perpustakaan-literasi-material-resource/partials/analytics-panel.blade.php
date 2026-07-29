@@ -29,6 +29,10 @@
         <article class="literasi-metric-card">
             <span class="literasi-metric-card__label">Responden Bulan Ini</span>
             <strong class="literasi-metric-card__value">{{ $formatNumber((int) ($summary['responses'] ?? 0)) }}</strong>
+            <small class="literasi-metric-card__detail">
+                {{ $formatNumber((int) ($summary['response_records'] ?? $summary['responses'] ?? 0)) }} jawaban
+                + {{ $formatNumber((int) ($summary['dispensations'] ?? 0)) }} dispensasi
+            </small>
         </article>
 
         <article class="literasi-metric-card">
@@ -78,7 +82,7 @@
             <div class="literasi-completion__header">
                 <div>
                     <h3 class="literasi-panel__title">Status Pengisian Materi</h3>
-                    <p class="literasi-analytics__description">Seluruh waktu untuk semua siswa aktif. Jawaban di Sampah dipisahkan dari siswa yang belum pernah mengisi.</p>
+                    <p class="literasi-analytics__description">Seluruh waktu untuk semua siswa aktif. Responden adalah jawaban nyata + dispensasi; jawaban di Sampah tetap dipisahkan.</p>
                 </div>
                 <span class="literasi-analytics__period">Penyelesaian: {{ $formatPercent((float) ($materialCompletion['completion_percentage'] ?? 0)) }}</span>
             </div>
@@ -86,8 +90,10 @@
             <div class="literasi-completion__metrics">
                 <div><span>Siswa Aktif</span><strong>{{ $formatNumber((int) ($materialCompletion['active_total'] ?? 0)) }}</strong></div>
                 <div class="is-success"><span>Sudah Mengisi</span><strong>{{ $formatNumber((int) ($materialCompletion['completed_total'] ?? 0)) }}</strong></div>
+                <div class="is-info"><span>Dispensasi</span><strong>{{ $formatNumber((int) ($materialCompletion['dispensation_total'] ?? 0)) }}</strong></div>
                 <div class="is-warning"><span>Belum Mengisi</span><strong>{{ $formatNumber((int) ($materialCompletion['missing_total'] ?? 0)) }}</strong></div>
                 <div class="is-danger"><span>Di Sampah</span><strong>{{ $formatNumber((int) ($materialCompletion['trashed_total'] ?? 0)) }}</strong></div>
+                <div class="is-primary"><span>Total Responden</span><strong>{{ $formatNumber((int) ($materialCompletion['respondent_total'] ?? 0)) }}</strong></div>
             </div>
 
             <div class="literasi-completion__classes">
@@ -95,7 +101,8 @@
                     <details class="literasi-completion__class" @if(($class['missing_total'] ?? 0) > 0 || ($class['trashed_total'] ?? 0) > 0) open @endif>
                         <summary>
                             <strong>{{ $class['class'] }}</strong>
-                            <span>{{ $formatNumber((int) $class['completed_total']) }}/{{ $formatNumber((int) $class['active_total']) }} mengisi</span>
+                            <span>{{ $formatNumber((int) $class['respondent_total']) }}/{{ $formatNumber((int) $class['active_total']) }} responden</span>
+                            <span>{{ $formatNumber((int) $class['completed_total']) }} jawaban + {{ $formatNumber((int) $class['dispensation_total']) }} dispensasi</span>
                             <span class="is-warning">{{ $formatNumber((int) $class['missing_total']) }} belum</span>
                             @if(($class['trashed_total'] ?? 0) > 0)
                                 <span class="is-danger">{{ $formatNumber((int) $class['trashed_total']) }} di Sampah</span>
@@ -106,11 +113,45 @@
                             <section>
                                 <h4>Belum Mengisi</h4>
                                 @forelse(($class['missing_students'] ?? []) as $student)
-                                    <div class="literasi-completion__student">{{ $student['name'] }}</div>
+                                    <div class="literasi-completion__student-row">
+                                        <span class="literasi-completion__student">{{ $student['name'] }}</span>
+                                        @if(($canManageDispensations ?? false) && isset($material))
+                                            <div class="literasi-completion__actions">
+                                                @foreach(\App\Models\PerpustakaanLiterasiDispensation::reasonOptions() as $reason => $label)
+                                                    <form method="post" action="{{ route('admin.perpustakaan-literasi.dispensations.store', [$material, $student['student_id']]) }}">
+                                                        @csrf
+                                                        <input type="hidden" name="reason" value="{{ $reason }}">
+                                                        <button type="submit" class="literasi-completion__action literasi-completion__action--{{ $reason === 'sick' ? 'sick' : 'mt' }}" onclick="return confirm('Tetapkan status dispensasi ini?')">{{ $label }}</button>
+                                                    </form>
+                                                @endforeach
+                                            </div>
+                                        @endif
+                                    </div>
                                 @empty
                                     <p class="literasi-empty-state">Tidak ada siswa yang belum mengisi.</p>
                                 @endforelse
                             </section>
+
+                            @if(($class['dispensation_total'] ?? 0) > 0)
+                                <section class="is-dispensation">
+                                    <h4>Dispensasi</h4>
+                                    @foreach(($class['dispensated_students'] ?? []) as $student)
+                                        <div class="literasi-completion__student-row">
+                                            <span class="literasi-completion__student">
+                                                {{ $student['name'] }}
+                                                <small>{{ $student['reason_label'] }} - {{ $student['confirmed_at'] ?? '-' }}</small>
+                                            </span>
+                                            @if(($canManageDispensations ?? false) && isset($material))
+                                                <form method="post" action="{{ route('admin.perpustakaan-literasi.dispensations.destroy', [$material, $student['student_id']]) }}">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="literasi-completion__action literasi-completion__action--cancel" onclick="return confirm('Batalkan dispensasi ini?')">Batalkan</button>
+                                                </form>
+                                            @endif
+                                        </div>
+                                    @endforeach
+                                </section>
+                            @endif
 
                             @if(($class['trashed_total'] ?? 0) > 0)
                                 <section class="is-trash">
@@ -148,9 +189,9 @@
                         @forelse($classActivity as $row)
                             <tr>
                                 <td data-label="Kelas">{{ $row['class'] }}</td>
-                                <td data-label="Hari Ini" class="is-number">{{ $formatNumber((int) $row['today']) }}</td>
-                                <td data-label="Minggu Ini" class="is-number">{{ $formatNumber((int) $row['week']) }}</td>
-                                <td data-label="Bulan Ini" class="is-number">{{ $formatNumber((int) $row['month']) }}</td>
+                                <td data-label="Hari Ini" class="is-number">{{ $formatNumber((int) $row['today']) }}<small>{{ $formatNumber((int) ($row['today_responses'] ?? $row['today'])) }} + {{ $formatNumber((int) ($row['today_dispensations'] ?? 0)) }}</small></td>
+                                <td data-label="Minggu Ini" class="is-number">{{ $formatNumber((int) $row['week']) }}<small>{{ $formatNumber((int) ($row['week_responses'] ?? $row['week'])) }} + {{ $formatNumber((int) ($row['week_dispensations'] ?? 0)) }}</small></td>
+                                <td data-label="Bulan Ini" class="is-number">{{ $formatNumber((int) $row['month']) }}<small>{{ $formatNumber((int) ($row['month_responses'] ?? $row['month'])) }} jawaban + {{ $formatNumber((int) ($row['month_dispensations'] ?? 0)) }} dispensasi</small></td>
                                 <td data-label="Rasio" class="is-number">{{ $row['month_ratio'] }}</td>
                             </tr>
                         @empty
@@ -181,7 +222,10 @@
                                 <tr>
                                     <td data-label="#" class="is-rank">{{ $index + 1 }}</td>
                                     <td data-label="Kelas">{{ $row['class'] }}</td>
-                                    <td data-label="Responden" class="is-number">{{ $formatNumber((int) $row['total']) }}</td>
+                                    <td data-label="Responden" class="is-number">
+                                        {{ $formatNumber((int) $row['total']) }}
+                                        <small>{{ $formatNumber((int) ($row['response_total'] ?? $row['total'])) }} jawaban + {{ $formatNumber((int) ($row['dispensation_total'] ?? 0)) }} dispensasi</small>
+                                    </td>
                                     <td data-label="Rasio" class="is-number">{{ $row['ratio'] }}</td>
                                 </tr>
                             @empty
@@ -245,7 +289,10 @@
                                 <tr>
                                     <td data-label="#" class="is-rank">{{ $index + 1 }}</td>
                                     <td data-label="Kelas">{{ $row['class'] }}</td>
-                                    <td data-label="Responden" class="is-number">{{ $formatNumber((int) $row['total']) }}</td>
+                                    <td data-label="Responden" class="is-number">
+                                        {{ $formatNumber((int) $row['total']) }}
+                                        <small>{{ $formatNumber((int) ($row['response_total'] ?? $row['total'])) }} jawaban + {{ $formatNumber((int) ($row['dispensation_total'] ?? 0)) }} dispensasi</small>
+                                    </td>
                                     <td data-label="Rasio" class="is-number">{{ $row['ratio'] }}</td>
                                 </tr>
                             @empty

@@ -16,6 +16,7 @@ use App\Support\Perpustakaan\LiteracySubmissionQueue;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -51,9 +52,17 @@ class PerpustakaanLiteracyProgramController extends Controller
         ]);
     }
 
-    public function show(string $slug): View
+    public function show(string $slug): Response
     {
-        $material = $this->resolvePublicMaterial($slug);
+        $material = $this->resolveDirectLinkMaterial($slug);
+
+        if (! $material->hasOpened()) {
+            return $this->noStoreView('library.literacy.upcoming', [
+                'title' => 'Materi Belum Dibuka',
+                'material' => $material,
+            ]);
+        }
+
         $material->loadMissing('questions');
         $description = $material->readingContentPreview(180);
 
@@ -61,11 +70,12 @@ class PerpustakaanLiteracyProgramController extends Controller
             $description = 'Materi '.$material->programCategoryLabel().' SMA AFBS. Baca materi dan kerjakan pertanyaannya melalui halaman ini.';
         }
 
-        return view('library.literacy.show', [
+        return $this->noStoreView('library.literacy.show', [
             'title' => $material->title,
             'material' => $material,
             'students' => $this->studentOptions(),
             'hasLatex' => $material->containsLatex(),
+            'isDirectLinkOnly' => ! $material->isListedPublicly(),
             'meta' => [
                 'description' => $description,
                 'canonical_url' => $material->publicUrl(),
@@ -89,12 +99,13 @@ class PerpustakaanLiteracyProgramController extends Controller
         string $slug,
         LiteracySocialThumbnail $thumbnail,
     ): BinaryFileResponse|RedirectResponse {
-        return $thumbnail->response($this->resolvePublicMaterial($slug));
+        return $thumbnail->response($this->resolveDirectLinkMaterial($slug));
     }
 
     public function store(Request $request, string $slug, LiteracySubmissionQueue $submissionQueue): RedirectResponse|JsonResponse
     {
-        $material = $this->resolvePublicMaterial($slug);
+        $material = $this->resolveDirectLinkMaterial($slug);
+        $this->ensureMaterialHasOpened($material);
         $questions = $material->questions()->get();
 
         if ($questions->isEmpty()) {
@@ -243,12 +254,12 @@ class PerpustakaanLiteracyProgramController extends Controller
         return redirect()->route('library.literacy.edit', $response->shortEditCode());
     }
 
-    public function edit(string $code): View
+    public function edit(string $code): Response
     {
         $response = $this->resolveResponseByEditCode($code);
         $response->loadMissing(['material.questions', 'answers']);
 
-        return view('library.literacy.edit', [
+        return $this->noStoreView('library.literacy.edit', [
             'title' => 'Edit Jawaban Literasi Numerasi',
             'response' => $response,
             'material' => $response->material,
@@ -377,7 +388,8 @@ class PerpustakaanLiteracyProgramController extends Controller
         string $slug,
         LiteracySubmissionQueue $submissionQueue,
     ): JsonResponse {
-        $material = $this->resolvePublicMaterial($slug);
+        $material = $this->resolveDirectLinkMaterial($slug);
+        $this->ensureMaterialHasOpened($material);
         $validated = $request->validate([
             'student_id' => ['required', 'integer', 'exists:data_siswa,id'],
             'submission_request_id' => ['required', 'uuid'],
@@ -438,7 +450,8 @@ class PerpustakaanLiteracyProgramController extends Controller
         string $slug,
         LiteracySubmissionEventRecorder $recorder,
     ) {
-        $material = $this->resolvePublicMaterial($slug);
+        $material = $this->resolveDirectLinkMaterial($slug);
+        $this->ensureMaterialHasOpened($material);
         $validated = $request->validate([
             'event_code' => ['required', 'in:client_retry_exhausted'],
             'submission_ticket' => ['nullable', 'string', 'max:64'],
@@ -480,12 +493,31 @@ class PerpustakaanLiteracyProgramController extends Controller
         return response()->noContent();
     }
 
-    protected function resolvePublicMaterial(string $slug): PerpustakaanLiterasiMaterial
+    public function completed(Request $request): Response
+    {
+        return $this->noStoreView('library.literacy.completed', [
+            'title' => 'Jawaban Berhasil Disimpan',
+            'receipt' => $request->session()->get('literacy_submission_receipt'),
+        ]);
+    }
+
+    protected function resolveDirectLinkMaterial(string $slug): PerpustakaanLiterasiMaterial
     {
         return PerpustakaanLiterasiMaterial::query()
-            ->availableForPublic()
             ->where('slug', $slug)
             ->firstOrFail();
+    }
+
+    protected function ensureMaterialHasOpened(PerpustakaanLiterasiMaterial $material): void
+    {
+        if ($material->hasOpened()) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'material' => 'Materi ini belum dibuka. Silakan kembali pada '
+                .$material->opens_at?->format('d/m/Y H:i').'.',
+        ]);
     }
 
     protected function resolveResponseByEditCode(string $code): PerpustakaanLiterasiResponse
@@ -1042,12 +1074,27 @@ class PerpustakaanLiteracyProgramController extends Controller
         PerpustakaanLiterasiResponse $response,
         string $message,
     ): RedirectResponse|JsonResponse {
-        $redirectUrl = route('library.literacy.edit', $response->shortEditCode());
+        $response->loadMissing('material');
+        $redirectUrl = route('library.literacy.completed');
+        $receipt = [
+            'student_name' => $response->student_name_snapshot,
+            'student_class' => $response->student_class_snapshot,
+            'material_title' => $response->material?->title,
+            'material_slug' => $response->material?->slug,
+            'submitted_at' => ($response->last_edited_at ?? $response->submitted_at)?->toIso8601String(),
+            'submission_status' => $response->submissionDeliveryLabel(),
+            'submission_status_detail' => $response->submissionDeliveryDescription(),
+            'edit_code' => $response->edit_code,
+            'submission_request_id' => request()->string('submission_request_id')->toString(),
+            'draft_key' => $response->last_edited_at
+                ? 'update:'.$response->getKey()
+                : 'create:'.$response->material_id,
+        ];
+
+        request()->session()->flash('literacy_submission_receipt', $receipt);
+        request()->session()->flash('success', $message);
 
         if (request()->expectsJson()) {
-            request()->session()->flash('success', $message);
-            request()->session()->flash('edit_code', $response->edit_code);
-
             return response()->json([
                 'status' => 'completed',
                 'message' => $message,
@@ -1056,9 +1103,18 @@ class PerpustakaanLiteracyProgramController extends Controller
             ]);
         }
 
-        return redirect()
-            ->to($redirectUrl)
-            ->with('success', $message)
-            ->with('edit_code', $response->edit_code);
+        return redirect()->to($redirectUrl, 303);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    protected function noStoreView(string $view, array $data): Response
+    {
+        return response()
+            ->view($view, $data)
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', '0');
     }
 }

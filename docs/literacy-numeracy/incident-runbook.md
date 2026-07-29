@@ -23,6 +23,23 @@
 3. Periksa apakah respons lama berada di Sampah dan masih memegang unique key.
 4. Gunakan kode edit jika respons sudah pernah masuk.
 5. Periksa event submit dan tiket sebelum menyimpulkan data hilang.
+6. Jika materi tidak tampil di daftar tetapi link dapat dibuka, itu perilaku normal: direct link tetap menerima jawaban setelah waktu buka.
+7. Jika waktu `opens_at` belum tiba, form sengaja tidak ditampilkan dan submit ditolak.
+
+## Perangkat dipakai bergantian
+
+1. Setelah submit pastikan browser berada di halaman Struk Pengiriman, bukan halaman edit.
+2. Struk tidak boleh menampilkan soal atau jawaban.
+3. Tekan Isi Murid Berikutnya; tombol ini memakai replace dan membuka form kosong.
+4. Jika kode edit perlu disimpan, salin sebelum memuat ulang struk karena data identitas hanya berada di flash session.
+
+## Sakit atau Tes MT
+
+1. Buka Rekap Materi lalu Status Pengisian Materi.
+2. Pada siswa Belum Mengisi, pilih Sakit atau Tes MT.
+3. Pastikan siswa berpindah ke bagian Dispensasi dan Total Responden bertambah.
+4. Jangan membuat jawaban palsu. Dispensasi tidak memiliki nilai, kode edit, atau analisis plagiasi.
+5. Jika siswa akhirnya mengerjakan, submit nyata otomatis mencabut dispensasi.
 
 ## Analisis lambat
 

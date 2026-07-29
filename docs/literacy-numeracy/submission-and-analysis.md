@@ -9,6 +9,7 @@
 5. Respons dan jawaban disimpan dalam transaksi.
 6. Tiket ditandai selesai dan slot dilepas dalam `finally`.
 7. Job kemiripan dijadwalkan; halaman sukses tidak menunggu analisis.
+8. Browser berpindah dengan `location.replace()` ke struk session tanpa soal dan jawaban.
 
 Textarea, radio Benar/Salah, dan dropdown Menjodohkan ikut draf. FormData tetap kecil karena tidak ada file audio.
 
@@ -20,6 +21,37 @@ Textarea, radio Benar/Salah, dan dropdown Menjodohkan ikut draf. FormData tetap 
 - `LEGACY`: respons dibuat sebelum pencatatan status.
 
 Retry memakai request ID dan tiket yang sama agar koneksi putus tidak membuat respons ganda.
+
+## Struk aman dan cache
+
+- Submit baru maupun edit menuju `/perpustakaan/program-literasi-numerasi/selesai`.
+- Struk hanya membaca flash session: identitas, materi, waktu, status submit, dan kode edit.
+- Struk tidak memuat bacaan, pertanyaan, jawaban, atau tombol edit langsung.
+- Form publik, form edit, dan struk memakai `Cache-Control: no-store`.
+- JavaScript menghapus draf setelah sukses dan memakai `location.replace()` agar perangkat bersama tidak mudah kembali ke jawaban sebelumnya.
+
+## Aturan direct link
+
+- Daftar publik tetap memakai scope `availableForPublic()`.
+- Resolver direct link hanya menolak materi soft-deleted.
+- Materi nonaktif atau melewati `closes_at` tetap membuka form dan menerima tiket/submit.
+- Materi sebelum `opens_at` menampilkan halaman HTTP 200 tanpa bacaan/pertanyaan/form; endpoint tiket dan submit menolak dengan validasi.
+- Thumbnail sosial tetap dapat dibuat untuk materi nonaktif atau tertutup.
+
+## Integritas halaman
+
+- `window.blur` tidak digunakan karena membuka pengaturan Wi-Fi dapat memicu kehilangan fokus.
+- Hanya `visibilitychange` tersembunyi selama minimal 10 detik yang menambah `app_hidden_count`.
+- Field historis `tab_switch_count` dan `page_leave_attempt_count` tetap diterima server agar browser lama kompatibel, tetapi tidak dipakai dalam indikator admin baru.
+
+## Dispensasi partisipasi
+
+- Tabel `perpustakaan_literasi_dispensations` menyimpan satu status per materi-siswa: `sick` atau `mt_test`.
+- Dispensasi mempunyai snapshot nama/kelas, admin dan waktu konfirmasi, catatan opsional, serta soft delete.
+- Respons aktif maupun respons di Sampah mencegah pemberian dispensasi.
+- Jika siswa yang memiliki dispensasi kemudian submit, hook respons otomatis membatalkan dispensasi.
+- Metrik partisipasi dan ranking jumlah pengisi menghitung `jawaban + dispensasi`.
+- Nilai, jawaban benar/salah, akurasi, plagiasi, dan total jawaban selalu hanya memakai respons nyata.
 
 ## Analisis
 

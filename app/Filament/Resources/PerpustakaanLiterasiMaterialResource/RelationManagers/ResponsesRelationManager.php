@@ -671,17 +671,11 @@ class ResponsesRelationManager extends RelationManager
     protected function integritySummarySection(PerpustakaanLiterasiResponse $record): Section
     {
         return Section::make('Tindakan Keluar Halaman')
-            ->columns(['default' => 1, 'md' => 4])
+            ->columns(['default' => 1, 'md' => 2])
             ->schema([
-                Forms\Components\Placeholder::make('tab_switch_count')
-                    ->label('Pindah Tab')
-                    ->content(number_format((int) ($record->tab_switch_count ?? 0), 0, ',', '.').'x'),
                 Forms\Components\Placeholder::make('app_hidden_count')
-                    ->label('Keluar Aplikasi')
+                    ->label('Halaman Disembunyikan > 10 Detik')
                     ->content(number_format((int) ($record->app_hidden_count ?? 0), 0, ',', '.').'x'),
-                Forms\Components\Placeholder::make('page_leave_attempt_count')
-                    ->label('Percobaan Keluar Halaman')
-                    ->content(number_format((int) ($record->page_leave_attempt_count ?? 0), 0, ',', '.').'x'),
                 Forms\Components\Placeholder::make('submitted_at')
                     ->label('Submit jawaban')
                     ->content($record->submitted_at?->format('d/m/Y H:i') ?? '-'),

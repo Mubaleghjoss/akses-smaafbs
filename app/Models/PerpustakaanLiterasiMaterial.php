@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
@@ -102,18 +103,30 @@ class PerpustakaanLiterasiMaterial extends Model implements HasRichContent
             if ($material->isForceDeleting()) {
                 app(PublicImageOptimizer::class)->removeAll($material->image_path);
 
+                if (Schema::hasTable('perpustakaan_literasi_dispensations')) {
+                    $material->dispensations()->withTrashed()->forceDelete();
+                }
+
                 return;
             }
 
             $material->questions()->get()->each->delete();
             $material->responses()->get()->each->delete();
             $material->similarityMatches()->get()->each->delete();
+
+            if (Schema::hasTable('perpustakaan_literasi_dispensations')) {
+                $material->dispensations()->get()->each->delete();
+            }
         });
 
         static::restoring(function (self $material): void {
             $material->questions()->withTrashed()->get()->each->restore();
             $material->responses()->withTrashed()->get()->each->restore();
             $material->similarityMatches()->withTrashed()->get()->each->restore();
+
+            if (Schema::hasTable('perpustakaan_literasi_dispensations')) {
+                $material->dispensations()->withTrashed()->get()->each->restore();
+            }
         });
 
         static::deleted(fn () => static::forgetPublicListCache());
@@ -152,6 +165,12 @@ class PerpustakaanLiterasiMaterial extends Model implements HasRichContent
             ->latest();
     }
 
+    public function dispensations(): HasMany
+    {
+        return $this->hasMany(PerpustakaanLiterasiDispensation::class, 'material_id')
+            ->latest('confirmed_at');
+    }
+
     public function scopeAvailableForPublic(Builder $query): Builder
     {
         return $query
@@ -162,6 +181,21 @@ class PerpustakaanLiterasiMaterial extends Model implements HasRichContent
             ->where(function (Builder $inner): void {
                 $inner->whereNull('closes_at')->orWhere('closes_at', '>=', now());
             });
+    }
+
+    public function hasOpened(): bool
+    {
+        return $this->opens_at === null || $this->opens_at->lte(now());
+    }
+
+    public function isClosed(): bool
+    {
+        return $this->closes_at !== null && $this->closes_at->lt(now());
+    }
+
+    public function isListedPublicly(): bool
+    {
+        return (bool) $this->is_active && $this->hasOpened() && ! $this->isClosed();
     }
 
     public function hasResponses(): bool
