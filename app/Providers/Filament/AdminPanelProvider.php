@@ -73,7 +73,9 @@ class AdminPanelProvider extends PanelProvider
                     $authCssPath = public_path('css/filament-admin-auth.css');
                     $authCssVersion = is_file($authCssPath) ? (string) filemtime($authCssPath) : '1';
                     $fallbackJsPath = public_path('js/filament-admin-fallback.js');
-                    $fallbackJsVersion = is_file($fallbackJsPath) ? (string) filemtime($fallbackJsPath) : '1';
+                    $fallbackJsVersion = is_file($fallbackJsPath)
+                        ? substr((string) hash_file('sha256', $fallbackJsPath), 0, 12)
+                        : '1';
 
                     $headSnippets = [
                         '<link rel="stylesheet" href="'.asset('css/filament-admin-responsive.css').'?v='.e($responsiveCssVersion).'" data-navigate-track="reload">',
