@@ -9,14 +9,22 @@ git pull --ff-only origin "${BRANCH}"
 
 echo "==> Install/update dependency PHP"
 if command -v composer >/dev/null 2>&1; then
-    composer install --no-dev --optimize-autoloader
+    COMPOSER_BIN="$(command -v composer)"
 elif [ -x "${HOME}/bin/composer" ]; then
-    "${HOME}/bin/composer" install --no-dev --optimize-autoloader
+    COMPOSER_BIN="${HOME}/bin/composer"
 elif [ -x /opt/cpanel/composer/bin/composer ]; then
-    /opt/cpanel/composer/bin/composer install --no-dev --optimize-autoloader
+    COMPOSER_BIN="/opt/cpanel/composer/bin/composer"
 else
     echo "ERROR: composer tidak ditemukan. Aktifkan Composer di cPanel atau hubungi hosting."
     exit 1
+fi
+
+if php -r 'exit(function_exists("proc_open") ? 0 : 1);'; then
+    "${COMPOSER_BIN}" install --no-dev --optimize-autoloader
+else
+    echo "INFO: proc_open nonaktif; jalankan Composer tanpa script lalu package discovery via Artisan."
+    "${COMPOSER_BIN}" install --no-dev --optimize-autoloader --no-scripts
+    php artisan package:discover --ansi
 fi
 
 echo "==> Install/build asset frontend"
