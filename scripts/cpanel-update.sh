@@ -51,6 +51,10 @@ if [ -d "${PUBLIC_WEB_ROOT}" ] && [ "${PUBLIC_WEB_ROOT}" != "$(pwd)/public" ]; t
     cp public/css/filament-admin-responsive.css "${PUBLIC_WEB_ROOT}/css/filament-admin-responsive.css"
     cp public/css/filament-admin-auth.css "${PUBLIC_WEB_ROOT}/css/filament-admin-auth.css"
 
+    # JavaScript fallback admin juga dimuat langsung oleh AdminPanelProvider.
+    mkdir -p "${PUBLIC_WEB_ROOT}/js"
+    cp public/js/filament-admin-fallback.js "${PUBLIC_WEB_ROOT}/js/filament-admin-fallback.js"
+
     # Header cache aset publik harus ikut aktif pada document root produksi.
     cp public/.htaccess "${PUBLIC_WEB_ROOT}/.htaccess"
 
