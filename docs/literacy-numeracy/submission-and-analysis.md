@@ -35,6 +35,9 @@ Retry memakai request ID dan tiket yang sama agar koneksi putus tidak membuat re
 - Submit baru maupun edit menuju `/perpustakaan/program-literasi-numerasi/selesai`.
 - Struk hanya membaca flash session: identitas, materi, waktu, status submit, dan kode edit.
 - Struk tidak memuat bacaan, pertanyaan, jawaban, atau tombol edit langsung.
+- Struk memuat status partisipasi teman **satu kelas**: sudah mengisi, belum mengisi, dan dispensasi. Data diambil setelah redirect agar tidak memperpanjang slot submit.
+- Daftar teman hanya menampilkan nama, kelas, dan label dispensasi; jawaban, nilai, kode edit teman, serta status internal Sampah tidak pernah ditampilkan.
+- Pesan Amal Salih mengajak murid mengingatkan teman yang belum mengisi secara sopan tanpa membagikan soal atau jawaban.
 - Form publik, form edit, dan struk memakai `Cache-Control: no-store`.
 - JavaScript menghapus draf setelah sukses dan memakai `location.replace()` agar perangkat bersama tidak mudah kembali ke jawaban sebelumnya.
 

@@ -2,6 +2,7 @@
 
 ## 2026-07-30 - Struk aman, direct link, dan dispensasi
 
+- Menambahkan daftar status teman satu kelas pada Struk Pengiriman dan pesan Amal Salih untuk mengingatkan teman yang belum mengisi.
 - Menambahkan salin daftar WhatsApp pada Status Pengisian Materi, dikelompokkan per kelas dengan kode `[SAKIT]` dan `[TES MT]`.
 - Memastikan JavaScript fallback admin ikut disinkronkan ke document root cPanel agar tombol clipboard aktif di produksi.
 - Menggunakan hash isi file sebagai versi JavaScript admin agar browser tidak mempertahankan skrip clipboard lama.

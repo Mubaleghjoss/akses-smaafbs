@@ -116,6 +116,9 @@ class LibraryLiteracyProgramTest extends TestCase
         Queue::fake();
 
         $student = $this->createStudent('Codex Struk Aman', 'XI Struk');
+        $missingPeer = $this->createStudent('Codex Teman Belum Mengisi', 'XI Struk');
+        $dispensatedPeer = $this->createStudent('Codex Teman Sakit', 'XI Struk');
+        $otherClassStudent = $this->createStudent('Codex Kelas Lain', 'XII Lain');
         $material = $this->createMaterial('Materi Struk Aman', [
             'student_verification_enabled' => false,
         ]);
@@ -126,6 +129,14 @@ class LibraryLiteracyProgramTest extends TestCase
             'max_characters' => 500,
         ]);
         $answer = 'Jawaban rahasia murid yang tidak boleh tampil di struk.';
+        PerpustakaanLiterasiDispensation::query()->create([
+            'material_id' => $material->getKey(),
+            'data_siswa_id' => $dispensatedPeer->getKey(),
+            'reason' => PerpustakaanLiterasiDispensation::REASON_SICK,
+            'student_name_snapshot' => $dispensatedPeer->nama,
+            'student_class_snapshot' => $dispensatedPeer->rombel_saat_ini,
+            'confirmed_at' => now(),
+        ]);
 
         $response = $this->post(route('library.literacy.store', $material->slug), [
             'student_id' => $student->getKey(),
@@ -135,6 +146,8 @@ class LibraryLiteracyProgramTest extends TestCase
         ])->assertRedirect(route('library.literacy.completed'));
 
         $response->assertSessionHas('literacy_submission_receipt.student_name', $student->nama);
+        $response->assertSessionHas('literacy_submission_receipt.student_id', $student->getKey());
+        $response->assertSessionHas('literacy_submission_receipt.material_id', $material->getKey());
 
         $storedResponse = PerpustakaanLiterasiResponse::query()
             ->where('material_id', $material->getKey())
@@ -149,6 +162,16 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee($storedResponse->edit_code)
             ->assertSee('Salin Kode Edit')
             ->assertSee('Isi Murid Berikutnya')
+            ->assertSee('Amal Salih Hari Ini')
+            ->assertSee('Ingatkan teman yang belum mengisi')
+            ->assertSee('Sudah Mengisi')
+            ->assertSee('Belum Mengisi')
+            ->assertSee($missingPeer->nama)
+            ->assertSee($dispensatedPeer->nama)
+            ->assertSee('Dispensasi—Tidak Perlu Diingatkan')
+            ->assertSee('Sakit')
+            ->assertSee('Kamu')
+            ->assertDontSee($otherClassStudent->nama)
             ->assertDontSee($question->prompt)
             ->assertDontSee($answer)
             ->assertDontSee(route('library.literacy.edit', $storedResponse->shortEditCode()), false);

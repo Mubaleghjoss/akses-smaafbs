@@ -10,6 +10,7 @@ use App\Models\PerpustakaanLiterasiMaterial;
 use App\Models\PerpustakaanLiterasiQuestion;
 use App\Models\PerpustakaanLiterasiResponse;
 use App\Models\PerpustakaanLiterasiSubmissionTicket;
+use App\Support\Perpustakaan\LiteracyReceiptClassStatus;
 use App\Support\Perpustakaan\LiteracySocialThumbnail;
 use App\Support\Perpustakaan\LiteracySubmissionEventRecorder;
 use App\Support\Perpustakaan\LiteracySubmissionQueue;
@@ -493,11 +494,14 @@ class PerpustakaanLiteracyProgramController extends Controller
         return response()->noContent();
     }
 
-    public function completed(Request $request): Response
+    public function completed(Request $request, LiteracyReceiptClassStatus $classStatus): Response
     {
+        $receipt = $request->session()->get('literacy_submission_receipt');
+
         return $this->noStoreView('library.literacy.completed', [
             'title' => 'Jawaban Berhasil Disimpan',
-            'receipt' => $request->session()->get('literacy_submission_receipt'),
+            'receipt' => $receipt,
+            'classStatus' => is_array($receipt) ? $classStatus->forReceipt($receipt) : null,
         ]);
     }
 
@@ -1077,8 +1081,10 @@ class PerpustakaanLiteracyProgramController extends Controller
         $response->loadMissing('material');
         $redirectUrl = route('library.literacy.completed');
         $receipt = [
+            'student_id' => $response->data_siswa_id,
             'student_name' => $response->student_name_snapshot,
             'student_class' => $response->student_class_snapshot,
+            'material_id' => $response->material_id,
             'material_title' => $response->material?->title,
             'material_slug' => $response->material?->slug,
             'submitted_at' => ($response->last_edited_at ?? $response->submitted_at)?->toIso8601String(),
