@@ -185,6 +185,57 @@
                 const draftSafetyText = () => storageAvailable
                     ? 'Jawaban tersimpan sebagai draf di tab ini.'
                     : 'Jawaban tetap tersimpan selama halaman ini tidak ditutup.';
+                const receiptSafetyText = () => 'Jawaban dinyatakan tersimpan setelah Struk Pengiriman dan kode edit tampil.';
+                const retryPresentation = (status) => {
+                    const normalizedStatus = Number(status);
+
+                    if (normalizedStatus === 0) {
+                        return {
+                            heading: 'Koneksi perangkat ke server terputus sementara',
+                            detail: 'Server belum memberikan konfirmasi pada percobaan ini.',
+                        };
+                    }
+
+                    if (normalizedStatus === 429) {
+                        return {
+                            heading: 'Permintaan sedang dibatasi sementara (429)',
+                            detail: 'Terlalu banyak permintaan diterima dalam waktu berdekatan.',
+                        };
+                    }
+
+                    if ([408, 504].includes(normalizedStatus)) {
+                        return {
+                            heading: `Respons server terlalu lama (${normalizedStatus})`,
+                            detail: 'Server belum memberikan konfirmasi sebelum batas waktu koneksi.',
+                        };
+                    }
+
+                    if ([502, 503].includes(normalizedStatus)) {
+                        return {
+                            heading: `Layanan server belum dapat merespons (${normalizedStatus})`,
+                            detail: 'Layanan hosting mengalami gangguan sementara.',
+                        };
+                    }
+
+                    if (normalizedStatus >= 500) {
+                        return {
+                            heading: `Aplikasi server mengalami gangguan sementara (${normalizedStatus})`,
+                            detail: 'Jawaban belum memperoleh konfirmasi penyimpanan dari server.',
+                        };
+                    }
+
+                    if (normalizedStatus === 425) {
+                        return {
+                            heading: 'Pengiriman belum siap diproses (425)',
+                            detail: 'Server meminta browser menunggu sebentar sebelum mencoba kembali.',
+                        };
+                    }
+
+                    return {
+                        heading: 'Pengiriman tertunda sementara',
+                        detail: 'Status pengiriman belum dapat dikonfirmasi.',
+                    };
+                };
                 const waitLabel = (seconds) => {
                     const safeSeconds = Math.max(1, Number.parseInt(seconds || '1', 10));
 
@@ -232,7 +283,7 @@
                         message.textContent = detail;
                     }
                 };
-                const setQueueAction = (action) => {
+                const setQueueAction = (action, label = '') => {
                     queueAction = action;
 
                     if (!cancelButton) {
@@ -240,7 +291,11 @@
                     }
 
                     cancelButton.dataset.literacyQueueAction = action;
-                    cancelButton.textContent = action === 'repair' ? 'Perbaiki jawaban' : 'Batal menunggu';
+                    cancelButton.textContent = label || {
+                        repair: 'Perbaiki jawaban',
+                        dismiss: 'Tutup pesan',
+                        cancel: 'Berhenti mencoba otomatis',
+                    }[action] || 'Tutup pesan';
                 };
                 const focusValidationField = (validationField) => {
                     const fieldName = validationField?.startsWith('answers.')
@@ -540,11 +595,12 @@
                             const baseDelay = Math.max(2, error.retryAfter || configuredDelay);
                             const delaySeconds = Math.ceil(baseDelay * (1 + (Math.random() * 0.3)));
                             failureCount += 1;
+                            const presentation = retryPresentation(error.status);
 
                             await countdownWait(delaySeconds, (remaining) => {
                                 showQueue(
-                                    'Server sedang ramai - tidak perlu menekan Kirim lagi',
-                                    `Percobaan otomatis ke-${failureCount + 1} dilakukan dalam ${remaining} detik. ${draftSafetyText()}`
+                                    presentation.heading,
+                                    `${presentation.detail} Percobaan otomatis ke-${failureCount + 1} dilakukan dalam ${remaining} detik. ${draftSafetyText()} Jangan menekan Kirim lagi atau menutup tab. ${receiptSafetyText()}`
                                 );
                             });
                         }
@@ -572,16 +628,20 @@
                             queueWaitedInput.value = '1';
                         }
 
+                        setQueueAction('cancel', 'Batalkan antrean');
                         showQueue(
                             `Anda sudah masuk antrean - urutan ke-${Math.max(1, payload.position || 1)}`,
-                            `Perkiraan ${waitLabel(payload.estimated_wait_seconds)}. ${draftSafetyText()}`
+                            `Tiket antrean sudah diterima server. Jawaban akan dikirim otomatis saat mendapat giliran, dengan perkiraan ${waitLabel(payload.estimated_wait_seconds)}. ${draftSafetyText()} Jangan menekan Kirim lagi atau menutup tab. ${receiptSafetyText()}`
                         );
 
                         return false;
                     }
 
                     if (['admitted', 'processing', 'completed'].includes(payload.status)) {
-                        showQueue('Giliran Anda sudah tersedia', 'Jawaban sedang dikirim. Mohon jangan menutup halaman.');
+                        showQueue(
+                            'Giliran Anda sudah tersedia',
+                            `Tiket sudah diterima dan jawaban sedang dikirim ke server. Jangan menutup tab. ${receiptSafetyText()}`
+                        );
 
                         return true;
                     }
@@ -625,7 +685,10 @@
                         cancelButton.disabled = true;
                     }
 
-                    showQueue('Menyimpan jawaban...', `Mohon tunggu. ${draftSafetyText()}`);
+                    showQueue(
+                        'Mengirim jawaban ke server...',
+                        `Mohon tunggu dan jangan menekan Kirim lagi. ${draftSafetyText()} ${receiptSafetyText()}`
+                    );
                     form.dispatchEvent(new CustomEvent('literacy:final-submit-start'));
 
                     try {
@@ -642,12 +705,14 @@
                         }
 
                         removeDraft();
-                        showQueue('Jawaban berhasil disimpan', 'Halaman hasil sedang dibuka...');
+                        showQueue('Jawaban berhasil disimpan', 'Server sudah mengonfirmasi penyimpanan. Struk Pengiriman sedang dibuka...');
                         window.location.replace(payload.redirect_url);
                     } catch (error) {
                         showQueue(
-                            error?.exhausted ? 'Belum berhasil menyimpan jawaban' : 'Jawaban belum dapat disimpan',
-                            error?.message || `Silakan periksa jawaban lalu coba lagi. ${draftSafetyText()}`
+                            error?.exhausted ? 'Belum ada konfirmasi penyimpanan dari server' : 'Jawaban belum dapat disimpan',
+                            error?.exhausted
+                                ? `Percobaan otomatis dihentikan sementara. ${draftSafetyText()} Jangan tutup tab. Periksa koneksi, lalu tekan Kirim satu kali untuk melanjutkan. ${receiptSafetyText()}`
+                                : (error?.message || `Silakan periksa jawaban lalu coba lagi. ${draftSafetyText()} ${receiptSafetyText()}`)
                         );
                         const isValidationError = error?.status === 422;
 
@@ -657,7 +722,7 @@
                             clearTicketState();
                             setQueueAction('repair');
                         } else {
-                            setQueueAction('cancel');
+                            setQueueAction('dismiss');
                         }
 
                         if (error?.exhausted) {
@@ -742,7 +807,7 @@
                             await countdownWait(pollSeconds, (remaining) => {
                                 showQueue(
                                     `Anda sudah masuk antrean - urutan ke-${Math.max(1, payload.position || 1)}`,
-                                    `Perkiraan ${waitLabel(payload.estimated_wait_seconds)}. Pemeriksaan berikutnya dalam ${remaining} detik. ${draftSafetyText()}`
+                                    `Tiket sudah diterima server. Perkiraan ${waitLabel(payload.estimated_wait_seconds)}; posisi diperiksa lagi dalam ${remaining} detik. ${draftSafetyText()} Jangan menekan Kirim lagi atau menutup tab. ${receiptSafetyText()}`
                                 );
                             });
 
@@ -789,12 +854,15 @@
                         form.requestSubmit(submitButton || undefined);
                     } catch (error) {
                         showQueue(
-                            error?.exhausted ? 'Belum berhasil terhubung ke antrean' : 'Pengiriman belum dapat dilanjutkan',
-                            error?.message || `Antrean belum dapat dihubungi. ${draftSafetyText()}`
+                            error?.exhausted ? 'Belum ada konfirmasi dari server' : 'Pengiriman belum dapat dilanjutkan',
+                            error?.exhausted
+                                ? `Percobaan otomatis dihentikan sementara. ${draftSafetyText()} Jangan tutup tab. Periksa koneksi, lalu tekan Kirim satu kali untuk melanjutkan. ${receiptSafetyText()}`
+                                : (error?.message || `Server belum dapat dihubungi. ${draftSafetyText()} ${receiptSafetyText()}`)
                         );
                         if (error?.exhausted) {
                             reportClientFailure(currentRetryStatuses());
                         }
+                        setQueueAction('dismiss');
                         stopQueue();
                     }
                 };
@@ -843,6 +911,14 @@
                         panel?.classList.add('hidden');
                         setQueueAction('cancel');
                         focusValidationField(lastValidationField);
+
+                        return;
+                    }
+
+                    if (queueAction === 'dismiss') {
+                        panel?.classList.add('hidden');
+                        setQueueAction('cancel');
+                        stopQueue();
 
                         return;
                     }

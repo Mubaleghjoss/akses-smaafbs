@@ -59,16 +59,7 @@
                 @endif
             </div>
 
-            <div class="hidden rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900" role="status" aria-live="polite" data-literacy-queue-panel>
-                <div class="flex items-start gap-3">
-                    <span class="mt-0.5 inline-block h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-sky-200 border-t-sky-600" aria-hidden="true"></span>
-                    <div class="min-w-0 flex-1">
-                        <div class="font-semibold" data-literacy-queue-title>Menyiapkan antrean pengiriman...</div>
-                        <div class="mt-1 leading-6 text-sky-800" data-literacy-queue-message>Perubahan jawaban tetap tersimpan di halaman ini. Jangan tutup halaman.</div>
-                    </div>
-                </div>
-                <button class="mt-3 rounded-xl border border-sky-300 px-3 py-2 text-xs font-semibold text-sky-800" type="button" data-literacy-queue-cancel>Batal menunggu</button>
-            </div>
+            @include('library.literacy._submission_status_panel', ['draftLabel' => 'Perubahan jawaban'])
 
             @foreach($material->questions as $index => $question)
                 @include('library.literacy._question_field', [

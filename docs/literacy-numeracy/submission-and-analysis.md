@@ -22,6 +22,14 @@ Textarea, radio Benar/Salah, dan dropdown Menjodohkan ikut draf. FormData tetap 
 
 Retry memakai request ID dan tiket yang sama agar koneksi putus tidak membuat respons ganda.
 
+### Pesan status untuk murid
+
+- Pesan retry dibedakan berdasarkan penyebab: koneksi perangkat, HTTP 429, timeout 408/504, layanan 502/503, atau gangguan aplikasi 500.
+- Hanya status tiket `waiting` yang memakai kalimat **sudah masuk antrean** dan menampilkan posisi. Gangguan koneksi tidak boleh disebut antrean penuh.
+- Selama retry, isian tetap berada di form dan disalin ke `sessionStorage`; murid tidak perlu menekan Kirim berulang dan harus mempertahankan tab tetap terbuka.
+- Draf bukan bukti respons sudah tersimpan di server. Bukti konfirmasi yang mudah dipahami murid adalah halaman **Struk Pengiriman** beserta kode edit.
+- Jika retry otomatis habis, murid diminta memeriksa koneksi lalu menekan Kirim satu kali. Request ID yang sama menjaga retry tetap idempoten.
+
 ## Struk aman dan cache
 
 - Submit baru maupun edit menuju `/perpustakaan/program-literasi-numerasi/selesai`.
