@@ -5,6 +5,8 @@
     @endphp
 
     <div class="space-y-6">
+        @include('filament.pages.assessment.partials.type-navigation')
+
         <section class="assessment-dashboard-hero assessment-type-hero overflow-hidden rounded-2xl border border-primary-200 bg-gradient-to-br from-primary-50 via-white to-white shadow-sm dark:border-primary-500/20 dark:from-primary-950/30 dark:via-gray-900 dark:to-gray-900">
             <div class="assessment-dashboard-hero__layout grid gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,24rem)] lg:items-center">
                 <div class="min-w-0">
@@ -34,6 +36,16 @@
         </section>
 
         @if ($period)
+            <section class="assessment-progress-note">
+                <span class="assessment-progress-note__icon">
+                    <x-filament::icon icon="heroicon-o-information-circle" />
+                </span>
+                <div>
+                    <strong>{{ $hub['completed_count'] }} penugasan sudah dikirim; {{ $hub['remaining_count'] }} masih dapat dilengkapi.</strong>
+                    <p>Mengirim atau memverifikasi satu mapel/kelas tidak menutup penugasan lain. Buka Input Nilai lalu pilih kelas yang masih berstatus Draf.</p>
+                </div>
+            </section>
+
             <section class="assessment-type-summary-grid grid grid-cols-2 gap-3 lg:grid-cols-4">
                 @foreach ([
                     ['label' => 'Siswa', 'value' => $hub['student_count'], 'icon' => 'heroicon-o-users'],

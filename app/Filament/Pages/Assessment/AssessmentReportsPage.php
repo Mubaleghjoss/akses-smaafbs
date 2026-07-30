@@ -4,6 +4,7 @@ namespace App\Filament\Pages\Assessment;
 
 use App\Enums\Assessment\AssessmentType;
 use App\Enums\Assessment\ReportGenerationStatus;
+use App\Filament\Pages\Assessment\Concerns\HasAssessmentTypeNavigation;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodHomeroom;
 use App\Models\Assessment\ClassReportArtifact;
@@ -21,6 +22,8 @@ use Throwable;
 
 abstract class AssessmentReportsPage extends AssessmentPage
 {
+    use HasAssessmentTypeNavigation;
+
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-printer';
 
     protected static string $assessmentPermission = 'penilaian.view';
@@ -123,6 +126,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
 
         if (! $period || ! $template) {
             Notification::make()->title('Pilih periode dan template')->warning()->send();
+
             return;
         }
 

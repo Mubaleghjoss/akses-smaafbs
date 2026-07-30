@@ -54,3 +54,14 @@
 - Memberi CSS panel eksplisit pada card Pengaturan, kesiapan fondasi, status
   pengumpulan, aktivitas, serta hub ASTS/ASAS agar tidak jatuh menjadi teks
   polos dan tetap responsif pada layar HP.
+- Memperbaiki direct URL Status Pengumpulan yang sebelumnya mengirim relasi
+  `HasMany` ke scope bertipe `Builder` dan dapat menghasilkan error 500.
+- Mengganti keterangan progres yang ambigu menjadi jumlah dikirim dan belum
+  dikirim; penugasan Draf/Dikembalikan diprioritaskan agar guru dapat
+  melanjutkan kelas lain setelah satu kelas dikirim atau diverifikasi.
+- Menambahkan header navigasi responsif pada seluruh halaman kerja ASTS/ASAS,
+  kartu Cakupan Saya dari snapshot mapel/wali kelas, dan akses rekap untuk wali
+  kelas yang benar-benar tercatat pada snapshot periode.
+- Menambahkan pengisian massal nilai dan deskripsi berbasis pilihan siswa.
+  Perubahan tetap masuk state/draf browser dahulu dan baru tersimpan melalui
+  Simpan Draf agar optimistic locking dan batch assignment tidak dilewati.

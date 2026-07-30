@@ -1,5 +1,7 @@
 <x-filament-panels::page>
     <div class="space-y-5">
+        @include('filament.pages.assessment.partials.type-navigation')
+
         <section class="grid gap-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-gray-900 md:grid-cols-2">
             <label class="min-w-0 text-sm font-semibold">Periode
                 <select wire:model.live="periodId" class="mt-2 w-full min-w-0 rounded-lg border-gray-300 dark:border-white/10 dark:bg-gray-950">

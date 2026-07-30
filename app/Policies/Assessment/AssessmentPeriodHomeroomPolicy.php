@@ -15,9 +15,6 @@ class AssessmentPeriodHomeroomPolicy extends AssessmentPolicy
     public function view(User $user, AssessmentPeriodHomeroom $homeroom): bool
     {
         return $this->canReadAll($user)
-            || (
-                $user->can('penilaian.homeroom')
-                && $this->ownsTeacherId($user, (int) $homeroom->teacher_id)
-            );
+            || $this->ownsTeacherId($user, (int) $homeroom->teacher_id);
     }
 }

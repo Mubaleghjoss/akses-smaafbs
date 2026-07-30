@@ -4558,3 +4558,277 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
         flex-direction: column;
     }
 }
+
+/* Assessment page context: shared navigation, access scope, and progress help. */
+.assessment-context-stack {
+    display: grid;
+    min-width: 0;
+    gap: 0.75rem;
+}
+
+.assessment-context-nav {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 1rem;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.assessment-context-nav__crumbs {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.7rem 0.85rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    color: #64748b;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.assessment-context-nav__crumbs a {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.35rem;
+    color: #0f766e;
+    text-decoration: none;
+}
+
+.assessment-context-nav__crumbs svg {
+    width: 1rem;
+    height: 1rem;
+}
+
+.assessment-context-nav__tabs {
+    display: flex;
+    max-width: 100%;
+    gap: 0.4rem;
+    overflow-x: auto;
+    padding: 0.55rem;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+}
+
+.assessment-context-nav__tabs a {
+    display: inline-flex;
+    min-height: 2.45rem;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border-radius: 0.75rem;
+    padding: 0.55rem 0.75rem;
+    color: #475569;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.assessment-context-nav__tabs a:hover,
+.assessment-context-nav__tabs a.is-active {
+    background: #0f766e;
+    color: #fff;
+}
+
+.assessment-context-nav__tabs svg {
+    width: 1rem;
+    height: 1rem;
+}
+
+.assessment-access-card,
+.assessment-progress-note {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    gap: 0.8rem;
+    border: 1px solid rgba(13, 148, 136, 0.24);
+    border-radius: 1rem;
+    background: rgba(240, 253, 250, 0.72);
+    padding: 0.9rem;
+}
+
+.assessment-access-card.is-empty {
+    border-color: rgba(245, 158, 11, 0.3);
+    background: rgba(255, 251, 235, 0.82);
+}
+
+.assessment-access-card__icon,
+.assessment-progress-note__icon {
+    display: inline-flex;
+    width: 2.35rem;
+    height: 2.35rem;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.75rem;
+    background: #ccfbf1;
+    color: #0f766e;
+}
+
+.assessment-access-card.is-empty .assessment-access-card__icon {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.assessment-access-card__icon svg,
+.assessment-progress-note__icon svg {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+.assessment-access-card__body,
+.assessment-progress-note > div {
+    min-width: 0;
+}
+
+.assessment-access-card h2,
+.assessment-progress-note strong {
+    display: block;
+    overflow-wrap: anywhere;
+    color: #0f172a;
+    font-size: 0.9rem;
+    font-weight: 800;
+}
+
+.assessment-access-card p,
+.assessment-progress-note p {
+    margin-top: 0.2rem;
+    overflow-wrap: anywhere;
+    color: #475569;
+    font-size: 0.78rem;
+    line-height: 1.55;
+}
+
+.assessment-access-card__details {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-top: 0.65rem;
+}
+
+.assessment-access-card__detail {
+    display: inline-flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    border: 1px solid rgba(13, 148, 136, 0.18);
+    border-radius: 999px;
+    background: #fff;
+    padding: 0.35rem 0.65rem;
+    color: #334155;
+    font-size: 0.72rem;
+}
+
+.assessment-access-card__detail strong,
+.assessment-access-card__detail span {
+    overflow-wrap: anywhere;
+}
+
+.assessment-access-card__detail.is-homeroom {
+    border-color: rgba(245, 158, 11, 0.28);
+    background: #fffbeb;
+}
+
+.assessment-progress-note {
+    border-color: rgba(59, 130, 246, 0.24);
+    background: rgba(239, 246, 255, 0.78);
+}
+
+.assessment-progress-note__icon {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.dark .assessment-context-nav,
+.fi-theme-dark .assessment-context-nav {
+    border-color: rgba(148, 163, 184, 0.2);
+    background: #18181b;
+}
+
+.dark .assessment-context-nav__crumbs,
+.fi-theme-dark .assessment-context-nav__crumbs {
+    border-color: rgba(148, 163, 184, 0.16);
+    color: #94a3b8;
+}
+
+.dark .assessment-context-nav__crumbs a,
+.fi-theme-dark .assessment-context-nav__crumbs a {
+    color: #5eead4;
+}
+
+.dark .assessment-context-nav__tabs a,
+.fi-theme-dark .assessment-context-nav__tabs a {
+    color: #cbd5e1;
+}
+
+.dark .assessment-context-nav__tabs a:hover,
+.dark .assessment-context-nav__tabs a.is-active,
+.fi-theme-dark .assessment-context-nav__tabs a:hover,
+.fi-theme-dark .assessment-context-nav__tabs a.is-active {
+    background: #0f766e;
+    color: #fff;
+}
+
+.dark .assessment-access-card,
+.dark .assessment-progress-note,
+.fi-theme-dark .assessment-access-card,
+.fi-theme-dark .assessment-progress-note {
+    border-color: rgba(45, 212, 191, 0.22);
+    background: rgba(13, 148, 136, 0.08);
+}
+
+.dark .assessment-access-card.is-empty,
+.fi-theme-dark .assessment-access-card.is-empty {
+    border-color: rgba(251, 191, 36, 0.24);
+    background: rgba(146, 64, 14, 0.12);
+}
+
+.dark .assessment-progress-note,
+.fi-theme-dark .assessment-progress-note {
+    border-color: rgba(96, 165, 250, 0.22);
+    background: rgba(30, 64, 175, 0.12);
+}
+
+.dark .assessment-access-card h2,
+.dark .assessment-progress-note strong,
+.fi-theme-dark .assessment-access-card h2,
+.fi-theme-dark .assessment-progress-note strong {
+    color: #f8fafc;
+}
+
+.dark .assessment-access-card p,
+.dark .assessment-progress-note p,
+.fi-theme-dark .assessment-access-card p,
+.fi-theme-dark .assessment-progress-note p {
+    color: #cbd5e1;
+}
+
+.dark .assessment-access-card__detail,
+.fi-theme-dark .assessment-access-card__detail {
+    border-color: rgba(45, 212, 191, 0.2);
+    background: #0f172a;
+    color: #e2e8f0;
+}
+
+.dark .assessment-access-card__detail.is-homeroom,
+.fi-theme-dark .assessment-access-card__detail.is-homeroom {
+    border-color: rgba(251, 191, 36, 0.24);
+    background: rgba(146, 64, 14, 0.18);
+}
+
+@media (max-width: 639px) {
+    .assessment-context-nav__tabs a {
+        min-height: 2.65rem;
+        padding-inline: 0.7rem;
+    }
+
+    .assessment-access-card,
+    .assessment-progress-note {
+        padding: 0.8rem;
+    }
+}

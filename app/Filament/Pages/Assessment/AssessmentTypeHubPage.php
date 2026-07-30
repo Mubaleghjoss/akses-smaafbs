@@ -4,6 +4,7 @@ namespace App\Filament\Pages\Assessment;
 
 use App\Enums\Assessment\AssessmentType;
 use App\Enums\Assessment\AssignmentStatus;
+use App\Filament\Pages\Assessment\Concerns\HasAssessmentTypeNavigation;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodHomeroom;
 use App\Models\User;
@@ -13,6 +14,8 @@ use Livewire\Attributes\Url;
 
 abstract class AssessmentTypeHubPage extends AssessmentPage
 {
+    use HasAssessmentTypeNavigation;
+
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-check';
 
     protected static AssessmentType $assessmentType;
@@ -79,8 +82,10 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
                 'class_count' => 0,
                 'assignment_count' => 0,
                 'completed_count' => 0,
+                'remaining_count' => 0,
+                'homeroom_count' => 0,
                 'completion_percentage' => 0,
-                'cards' => $this->actionCards(null, 0, 0, 0, 0),
+                'cards' => $this->actionCards(null, 0, 0, 0, 0, 0),
             ];
         }
 
@@ -106,6 +111,10 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
             ->where('is_active', true)
             ->count();
         $classCount = $rombelIds->count();
+        $homeroomCount = $this->scopeHomerooms(
+            $period->homerooms()->getQuery(),
+        )->count();
+        $remainingCount = max(0, $assignmentCount - $completedCount);
         $completionPercentage = $assignmentCount > 0
             ? (int) round(($completedCount / $assignmentCount) * 100)
             : 0;
@@ -116,6 +125,8 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
             'class_count' => $classCount,
             'assignment_count' => $assignmentCount,
             'completed_count' => $completedCount,
+            'remaining_count' => $remainingCount,
+            'homeroom_count' => $homeroomCount,
             'completion_percentage' => $completionPercentage,
             'cards' => $this->actionCards(
                 $period,
@@ -123,6 +134,7 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
                 $classCount,
                 $assignmentCount,
                 $completedCount,
+                $homeroomCount,
             ),
         ];
     }
@@ -136,6 +148,7 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
         int $classCount,
         int $assignmentCount,
         int $completedCount,
+        int $homeroomCount,
     ): array {
         $isAsts = static::$assessmentType === AssessmentType::ASTS;
         $inputPage = $isAsts ? AstsInputScores::class : AsasInputScores::class;
@@ -151,7 +164,7 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
                 'icon' => 'heroicon-o-pencil-square',
                 'tone' => 'primary',
                 'value' => number_format($assignmentCount, 0, ',', '.'),
-                'caption' => 'penugasan dalam cakupan',
+                'caption' => max(0, $assignmentCount - $completedCount).' masih perlu dilengkapi',
                 'url' => $inputPage::canAccess() ? $inputPage::getUrl($parameters) : null,
             ],
             [
@@ -160,7 +173,7 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
                 'icon' => 'heroicon-o-clipboard-document-check',
                 'tone' => 'success',
                 'value' => "{$completedCount}/{$assignmentCount}",
-                'caption' => 'sudah dikirim atau selesai',
+                'caption' => "{$completedCount} dikirim · ".max(0, $assignmentCount - $completedCount).' belum dikirim',
                 'url' => $statusPage::canAccess() ? $statusPage::getUrl($parameters) : null,
             ],
             [
@@ -168,8 +181,8 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
                 'description' => 'Lengkapi absensi, ekstrakurikuler, prestasi, dan catatan wali kelas.',
                 'icon' => 'heroicon-o-user-group',
                 'tone' => 'warning',
-                'value' => number_format($classCount, 0, ',', '.'),
-                'caption' => 'kelas dalam cakupan',
+                'value' => number_format($homeroomCount, 0, ',', '.'),
+                'caption' => 'kelas wali dalam cakupan',
                 'url' => $homeroomPage::canAccess() ? $homeroomPage::getUrl($parameters) : null,
             ],
             [
@@ -223,13 +236,11 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
             return $query->whereRaw('1 = 0');
         }
 
-        $homeroomRombelIds = $user->can('penilaian.homeroom')
-            ? AssessmentPeriodHomeroom::query()
-                ->where('assessment_period_id', $periodId)
-                ->where('teacher_id', $user->guru_tendik_id)
-                ->pluck('assessment_period_rombel_id')
-                ->all()
-            : [];
+        $homeroomRombelIds = AssessmentPeriodHomeroom::query()
+            ->where('assessment_period_id', $periodId)
+            ->where('teacher_id', $user->guru_tendik_id)
+            ->pluck('assessment_period_rombel_id')
+            ->all();
 
         return $query->where(function (Builder $assignments) use ($user, $homeroomRombelIds): void {
             $assignments->where('teacher_id', $user->guru_tendik_id);
@@ -238,5 +249,22 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
                 $assignments->orWhereIn('assessment_period_rombel_id', $homeroomRombelIds);
             }
         });
+    }
+
+    protected function scopeHomerooms(Builder $query): Builder
+    {
+        $user = auth()->user();
+
+        if (! $user instanceof User) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if ($user->hasFullAdminAccess() || $user->can('penilaian.verify') || $user->hasRole('kepala_sekolah')) {
+            return $query;
+        }
+
+        return $user->guru_tendik_id
+            ? $query->where('teacher_id', $user->guru_tendik_id)
+            : $query->whereRaw('1 = 0');
     }
 }

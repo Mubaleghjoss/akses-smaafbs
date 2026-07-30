@@ -6,6 +6,7 @@ use App\Actions\Assessment\SaveAssessmentScoresAction;
 use App\Actions\Assessment\SubmitAssessmentAssignmentAction;
 use App\Enums\Assessment\AssessmentType;
 use App\Enums\Assessment\AssignmentStatus;
+use App\Filament\Pages\Assessment\Concerns\HasAssessmentTypeNavigation;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodAssignment;
 use App\Models\Assessment\AssessmentPeriodHomeroom;
@@ -23,6 +24,8 @@ use Throwable;
 
 abstract class AssessmentScoreEntryPage extends AssessmentPage
 {
+    use HasAssessmentTypeNavigation;
+
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-pencil-square';
 
     protected static string $assessmentPermission = 'penilaian.input';
@@ -50,6 +53,17 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
     /** @var array<string, mixed>|null */
     public ?array $assignmentMeta = null;
 
+    /** @var array<int, int|string> */
+    public array $selectedStudentIds = [];
+
+    public ?int $bulkComponentId = null;
+
+    public string $bulkScore = '';
+
+    public string $bulkDescription = '';
+
+    public bool $bulkFillEmptyOnly = true;
+
     public static function canAccess(): bool
     {
         $user = auth()->user();
@@ -65,6 +79,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
                         $user->can('penilaian.input')
                         || $user->can('penilaian.verify')
                         || $user->can('penilaian.homeroom')
+                        || static::currentUserOwnsAssessmentHomeroom()
                         || $user->hasRole('kepala_sekolah')
                     )
                 )
@@ -134,13 +149,52 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
         }
 
         return $this->assignmentQuery()
+            ->orderByRaw("CASE status
+                WHEN 'returned' THEN 0
+                WHEN 'draft' THEN 1
+                WHEN 'submitted' THEN 2
+                WHEN 'verified' THEN 3
+                WHEN 'locked' THEN 4
+                ELSE 5 END")
             ->orderBy('rombel_name_snapshot')
             ->orderBy('subject_name_snapshot')
             ->get()
+            ->each(function (AssessmentPeriodAssignment $assignment): void {
+                $status = $assignment->status instanceof AssignmentStatus
+                    ? $assignment->status
+                    : AssignmentStatus::from((string) $assignment->status);
+                $assignment->subject_name_snapshot .= ' — '.$status->label();
+            })
             ->mapWithKeys(fn (AssessmentPeriodAssignment $assignment): array => [
                 $assignment->getKey() => "{$assignment->rombel_name_snapshot} · {$assignment->subject_name_snapshot}",
             ])
             ->all();
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    public function getAssignmentProgress(): array
+    {
+        if (! $this->periodId) {
+            return ['total' => 0, 'sent' => 0, 'remaining' => 0];
+        }
+
+        $query = $this->assignmentQuery();
+        $total = (clone $query)->count();
+        $sent = (clone $query)
+            ->whereIn('status', [
+                AssignmentStatus::SUBMITTED->value,
+                AssignmentStatus::VERIFIED->value,
+                AssignmentStatus::LOCKED->value,
+            ])
+            ->count();
+
+        return [
+            'total' => $total,
+            'sent' => $sent,
+            'remaining' => max(0, $total - $sent),
+        ];
     }
 
     public function updatedPeriodId(): void
@@ -161,6 +215,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
         $this->components = [];
         $this->assignmentMeta = null;
         $this->lockVersion = 0;
+        $this->selectedStudentIds = [];
 
         if (! $this->assignmentId) {
             return;
@@ -212,6 +267,8 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             ])
             ->values()
             ->all();
+        $this->bulkComponentId = collect($this->components)
+            ->firstWhere('score_source', 'manual')['id'] ?? null;
 
         foreach ($students as $student) {
             $rowScores = [];
@@ -321,6 +378,119 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
         }
     }
 
+    public function selectAllStudents(): void
+    {
+        $this->selectedStudentIds = array_map('intval', array_keys($this->scoreRows));
+    }
+
+    public function clearStudentSelection(): void
+    {
+        $this->selectedStudentIds = [];
+    }
+
+    public function applyBulkValues(): void
+    {
+        if (! data_get($this->assignmentMeta, 'editable')) {
+            Notification::make()
+                ->title('Penugasan ini hanya dapat ditinjau')
+                ->body('Pilih penugasan berstatus Draf atau Dikembalikan untuk mengubah nilai.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $studentIds = collect($this->selectedStudentIds)
+            ->map(fn (mixed $id): int => (int) $id)
+            ->filter(fn (int $id): bool => array_key_exists($id, $this->scoreRows))
+            ->unique()
+            ->values();
+
+        if ($studentIds->isEmpty()) {
+            Notification::make()
+                ->title('Pilih siswa terlebih dahulu')
+                ->body('Centang siswa yang akan menerima nilai atau deskripsi massal.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $component = $this->bulkComponentId
+            ? collect($this->components)->firstWhere('id', $this->bulkComponentId)
+            : null;
+        $hasScore = trim($this->bulkScore) !== '';
+        $description = trim($this->bulkDescription);
+
+        if (! $hasScore && $description === '') {
+            Notification::make()
+                ->title('Nilai atau deskripsi belum diisi')
+                ->body('Isi minimal salah satu sebelum menerapkan ke siswa terpilih.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        if ($hasScore) {
+            if (! $component || $component['score_source'] !== 'manual') {
+                Notification::make()->title('Pilih komponen nilai manual')->danger()->send();
+
+                return;
+            }
+
+            if (! is_numeric($this->bulkScore)) {
+                Notification::make()->title('Nilai massal harus berupa angka')->danger()->send();
+
+                return;
+            }
+
+            $score = (float) $this->bulkScore;
+            if ($score < (float) $component['minimum_score'] || $score > (float) $component['maximum_score']) {
+                Notification::make()
+                    ->title('Nilai di luar batas komponen')
+                    ->body("Nilai {$component['name']} harus antara {$component['minimum_score']} dan {$component['maximum_score']}.")
+                    ->danger()
+                    ->send();
+
+                return;
+            }
+        }
+
+        $changed = 0;
+        foreach ($studentIds as $studentId) {
+            $rowChanged = false;
+
+            if ($hasScore && $component) {
+                $currentScore = data_get($this->scoreRows, "{$studentId}.scores.{$component['id']}");
+                if (! $this->bulkFillEmptyOnly || $currentScore === null || $currentScore === '') {
+                    $this->scoreRows[$studentId]['scores'][$component['id']] = (float) $this->bulkScore;
+                    $rowChanged = true;
+                }
+            }
+
+            if ($description !== '') {
+                $currentDescription = trim((string) data_get($this->scoreRows, "{$studentId}.description", ''));
+                if (! $this->bulkFillEmptyOnly || $currentDescription === '') {
+                    $this->scoreRows[$studentId]['description'] = $description;
+                    $rowChanged = true;
+                }
+            }
+
+            if ($rowChanged) {
+                $changed++;
+            }
+        }
+
+        $this->dispatch('assessment-bulk-applied', key: $this->draftKey());
+        Notification::make()
+            ->title("Diterapkan ke {$changed} siswa")
+            ->body('Perubahan baru berada di formulir. Tekan Simpan Draf untuk menyimpannya ke server.')
+            ->success()
+            ->duration(12000)
+            ->send();
+    }
+
     public function draftKey(): string
     {
         return 'assessment-draft-'.((int) auth()->id()).'-'.($this->assignmentId ?: 'none');
@@ -364,7 +534,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             return $query->whereRaw('1 = 0');
         }
 
-        $homeroomRombelIds = $user->can('penilaian.homeroom') && $this->periodId
+        $homeroomRombelIds = $this->periodId
             ? AssessmentPeriodHomeroom::query()
                 ->where('assessment_period_id', $this->periodId)
                 ->where('teacher_id', $user->guru_tendik_id)

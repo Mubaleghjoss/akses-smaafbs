@@ -1,5 +1,17 @@
 <x-filament-panels::page>
     <div class="space-y-5">
+        @include('filament.pages.assessment.partials.type-navigation')
+
+        <section class="assessment-progress-note">
+            <span class="assessment-progress-note__icon">
+                <x-filament::icon icon="heroicon-o-information-circle" />
+            </span>
+            <div>
+                <strong>Status berlaku per mapel dan kelas, bukan untuk menutup seluruh periode.</strong>
+                <p>Penugasan Draf atau Dikembalikan tetap dapat dibuka dari tombol Tinjau Nilai dan dilengkapi oleh guru pengampu.</p>
+            </div>
+        </section>
+
         <section class="grid gap-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-gray-900 md:grid-cols-2">
             <label class="min-w-0 text-sm font-semibold text-gray-700 dark:text-gray-200">
                 Periode

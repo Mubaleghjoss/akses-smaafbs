@@ -6,8 +6,10 @@ use App\Actions\Assessment\ReturnAssessmentAssignmentAction;
 use App\Actions\Assessment\VerifyAssessmentAssignmentAction;
 use App\Enums\Assessment\AssessmentType;
 use App\Enums\Assessment\AssignmentStatus;
+use App\Filament\Pages\Assessment\Concerns\HasAssessmentTypeNavigation;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodAssignment;
+use App\Models\Assessment\AssessmentPeriodHomeroom;
 use App\Models\User;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\Support\Htmlable;
@@ -17,6 +19,8 @@ use Throwable;
 
 abstract class AssessmentSubmissionStatusPage extends AssessmentPage
 {
+    use HasAssessmentTypeNavigation;
+
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-check';
 
     protected static string $assessmentPermission = 'penilaian.view';
@@ -78,7 +82,7 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
             ->groupBy('assessment_period_rombel_id')
             ->pluck('aggregate', 'assessment_period_rombel_id');
         $query = $this->scopeAssignments(
-            $period->assignments()->withCount([
+            $period->assignments()->getQuery()->withCount([
                 'results',
                 'results as completed_results_count' => fn (Builder $builder): Builder => $builder->whereNotNull('final_score'),
             ]),
@@ -172,8 +176,8 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
         }
 
         $periodId = (int) ($this->periodId ?? 0);
-        $homeroomRombelIds = $user->can('penilaian.homeroom') && $periodId > 0
-            ? \App\Models\Assessment\AssessmentPeriodHomeroom::query()
+        $homeroomRombelIds = $periodId > 0
+            ? AssessmentPeriodHomeroom::query()
                 ->where('assessment_period_id', $periodId)
                 ->where('teacher_id', $user->guru_tendik_id)
                 ->pluck('assessment_period_rombel_id')
@@ -211,12 +215,10 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
                 fn (Builder $assignments): Builder => $assignments->where('teacher_id', $user->guru_tendik_id),
             );
 
-            if ($user->can('penilaian.homeroom')) {
-                $periods->orWhereHas(
-                    'homerooms',
-                    fn (Builder $homerooms): Builder => $homerooms->where('teacher_id', $user->guru_tendik_id),
-                );
-            }
+            $periods->orWhereHas(
+                'homerooms',
+                fn (Builder $homerooms): Builder => $homerooms->where('teacher_id', $user->guru_tendik_id),
+            );
         });
     }
 

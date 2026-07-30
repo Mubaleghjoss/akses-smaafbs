@@ -107,5 +107,25 @@ Role baru bersifat aditif: `super_admin`, `kurikulum`, `guru_mapel`, `wali_kelas
   role masih memiliki permission granular.
 - Kurikulum, kepala sekolah, dan wali kelas dalam scope dapat membuka matriks
   nilai baca-saja; hanya guru pengampu yang memenuhi Policy dapat mengedit.
+- Snapshot `assessment_period_homerooms` menjadi bukti akses record wali kelas.
+  Akun yang tertaut ke guru pada snapshot dapat membuka dan mengisi rekap
+  kelasnya sendiri walaupun akun masih memakai role umum `guru`; akses modul
+  `penilaian` tetap wajib dan kelas lain tetap ditolak oleh Policy.
+- Setiap halaman kerja ASTS/ASAS menampilkan kartu **Cakupan Saya** yang membaca
+  mapel, kelas mengajar, dan wali kelas langsung dari snapshot periode.
+
+## Pengisian nilai massal
+
+- Penugasan `draft` dan `returned` selalu diprioritaskan di pilihan Mapel dan
+  Kelas. Penugasan `submitted`, `verified`, dan `locked` tetap dapat ditinjau
+  tetapi tidak dibuka kembali secara diam-diam.
+- Guru dapat mencentang siswa lalu menerapkan satu nilai komponen dan/atau satu
+  deskripsi ke banyak siswa. Opsi aman bawaan hanya mengisi kolom kosong.
+- Aksi massal hanya mengubah state formulir dan draf browser. Database tetap
+  berubah melalui tombol **Simpan Draf** sehingga batch satu assignment dan
+  `lock_version` tetap berlaku.
+- Mengirim atau memverifikasi satu assignment tidak menutup assignment lain
+  pada periode yang sama. Status kemajuan selalu ditulis sebagai jumlah
+  dikirim dan jumlah yang masih belum dikirim.
 
 Setiap action custom memeriksa permission dan Policy pada server. Menyembunyikan tombol bukan mekanisme keamanan.

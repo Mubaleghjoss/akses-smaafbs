@@ -39,8 +39,19 @@
         .assessment-mobile-grid { display:grid; gap:.85rem; margin-top:1rem; }
         .assessment-mobile-score { display:grid; grid-template-columns:minmax(0,1fr) minmax(90px,120px); gap:.7rem; align-items:center; }
         .assessment-actionbar { display:flex; flex-wrap:wrap; gap:.65rem; align-items:center; justify-content:flex-end; }
+        .assessment-bulk-card {
+            display:grid; gap:1rem; padding:1rem; border:1px solid rgba(13,148,136,.28);
+            border-radius:1rem; background:rgba(240,253,250,.72);
+        }
+        .dark .assessment-bulk-card { border-color:rgba(45,212,191,.22); background:rgba(13,148,136,.08); }
+        .assessment-bulk-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:.8rem; }
+        .assessment-bulk-grid .is-wide { grid-column:1 / -1; }
+        .assessment-student-check { display:flex; align-items:flex-start; gap:.55rem; cursor:pointer; }
+        .assessment-student-check input { margin-top:.18rem; flex:0 0 auto; }
         @media (max-width: 767px) {
             .assessment-score-toolbar { grid-template-columns:minmax(0,1fr); }
+            .assessment-bulk-grid { grid-template-columns:minmax(0,1fr); }
+            .assessment-bulk-grid .is-wide { grid-column:auto; }
             .assessment-desktop { display:none !important; }
             .assessment-actionbar > * { flex:1 1 auto; }
         }
@@ -48,6 +59,19 @@
     </style>
 
     <div class="assessment-score-page space-y-5">
+        @include('filament.pages.assessment.partials.type-navigation')
+
+        @php($assignmentProgress = $this->getAssignmentProgress())
+        <section class="assessment-progress-note">
+            <span class="assessment-progress-note__icon">
+                <x-filament::icon icon="heroicon-o-information-circle" />
+            </span>
+            <div>
+                <strong>{{ $assignmentProgress['sent'] }} dari {{ $assignmentProgress['total'] }} penugasan sudah dikirim.</strong>
+                <p>{{ $assignmentProgress['remaining'] }} penugasan masih dapat dilengkapi. Pilihan Draf dan Dikembalikan ditampilkan lebih dahulu.</p>
+            </div>
+        </section>
+
         <section class="assessment-score-toolbar">
             <div class="assessment-score-field">
                 <label for="assessment-period">Periode</label>
@@ -109,6 +133,11 @@
                         draft.lockVersion = this.serverVersion;
                         localStorage.setItem(this.draftKey, JSON.stringify(draft));
                     },
+                    persistRenderedFields() {
+                        this.$root.querySelectorAll('[data-assessment-path]').forEach((field) => {
+                            this.saveLocal({ target: field });
+                        });
+                    },
                     restoreLocal(force = false) {
                         let draft = null;
                         try { draft = JSON.parse(localStorage.getItem(this.draftKey) || 'null'); } catch (e) {}
@@ -131,10 +160,55 @@
                         this.staleSavedAt = null;
                     }
                 }"
-                x-init="restoreLocal(); window.addEventListener('assessment-draft-cleared', (event) => { if (event.detail?.key === draftKey) localStorage.removeItem(draftKey) })"
+                x-init="restoreLocal(); window.addEventListener('assessment-draft-cleared', (event) => { if (event.detail?.key === draftKey) localStorage.removeItem(draftKey) }); window.addEventListener('assessment-bulk-applied', (event) => { if (event.detail?.key === draftKey) setTimeout(() => persistRenderedFields(), 50) })"
                 x-on:input.debounce.250ms="saveLocal($event)"
                 class="space-y-4"
             >
+                @if ($assignmentMeta['editable'])
+                    <section class="assessment-bulk-card">
+                        <div>
+                            <h2 class="font-bold text-gray-950 dark:text-white">Isi Nilai & Deskripsi Massal</h2>
+                            <p class="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">
+                                Centang siswa, isi nilai atau deskripsi, lalu terapkan ke formulir. Data belum masuk server sampai tombol <strong>Simpan Draf</strong> ditekan.
+                            </p>
+                        </div>
+
+                        <div class="assessment-bulk-grid">
+                            <label class="assessment-score-field">
+                                <span class="block text-xs font-bold text-gray-600 dark:text-gray-300">Komponen Nilai</span>
+                                <select wire:model="bulkComponentId" class="assessment-score-select mt-2">
+                                    @foreach ($components as $component)
+                                        @if ($component['score_source'] === 'manual')
+                                            <option value="{{ $component['id'] }}">{{ $component['name'] }}</option>
+                                        @endif
+                                    @endforeach
+                                </select>
+                            </label>
+                            <label class="assessment-score-field">
+                                <span class="block text-xs font-bold text-gray-600 dark:text-gray-300">Nilai Massal</span>
+                                <input wire:model="bulkScore" type="number" step="0.01" class="assessment-score-input mt-2" placeholder="Contoh: 85">
+                            </label>
+                            <label class="assessment-score-field is-wide">
+                                <span class="block text-xs font-bold text-gray-600 dark:text-gray-300">Deskripsi Massal (opsional)</span>
+                                <textarea wire:model="bulkDescription" rows="2" class="assessment-description mt-2 min-w-0" placeholder="Contoh: Menunjukkan pemahaman yang baik dan konsisten."></textarea>
+                            </label>
+                            <label class="is-wide flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200">
+                                <input type="checkbox" wire:model="bulkFillEmptyOnly" class="mt-1 rounded border-gray-300">
+                                <span><strong>Hanya isi kolom yang masih kosong</strong><small class="block text-gray-500">Nonaktifkan hanya jika nilai/deskripsi lama memang ingin ditimpa.</small></span>
+                            </label>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-2">
+                            <x-filament::button type="button" size="sm" color="gray" wire:click="selectAllStudents">Pilih Semua</x-filament::button>
+                            <x-filament::button type="button" size="sm" color="gray" wire:click="clearStudentSelection">Kosongkan Pilihan</x-filament::button>
+                            <span class="text-xs font-semibold text-gray-500">{{ count($selectedStudentIds) }} siswa dipilih</span>
+                            <x-filament::button type="button" size="sm" wire:click="applyBulkValues" wire:loading.attr="disabled" icon="heroicon-o-bolt" class="sm:ml-auto">
+                                Terapkan ke Form
+                            </x-filament::button>
+                        </div>
+                    </section>
+                @endif
+
                 <div x-show="stale" x-cloak class="rounded-xl border border-warning-200 bg-warning-50 p-3 text-sm text-warning-800 dark:border-warning-500/30 dark:bg-warning-950/30 dark:text-warning-200">
                     <strong>Draf browser berasal dari versi nilai yang lebih lama.</strong>
                     Draf tidak dipulihkan otomatis agar tidak menimpa perubahan terbaru dari tab lain.
@@ -174,8 +248,15 @@
                                 @foreach ($scoreRows as $studentId => $row)
                                     <tr>
                                         <td class="student-col">
-                                            <div class="font-semibold text-gray-950 dark:text-white">{{ $row['student_name'] }}</div>
-                                            <div class="mt-1 text-xs text-gray-500">{{ $row['nis'] }}</div>
+                                            <label class="assessment-student-check">
+                                                @if ($assignmentMeta['editable'])
+                                                    <input type="checkbox" value="{{ $studentId }}" wire:model.live="selectedStudentIds" class="rounded border-gray-300">
+                                                @endif
+                                                <span class="min-w-0">
+                                                    <span class="block font-semibold text-gray-950 dark:text-white">{{ $row['student_name'] }}</span>
+                                                    <span class="mt-1 block text-xs text-gray-500">{{ $row['nis'] }}</span>
+                                                </span>
+                                            </label>
                                             @if ($row['final_score'] !== null)
                                                 <div class="mt-2 text-xs font-semibold text-primary-600">Nilai akhir: {{ $row['final_score'] }}</div>
                                             @endif
@@ -216,10 +297,15 @@
                         @php($studentId = $row['student_id'])
                         <article class="assessment-mobile-card" x-show="current === {{ $index }}" x-cloak>
                             <div class="flex items-start justify-between gap-3">
-                                <div class="min-w-0">
-                                    <h2 class="break-words font-bold text-gray-950 dark:text-white">{{ $row['student_name'] }}</h2>
-                                    <p class="mt-1 text-xs text-gray-500">{{ $row['nis'] }}</p>
-                                </div>
+                                <label class="assessment-student-check min-w-0">
+                                    @if ($assignmentMeta['editable'])
+                                        <input type="checkbox" value="{{ $studentId }}" wire:model.live="selectedStudentIds" class="rounded border-gray-300">
+                                    @endif
+                                    <span class="min-w-0">
+                                        <span class="block break-words font-bold text-gray-950 dark:text-white">{{ $row['student_name'] }}</span>
+                                        <span class="mt-1 block text-xs text-gray-500">{{ $row['nis'] }}</span>
+                                    </span>
+                                </label>
                                 <span class="assessment-score-pill">{{ $index + 1 }}/{{ count($scoreRows) }}</span>
                             </div>
                             <div class="assessment-mobile-grid">

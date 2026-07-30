@@ -4,6 +4,7 @@ namespace App\Filament\Pages\Assessment;
 
 use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssessmentType;
+use App\Filament\Pages\Assessment\Concerns\HasAssessmentTypeNavigation;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodHomeroom;
 use App\Models\Assessment\AuditLog;
@@ -22,6 +23,8 @@ use Throwable;
 
 abstract class AssessmentHomeroomRecapPage extends AssessmentPage
 {
+    use HasAssessmentTypeNavigation;
+
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-user-group';
 
     protected static string $assessmentPermission = 'penilaian.homeroom';
@@ -55,6 +58,7 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
                     && (
                         $user->can('penilaian.homeroom')
                         || $user->can('penilaian.verify')
+                        || static::currentUserOwnsAssessmentHomeroom()
                         || $user->hasRole('kepala_sekolah')
                     )
                 )
@@ -165,11 +169,11 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
 
     public function saveReports(): void
     {
-        $this->authorizeAssessment('penilaian.homeroom');
         $homeroom = $this->homeroomId ? $this->homeroomQuery()->with('period')->findOrFail($this->homeroomId) : null;
 
         if (! $homeroom || ! $this->canEditHomeroom($homeroom)) {
             Notification::make()->title('Rekap tidak dapat diubah pada status periode ini')->warning()->send();
+
             return;
         }
 
@@ -325,7 +329,6 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
         }
 
         return $user->canViewModule('penilaian')
-            && $user->can('penilaian.homeroom')
             && $user->guru_tendik_id !== null
             && (int) $user->guru_tendik_id === (int) $homeroom->teacher_id;
     }

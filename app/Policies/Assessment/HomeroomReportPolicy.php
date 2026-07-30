@@ -17,10 +17,7 @@ class HomeroomReportPolicy extends AssessmentPolicy
     public function view(User $user, HomeroomReport $report): bool
     {
         return $this->canReadAll($user)
-            || (
-                $user->can('penilaian.homeroom')
-                && $this->ownsPeriodRombel($user, $report->student->periodRombel)
-            );
+            || $this->ownsPeriodRombel($user, $report->student->periodRombel);
     }
 
     public function create(User $user, AssessmentPeriodHomeroom $homeroom): bool
@@ -32,10 +29,7 @@ class HomeroomReportPolicy extends AssessmentPolicy
 
         return (
             $this->isFullAdmin($user)
-            || (
-                $user->can('penilaian.homeroom')
-                && $this->ownsTeacherId($user, (int) $homeroom->teacher_id)
-            )
+            || $this->ownsTeacherId($user, (int) $homeroom->teacher_id)
         ) && in_array($periodStatus, [
             AssessmentPeriodStatus::OPEN,
             AssessmentPeriodStatus::ENTRY_CLOSED,
@@ -46,10 +40,7 @@ class HomeroomReportPolicy extends AssessmentPolicy
     public function update(User $user, HomeroomReport $report): bool
     {
         return ($this->isFullAdmin($user)
-                || (
-                    $user->can('penilaian.homeroom')
-                    && $this->ownsPeriodRombel($user, $report->student->periodRombel)
-                ))
+                || $this->ownsPeriodRombel($user, $report->student->periodRombel))
             && in_array($report->period->status, [
                 AssessmentPeriodStatus::OPEN,
                 AssessmentPeriodStatus::ENTRY_CLOSED,
