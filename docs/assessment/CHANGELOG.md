@@ -33,3 +33,12 @@
   langsung dari data.
 - Menambahkan petunjuk eksplisit bahwa label mapel pada profil guru tidak
   menggantikan penugasan resmi guru–mapel–kelas–semester.
+- Memperjelas Dashboard Penilaian dan Impor Master menggunakan kartu visual
+  dengan CSS panel Filament yang eksplisit, sehingga warna, batas, ikon, tombol,
+  dan susunan responsif tetap tampil walaupun halaman admin tidak memakai
+  bundle Tailwind publik.
+- Menambahkan alur visual empat tahap pada Impor Master serta kartu hasil data
+  tahun/semester, mapel, guru pengampu, kelas, dan wali kelas.
+- Menambahkan panduan maksud, tujuan, hasil, contoh ASTS/ASAS, pilihan cakupan,
+  dan indikator langsung total bobot pada form Komponen dan Bobot. Status siap
+  hanya muncul ketika total komponen aktif tepat 100%.

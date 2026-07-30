@@ -1,8 +1,86 @@
 <x-filament-panels::page>
     <div class="assessment-master-import space-y-6">
-        {{ $this->form }}
+        <section class="assessment-import-hero">
+            <div class="assessment-import-hero__icon">
+                <x-filament::icon icon="heroicon-o-table-cells" class="h-7 w-7" />
+            </div>
+            <div class="assessment-import-hero__copy">
+                <span class="assessment-import-hero__eyebrow">Impor aman dengan pratinjau</span>
+                <h2>Siapkan hubungan guru, mapel, kelas, dan semester</h2>
+                <p>
+                    Workbook ini bukan untuk memasukkan nilai siswa. Fungsinya membentuk master resmi yang menentukan guru mana mengisi mapel apa pada kelas tertentu.
+                </p>
+            </div>
+        </section>
 
-        <div class="flex flex-wrap gap-3">
+        <section class="assessment-import-flow" aria-labelledby="assessment-import-flow-title">
+            <div class="assessment-import-flow__head">
+                <div>
+                    <span>Urutan kerja</span>
+                    <h2 id="assessment-import-flow-title">Empat tahap sebelum data diterapkan</h2>
+                </div>
+                <p>Data baru tidak langsung masuk ketika file dipilih. Admin selalu melihat hasil pemeriksaan terlebih dahulu.</p>
+            </div>
+            <div class="assessment-import-flow__grid">
+                @foreach ([
+                    ['1', 'Download Template', 'Gunakan workbook resmi agar nama sheet dan urutan kolom sesuai.', 'heroicon-o-arrow-down-tray'],
+                    ['2', 'Isi Data Master', 'Lengkapi tahun, semester, mapel, guru–mapel–kelas, dan wali kelas.', 'heroicon-o-pencil-square'],
+                    ['3', 'Upload dan Periksa', 'Sistem menandai data baru, perubahan, peringatan, dan kesalahan.', 'heroicon-o-magnifying-glass'],
+                    ['4', 'Terapkan Impor', 'Tombol penerapan baru muncul setelah pratinjau tidak memiliki kesalahan.', 'heroicon-o-check-badge'],
+                ] as [$number, $title, $description, $icon])
+                    <article class="assessment-import-step">
+                        <span class="assessment-import-step__number">{{ $number }}</span>
+                        <span class="assessment-import-step__icon">
+                            <x-filament::icon :icon="$icon" class="h-5 w-5" />
+                        </span>
+                        <h3>{{ $title }}</h3>
+                        <p>{{ $description }}</p>
+                    </article>
+                @endforeach
+            </div>
+        </section>
+
+        <section class="assessment-import-output">
+            <div class="assessment-import-output__head">
+                <x-filament::icon icon="heroicon-o-circle-stack" class="h-5 w-5" />
+                <div>
+                    <h2>Data yang dihasilkan</h2>
+                    <p>Setelah diterapkan, data berikut menjadi sumber saat periode ASTS/ASAS dibuka.</p>
+                </div>
+            </div>
+            <div class="assessment-import-output__grid">
+                @foreach ([
+                    ['Tahun & Semester', 'Menentukan periode akademik penilaian.'],
+                    ['Mata Pelajaran', 'Daftar mapel resmi yang dapat dinilai.'],
+                    ['Guru Pengampu', 'Menentukan pemilik input nilai setiap mapel.'],
+                    ['Kelas', 'Menentukan rombel yang menjadi cakupan guru.'],
+                    ['Wali Kelas', 'Menentukan pengisi rekap dan catatan kelas.'],
+                ] as [$title, $description])
+                    <article>
+                        <x-filament::icon icon="heroicon-o-check-circle" class="h-5 w-5" />
+                        <div>
+                            <strong>{{ $title }}</strong>
+                            <span>{{ $description }}</span>
+                        </div>
+                    </article>
+                @endforeach
+            </div>
+        </section>
+
+        <section class="assessment-import-upload">
+            <div class="assessment-import-upload__head">
+                <span class="assessment-import-upload__number">1</span>
+                <div>
+                    <h2>Download template lalu pilih file yang sudah diisi</h2>
+                    <p>Format yang diterima hanya XLSX maksimal 5 MB. File disimpan privat dan dihapus setelah impor berhasil.</p>
+                </div>
+            </div>
+            <div class="assessment-import-upload__form">
+                {{ $this->form }}
+            </div>
+        </section>
+
+        <div class="assessment-import-actions flex flex-wrap gap-3">
             <x-filament::button wire:click="previewImport" icon="heroicon-o-magnifying-glass">
                 Periksa &amp; Buat Pratinjau
             </x-filament::button>
@@ -22,7 +100,7 @@
             @php
                 $summary = $preview['summary'] ?? [];
             @endphp
-            <section class="grid grid-cols-2 gap-3 md:grid-cols-5">
+            <section class="assessment-import-summary grid grid-cols-2 gap-3 md:grid-cols-5">
                 @foreach ([
                     ['Baru', $summary['create'] ?? 0, 'emerald'],
                     ['Perubahan', $summary['update'] ?? 0, 'amber'],
@@ -30,7 +108,7 @@
                     ['Peringatan', $summary['warnings'] ?? 0, 'sky'],
                     ['Kesalahan', $summary['errors'] ?? 0, 'rose'],
                 ] as [$label, $value, $tone])
-                    <article class="min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-gray-900">
+                    <article class="assessment-import-summary__card min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-gray-900">
                         <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ $label }}</p>
                         <p class="mt-1 text-2xl font-bold text-gray-950 dark:text-white">{{ $value }}</p>
                     </article>

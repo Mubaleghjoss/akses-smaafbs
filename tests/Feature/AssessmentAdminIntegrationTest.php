@@ -11,6 +11,7 @@ use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\Assessment\AstsInputScores;
 use App\Filament\Resources\AssessmentAuditLogResource\Pages\ListAssessmentAuditLogs;
 use App\Filament\Resources\AssessmentPeriodResource;
+use App\Filament\Resources\AssessmentSchemeResource;
 use App\Filament\Resources\AssessmentSchemeResource\Pages\CreateAssessmentScheme;
 use App\Models\Assessment\AcademicYear;
 use App\Models\Assessment\AssessmentPeriod;
@@ -348,6 +349,8 @@ class AssessmentAdminIntegrationTest extends TestCase
 
         Livewire::actingAs($admin)
             ->test(AssessmentDashboard::class)
+            ->assertSeeHtml('assessment-dashboard-hero')
+            ->assertSeeHtml('assessment-settings-card')
             ->assertSee('Alur Menyiapkan ASTS dan ASAS')
             ->assertSee('Guru dan Akun Login')
             ->assertSee('Rombel dan Siswa Aktif')
@@ -428,6 +431,10 @@ class AssessmentAdminIntegrationTest extends TestCase
 
         Livewire::actingAs($admin)
             ->test(AssessmentMasterImport::class)
+            ->assertSeeHtml('assessment-import-hero')
+            ->assertSee('Siapkan hubungan guru, mapel, kelas, dan semester')
+            ->assertSee('Empat tahap sebelum data diterapkan')
+            ->assertSee('Data yang dihasilkan')
             ->set('preview', [
                 'summary' => [
                     'create' => 1,
@@ -458,6 +465,28 @@ class AssessmentAdminIntegrationTest extends TestCase
             ->assertSee('1 baris');
     }
 
+    public function test_scheme_guide_and_weight_preview_explain_the_result_before_save(): void
+    {
+        $warning = AssessmentSchemeResource::weightPreview([
+            ['weight' => 40, 'settings' => ['is_active' => true]],
+            ['weight' => 50, 'settings' => ['is_active' => true]],
+            ['weight' => 10, 'settings' => ['is_active' => false]],
+        ])->toHtml();
+
+        $this->assertStringContainsString('assessment-weight-preview is-warning', $warning);
+        $this->assertStringContainsString('90,00%', $warning);
+        $this->assertStringContainsString('Belum siap', $warning);
+
+        $ready = AssessmentSchemeResource::weightPreview([
+            ['weight' => 40, 'settings' => ['is_active' => true]],
+            ['weight' => 60, 'settings' => ['is_active' => true]],
+        ])->toHtml();
+
+        $this->assertStringContainsString('assessment-weight-preview is-ready', $ready);
+        $this->assertStringContainsString('100,00%', $ready);
+        $this->assertStringContainsString('Siap disimpan', $ready);
+    }
+
     public function test_invalid_scheme_component_relationship_is_rolled_back_atomically(): void
     {
         $admin = $this->createUser('assessment-scheme-admin', 'admin');
@@ -485,6 +514,12 @@ class AssessmentAdminIntegrationTest extends TestCase
 
         $component = Livewire::actingAs($admin)
             ->test(CreateAssessmentScheme::class)
+            ->assertSeeHtml('assessment-scheme-guide')
+            ->assertSee('Apa itu Komponen dan Bobot?')
+            ->assertSee('Maksud')
+            ->assertSee('Tujuan')
+            ->assertSee('Hasil')
+            ->assertSee('Total 100%')
             ->fillForm([
                 'assessment_period_id' => $period->getKey(),
                 'name' => 'Skema Bobot Tidak Valid',

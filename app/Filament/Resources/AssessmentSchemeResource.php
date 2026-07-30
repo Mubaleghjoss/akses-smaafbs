@@ -18,10 +18,12 @@ use Filament\Forms;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\View as SchemaView;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
 
 class AssessmentSchemeResource extends Resource
@@ -63,6 +65,8 @@ class AssessmentSchemeResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->schema([
+            SchemaView::make('filament.resources.assessment-scheme-resource.partials.scheme-guide')
+                ->columnSpanFull(),
             Section::make('Cakupan Skema')
                 ->description('Kosongkan mapel atau kelas untuk membuat skema default periode. Skema yang lebih spesifik akan diprioritaskan.')
                 ->columns(['default' => 1, 'md' => 2])
@@ -127,6 +131,11 @@ class AssessmentSchemeResource extends Resource
             Section::make('Komponen Nilai')
                 ->description('Total bobot komponen aktif wajib tepat 100%. Komponen referensi ASTS hanya digunakan pada ASAS.')
                 ->schema([
+                    Forms\Components\Placeholder::make('weight_total_preview')
+                        ->label('Status Total Bobot')
+                        ->content(fn (Get $get): HtmlString => static::weightPreview(
+                            $get('components'),
+                        )),
                     Forms\Components\Repeater::make('components')
                         ->relationship()
                         ->label('Komponen')
@@ -155,6 +164,7 @@ class AssessmentSchemeResource extends Resource
                                 ->suffix('%')
                                 ->minValue(0)
                                 ->maxValue(100)
+                                ->live(onBlur: true)
                                 ->required(),
                             Forms\Components\TextInput::make('maximum_score')
                                 ->label('Skor Maksimum')
@@ -177,6 +187,7 @@ class AssessmentSchemeResource extends Resource
                             Forms\Components\Toggle::make('settings.is_active')
                                 ->label('Komponen Aktif')
                                 ->default(true)
+                                ->live()
                                 ->inline(false),
                         ]),
                 ]),
@@ -217,6 +228,32 @@ class AssessmentSchemeResource extends Resource
                         ->columnSpanFull(),
                 ]),
         ]);
+    }
+
+    public static function weightPreview(mixed $components): HtmlString
+    {
+        $rows = collect(is_array($components) ? $components : []);
+        $activeRows = $rows->filter(
+            fn (mixed $component): bool => is_array($component)
+                && data_get($component, 'settings.is_active', true) !== false,
+        );
+        $total = (float) $activeRows->sum(
+            fn (array $component): float => (float) ($component['weight'] ?? 0),
+        );
+        $ready = $activeRows->isNotEmpty() && abs($total - 100.0) < 0.0001;
+        $formatted = number_format($total, 2, ',', '.');
+        $status = $ready
+            ? 'Siap disimpan. Total bobot komponen aktif sudah tepat 100%.'
+            : 'Belum siap. Ubah bobot komponen aktif sampai totalnya tepat 100%.';
+        $class = $ready ? 'is-ready' : 'is-warning';
+
+        return new HtmlString(
+            '<div class="assessment-weight-preview '.$class.'">'
+            .'<span>Total saat ini</span>'
+            .'<strong>'.$formatted.'%</strong>'
+            .'<small>'.$status.'</small>'
+            .'</div>',
+        );
     }
 
     public static function table(Table $table): Table

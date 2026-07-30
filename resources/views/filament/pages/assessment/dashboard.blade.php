@@ -6,8 +6,8 @@
     @endphp
 
     <div class="space-y-6">
-        <section class="overflow-hidden rounded-2xl border border-primary-200 bg-gradient-to-br from-primary-50 via-white to-white shadow-sm dark:border-primary-500/20 dark:from-primary-950/30 dark:via-gray-900 dark:to-gray-900">
-            <div class="grid gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,24rem)] lg:items-center">
+        <section class="assessment-dashboard-hero overflow-hidden rounded-2xl border border-primary-200 bg-gradient-to-br from-primary-50 via-white to-white shadow-sm dark:border-primary-500/20 dark:from-primary-950/30 dark:via-gray-900 dark:to-gray-900">
+            <div class="assessment-dashboard-hero__layout grid gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,24rem)] lg:items-center">
                 <div class="min-w-0">
                     <span class="inline-flex items-center gap-2 rounded-full bg-primary-100 px-3 py-1 text-xs font-bold text-primary-700 dark:bg-primary-500/15 dark:text-primary-300">
                         <x-filament::icon icon="heroicon-o-cog-6-tooth" class="h-4 w-4" />
@@ -19,7 +19,7 @@
                     </p>
                 </div>
 
-                <label class="block min-w-0 rounded-xl border border-gray-200 bg-white/90 p-3 shadow-sm dark:border-white/10 dark:bg-gray-950/70">
+                <label class="assessment-dashboard-period block min-w-0 rounded-xl border border-gray-200 bg-white/90 p-3 shadow-sm dark:border-white/10 dark:bg-gray-950/70">
                     <span class="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Periode yang dipantau</span>
                     <select wire:model.live="periodId" class="mt-2 w-full min-w-0 rounded-lg border-gray-300 text-sm dark:border-white/10 dark:bg-gray-950">
                         @forelse ($this->getPeriodOptions() as $id => $label)
@@ -105,7 +105,7 @@
                 <p class="mt-1 text-sm text-gray-500">Kartu menampilkan jumlah data dan membuka halaman pengelolaan yang sesuai.</p>
             </div>
 
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div class="assessment-settings-grid grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 @foreach ($settingCards as $card)
                     @php
                         $toneClasses = match ($card['tone']) {
@@ -116,9 +116,9 @@
                             default => 'bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-300',
                         };
                     @endphp
-                    <article class="flex min-w-0 flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition sm:p-5 dark:border-white/10 dark:bg-gray-900 {{ $card['url'] ? 'hover:-translate-y-0.5 hover:border-primary-400 hover:shadow-md' : 'opacity-70' }}">
+                    <article class="assessment-settings-card flex min-w-0 flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition sm:p-5 dark:border-white/10 dark:bg-gray-900 {{ $card['url'] ? 'is-actionable hover:-translate-y-0.5 hover:border-primary-400 hover:shadow-md' : 'is-restricted opacity-70' }}">
                         <div class="flex min-w-0 items-start justify-between gap-3">
-                            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl {{ $toneClasses }}">
+                            <span class="assessment-settings-card__icon flex h-11 w-11 shrink-0 items-center justify-center rounded-xl {{ $toneClasses }}">
                                 <x-filament::icon :icon="$card['icon']" class="h-6 w-6" />
                             </span>
                             <div class="min-w-0 text-right">
@@ -131,7 +131,7 @@
                         <p class="mt-2 flex-1 break-words text-sm leading-6 text-gray-600 dark:text-gray-300">{{ $card['description'] }}</p>
 
                         @if ($card['url'])
-                            <a href="{{ $card['url'] }}" wire:navigate class="mt-5 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:ring-offset-gray-900">
+                            <a href="{{ $card['url'] }}" wire:navigate class="assessment-settings-card__action mt-5 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:ring-offset-gray-900">
                                 Buka {{ $card['title'] }}
                                 <x-filament::icon icon="heroicon-o-arrow-right" class="h-4 w-4" />
                             </a>
