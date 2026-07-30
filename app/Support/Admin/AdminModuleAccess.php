@@ -2,23 +2,25 @@
 
 namespace App\Support\Admin;
 
-use App\Filament\Pages\DashboardProker;
 use App\Filament\Pages\Assessment\AsasHomeroomRecap;
+use App\Filament\Pages\Assessment\AsasHub;
 use App\Filament\Pages\Assessment\AsasInputScores;
 use App\Filament\Pages\Assessment\AsasReports;
 use App\Filament\Pages\Assessment\AsasSubmissionStatus;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Assessment\AssessmentMasterImport;
 use App\Filament\Pages\Assessment\AstsHomeroomRecap;
+use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\Assessment\AstsInputScores;
 use App\Filament\Pages\Assessment\AstsReports;
 use App\Filament\Pages\Assessment\AstsSubmissionStatus;
+use App\Filament\Pages\DashboardProker;
 use App\Filament\Pages\SarprasStickerSettings;
-use App\Filament\Resources\BeritaResource;
 use App\Filament\Resources\AssessmentAuditLogResource;
 use App\Filament\Resources\AssessmentPeriodResource;
 use App\Filament\Resources\AssessmentReportTemplateResource;
 use App\Filament\Resources\AssessmentSchemeResource;
+use App\Filament\Resources\BeritaResource;
 use App\Filament\Resources\BerkasGuruResource;
 use App\Filament\Resources\BerkasSiswaResource;
 use App\Filament\Resources\BoardingArsipMtResource;
@@ -114,6 +116,8 @@ class AdminModuleAccess
      */
     protected const ADDITIONAL_MODULE_CLASSES = [
         'penilaian' => [
+            AstsHub::class,
+            AsasHub::class,
             AstsInputScores::class,
             AstsSubmissionStatus::class,
             AstsHomeroomRecap::class,
@@ -435,5 +439,3 @@ class AdminModuleAccess
             ->all();
     }
 }
-
-

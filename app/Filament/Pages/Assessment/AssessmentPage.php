@@ -3,6 +3,7 @@
 namespace App\Filament\Pages\Assessment;
 
 use App\Models\User;
+use App\Support\Admin\AdminSchoolNavigation;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Schema;
 
@@ -14,7 +15,8 @@ abstract class AssessmentPage extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        return static::canAccess();
+        return static::canAccess()
+            && AdminSchoolNavigation::shouldRegisterAssessmentClass(static::class);
     }
 
     public static function canAccess(): bool

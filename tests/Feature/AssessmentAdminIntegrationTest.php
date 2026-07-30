@@ -4,12 +4,13 @@ namespace Tests\Feature;
 
 use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssessmentType;
-use App\Filament\Pages\Assessment\AsasInputScores;
+use App\Filament\Pages\Assessment\AsasHub;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Assessment\AssessmentMasterImport;
+use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\Assessment\AstsInputScores;
-use App\Filament\Resources\AssessmentPeriodResource;
 use App\Filament\Resources\AssessmentAuditLogResource\Pages\ListAssessmentAuditLogs;
+use App\Filament\Resources\AssessmentPeriodResource;
 use App\Filament\Resources\AssessmentSchemeResource\Pages\CreateAssessmentScheme;
 use App\Models\Assessment\AcademicYear;
 use App\Models\Assessment\AssessmentPeriod;
@@ -30,11 +31,11 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
+use Livewire\Livewire;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Spatie\Permission\Models\Role;
-use Livewire\Livewire;
 use Tests\Feature\Concerns\BootstrapsUserAndPermissionTables;
 use Tests\TestCase;
 
@@ -235,19 +236,19 @@ class AssessmentAdminIntegrationTest extends TestCase
         );
         $this->assertSame(
             AdminSchoolNavigation::GROUP,
-            AdminSchoolNavigation::effectiveGroupForClass(AstsInputScores::class),
+            AdminSchoolNavigation::effectiveGroupForClass(AstsHub::class),
         );
         $this->assertSame(
             AdminSchoolNavigation::GROUP,
-            AdminSchoolNavigation::effectiveGroupForClass(AssessmentPeriodResource::class),
+            AdminSchoolNavigation::effectiveGroupForClass(AssessmentDashboard::class),
         );
         $assessmentParents = collect(AdminSchoolNavigation::parentNavigationItems([
-            AstsInputScores::class,
-            AsasInputScores::class,
-            AssessmentPeriodResource::class,
+            AssessmentDashboard::class,
+            AstsHub::class,
+            AsasHub::class,
         ]))->keyBy(fn ($item): string => $item->getLabel());
         $this->assertSame(
-            ['ASTS', 'ASAS', 'Pengaturan Penilaian'],
+            ['Penilaian'],
             $assessmentParents->keys()->all(),
         );
         $this->assertTrue(
@@ -257,6 +258,14 @@ class AssessmentAdminIntegrationTest extends TestCase
         );
         $this->assertContains(
             AssessmentDashboard::class,
+            AdminModuleAccess::itemClassesForLevels(['penilaian' => AdminModuleAccess::VIEW]),
+        );
+        $this->assertContains(
+            AstsHub::class,
+            AdminModuleAccess::itemClassesForLevels(['penilaian' => AdminModuleAccess::VIEW]),
+        );
+        $this->assertContains(
+            AsasHub::class,
             AdminModuleAccess::itemClassesForLevels(['penilaian' => AdminModuleAccess::VIEW]),
         );
         $this->assertContains(
@@ -270,7 +279,11 @@ class AssessmentAdminIntegrationTest extends TestCase
 
         $this->actingAs($viewer);
         $this->assertTrue(AssessmentDashboard::canAccess());
+        $this->assertTrue(AssessmentDashboard::shouldRegisterNavigation());
+        $this->assertTrue(AstsHub::shouldRegisterNavigation());
+        $this->assertTrue(AsasHub::shouldRegisterNavigation());
         $this->assertFalse(AstsInputScores::canAccess());
+        $this->assertFalse(AstsInputScores::shouldRegisterNavigation());
         $this->assertFalse(
             AssessmentPeriodResource::canViewAny(),
             'Akses module-level view tidak boleh membuka data resource pengaturan periode.',
@@ -332,6 +345,29 @@ class AssessmentAdminIntegrationTest extends TestCase
             'no-store',
             (string) $response->headers->get('cache-control'),
         );
+
+        Livewire::actingAs($admin)
+            ->test(AssessmentDashboard::class)
+            ->assertSee('Menu Pengaturan')
+            ->assertSee('Periode Penilaian')
+            ->assertSee('Komponen dan Bobot')
+            ->assertSee('Template Rapor');
+
+        Livewire::actingAs($admin)
+            ->test(AstsHub::class)
+            ->assertSee('Semua kebutuhan ASTS dalam satu halaman')
+            ->assertSee('Input Nilai Saya')
+            ->assertSee('Status Pengumpulan')
+            ->assertSee('Rekap Wali Kelas')
+            ->assertSee('Cetak Rapor ASTS');
+
+        Livewire::actingAs($admin)
+            ->test(AsasHub::class)
+            ->assertSee('Semua kebutuhan ASAS dalam satu halaman')
+            ->assertSee('Input Nilai Saya')
+            ->assertSee('Status Pengumpulan')
+            ->assertSee('Rekap Wali Kelas')
+            ->assertSee('Cetak Rapor Semester');
 
         $year = AcademicYear::query()->create([
             'code' => '2026-2027',

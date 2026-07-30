@@ -8,6 +8,7 @@ use App\Enums\Assessment\AssessmentType;
 use App\Enums\Assessment\AssignmentStatus;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodAssignment;
+use App\Models\Assessment\AssessmentPeriodHomeroom;
 use App\Models\Assessment\AssessmentScore;
 use App\Models\Assessment\StudentSubjectResult;
 use App\Models\User;
@@ -74,7 +75,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
     {
         $user = auth()->user();
 
-        return static::canAccess()
+        return parent::shouldRegisterNavigation()
             && $user instanceof User
             && (
                 $user->hasFullAdminAccess()
@@ -172,6 +173,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
 
         if (! $assignment) {
             $this->assignmentId = null;
+
             return;
         }
 
@@ -252,6 +254,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
 
         if (! $assignment) {
             Notification::make()->title('Pilih penugasan terlebih dahulu')->warning()->send();
+
             return false;
         }
 
@@ -362,7 +365,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
         }
 
         $homeroomRombelIds = $user->can('penilaian.homeroom') && $this->periodId
-            ? \App\Models\Assessment\AssessmentPeriodHomeroom::query()
+            ? AssessmentPeriodHomeroom::query()
                 ->where('assessment_period_id', $this->periodId)
                 ->where('teacher_id', $user->guru_tendik_id)
                 ->pluck('assessment_period_rombel_id')

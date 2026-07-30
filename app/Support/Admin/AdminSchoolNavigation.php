@@ -2,23 +2,12 @@
 
 namespace App\Support\Admin;
 
-use App\Filament\Pages\DashboardProker;
-use App\Filament\Pages\Assessment\AsasHomeroomRecap;
-use App\Filament\Pages\Assessment\AsasInputScores;
-use App\Filament\Pages\Assessment\AsasReports;
-use App\Filament\Pages\Assessment\AsasSubmissionStatus;
+use App\Filament\Pages\Assessment\AsasHub;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
-use App\Filament\Pages\Assessment\AssessmentMasterImport;
-use App\Filament\Pages\Assessment\AstsHomeroomRecap;
-use App\Filament\Pages\Assessment\AstsInputScores;
-use App\Filament\Pages\Assessment\AstsReports;
-use App\Filament\Pages\Assessment\AstsSubmissionStatus;
+use App\Filament\Pages\Assessment\AstsHub;
+use App\Filament\Pages\DashboardProker;
 use App\Filament\Pages\SarprasStickerSettings;
 use App\Filament\Resources\BeritaResource;
-use App\Filament\Resources\AssessmentAuditLogResource;
-use App\Filament\Resources\AssessmentPeriodResource;
-use App\Filament\Resources\AssessmentReportTemplateResource;
-use App\Filament\Resources\AssessmentSchemeResource;
 use App\Filament\Resources\BerkasGuruResource;
 use App\Filament\Resources\BerkasSiswaResource;
 use App\Filament\Resources\CalendarEventResource;
@@ -29,14 +18,14 @@ use App\Filament\Resources\EventTimelineResource;
 use App\Filament\Resources\GaleriResource;
 use App\Filament\Resources\GuruTendikResource;
 use App\Filament\Resources\JenisBerkasResource;
-use App\Filament\Resources\PrestasiResource;
-use App\Filament\Resources\ProfilSekolahResource;
-use App\Filament\Resources\ProkerBidangResource;
-use App\Filament\Resources\ProkerResource;
 use App\Filament\Resources\PerpustakaanBukuResource;
 use App\Filament\Resources\PerpustakaanKategoriResource;
 use App\Filament\Resources\PerpustakaanLemariResource;
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource;
+use App\Filament\Resources\PrestasiResource;
+use App\Filament\Resources\ProfilSekolahResource;
+use App\Filament\Resources\ProkerBidangResource;
+use App\Filament\Resources\ProkerResource;
 use App\Filament\Resources\RombelResource;
 use App\Filament\Resources\SarprasActivityResource;
 use App\Filament\Resources\SarprasBospInventoryResource;
@@ -69,9 +58,7 @@ class AdminSchoolNavigation
         'Agenda' => ['icon' => 'heroicon-o-calendar-days', 'sort' => 190],
         'Konten' => ['icon' => 'heroicon-o-newspaper', 'sort' => 200],
         'Perpustakaan' => ['icon' => 'heroicon-o-book-open', 'sort' => 210],
-        'ASTS' => ['icon' => 'heroicon-o-document-check', 'sort' => 10],
-        'ASAS' => ['icon' => 'heroicon-o-academic-cap', 'sort' => 20],
-        'Pengaturan Penilaian' => ['icon' => 'heroicon-o-cog-6-tooth', 'sort' => 30],
+        'Penilaian' => ['icon' => 'heroicon-o-academic-cap', 'sort' => 115],
     ];
 
     /**
@@ -109,19 +96,9 @@ class AdminSchoolNavigation
         PerpustakaanKategoriResource::class => 'Perpustakaan',
         PerpustakaanLemariResource::class => 'Perpustakaan',
         PerpustakaanLiterasiMaterialResource::class => 'Perpustakaan',
-        AstsInputScores::class => 'ASTS',
-        AstsSubmissionStatus::class => 'ASTS',
-        AstsHomeroomRecap::class => 'ASTS',
-        AstsReports::class => 'ASTS',
-        AsasInputScores::class => 'ASAS',
-        AsasSubmissionStatus::class => 'ASAS',
-        AsasHomeroomRecap::class => 'ASAS',
-        AsasReports::class => 'ASAS',
-        AssessmentPeriodResource::class => 'Pengaturan Penilaian',
-        AssessmentSchemeResource::class => 'Pengaturan Penilaian',
-        AssessmentReportTemplateResource::class => 'Pengaturan Penilaian',
-        AssessmentAuditLogResource::class => 'Pengaturan Penilaian',
-        AssessmentMasterImport::class => 'Pengaturan Penilaian',
+        AssessmentDashboard::class => 'Penilaian',
+        AstsHub::class => 'Penilaian',
+        AsasHub::class => 'Penilaian',
     ];
 
     /**
@@ -129,12 +106,23 @@ class AdminSchoolNavigation
      */
     protected const CLASS_GROUP_MAP = [
         AssessmentDashboard::class => self::GROUP,
+        AstsHub::class => self::GROUP,
+        AsasHub::class => self::GROUP,
     ];
 
     public static function shouldClassify(string $class): bool
     {
         return array_key_exists($class, self::CLASS_PARENT_MAP)
             || array_key_exists($class, self::CLASS_GROUP_MAP);
+    }
+
+    public static function shouldRegisterAssessmentClass(string $class): bool
+    {
+        return in_array($class, [
+            AssessmentDashboard::class,
+            AstsHub::class,
+            AsasHub::class,
+        ], true);
     }
 
     public static function effectiveGroupForClass(string $class): string|\UnitEnum|null

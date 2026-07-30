@@ -3,6 +3,7 @@
 namespace App\Filament\Concerns;
 
 use App\Models\User;
+use App\Support\Admin\AdminSchoolNavigation;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
@@ -11,7 +12,8 @@ trait HasAssessmentPermissions
 {
     public static function shouldRegisterNavigation(): bool
     {
-        return static::canViewAny();
+        return static::canViewAny()
+            && AdminSchoolNavigation::shouldRegisterAssessmentClass(static::class);
     }
 
     public static function canAccess(): bool

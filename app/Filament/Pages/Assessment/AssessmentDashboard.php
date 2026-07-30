@@ -2,11 +2,18 @@
 
 namespace App\Filament\Pages\Assessment;
 
-use App\Enums\Assessment\AssignmentStatus;
 use App\Enums\Assessment\AssessmentType;
+use App\Enums\Assessment\AssignmentStatus;
+use App\Filament\Resources\AssessmentAuditLogResource;
+use App\Filament\Resources\AssessmentPeriodResource;
+use App\Filament\Resources\AssessmentReportTemplateResource;
+use App\Filament\Resources\AssessmentSchemeResource;
 use App\Models\Assessment\AcademicYear;
 use App\Models\Assessment\AssessmentPeriod;
+use App\Models\Assessment\AssessmentPeriodHomeroom;
+use App\Models\Assessment\AssessmentScheme;
 use App\Models\Assessment\AuditLog;
+use App\Models\Assessment\ReportTemplate;
 use App\Models\Assessment\Subject;
 use App\Models\Assessment\TeachingAssignment;
 use App\Models\User;
@@ -16,13 +23,13 @@ use Livewire\Attributes\Url;
 
 class AssessmentDashboard extends AssessmentPage
 {
-    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-chart-bar-square';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-cog-6-tooth';
 
-    protected static ?string $navigationLabel = 'Dashboard Penilaian';
+    protected static ?string $navigationLabel = 'Pengaturan Penilaian';
 
     protected static ?string $slug = 'penilaian';
 
-    protected static ?int $navigationSort = 0;
+    protected static ?int $navigationSort = 1;
 
     protected string $view = 'filament.pages.assessment.dashboard';
 
@@ -39,7 +46,7 @@ class AssessmentDashboard extends AssessmentPage
 
     public function getTitle(): string|Htmlable
     {
-        return 'Dashboard Penilaian';
+        return 'Pengaturan Penilaian';
     }
 
     public function getSubheading(): string|Htmlable|null
@@ -58,6 +65,60 @@ class AssessmentDashboard extends AssessmentPage
                 return [$period->getKey() => "{$type} · {$period->name}"];
             })
             ->all();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function getSettingCards(): array
+    {
+        return [
+            [
+                'title' => 'Periode Penilaian',
+                'description' => 'Buat periode ASTS atau ASAS, pilih kelas, jalankan preflight, dan atur tahap pengumpulan.',
+                'icon' => 'heroicon-o-calendar-days',
+                'tone' => 'primary',
+                'value' => AssessmentPeriodResource::canViewAny() ? AssessmentPeriod::query()->count() : '—',
+                'caption' => 'periode tersedia',
+                'url' => AssessmentPeriodResource::canViewAny() ? AssessmentPeriodResource::getUrl() : null,
+            ],
+            [
+                'title' => 'Komponen dan Bobot',
+                'description' => 'Atur komponen nilai, bobot 100%, KKM, predikat, dan sumber nilai ASTS untuk ASAS.',
+                'icon' => 'heroicon-o-adjustments-horizontal',
+                'tone' => 'success',
+                'value' => AssessmentSchemeResource::canViewAny() ? AssessmentScheme::query()->count() : '—',
+                'caption' => 'skema penilaian',
+                'url' => AssessmentSchemeResource::canViewAny() ? AssessmentSchemeResource::getUrl() : null,
+            ],
+            [
+                'title' => 'Template Rapor',
+                'description' => 'Kelola identitas dokumen dan template A4 yang dipakai untuk snapshot rapor privat.',
+                'icon' => 'heroicon-o-document-text',
+                'tone' => 'info',
+                'value' => AssessmentReportTemplateResource::canViewAny() ? ReportTemplate::query()->count() : '—',
+                'caption' => 'template rapor',
+                'url' => AssessmentReportTemplateResource::canViewAny() ? AssessmentReportTemplateResource::getUrl() : null,
+            ],
+            [
+                'title' => 'Impor Master Resmi',
+                'description' => 'Unduh workbook, pratinjau guru, mapel, rombel, dan wali kelas sebelum menerapkan data.',
+                'icon' => 'heroicon-o-arrow-up-tray',
+                'tone' => 'warning',
+                'value' => 'Excel',
+                'caption' => 'preview sebelum apply',
+                'url' => AssessmentMasterImport::canAccess() ? AssessmentMasterImport::getUrl() : null,
+            ],
+            [
+                'title' => 'Log Perubahan',
+                'description' => 'Telusuri perubahan periode, nilai, verifikasi, penerbitan, dan alasan koreksi.',
+                'icon' => 'heroicon-o-clipboard-document-check',
+                'tone' => 'gray',
+                'value' => AssessmentAuditLogResource::canViewAny() ? AuditLog::query()->count() : '—',
+                'caption' => 'aktivitas tercatat',
+                'url' => AssessmentAuditLogResource::canViewAny() ? AssessmentAuditLogResource::getUrl() : null,
+            ],
+        ];
     }
 
     public function getReadiness(): array
@@ -210,7 +271,7 @@ class AssessmentDashboard extends AssessmentPage
         }
 
         $homeroomRombelIds = $user->can('penilaian.homeroom')
-            ? \App\Models\Assessment\AssessmentPeriodHomeroom::query()
+            ? AssessmentPeriodHomeroom::query()
                 ->where('assessment_period_id', $periodId)
                 ->where('teacher_id', $user->guru_tendik_id)
                 ->pluck('assessment_period_rombel_id')

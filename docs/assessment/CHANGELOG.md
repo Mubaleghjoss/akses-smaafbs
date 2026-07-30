@@ -20,3 +20,10 @@
   terpisah.
 - Memperbaiki kompilasi Blade pada rincian pratinjau Impor Master agar admin
   dapat membuka dan memeriksa hasil workbook tanpa error 500.
+- Merapikan navigasi menjadi satu induk **Penilaian** di dalam Manajemen
+  Sekolah dengan tiga halaman hub: Pengaturan Penilaian, ASTS, dan ASAS.
+  Halaman rinci tetap tersedia melalui kartu responsif dan tidak lagi memenuhi
+  sidebar.
+- Mengubah ringkasan pengaturan serta pekerjaan ASTS/ASAS menjadi kartu
+  responsif dengan ikon, status, jumlah data, dan tombol tindakan yang aman
+  pada layar HP.
