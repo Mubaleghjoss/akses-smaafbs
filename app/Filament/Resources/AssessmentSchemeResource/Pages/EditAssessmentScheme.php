@@ -48,9 +48,12 @@ class EditAssessmentScheme extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
+        $components = data_get($this->form->getRawState(), 'components', []);
+
         return AssessmentSchemeResource::validateSchemeData(
             $data,
             (int) $this->record->getKey(),
+            is_array($components) ? $components : [],
         );
     }
 

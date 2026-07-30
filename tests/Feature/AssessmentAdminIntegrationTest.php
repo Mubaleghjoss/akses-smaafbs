@@ -15,6 +15,7 @@ use App\Filament\Resources\AssessmentSchemeResource;
 use App\Filament\Resources\AssessmentSchemeResource\Pages\CreateAssessmentScheme;
 use App\Models\Assessment\AcademicYear;
 use App\Models\Assessment\AssessmentPeriod;
+use App\Models\Assessment\AssessmentScheme;
 use App\Models\Assessment\AuditLog;
 use App\Models\Assessment\HomeroomAssignment;
 use App\Models\Assessment\Semester;
@@ -485,6 +486,71 @@ class AssessmentAdminIntegrationTest extends TestCase
         $this->assertStringContainsString('assessment-weight-preview is-ready', $ready);
         $this->assertStringContainsString('100,00%', $ready);
         $this->assertStringContainsString('Siap disimpan', $ready);
+    }
+
+    public function test_scheme_with_one_relationship_component_is_created_successfully(): void
+    {
+        $admin = $this->createUser('assessment-valid-scheme-admin', 'admin');
+        $year = AcademicYear::query()->create([
+            'code' => '2029-2030',
+            'name' => 'Tahun Pelajaran 2029/2030',
+            'is_active' => true,
+        ]);
+        $semester = Semester::query()->create([
+            'assessment_academic_year_id' => $year->getKey(),
+            'code' => '2029-2030-GANJIL',
+            'name' => 'Semester Ganjil',
+            'is_active' => true,
+        ]);
+        $period = AssessmentPeriod::query()->create([
+            'assessment_academic_year_id' => $year->getKey(),
+            'assessment_semester_id' => $semester->getKey(),
+            'code' => 'ASTS-SKEMA-VALID',
+            'name' => 'ASTS Skema Valid',
+            'type' => AssessmentType::ASTS,
+            'status' => AssessmentPeriodStatus::DRAFT,
+            'settings' => ['rombel_ids' => []],
+            'created_by' => $admin->getKey(),
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(CreateAssessmentScheme::class)
+            ->fillForm([
+                'assessment_period_id' => $period->getKey(),
+                'name' => 'Skema Satu Komponen',
+                'rounding_precision' => 2,
+                'minimum_score' => 0,
+                'maximum_score' => 100,
+                'is_active' => true,
+                'settings' => [
+                    'kkm' => 75,
+                    'fallback_predicate' => 'D',
+                    'predicates' => [],
+                ],
+                'components' => [[
+                    'code' => 'UTAMA',
+                    'name' => 'Nilai Utama',
+                    'domain' => 'Kompetensi Utama',
+                    'weight' => 100,
+                    'maximum_score' => 100,
+                    'score_source' => 'manual',
+                    'is_required' => true,
+                    'settings' => ['is_active' => true],
+                ]],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $scheme = AssessmentScheme::query()
+            ->where('name', 'Skema Satu Komponen')
+            ->firstOrFail();
+
+        $this->assertDatabaseHas('assessment_components', [
+            'assessment_scheme_id' => $scheme->getKey(),
+            'code' => 'UTAMA',
+            'name' => 'Nilai Utama',
+            'weight' => 100,
+        ]);
     }
 
     public function test_invalid_scheme_component_relationship_is_rolled_back_atomically(): void

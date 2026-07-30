@@ -327,8 +327,14 @@ class AssessmentSchemeResource extends Resource
             ->bulkActions([]);
     }
 
-    public static function validateSchemeData(array $data, ?int $ignoreSchemeId = null): array
-    {
+    /**
+     * @param  array<int|string, mixed>|null  $relationshipComponents
+     */
+    public static function validateSchemeData(
+        array $data,
+        ?int $ignoreSchemeId = null,
+        ?array $relationshipComponents = null,
+    ): array {
         $period = AssessmentPeriod::query()->find((int) ($data['assessment_period_id'] ?? 0));
 
         if (! $period || $period->status !== AssessmentPeriodStatus::DRAFT) {
@@ -410,7 +416,11 @@ class AssessmentSchemeResource extends Resource
             ]);
         }
 
-        $components = collect($data['components'] ?? []);
+        // A relationship repeater is intentionally excluded from the dehydrated
+        // model payload by Filament. Create/Edit pages pass its raw relationship
+        // state separately so server validation sees the same rows as the UI.
+        $components = collect($relationshipComponents ?? ($data['components'] ?? []))
+            ->values();
 
         if ($components->isEmpty()) {
             throw ValidationException::withMessages(['data.components' => 'Skema wajib memiliki minimal satu komponen.']);

@@ -42,3 +42,6 @@
 - Menambahkan panduan maksud, tujuan, hasil, contoh ASTS/ASAS, pilihan cakupan,
   dan indikator langsung total bobot pada form Komponen dan Bobot. Status siap
   hanya muncul ketika total komponen aktif tepat 100%.
+- Memperbaiki validasi pembuatan dan perubahan skema agar membaca komponen dari
+  raw state repeater relasi Filament. Satu atau beberapa komponen yang sudah
+  terlihat pada form tidak lagi keliru dianggap kosong saat disimpan.

@@ -2,8 +2,8 @@
 
 namespace App\Filament\Resources\AssessmentSchemeResource\Pages;
 
-use App\Filament\Resources\AssessmentSchemeResource;
 use App\Enums\Assessment\AssessmentPeriodStatus;
+use App\Filament\Resources\AssessmentSchemeResource;
 use App\Models\Assessment\AssessmentPeriod;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Validation\ValidationException;
@@ -31,6 +31,11 @@ class CreateAssessmentScheme extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        return AssessmentSchemeResource::validateSchemeData($data);
+        $components = data_get($this->form->getRawState(), 'components', []);
+
+        return AssessmentSchemeResource::validateSchemeData(
+            $data,
+            relationshipComponents: is_array($components) ? $components : [],
+        );
     }
 }
