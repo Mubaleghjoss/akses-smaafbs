@@ -119,7 +119,8 @@ class AssessmentTeacherExperienceTest extends TestCase
         $this->actingAs($teacher)
             ->get(AstsSubmissionStatus::getUrl(['period' => $period->getKey()]))
             ->assertOk()
-            ->assertSee('Status berlaku per mapel dan kelas');
+            ->assertSee('Status Penugasan')
+            ->assertSeeHtml('assessment-status-data-card');
 
         Livewire::actingAs($teacher)
             ->test(AstsHub::class)
@@ -153,9 +154,16 @@ class AssessmentTeacherExperienceTest extends TestCase
             ->set('periodId', $period->getKey())
             ->set('homeroomId', $homeroom->getKey())
             ->call('loadReports')
-            ->assertSee('Cakupan Saya')
-            ->assertSee('Wali Kelas')
-            ->assertSee('X 1');
+            ->assertSee('Isi Massal Rekap Wali Kelas')
+            ->assertSee('X 1')
+            ->set('selectedStudentIds', [$studentId])
+            ->set('bulkField', 'homeroom_note')
+            ->set('bulkValue', 'Terus tingkatkan kedisiplinan dan tanggung jawab.')
+            ->call('applyBulkValue')
+            ->assertSet(
+                "reportRows.{$studentId}.homeroom_note",
+                'Terus tingkatkan kedisiplinan dan tanggung jawab.',
+            );
 
         $this->assertSame(AssignmentStatus::DRAFT, $assignment->refresh()->status);
         $this->assertSame(AssignmentStatus::SUBMITTED, $submittedAssignment->refresh()->status);

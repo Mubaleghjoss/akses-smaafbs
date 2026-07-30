@@ -44,6 +44,15 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
 
     public ?array $homeroomMeta = null;
 
+    /** @var array<int, int|string> */
+    public array $selectedStudentIds = [];
+
+    public string $bulkField = 'homeroom_note';
+
+    public string $bulkValue = '';
+
+    public bool $bulkFillEmptyOnly = true;
+
     public static function canAccess(): bool
     {
         $user = auth()->user();
@@ -118,6 +127,7 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
     {
         $this->reportRows = [];
         $this->homeroomMeta = null;
+        $this->selectedStudentIds = [];
 
         $homeroom = $this->homeroomId ? $this->homeroomQuery()->with('period')->find($this->homeroomId) : null;
         if (! $homeroom) {
@@ -165,6 +175,135 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
                     AssessmentPeriodStatus::VERIFICATION,
                 ], true),
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function getBulkFieldOptions(): array
+    {
+        $options = [
+            'sick_days' => 'Jumlah Hari Sakit',
+            'permission_days' => 'Jumlah Hari Izin',
+            'absent_days' => 'Jumlah Hari Alpa',
+            'extracurricular' => 'Ekstrakurikuler',
+            'achievement' => 'Prestasi',
+            'homeroom_note' => 'Catatan Wali Kelas',
+        ];
+
+        if (data_get($this->homeroomMeta, 'collect_promotion_status')) {
+            $options['promotion_status'] = 'Status Semester';
+        }
+
+        return $options;
+    }
+
+    public function selectAllStudents(): void
+    {
+        $this->selectedStudentIds = array_map('intval', array_keys($this->reportRows));
+    }
+
+    public function clearStudentSelection(): void
+    {
+        $this->selectedStudentIds = [];
+    }
+
+    public function applyBulkValue(): void
+    {
+        if (! data_get($this->homeroomMeta, 'editable')) {
+            Notification::make()
+                ->title('Rekap kelas ini hanya dapat ditinjau')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $studentIds = collect($this->selectedStudentIds)
+            ->map(fn (mixed $id): int => (int) $id)
+            ->filter(fn (int $id): bool => array_key_exists($id, $this->reportRows))
+            ->unique()
+            ->values();
+
+        if ($studentIds->isEmpty()) {
+            Notification::make()
+                ->title('Pilih siswa terlebih dahulu')
+                ->body('Centang siswa yang akan menerima isian massal.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $fieldOptions = $this->getBulkFieldOptions();
+        if (! array_key_exists($this->bulkField, $fieldOptions)) {
+            Notification::make()->title('Kolom bulk tidak valid')->danger()->send();
+
+            return;
+        }
+
+        $value = trim($this->bulkValue);
+        if ($value === '') {
+            Notification::make()
+                ->title('Nilai bulk belum diisi')
+                ->body('Masukkan angka atau teks yang akan diterapkan.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $numericFields = ['sick_days', 'permission_days', 'absent_days'];
+        if (in_array($this->bulkField, $numericFields, true)) {
+            if (! ctype_digit($value) || (int) $value > 366) {
+                Notification::make()
+                    ->title('Jumlah hari tidak valid')
+                    ->body('Masukkan angka bulat antara 0 sampai 366.')
+                    ->danger()
+                    ->send();
+
+                return;
+            }
+
+            $value = (int) $value;
+        } else {
+            $maximum = match ($this->bulkField) {
+                'homeroom_note' => 2000,
+                'promotion_status' => 50,
+                default => 4000,
+            };
+            if (mb_strlen($value) > $maximum) {
+                Notification::make()
+                    ->title('Teks terlalu panjang')
+                    ->body("Kolom {$fieldOptions[$this->bulkField]} maksimal {$maximum} karakter.")
+                    ->danger()
+                    ->send();
+
+                return;
+            }
+        }
+
+        $changed = 0;
+        foreach ($studentIds as $studentId) {
+            $current = data_get($this->reportRows, "{$studentId}.{$this->bulkField}");
+            $isEmpty = in_array($this->bulkField, $numericFields, true)
+                ? (int) $current === 0
+                : trim((string) $current) === '';
+
+            if ($this->bulkFillEmptyOnly && ! $isEmpty) {
+                continue;
+            }
+
+            $this->reportRows[$studentId][$this->bulkField] = $value;
+            $changed++;
+        }
+
+        Notification::make()
+            ->title("Diterapkan ke {$changed} siswa")
+            ->body('Perubahan masih berada di formulir. Tekan Simpan Rekap Wali Kelas agar tersimpan ke server.')
+            ->success()
+            ->duration(12000)
+            ->send();
     }
 
     public function saveReports(): void

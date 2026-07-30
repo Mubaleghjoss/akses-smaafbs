@@ -1,56 +1,117 @@
 <x-filament-panels::page>
-    <div class="space-y-5">
-        @include('filament.pages.assessment.partials.type-navigation')
+    <div class="assessment-homeroom-page">
+        @include('filament.pages.assessment.partials.type-navigation', ['showAccess' => false])
 
-        <section class="grid gap-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-gray-900 md:grid-cols-2">
-            <label class="min-w-0 text-sm font-semibold">Periode
-                <select wire:model.live="periodId" class="mt-2 w-full min-w-0 rounded-lg border-gray-300 dark:border-white/10 dark:bg-gray-950">
-                    @foreach ($this->getPeriodOptions() as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach
+        <section class="assessment-homeroom-filter-card">
+            <label>
+                <span>Periode</span>
+                <select wire:model.live="periodId">
+                    @foreach ($this->getPeriodOptions() as $id => $label)
+                        <option value="{{ $id }}">{{ $label }}</option>
+                    @endforeach
                 </select>
             </label>
-            <label class="min-w-0 text-sm font-semibold">Kelas
-                <select wire:model.live="homeroomId" class="mt-2 w-full min-w-0 rounded-lg border-gray-300 dark:border-white/10 dark:bg-gray-950">
-                    @foreach ($this->getHomeroomOptions() as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach
+            <label>
+                <span>Kelas Wali</span>
+                <select wire:model.live="homeroomId">
+                    @foreach ($this->getHomeroomOptions() as $id => $label)
+                        <option value="{{ $id }}">{{ $label }}</option>
+                    @endforeach
                 </select>
             </label>
         </section>
 
         @if ($homeroomMeta)
-            <div class="flex flex-wrap gap-2">
-                <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold dark:bg-white/10">{{ $homeroomMeta['rombel'] }}</span>
-                <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold dark:bg-white/10">{{ $homeroomMeta['teacher'] }}</span>
-                <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold dark:bg-white/10">{{ $homeroomMeta['status_label'] }}</span>
-            </div>
+            <section class="assessment-homeroom-summary-card">
+                <span>
+                    <x-filament::icon icon="heroicon-o-user-group" />
+                </span>
+                <div>
+                    <h2>{{ $homeroomMeta['rombel'] }} · {{ $homeroomMeta['teacher'] }}</h2>
+                    <p>{{ count($reportRows) }} siswa · Periode {{ $homeroomMeta['status_label'] }}</p>
+                </div>
+            </section>
 
-            <section class="hidden max-w-full overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/10 dark:bg-gray-900 md:block">
-                <div class="max-w-full overflow-x-auto">
-                    <table class="w-full min-w-[1180px] border-collapse">
-                        <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500 dark:bg-white/5">
+            @if ($homeroomMeta['editable'])
+                <section class="assessment-homeroom-bulk-card">
+                    <div class="assessment-homeroom-bulk-card__head">
+                        <div>
+                            <h2>Isi Massal Rekap Wali Kelas</h2>
+                            <p>Pilih siswa dan satu kolom. Perubahan baru tersimpan setelah tombol Simpan Rekap ditekan.</p>
+                        </div>
+                        <span>{{ count($selectedStudentIds) }} dipilih</span>
+                    </div>
+
+                    <div class="assessment-homeroom-bulk-grid">
+                        <label>
+                            <span>Kolom yang Diisi</span>
+                            <select wire:model.live="bulkField">
+                                @foreach ($this->getBulkFieldOptions() as $field => $label)
+                                    <option value="{{ $field }}">{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <label>
+                            <span>Nilai / Teks</span>
+                            @if (in_array($bulkField, ['sick_days', 'permission_days', 'absent_days'], true))
+                                <input wire:model="bulkValue" type="number" min="0" max="366" placeholder="Contoh: 2">
+                            @else
+                                <textarea wire:model="bulkValue" rows="2" placeholder="Tulis isian yang akan diterapkan"></textarea>
+                            @endif
+                        </label>
+                    </div>
+
+                    <label class="assessment-homeroom-bulk-check">
+                        <input type="checkbox" wire:model="bulkFillEmptyOnly">
+                        <span><strong>Hanya isi data yang masih kosong</strong><small>Untuk Sakit, Izin, dan Alpa, angka 0 dianggap masih kosong.</small></span>
+                    </label>
+
+                    <div class="assessment-homeroom-bulk-actions">
+                        <x-filament::button type="button" size="sm" color="gray" wire:click="selectAllStudents">Pilih Semua</x-filament::button>
+                        <x-filament::button type="button" size="sm" color="gray" wire:click="clearStudentSelection">Kosongkan</x-filament::button>
+                        <x-filament::button type="button" size="sm" wire:click="applyBulkValue" wire:loading.attr="disabled" icon="heroicon-o-bolt">
+                            Terapkan ke Form
+                        </x-filament::button>
+                    </div>
+                </section>
+            @endif
+
+            <section class="assessment-homeroom-desktop">
+                <div class="assessment-homeroom-table-scroll">
+                    <table class="assessment-homeroom-table">
+                        <thead>
                             <tr>
-                                <th class="sticky left-0 z-10 min-w-[210px] bg-gray-50 p-3 dark:bg-gray-800">Siswa</th>
-                                <th class="p-3">Sakit</th><th class="p-3">Izin</th><th class="p-3">Alpa</th>
-                                <th class="min-w-[230px] p-3">Ekstrakurikuler</th>
-                                <th class="min-w-[230px] p-3">Prestasi</th>
-                                <th class="min-w-[260px] p-3">Catatan Wali</th>
+                                <th class="student-column">Siswa</th>
+                                <th>Sakit</th>
+                                <th>Izin</th>
+                                <th>Alpa</th>
+                                <th>Ekstrakurikuler</th>
+                                <th>Prestasi</th>
+                                <th>Catatan Wali</th>
                                 @if ($homeroomMeta['collect_promotion_status'])
-                                    <th class="min-w-[160px] p-3">Status Semester</th>
+                                    <th>Status Semester</th>
                                 @endif
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-gray-200 dark:divide-white/10">
+                        <tbody>
                             @foreach ($reportRows as $studentId => $row)
                                 <tr>
-                                    <td class="sticky left-0 z-[1] bg-white p-3 dark:bg-gray-900">
-                                        <strong class="block">{{ $row['student_name'] }}</strong><small class="text-gray-500">{{ $row['nis'] }}</small>
+                                    <td class="student-column">
+                                        <label class="assessment-homeroom-student">
+                                            @if ($homeroomMeta['editable'])
+                                                <input type="checkbox" value="{{ $studentId }}" wire:model.live="selectedStudentIds">
+                                            @endif
+                                            <span><strong>{{ $row['student_name'] }}</strong><small>{{ $row['nis'] }}</small></span>
+                                        </label>
                                     </td>
                                     @foreach (['sick_days', 'permission_days', 'absent_days'] as $field)
-                                        <td class="p-2"><input type="number" min="0" max="366" class="w-20 rounded-lg border-gray-300 dark:border-white/10 dark:bg-gray-950" wire:model.blur="reportRows.{{ $studentId }}.{{ $field }}" @disabled(! $homeroomMeta['editable'])></td>
+                                        <td><input type="number" min="0" max="366" class="is-number" wire:model.blur="reportRows.{{ $studentId }}.{{ $field }}" @disabled(! $homeroomMeta['editable'])></td>
                                     @endforeach
-                                    <td class="p-2"><textarea rows="3" class="w-full rounded-lg border-gray-300 dark:border-white/10 dark:bg-gray-950" wire:model.blur="reportRows.{{ $studentId }}.extracurricular" @disabled(! $homeroomMeta['editable'])></textarea></td>
-                                    <td class="p-2"><textarea rows="3" class="w-full rounded-lg border-gray-300 dark:border-white/10 dark:bg-gray-950" wire:model.blur="reportRows.{{ $studentId }}.achievement" @disabled(! $homeroomMeta['editable'])></textarea></td>
-                                    <td class="p-2"><textarea rows="3" class="w-full rounded-lg border-gray-300 dark:border-white/10 dark:bg-gray-950" wire:model.blur="reportRows.{{ $studentId }}.homeroom_note" @disabled(! $homeroomMeta['editable'])></textarea></td>
+                                    <td><textarea rows="3" wire:model.blur="reportRows.{{ $studentId }}.extracurricular" @disabled(! $homeroomMeta['editable'])></textarea></td>
+                                    <td><textarea rows="3" wire:model.blur="reportRows.{{ $studentId }}.achievement" @disabled(! $homeroomMeta['editable'])></textarea></td>
+                                    <td><textarea rows="3" wire:model.blur="reportRows.{{ $studentId }}.homeroom_note" @disabled(! $homeroomMeta['editable'])></textarea></td>
                                     @if ($homeroomMeta['collect_promotion_status'])
-                                        <td class="p-2"><input type="text" maxlength="50" class="w-full rounded-lg border-gray-300 dark:border-white/10 dark:bg-gray-950" wire:model.blur="reportRows.{{ $studentId }}.promotion_status" @disabled(! $homeroomMeta['editable'])></td>
+                                        <td><input type="text" maxlength="50" wire:model.blur="reportRows.{{ $studentId }}.promotion_status" @disabled(! $homeroomMeta['editable'])></td>
                                     @endif
                                 </tr>
                             @endforeach
@@ -59,22 +120,28 @@
                 </div>
             </section>
 
-            <section class="space-y-3 md:hidden">
+            <section class="assessment-homeroom-mobile">
                 @foreach ($reportRows as $studentId => $row)
-                    <article class="min-w-0 rounded-xl border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-gray-900">
-                        <h2 class="break-words font-bold">{{ $row['student_name'] }}</h2>
-                        <p class="text-xs text-gray-500">{{ $row['nis'] }}</p>
-                        <div class="mt-4 grid grid-cols-3 gap-2">
+                    <article class="assessment-homeroom-student-card">
+                        <label class="assessment-homeroom-student">
+                            @if ($homeroomMeta['editable'])
+                                <input type="checkbox" value="{{ $studentId }}" wire:model.live="selectedStudentIds">
+                            @endif
+                            <span><strong>{{ $row['student_name'] }}</strong><small>{{ $row['nis'] }}</small></span>
+                        </label>
+
+                        <div class="assessment-homeroom-absence-grid">
                             @foreach (['sick_days' => 'Sakit', 'permission_days' => 'Izin', 'absent_days' => 'Alpa'] as $field => $label)
-                                <label class="text-xs font-semibold">{{ $label }}<input type="number" min="0" max="366" class="mt-1 w-full rounded-lg border-gray-300 dark:border-white/10 dark:bg-gray-950" wire:model.blur="reportRows.{{ $studentId }}.{{ $field }}" @disabled(! $homeroomMeta['editable'])></label>
+                                <label><span>{{ $label }}</span><input type="number" min="0" max="366" wire:model.blur="reportRows.{{ $studentId }}.{{ $field }}" @disabled(! $homeroomMeta['editable'])></label>
                             @endforeach
                         </div>
-                        <div class="mt-3 grid gap-3">
-                            <label class="text-xs font-semibold">Ekstrakurikuler (satu per baris)<textarea rows="2" class="mt-1 w-full rounded-lg border-gray-300 dark:border-white/10 dark:bg-gray-950" wire:model.blur="reportRows.{{ $studentId }}.extracurricular" @disabled(! $homeroomMeta['editable'])></textarea></label>
-                            <label class="text-xs font-semibold">Prestasi (satu per baris)<textarea rows="2" class="mt-1 w-full rounded-lg border-gray-300 dark:border-white/10 dark:bg-gray-950" wire:model.blur="reportRows.{{ $studentId }}.achievement" @disabled(! $homeroomMeta['editable'])></textarea></label>
-                            <label class="text-xs font-semibold">Catatan Wali Kelas<textarea rows="3" class="mt-1 w-full rounded-lg border-gray-300 dark:border-white/10 dark:bg-gray-950" wire:model.blur="reportRows.{{ $studentId }}.homeroom_note" @disabled(! $homeroomMeta['editable'])></textarea></label>
+
+                        <div class="assessment-homeroom-text-grid">
+                            <label><span>Ekstrakurikuler</span><textarea rows="2" wire:model.blur="reportRows.{{ $studentId }}.extracurricular" @disabled(! $homeroomMeta['editable'])></textarea></label>
+                            <label><span>Prestasi</span><textarea rows="2" wire:model.blur="reportRows.{{ $studentId }}.achievement" @disabled(! $homeroomMeta['editable'])></textarea></label>
+                            <label><span>Catatan Wali Kelas</span><textarea rows="3" wire:model.blur="reportRows.{{ $studentId }}.homeroom_note" @disabled(! $homeroomMeta['editable'])></textarea></label>
                             @if ($homeroomMeta['collect_promotion_status'])
-                                <label class="text-xs font-semibold">Status Semester<input type="text" maxlength="50" class="mt-1 w-full rounded-lg border-gray-300 dark:border-white/10 dark:bg-gray-950" wire:model.blur="reportRows.{{ $studentId }}.promotion_status" @disabled(! $homeroomMeta['editable'])></label>
+                                <label><span>Status Semester</span><input type="text" maxlength="50" wire:model.blur="reportRows.{{ $studentId }}.promotion_status" @disabled(! $homeroomMeta['editable'])></label>
                             @endif
                         </div>
                     </article>
@@ -82,12 +149,19 @@
             </section>
 
             @if ($homeroomMeta['editable'])
-                <div class="flex justify-end">
-                    <x-filament::button wire:click="saveReports" wire:loading.attr="disabled" icon="heroicon-o-cloud-arrow-up">Simpan Rekap Wali Kelas</x-filament::button>
+                <div class="assessment-homeroom-savebar">
+                    <span>Pastikan data sudah diperiksa sebelum disimpan.</span>
+                    <x-filament::button wire:click="saveReports" wire:loading.attr="disabled" icon="heroicon-o-cloud-arrow-up">
+                        Simpan Rekap Wali Kelas
+                    </x-filament::button>
                 </div>
             @endif
         @else
-            <div class="rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500 dark:border-white/15">Belum ada penugasan wali kelas untuk periode ini.</div>
+            <section class="assessment-homeroom-empty">
+                <x-filament::icon icon="heroicon-o-user-group" />
+                <h2>Belum ada kelas wali</h2>
+                <p>Penugasan wali kelas untuk periode ini belum tersedia pada akun Anda.</p>
+            </section>
         @endif
     </div>
 </x-filament-panels::page>

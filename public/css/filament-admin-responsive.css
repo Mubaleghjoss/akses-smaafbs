@@ -4832,3 +4832,663 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
         padding: 0.8rem;
     }
 }
+
+/* Assessment status and homeroom pages: explicit panel styling (no Tailwind dependency). */
+.assessment-status-page,
+.assessment-homeroom-page {
+    display: grid;
+    min-width: 0;
+    gap: 1rem;
+}
+
+.assessment-status-filter-card,
+.assessment-homeroom-filter-card {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.85rem;
+    border: 1px solid #dbe4ee;
+    border-radius: 1rem;
+    background: #fff;
+    padding: 1rem;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.assessment-status-filter-card label,
+.assessment-homeroom-filter-card label,
+.assessment-homeroom-bulk-grid label,
+.assessment-homeroom-absence-grid label,
+.assessment-homeroom-text-grid label {
+    display: grid;
+    min-width: 0;
+    gap: 0.4rem;
+    color: #334155;
+    font-size: 0.78rem;
+    font-weight: 800;
+}
+
+.assessment-status-filter-card select,
+.assessment-homeroom-filter-card select,
+.assessment-homeroom-bulk-grid select,
+.assessment-homeroom-bulk-grid input,
+.assessment-homeroom-bulk-grid textarea,
+.assessment-homeroom-table input,
+.assessment-homeroom-table textarea,
+.assessment-homeroom-absence-grid input,
+.assessment-homeroom-text-grid input,
+.assessment-homeroom-text-grid textarea {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.7rem;
+    background: #fff;
+    color: #0f172a;
+    padding: 0.58rem 0.7rem;
+    font-size: 0.83rem;
+}
+
+.assessment-status-filter-card select,
+.assessment-homeroom-filter-card select,
+.assessment-homeroom-bulk-grid select {
+    min-height: 2.65rem;
+}
+
+.assessment-status-filter-card select:focus,
+.assessment-homeroom-filter-card select:focus,
+.assessment-homeroom-bulk-grid select:focus,
+.assessment-homeroom-bulk-grid input:focus,
+.assessment-homeroom-bulk-grid textarea:focus,
+.assessment-homeroom-table input:focus,
+.assessment-homeroom-table textarea:focus,
+.assessment-homeroom-absence-grid input:focus,
+.assessment-homeroom-text-grid input:focus,
+.assessment-homeroom-text-grid textarea:focus {
+    outline: 2px solid rgba(13, 148, 136, 0.22);
+    border-color: #0d9488;
+}
+
+.assessment-status-data-card,
+.assessment-homeroom-desktop {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid #dbe4ee;
+    border-radius: 1rem;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.assessment-status-desktop,
+.assessment-homeroom-table-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.assessment-status-table,
+.assessment-homeroom-table {
+    width: 100%;
+    min-width: 860px;
+    border-collapse: separate;
+    border-spacing: 0;
+    color: #1e293b;
+}
+
+.assessment-homeroom-table {
+    min-width: 1180px;
+}
+
+.assessment-status-table th,
+.assessment-homeroom-table th {
+    border-bottom: 1px solid #dbe4ee;
+    background: #f1f5f9;
+    padding: 0.75rem;
+    color: #475569;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.025em;
+    text-align: left;
+    text-transform: uppercase;
+}
+
+.assessment-status-table td,
+.assessment-homeroom-table td {
+    border-bottom: 1px solid #e8edf3;
+    background: #fff;
+    padding: 0.75rem;
+    color: #1e293b;
+    font-size: 0.82rem;
+    vertical-align: top;
+}
+
+.assessment-status-table tbody tr:last-child td,
+.assessment-homeroom-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.assessment-status-table tbody tr:hover td,
+.assessment-homeroom-table tbody tr:hover td {
+    background: #f8fafc;
+}
+
+.assessment-status-mobile,
+.assessment-homeroom-mobile {
+    display: none;
+}
+
+.assessment-status-mobile-card {
+    display: grid;
+    gap: 0.8rem;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 1rem;
+    background: #fff;
+    color: #1e293b;
+}
+
+.assessment-status-mobile-card:last-child {
+    border-bottom: 0;
+}
+
+.assessment-status-empty {
+    padding: 2rem 1rem;
+    color: #64748b;
+    font-size: 0.8rem;
+    text-align: center;
+}
+
+.assessment-status-table td > span,
+.assessment-status-mobile-card > div:first-child > span {
+    display: inline-flex;
+    width: fit-content;
+    border-radius: 999px;
+    background: #e2e8f0;
+    padding: 0.28rem 0.55rem;
+    color: #334155;
+    font-size: 0.7rem;
+    font-weight: 800;
+}
+
+.assessment-status-mobile-card > div {
+    min-width: 0;
+}
+
+.assessment-status-mobile-card > div:first-child {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.7rem;
+}
+
+.assessment-status-mobile-card h2 {
+    overflow-wrap: anywhere;
+    color: #0f172a;
+    font-size: 0.88rem;
+    font-weight: 800;
+}
+
+.assessment-status-mobile-card p {
+    margin-top: 0.15rem;
+    overflow-wrap: anywhere;
+    color: #64748b;
+    font-size: 0.74rem;
+}
+
+.assessment-status-mobile-card > div:nth-child(2) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
+}
+
+.assessment-status-mobile-card > div:nth-child(2) > div {
+    border-radius: 0.7rem;
+    background: #f1f5f9;
+    padding: 0.65rem;
+    color: #334155;
+    font-size: 0.76rem;
+}
+
+.assessment-status-mobile-card > div:last-child {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.assessment-homeroom-summary-card {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.8rem;
+    border: 1px solid #bae6fd;
+    border-radius: 1rem;
+    background: #f0f9ff;
+    padding: 0.9rem 1rem;
+}
+
+.assessment-homeroom-summary-card > span {
+    display: inline-flex;
+    width: 2.5rem;
+    height: 2.5rem;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.8rem;
+    background: #e0f2fe;
+    color: #0369a1;
+}
+
+.assessment-homeroom-summary-card svg {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+.assessment-homeroom-summary-card h2 {
+    overflow-wrap: anywhere;
+    color: #0f172a;
+    font-size: 0.93rem;
+    font-weight: 800;
+}
+
+.assessment-homeroom-summary-card p {
+    margin-top: 0.15rem;
+    color: #475569;
+    font-size: 0.76rem;
+}
+
+.assessment-homeroom-bulk-card {
+    display: grid;
+    min-width: 0;
+    gap: 0.85rem;
+    border: 1px solid #99f6e4;
+    border-radius: 1rem;
+    background: #f0fdfa;
+    padding: 1rem;
+}
+
+.assessment-homeroom-bulk-card__head {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.assessment-homeroom-bulk-card__head h2 {
+    color: #0f172a;
+    font-size: 0.92rem;
+    font-weight: 800;
+}
+
+.assessment-homeroom-bulk-card__head p {
+    margin-top: 0.2rem;
+    color: #475569;
+    font-size: 0.76rem;
+    line-height: 1.5;
+}
+
+.assessment-homeroom-bulk-card__head > span {
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: #ccfbf1;
+    padding: 0.3rem 0.6rem;
+    color: #0f766e;
+    font-size: 0.7rem;
+    font-weight: 800;
+}
+
+.assessment-homeroom-bulk-grid {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
+    gap: 0.8rem;
+}
+
+.assessment-homeroom-bulk-check,
+.assessment-homeroom-student {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    gap: 0.55rem;
+    color: #334155;
+    cursor: pointer;
+}
+
+.assessment-homeroom-bulk-check input,
+.assessment-homeroom-student > input {
+    width: 1rem;
+    height: 1rem;
+    flex: 0 0 auto;
+    margin-top: 0.15rem;
+}
+
+.assessment-homeroom-bulk-check span,
+.assessment-homeroom-student span {
+    min-width: 0;
+}
+
+.assessment-homeroom-bulk-check strong,
+.assessment-homeroom-bulk-check small,
+.assessment-homeroom-student strong,
+.assessment-homeroom-student small {
+    display: block;
+    overflow-wrap: anywhere;
+}
+
+.assessment-homeroom-bulk-check {
+    font-size: 0.78rem;
+}
+
+.assessment-homeroom-bulk-check small,
+.assessment-homeroom-student small {
+    margin-top: 0.15rem;
+    color: #64748b;
+    font-size: 0.7rem;
+}
+
+.assessment-homeroom-bulk-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+}
+
+.assessment-homeroom-bulk-actions > :last-child {
+    margin-left: auto;
+}
+
+.assessment-homeroom-table .student-column {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    min-width: 220px;
+    max-width: 260px;
+}
+
+.assessment-homeroom-table th.student-column {
+    z-index: 3;
+    background: #eaf0f6;
+}
+
+.assessment-homeroom-table td.student-column {
+    background: #fff;
+}
+
+.assessment-homeroom-table td {
+    min-width: 210px;
+}
+
+.assessment-homeroom-table td:has(.is-number) {
+    min-width: 88px;
+}
+
+.assessment-homeroom-table .is-number {
+    width: 4.8rem;
+}
+
+.assessment-homeroom-table textarea {
+    min-height: 4.6rem;
+    resize: vertical;
+}
+
+.assessment-homeroom-table input:disabled,
+.assessment-homeroom-table textarea:disabled,
+.assessment-homeroom-absence-grid input:disabled,
+.assessment-homeroom-text-grid input:disabled,
+.assessment-homeroom-text-grid textarea:disabled {
+    background: #f1f5f9;
+    color: #64748b;
+    opacity: 0.8;
+}
+
+.assessment-homeroom-student-card {
+    display: grid;
+    min-width: 0;
+    gap: 0.9rem;
+    border: 1px solid #dbe4ee;
+    border-radius: 1rem;
+    background: #fff;
+    padding: 1rem;
+    color: #1e293b;
+}
+
+.assessment-homeroom-absence-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.55rem;
+}
+
+.assessment-homeroom-text-grid {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.assessment-homeroom-savebar {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    border: 1px solid #dbe4ee;
+    border-radius: 1rem;
+    background: #fff;
+    padding: 0.8rem 1rem;
+}
+
+.assessment-homeroom-savebar span {
+    margin-right: auto;
+    color: #64748b;
+    font-size: 0.75rem;
+}
+
+.assessment-homeroom-empty {
+    display: grid;
+    justify-items: center;
+    gap: 0.45rem;
+    border: 1px dashed #cbd5e1;
+    border-radius: 1rem;
+    background: #f8fafc;
+    padding: 2rem 1rem;
+    color: #64748b;
+    text-align: center;
+}
+
+.assessment-homeroom-empty svg {
+    width: 2rem;
+    height: 2rem;
+}
+
+.assessment-homeroom-empty h2 {
+    color: #1e293b;
+    font-size: 0.9rem;
+    font-weight: 800;
+}
+
+.assessment-homeroom-empty p {
+    font-size: 0.78rem;
+}
+
+.dark .assessment-status-filter-card,
+.dark .assessment-homeroom-filter-card,
+.dark .assessment-status-data-card,
+.dark .assessment-homeroom-desktop,
+.dark .assessment-homeroom-savebar,
+.fi-theme-dark .assessment-status-filter-card,
+.fi-theme-dark .assessment-homeroom-filter-card,
+.fi-theme-dark .assessment-status-data-card,
+.fi-theme-dark .assessment-homeroom-desktop,
+.fi-theme-dark .assessment-homeroom-savebar {
+    border-color: rgba(148, 163, 184, 0.2);
+    background: #18181b;
+}
+
+.dark .assessment-status-filter-card label,
+.dark .assessment-homeroom-filter-card label,
+.dark .assessment-homeroom-bulk-grid label,
+.dark .assessment-homeroom-absence-grid label,
+.dark .assessment-homeroom-text-grid label,
+.fi-theme-dark .assessment-status-filter-card label,
+.fi-theme-dark .assessment-homeroom-filter-card label,
+.fi-theme-dark .assessment-homeroom-bulk-grid label,
+.fi-theme-dark .assessment-homeroom-absence-grid label,
+.fi-theme-dark .assessment-homeroom-text-grid label {
+    color: #e2e8f0;
+}
+
+.dark .assessment-status-filter-card select,
+.dark .assessment-homeroom-filter-card select,
+.dark .assessment-homeroom-bulk-grid select,
+.dark .assessment-homeroom-bulk-grid input,
+.dark .assessment-homeroom-bulk-grid textarea,
+.dark .assessment-homeroom-table input,
+.dark .assessment-homeroom-table textarea,
+.dark .assessment-homeroom-absence-grid input,
+.dark .assessment-homeroom-text-grid input,
+.dark .assessment-homeroom-text-grid textarea,
+.fi-theme-dark .assessment-status-filter-card select,
+.fi-theme-dark .assessment-homeroom-filter-card select,
+.fi-theme-dark .assessment-homeroom-bulk-grid select,
+.fi-theme-dark .assessment-homeroom-bulk-grid input,
+.fi-theme-dark .assessment-homeroom-bulk-grid textarea,
+.fi-theme-dark .assessment-homeroom-table input,
+.fi-theme-dark .assessment-homeroom-table textarea,
+.fi-theme-dark .assessment-homeroom-absence-grid input,
+.fi-theme-dark .assessment-homeroom-text-grid input,
+.fi-theme-dark .assessment-homeroom-text-grid textarea {
+    border-color: rgba(148, 163, 184, 0.28);
+    background: #0f172a;
+    color: #f8fafc;
+}
+
+.dark .assessment-status-table th,
+.dark .assessment-homeroom-table th,
+.fi-theme-dark .assessment-status-table th,
+.fi-theme-dark .assessment-homeroom-table th {
+    border-color: rgba(148, 163, 184, 0.18);
+    background: #1f2937;
+    color: #cbd5e1;
+}
+
+.dark .assessment-status-table td,
+.dark .assessment-homeroom-table td,
+.dark .assessment-homeroom-table td.student-column,
+.dark .assessment-status-mobile-card,
+.dark .assessment-homeroom-student-card,
+.fi-theme-dark .assessment-status-table td,
+.fi-theme-dark .assessment-homeroom-table td,
+.fi-theme-dark .assessment-homeroom-table td.student-column,
+.fi-theme-dark .assessment-status-mobile-card,
+.fi-theme-dark .assessment-homeroom-student-card {
+    border-color: rgba(148, 163, 184, 0.14);
+    background: #18181b;
+    color: #e2e8f0;
+}
+
+.dark .assessment-status-table td > span,
+.dark .assessment-status-mobile-card > div:first-child > span,
+.fi-theme-dark .assessment-status-table td > span,
+.fi-theme-dark .assessment-status-mobile-card > div:first-child > span {
+    background: rgba(148, 163, 184, 0.16);
+    color: #e2e8f0;
+}
+
+.dark .assessment-status-mobile-card h2,
+.fi-theme-dark .assessment-status-mobile-card h2 {
+    color: #f8fafc;
+}
+
+.dark .assessment-status-mobile-card p,
+.fi-theme-dark .assessment-status-mobile-card p {
+    color: #94a3b8;
+}
+
+.dark .assessment-status-mobile-card > div:nth-child(2) > div,
+.fi-theme-dark .assessment-status-mobile-card > div:nth-child(2) > div {
+    background: #0f172a;
+    color: #e2e8f0;
+}
+
+.dark .assessment-status-table tbody tr:hover td,
+.dark .assessment-homeroom-table tbody tr:hover td,
+.fi-theme-dark .assessment-status-table tbody tr:hover td,
+.fi-theme-dark .assessment-homeroom-table tbody tr:hover td {
+    background: #202027;
+}
+
+.dark .assessment-homeroom-summary-card,
+.fi-theme-dark .assessment-homeroom-summary-card {
+    border-color: rgba(56, 189, 248, 0.22);
+    background: rgba(3, 105, 161, 0.12);
+}
+
+.dark .assessment-homeroom-summary-card h2,
+.dark .assessment-homeroom-bulk-card__head h2,
+.dark .assessment-homeroom-empty h2,
+.fi-theme-dark .assessment-homeroom-summary-card h2,
+.fi-theme-dark .assessment-homeroom-bulk-card__head h2,
+.fi-theme-dark .assessment-homeroom-empty h2 {
+    color: #f8fafc;
+}
+
+.dark .assessment-homeroom-summary-card p,
+.dark .assessment-homeroom-bulk-card__head p,
+.dark .assessment-homeroom-savebar span,
+.fi-theme-dark .assessment-homeroom-summary-card p,
+.fi-theme-dark .assessment-homeroom-bulk-card__head p,
+.fi-theme-dark .assessment-homeroom-savebar span {
+    color: #cbd5e1;
+}
+
+.dark .assessment-homeroom-bulk-card,
+.fi-theme-dark .assessment-homeroom-bulk-card {
+    border-color: rgba(45, 212, 191, 0.22);
+    background: rgba(13, 148, 136, 0.09);
+}
+
+.dark .assessment-homeroom-empty,
+.fi-theme-dark .assessment-homeroom-empty {
+    border-color: rgba(148, 163, 184, 0.24);
+    background: #18181b;
+}
+
+@media (max-width: 767px) {
+    .assessment-status-filter-card,
+    .assessment-homeroom-filter-card,
+    .assessment-homeroom-bulk-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .assessment-status-desktop,
+    .assessment-homeroom-desktop {
+        display: none;
+    }
+
+    .assessment-status-mobile,
+    .assessment-homeroom-mobile {
+        display: grid;
+        gap: 0.75rem;
+    }
+
+    .assessment-status-mobile {
+        gap: 0;
+    }
+
+    .assessment-homeroom-bulk-card__head,
+    .assessment-homeroom-savebar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .assessment-homeroom-bulk-card__head > span {
+        align-self: flex-start;
+    }
+
+    .assessment-homeroom-bulk-actions > *,
+    .assessment-homeroom-savebar > * {
+        width: 100%;
+    }
+
+    .assessment-homeroom-bulk-actions > :last-child {
+        margin-left: 0;
+    }
+
+    .assessment-homeroom-savebar span {
+        margin-right: 0;
+    }
+}

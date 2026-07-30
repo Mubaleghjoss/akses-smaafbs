@@ -41,6 +41,7 @@ trait HasAssessmentTypeNavigation
         return [
             'dashboard_url' => AssessmentDashboard::getUrl(),
             'hub_url' => $hubPage::getUrl($periodParameters),
+            'is_hub' => static::class === $hubPage,
             'type_label' => static::$assessmentType->label(),
             'items' => collect($items)
                 ->map(fn (array $item): array => [

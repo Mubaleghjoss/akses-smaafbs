@@ -128,4 +128,15 @@ Role baru bersifat aditif: `super_admin`, `kurikulum`, `guru_mapel`, `wali_kelas
   pada periode yang sama. Status kemajuan selalu ditulis sebagai jumlah
   dikirim dan jumlah yang masih belum dikirim.
 
+## Pengisian rekap wali kelas massal
+
+- Wali kelas dapat memilih beberapa siswa lalu mengisi massal salah satu kolom:
+  Sakit, Izin, Alpa, Ekstrakurikuler, Prestasi, Catatan Wali, dan Status
+  Semester ketika periode mengaktifkannya.
+- Opsi aman bawaan hanya mengisi data kosong. Untuk kolom ketidakhadiran, angka
+  nol diperlakukan sebagai data kosong.
+- Aksi massal hanya mengubah state formulir. Penyimpanan database tetap melalui
+  tombol **Simpan Rekap Wali Kelas**, Policy record, dan transaction yang sama
+  dengan pengisian satu per satu.
+
 Setiap action custom memeriksa permission dan Policy pada server. Menyembunyikan tombol bukan mekanisme keamanan.

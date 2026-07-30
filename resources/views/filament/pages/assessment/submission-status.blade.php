@@ -1,28 +1,18 @@
 <x-filament-panels::page>
-    <div class="space-y-5">
-        @include('filament.pages.assessment.partials.type-navigation')
+    <div class="assessment-status-page">
+        @include('filament.pages.assessment.partials.type-navigation', ['showAccess' => false])
 
-        <section class="assessment-progress-note">
-            <span class="assessment-progress-note__icon">
-                <x-filament::icon icon="heroicon-o-information-circle" />
-            </span>
-            <div>
-                <strong>Status berlaku per mapel dan kelas, bukan untuk menutup seluruh periode.</strong>
-                <p>Penugasan Draf atau Dikembalikan tetap dapat dibuka dari tombol Tinjau Nilai dan dilengkapi oleh guru pengampu.</p>
-            </div>
-        </section>
-
-        <section class="grid gap-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-gray-900 md:grid-cols-2">
-            <label class="min-w-0 text-sm font-semibold text-gray-700 dark:text-gray-200">
-                Periode
+        <section class="assessment-status-filter-card">
+            <label>
+                <span>Periode</span>
                 <select wire:model.live="periodId" class="mt-2 w-full min-w-0 rounded-lg border-gray-300 bg-white dark:border-white/10 dark:bg-gray-950">
                     @foreach ($this->getPeriodOptions() as $id => $label)
                         <option value="{{ $id }}">{{ $label }}</option>
                     @endforeach
                 </select>
             </label>
-            <label class="min-w-0 text-sm font-semibold text-gray-700 dark:text-gray-200">
-                Status
+            <label>
+                <span>Status Penugasan</span>
                 <select wire:model.live="statusFilter" class="mt-2 w-full min-w-0 rounded-lg border-gray-300 bg-white dark:border-white/10 dark:bg-gray-950">
                     @foreach ($this->getStatusOptions() as $value => $label)
                         <option value="{{ $value }}">{{ $label }}</option>
@@ -32,9 +22,9 @@
         </section>
 
         @php($rows = $this->getAssignmentRows())
-        <section class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/10 dark:bg-gray-900">
-            <div class="hidden max-w-full overflow-x-auto md:block">
-                <table class="w-full min-w-[860px] border-collapse">
+        <section class="assessment-status-data-card">
+            <div class="assessment-status-desktop">
+                <table class="assessment-status-table">
                     <thead class="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:bg-white/5">
                         <tr>
                             <th class="p-3">Kelas / Mapel</th>
@@ -85,9 +75,9 @@
                 </table>
             </div>
 
-            <div class="divide-y divide-gray-200 dark:divide-white/10 md:hidden">
+            <div class="assessment-status-mobile">
                 @forelse ($rows as $row)
-                    <article class="space-y-3 p-4">
+                    <article class="assessment-status-mobile-card">
                         <div class="flex items-start justify-between gap-3">
                             <div class="min-w-0">
                                 <h2 class="break-words font-bold text-gray-950 dark:text-white">{{ $row['rombel'] }} · {{ $row['subject'] }}</h2>
@@ -118,7 +108,7 @@
                         </div>
                     </article>
                 @empty
-                    <div class="p-8 text-center text-sm text-gray-500">Belum ada penugasan pada filter ini.</div>
+                    <div class="assessment-status-empty">Belum ada penugasan pada filter ini.</div>
                 @endforelse
             </div>
         </section>

@@ -65,3 +65,12 @@
 - Menambahkan pengisian massal nilai dan deskripsi berbasis pilihan siswa.
   Perubahan tetap masuk state/draf browser dahulu dan baru tersimpan melalui
   Simpan Draf agar optimistic locking dan batch assignment tidak dilewati.
+- Menambahkan bulk action Rekap Wali Kelas untuk absensi, ekstrakurikuler,
+  prestasi, catatan wali, dan status semester tanpa melewati tombol Simpan
+  Rekap maupun Policy.
+- Menyederhanakan header halaman kerja menjadi satu tombol kembali dan satu
+  baris tab, serta menghapus kartu cakupan/keterangan yang mengulang isi pada
+  halaman Status, Rekap Wali, dan Rapor.
+- Memberi CSS panel eksplisit pada filter, tabel, kartu siswa, bulk action,
+  empty state, dan save bar Status/Rekap Wali agar kontras mode terang/gelap
+  tetap terbaca tanpa bergantung pada utility Tailwind.
