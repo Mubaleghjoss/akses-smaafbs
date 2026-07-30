@@ -6,6 +6,7 @@ Portal sekolah berbasis Laravel dengan dua area utama:
 - panel admin Filament di `/admin` untuk pengelolaan data internal.
 
 Dokumentasi teknis dan runbook Literasi Numerasi tersedia di [`docs/literacy-numeracy/README.md`](docs/literacy-numeracy/README.md).
+Dokumentasi arsitektur dan runbook Penilaian ASTS–ASAS tersedia di [`docs/assessment/README.md`](docs/assessment/README.md).
 
 Dokumen ini sengaja dibuat ringkas dan hanya memuat hal yang bisa dicek langsung dari repo saat ini.
 

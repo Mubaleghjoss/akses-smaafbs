@@ -3,8 +3,22 @@
 namespace App\Support\Admin;
 
 use App\Filament\Pages\DashboardProker;
+use App\Filament\Pages\Assessment\AsasHomeroomRecap;
+use App\Filament\Pages\Assessment\AsasInputScores;
+use App\Filament\Pages\Assessment\AsasReports;
+use App\Filament\Pages\Assessment\AsasSubmissionStatus;
+use App\Filament\Pages\Assessment\AssessmentDashboard;
+use App\Filament\Pages\Assessment\AssessmentMasterImport;
+use App\Filament\Pages\Assessment\AstsHomeroomRecap;
+use App\Filament\Pages\Assessment\AstsInputScores;
+use App\Filament\Pages\Assessment\AstsReports;
+use App\Filament\Pages\Assessment\AstsSubmissionStatus;
 use App\Filament\Pages\SarprasStickerSettings;
 use App\Filament\Resources\BeritaResource;
+use App\Filament\Resources\AssessmentAuditLogResource;
+use App\Filament\Resources\AssessmentPeriodResource;
+use App\Filament\Resources\AssessmentReportTemplateResource;
+use App\Filament\Resources\AssessmentSchemeResource;
 use App\Filament\Resources\BerkasGuruResource;
 use App\Filament\Resources\BerkasSiswaResource;
 use App\Filament\Resources\CalendarEventResource;
@@ -40,7 +54,7 @@ class AdminSchoolNavigation
     public const GROUP = 'Manajemen Sekolah';
 
     /**
-     * @var array<string, array{icon:string,sort:int}>
+     * @var array<string, array{icon:string,sort:int,group?:string}>
      */
     protected const PARENT_DEFINITIONS = [
         'Sarpras' => ['icon' => 'heroicon-o-wrench-screwdriver', 'sort' => 100],
@@ -55,6 +69,9 @@ class AdminSchoolNavigation
         'Agenda' => ['icon' => 'heroicon-o-calendar-days', 'sort' => 190],
         'Konten' => ['icon' => 'heroicon-o-newspaper', 'sort' => 200],
         'Perpustakaan' => ['icon' => 'heroicon-o-book-open', 'sort' => 210],
+        'ASTS' => ['icon' => 'heroicon-o-document-check', 'sort' => 10, 'group' => 'Penilaian'],
+        'ASAS' => ['icon' => 'heroicon-o-academic-cap', 'sort' => 20, 'group' => 'Penilaian'],
+        'Pengaturan Penilaian' => ['icon' => 'heroicon-o-cog-6-tooth', 'sort' => 30, 'group' => 'Penilaian'],
     ];
 
     /**
@@ -92,16 +109,54 @@ class AdminSchoolNavigation
         PerpustakaanKategoriResource::class => 'Perpustakaan',
         PerpustakaanLemariResource::class => 'Perpustakaan',
         PerpustakaanLiterasiMaterialResource::class => 'Perpustakaan',
+        AstsInputScores::class => 'ASTS',
+        AstsSubmissionStatus::class => 'ASTS',
+        AstsHomeroomRecap::class => 'ASTS',
+        AstsReports::class => 'ASTS',
+        AsasInputScores::class => 'ASAS',
+        AsasSubmissionStatus::class => 'ASAS',
+        AsasHomeroomRecap::class => 'ASAS',
+        AsasReports::class => 'ASAS',
+        AssessmentPeriodResource::class => 'Pengaturan Penilaian',
+        AssessmentSchemeResource::class => 'Pengaturan Penilaian',
+        AssessmentReportTemplateResource::class => 'Pengaturan Penilaian',
+        AssessmentAuditLogResource::class => 'Pengaturan Penilaian',
+        AssessmentMasterImport::class => 'Pengaturan Penilaian',
+    ];
+
+    /**
+     * @var array<class-string, string>
+     */
+    protected const CLASS_GROUP_MAP = [
+        AssessmentDashboard::class => 'Penilaian',
+        AstsInputScores::class => 'Penilaian',
+        AstsSubmissionStatus::class => 'Penilaian',
+        AstsHomeroomRecap::class => 'Penilaian',
+        AstsReports::class => 'Penilaian',
+        AsasInputScores::class => 'Penilaian',
+        AsasSubmissionStatus::class => 'Penilaian',
+        AsasHomeroomRecap::class => 'Penilaian',
+        AsasReports::class => 'Penilaian',
+        AssessmentPeriodResource::class => 'Penilaian',
+        AssessmentSchemeResource::class => 'Penilaian',
+        AssessmentReportTemplateResource::class => 'Penilaian',
+        AssessmentAuditLogResource::class => 'Penilaian',
+        AssessmentMasterImport::class => 'Penilaian',
     ];
 
     public static function shouldClassify(string $class): bool
     {
-        return array_key_exists($class, self::CLASS_PARENT_MAP);
+        return array_key_exists($class, self::CLASS_PARENT_MAP)
+            || array_key_exists($class, self::CLASS_GROUP_MAP);
     }
 
     public static function effectiveGroupForClass(string $class): string|\UnitEnum|null
     {
-        if (self::shouldClassify($class)) {
+        if (array_key_exists($class, self::CLASS_GROUP_MAP)) {
+            return self::CLASS_GROUP_MAP[$class];
+        }
+
+        if (array_key_exists($class, self::CLASS_PARENT_MAP)) {
             return self::GROUP;
         }
 
@@ -126,12 +181,15 @@ class AdminSchoolNavigation
         $group = self::effectiveGroupForClass($class);
         $parent = self::parentItemForClass($class);
 
-        return array_map(
-            fn (NavigationItem $item): NavigationItem => $item
-                ->group($group)
-                ->parentItem($parent),
-            $items,
-        );
+        return array_map(function (NavigationItem $item) use ($group, $parent): NavigationItem {
+            $item->group($group);
+
+            if (filled($parent)) {
+                $item->parentItem($parent);
+            }
+
+            return $item;
+        }, $items);
     }
 
     /**
@@ -148,7 +206,7 @@ class AdminSchoolNavigation
                 $definition = self::PARENT_DEFINITIONS[$label];
 
                 return NavigationItem::make($label)
-                    ->group(self::GROUP)
+                    ->group($definition['group'] ?? self::GROUP)
                     ->icon($definition['icon'])
                     ->sort($definition['sort']);
             })

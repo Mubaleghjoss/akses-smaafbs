@@ -7,6 +7,7 @@ use App\Models\BerkasGuru;
 use App\Models\BerkasSiswa;
 use App\Models\User;
 use App\Support\Admin\AdminModuleAccess;
+use App\Support\Assessment\Reporting\AssessmentReportQueueGate;
 use App\Support\Perpustakaan\LiteracySubmissionQueue;
 use App\Support\ServerSync\ServerDataPuller;
 use Filament\Facades\Filament;
@@ -169,8 +170,10 @@ Schedule::call(function (): void {
     ]);
 
     try {
+        $literacyQueue = (string) config('literacy.similarity_queue', 'literacy-analysis');
+
         Artisan::call('queue:work', [
-            '--queue' => 'literacy-analysis,default',
+            '--queue' => implode(',', array_values(array_unique([$literacyQueue, 'default']))),
             '--stop-when-empty' => true,
             '--max-jobs' => 3,
             '--max-time' => 20,
@@ -191,7 +194,28 @@ Schedule::call(function (): void {
 })
     ->everyMinute()
     ->name('queue-controlled-worker')
-    ->withoutOverlapping();
+    ->withoutOverlapping(10);
+
+Schedule::call(function (): void {
+    if (! app(AssessmentReportQueueGate::class)->shouldRun()) {
+        return;
+    }
+
+    Artisan::call('queue:work', [
+        '--queue' => (string) config('assessment.reports.queue', 'assessment-reports'),
+        '--stop-when-empty' => true,
+        // Shared hosting selalu memproses tepat satu PDF pada setiap putaran.
+        '--max-jobs' => 1,
+        '--max-time' => max(10, (int) config('assessment.reports.worker.max_time', 50)),
+        '--tries' => 3,
+        '--sleep' => 1,
+        '--timeout' => max(60, (int) config('assessment.reports.worker.timeout', 180)),
+        '--no-interaction' => true,
+    ]);
+})
+    ->everyMinute()
+    ->name('assessment-report-worker')
+    ->withoutOverlapping(10);
 
 Schedule::call(function (): void {
     if (Schema::hasTable('perpustakaan_literasi_submission_events')) {

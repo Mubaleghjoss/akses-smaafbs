@@ -1,0 +1,66 @@
+# Workbook dan Impor Master
+
+## Template resmi
+
+Download dari halaman **Penilaian → Pengaturan Penilaian → Impor Master Resmi**. Workbook berisi:
+
+- `PETUNJUK`
+- `TAHUN_SEMESTER`
+- `MAPEL`
+- `PENUGASAN_GURU`
+- `WALI_KELAS`
+- `REF_GURU`
+- `REF_ROMBEL`
+
+Kolom ID sistem pada sheet penugasan/referensi disembunyikan untuk mencegah perubahan tidak sengaja. Importer tetap dapat menyelesaikan referensi melalui nama yang unik. Jika nama guru ganda, ID sistem wajib tersedia.
+
+## Kontrak kolom
+
+`TAHUN_SEMESTER`:
+
+```text
+TAHUN_KODE, TAHUN_NAMA, TAHUN_MULAI, TAHUN_SELESAI,
+SEMESTER_KODE, SEMESTER_NAMA, SEMESTER_MULAI, SEMESTER_SELESAI, AKTIF
+```
+
+`MAPEL`:
+
+```text
+KODE_MAPEL, NAMA_MAPEL, DESKRIPSI, URUTAN, AKTIF
+```
+
+`PENUGASAN_GURU`:
+
+```text
+SEMESTER_KODE, MAPEL_KODE, NAMA_GURU, ID_GURU_SISTEM,
+NAMA_ROMBEL, ID_ROMBEL_SISTEM, AKTIF
+```
+
+`WALI_KELAS`:
+
+```text
+SEMESTER_KODE, NAMA_GURU, ID_GURU_SISTEM,
+NAMA_ROMBEL, ID_ROMBEL_SISTEM, AKTIF
+```
+
+Tanggal memakai `YYYY-MM-DD`; boolean memakai `YA` atau `TIDAK`.
+Empat header transaksi wajib sama persis dan tetap pada urutan tersebut.
+Importer menolak judul yang diubah, kolom yang hilang, kolom tambahan, atau
+urutan yang dipindahkan. Rentang tanggal juga diperiksa: mulai tidak boleh
+melewati selesai dan tanggal semester harus berada dalam tahun pelajaran.
+
+## Preview dan apply
+
+1. Upload disimpan sementara pada disk privat.
+2. Preview memeriksa sheet/kolom, duplikat, referensi hilang, akun guru, dan status rombel.
+3. Preview ditandatangani dengan HMAC aplikasi agar payload Livewire tidak dapat dimodifikasi.
+4. Tombol **Terapkan Impor** hanya tersedia jika tidak ada error.
+5. Apply menjalankan seluruh upsert dalam satu transaksi.
+6. Baris yang hilang dari workbook tidak pernah dihapus/dinonaktifkan otomatis.
+7. File upload sementara dihapus setelah apply berhasil.
+8. Ringkasan apply masuk `assessment_audit_logs`.
+
+Guru tanpa akun dan rombel nonaktif tampil sebagai warning; preflight pembukaan periode tetap menjadi pagar terakhir.
+Importer tidak memberi atau mengganti role user. Setelah apply, admin wajib
+memeriksa akun tertaut dan menetapkan role `guru_mapel`/`wali_kelas` sesuai
+surat penugasan resmi sebelum membuka periode.

@@ -5,6 +5,13 @@
 - Before changing the literacy/numeracy module, read `docs/literacy-numeracy/README.md` and the linked document for the subsystem being changed.
 - Keep submit queue work, question types, scoring, similarity analysis, and the school-network monitor compatible with the invariants documented there.
 
+## Penilaian ASTS–ASAS
+
+- Before changing the assessment module, read `docs/assessment/README.md` and the linked document for the subsystem being changed.
+- Preserve period-scoped data, immutable report snapshots, optimistic locking, private PDF storage, explicit action authorization, and Literasi-first queue priority.
+- Do not use `guru_mapel_label`, `guru_walas_scope`, legacy `kelas`, or `boarding_rapots` as an assessment transaction source.
+- Never expose report files through the public disk or webroot.
+
 ## Admin UI responsiveness
 
 - Every admin feature in `/admin` must be usable on phone-width screens.

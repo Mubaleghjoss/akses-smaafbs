@@ -1,0 +1,33 @@
+<?php
+
+return [
+    /*
+    |--------------------------------------------------------------------------
+    | Feature flag
+    |--------------------------------------------------------------------------
+    |
+    | Modul dapat dipasang dan dimigrasikan tanpa langsung terlihat oleh
+    | pengguna. Aktifkan setelah master serta hak akses selesai diverifikasi.
+    |
+    */
+    'enabled' => (bool) env('ASSESSMENT_MODULE_ENABLED', false),
+
+    'formula_version' => env('ASSESSMENT_FORMULA_VERSION', '1.0.0'),
+
+    'reports' => [
+        // Disk "local" memakai storage/app/private pada aplikasi ini.
+        'disk' => env('ASSESSMENT_REPORT_DISK', 'local'),
+        'queue' => env('ASSESSMENT_REPORT_QUEUE', 'assessment-reports'),
+        'path' => 'assessment-reports',
+        'worker' => [
+            'max_time' => (int) env('ASSESSMENT_REPORT_WORKER_MAX_TIME', 50),
+            'timeout' => (int) env('ASSESSMENT_REPORT_WORKER_TIMEOUT', 180),
+        ],
+    ],
+
+    'share_links' => [
+        'default_expiry_hours' => (int) env('ASSESSMENT_SHARE_EXPIRY_HOURS', 24),
+        'allowed_expiry_days' => [1, 3, 7],
+        'rate_limit_per_minute' => (int) env('ASSESSMENT_SHARE_RATE_LIMIT', 30),
+    ],
+];

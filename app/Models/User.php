@@ -32,6 +32,7 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
     public const FULL_ADMIN_ROLES = [
         'admin',
         'guru_admin',
+        'super_admin',
     ];
 
     public const NAVIGATION_GROUP_OPTIONS = [
@@ -45,6 +46,7 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
         'Siswa' => 'Siswa',
         'Guru/Tendik' => 'Guru/Tendik',
         'UKS' => 'UKS',
+        'Penilaian' => 'Penilaian',
     ];
 
     protected static ?bool $permissionRelationsAvailable = null;
@@ -266,6 +268,10 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
             'kepala_perpus',
             'guru_uks',
             'guru',
+            'kurikulum',
+            'guru_mapel',
+            'wali_kelas',
+            'kepala_sekolah',
         ]);
     }
 
@@ -281,7 +287,7 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
 
     public function isGuru(): bool
     {
-        return $this->hasAnyRole(['guru', 'guru_admin']);
+        return $this->hasAnyRole(['guru', 'guru_admin', 'guru_mapel', 'wali_kelas']);
     }
 
     public function usesGuruPersonalScope(): bool

@@ -2,6 +2,7 @@
 
 use App\Contracts\SiteSettingsAccessor;
 use App\Http\Controllers\Admin\AdminUserCredentialDocumentController;
+use App\Http\Controllers\Admin\AssessmentMasterTemplateController;
 use App\Http\Controllers\Admin\BerkasGuruDocumentController;
 use App\Http\Controllers\Admin\BoardingBacaanAssessmentExportController;
 use App\Http\Controllers\Admin\BoardingRapotDocumentController;
@@ -22,6 +23,7 @@ use App\Http\Controllers\Admin\SarprasRoomInventoryDocumentController;
 use App\Http\Controllers\Admin\UksRecordExportController;
 use App\Http\Controllers\Admin\UksRecordImportTemplateController;
 use App\Http\Controllers\AgendaController;
+use App\Http\Controllers\AssessmentReportController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\GuruTendikProfileController;
 use App\Http\Controllers\HomeController;
@@ -54,6 +56,30 @@ Route::middleware('auth')->get(
     '/admin/prokers/import-template',
     ProkerImportTemplateController::class
 )->name('admin.prokers.import-template');
+
+Route::middleware('auth')->group(function (): void {
+    Route::get(
+        '/admin/penilaian/master/template',
+        AssessmentMasterTemplateController::class,
+    )->name('admin.assessment.master-template');
+
+    Route::get(
+        '/admin/penilaian/rapor/siswa/{reportSnapshot}/download',
+        [AssessmentReportController::class, 'downloadSnapshot'],
+    )->name('assessment.reports.snapshot.download');
+
+    Route::get(
+        '/admin/penilaian/rapor/kelas/{classReportArtifact}/download',
+        [AssessmentReportController::class, 'downloadClass'],
+    )->name('assessment.reports.class.download');
+});
+
+Route::get(
+    '/rapor/penilaian/{token}',
+    [AssessmentReportController::class, 'downloadShared'],
+)
+    ->middleware('throttle:'.max(1, (int) config('assessment.share_links.rate_limit_per_minute', 30)).',1')
+    ->name('assessment.reports.shared.download');
 
 Route::middleware('auth')
     ->prefix('/admin/perpustakaan-literasi-materials/{material}/dispensations/{student}')
