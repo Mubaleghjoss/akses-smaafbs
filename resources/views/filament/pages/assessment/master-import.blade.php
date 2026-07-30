@@ -19,7 +19,9 @@
         </div>
 
         @if ($preview)
-            @php($summary = $preview['summary'] ?? [])
+            @php
+                $summary = $preview['summary'] ?? [];
+            @endphp
             <section class="grid grid-cols-2 gap-3 md:grid-cols-5">
                 @foreach ([
                     ['Baru', $summary['create'] ?? 0, 'emerald'],
@@ -78,8 +80,12 @@
 
                 <div class="mt-4 space-y-3">
                     @foreach ($previewGroups as $key => $label)
-                        @php($rows = $preview['payload'][$key] ?? [])
-                        <details class="group overflow-hidden rounded-xl border border-gray-200 dark:border-white/10" @if (collect($rows)->contains(fn ($row) => ($row['action'] ?? '') !== 'unchanged')) open @endif>
+                        @php
+                            $rows = $preview['payload'][$key] ?? [];
+                            $hasChanges = collect($rows)
+                                ->contains(fn ($row) => ($row['action'] ?? '') !== 'unchanged');
+                        @endphp
+                        <details class="group overflow-hidden rounded-xl border border-gray-200 dark:border-white/10" @if ($hasChanges) open @endif>
                             <summary class="flex cursor-pointer list-none items-center justify-between gap-3 bg-gray-50 px-4 py-3 dark:bg-white/5">
                                 <span class="min-w-0 break-words text-sm font-semibold text-gray-900 dark:text-white">{{ $label }}</span>
                                 <span class="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-600 shadow-sm dark:bg-gray-900 dark:text-gray-300">{{ count($rows) }} baris</span>

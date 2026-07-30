@@ -6,6 +6,7 @@ use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssessmentType;
 use App\Filament\Pages\Assessment\AsasInputScores;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
+use App\Filament\Pages\Assessment\AssessmentMasterImport;
 use App\Filament\Pages\Assessment\AstsInputScores;
 use App\Filament\Resources\AssessmentPeriodResource;
 use App\Filament\Resources\AssessmentAuditLogResource\Pages\ListAssessmentAuditLogs;
@@ -377,6 +378,42 @@ class AssessmentAdminIntegrationTest extends TestCase
             $admin->fresh()->hasPermissionTo('penilaian.report.generate'),
             'Menjalankan ulang seeder awal tidak boleh menghapus permission Penilaian.',
         );
+    }
+
+    public function test_master_import_preview_renders_summary_and_rows_without_blade_errors(): void
+    {
+        $admin = $this->createUser('assessment-import-preview-admin', 'admin');
+
+        Livewire::actingAs($admin)
+            ->test(AssessmentMasterImport::class)
+            ->set('preview', [
+                'summary' => [
+                    'create' => 1,
+                    'update' => 0,
+                    'unchanged' => 0,
+                    'warnings' => 0,
+                    'errors' => 0,
+                ],
+                'errors' => [],
+                'warnings' => [],
+                'payload' => [
+                    'academic_years' => [[
+                        'action' => 'create',
+                        'code' => '2026-2027',
+                        'name' => 'Tahun Pelajaran 2026/2027',
+                        'starts_on' => '2026-07-01',
+                        'ends_on' => '2027-06-30',
+                        'is_active' => true,
+                    ]],
+                    'semesters' => [],
+                    'subjects' => [],
+                    'teaching_assignments' => [],
+                    'homeroom_assignments' => [],
+                ],
+            ])
+            ->assertSee('Rincian pratinjau')
+            ->assertSee('Tahun Pelajaran 2026/2027')
+            ->assertSee('1 baris');
     }
 
     public function test_invalid_scheme_component_relationship_is_rolled_back_atomically(): void

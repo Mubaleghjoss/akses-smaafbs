@@ -18,3 +18,5 @@
 - Memindahkan Dashboard Penilaian, ASTS, ASAS, dan Pengaturan Penilaian ke
   kelompok navigasi **Manajemen Sekolah** agar tidak membuat kelompok menu
   terpisah.
+- Memperbaiki kompilasi Blade pada rincian pratinjau Impor Master agar admin
+  dapat membuka dan memeriksa hasil workbook tanpa error 500.
