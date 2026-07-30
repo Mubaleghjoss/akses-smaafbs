@@ -2,23 +2,32 @@
 
 namespace App\Filament\Pages\Assessment;
 
+use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssessmentType;
 use App\Enums\Assessment\AssignmentStatus;
 use App\Filament\Resources\AssessmentAuditLogResource;
 use App\Filament\Resources\AssessmentPeriodResource;
 use App\Filament\Resources\AssessmentReportTemplateResource;
 use App\Filament\Resources\AssessmentSchemeResource;
+use App\Filament\Resources\DataSiswaResource;
+use App\Filament\Resources\GuruTendikResource;
 use App\Models\Assessment\AcademicYear;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodHomeroom;
 use App\Models\Assessment\AssessmentScheme;
 use App\Models\Assessment\AuditLog;
+use App\Models\Assessment\HomeroomAssignment;
 use App\Models\Assessment\ReportTemplate;
+use App\Models\Assessment\Semester;
 use App\Models\Assessment\Subject;
 use App\Models\Assessment\TeachingAssignment;
+use App\Models\DataSiswa;
+use App\Models\GuruTendik;
+use App\Models\Rombel;
 use App\Models\User;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Schema;
 use Livewire\Attributes\Url;
 
 class AssessmentDashboard extends AssessmentPage
@@ -118,6 +127,189 @@ class AssessmentDashboard extends AssessmentPage
                 'caption' => 'aktivitas tercatat',
                 'url' => AssessmentAuditLogResource::canViewAny() ? AssessmentAuditLogResource::getUrl() : null,
             ],
+        ];
+    }
+
+    /**
+     * @return array{
+     *     steps: array<int, array<string, mixed>>,
+     *     notes: array<int, string>,
+     *     asts_url: ?string,
+     *     asas_url: ?string
+     * }
+     */
+    public function getSetupWorkflow(): array
+    {
+        $activeTeacherCount = GuruTendik::query()
+            ->whereRaw("LOWER(COALESCE(status, '')) = 'aktif'")
+            ->count();
+        $linkedTeacherCount = User::query()
+            ->whereNotNull('guru_tendik_id')
+            ->distinct()
+            ->count('guru_tendik_id');
+
+        $activeRombels = Rombel::query()
+            ->where('is_active', true)
+            ->orderBy('nama')
+            ->get(['id', 'nama']);
+        $activeStudentCount = 0;
+        $studentsWithoutActiveRombel = 0;
+
+        if (Schema::hasTable('data_siswa')) {
+            $activeStudents = DataSiswa::query()->where('status', 'aktif');
+            $activeStudentCount = (clone $activeStudents)->count();
+            $studentsWithoutActiveRombel = (clone $activeStudents)
+                ->where(function (Builder $students) use ($activeRombels): void {
+                    $students
+                        ->whereNull('rombel_saat_ini')
+                        ->orWhere('rombel_saat_ini', '')
+                        ->orWhereNotIn('rombel_saat_ini', $activeRombels->pluck('nama'));
+                })
+                ->count();
+        }
+
+        $activeSemesterCount = Semester::query()->where('is_active', true)->count();
+        $activeSubjectCount = Subject::query()->where('is_active', true)->count();
+        $activeTeachingCount = TeachingAssignment::query()->where('is_active', true)->count();
+        $activeHomeroomCount = HomeroomAssignment::query()->where('is_active', true)->count();
+        $assignedTeacherIds = TeachingAssignment::query()
+            ->where('is_active', true)
+            ->pluck('teacher_id')
+            ->merge(
+                HomeroomAssignment::query()
+                    ->where('is_active', true)
+                    ->pluck('teacher_id'),
+            )
+            ->map(fn (mixed $teacherId): int => (int) $teacherId)
+            ->filter()
+            ->unique()
+            ->values();
+        $linkedAssignedTeacherIds = User::query()
+            ->whereIn('guru_tendik_id', $assignedTeacherIds)
+            ->pluck('guru_tendik_id')
+            ->map(fn (mixed $teacherId): int => (int) $teacherId)
+            ->unique();
+        $unlinkedAssignedTeacherCount = $assignedTeacherIds
+            ->diff($linkedAssignedTeacherIds)
+            ->count();
+
+        $astsPeriodCount = AssessmentPeriod::query()
+            ->where('type', AssessmentType::ASTS->value)
+            ->count();
+        $asasPeriodCount = AssessmentPeriod::query()
+            ->where('type', AssessmentType::ASAS->value)
+            ->count();
+        $openPeriodCount = AssessmentPeriod::query()
+            ->whereIn('status', [
+                AssessmentPeriodStatus::OPEN->value,
+                AssessmentPeriodStatus::ENTRY_CLOSED->value,
+                AssessmentPeriodStatus::VERIFICATION->value,
+                AssessmentPeriodStatus::LOCKED->value,
+                AssessmentPeriodStatus::PUBLISHED->value,
+            ])
+            ->count();
+
+        $activeSchemes = AssessmentScheme::query()
+            ->where('is_active', true)
+            ->with('components')
+            ->get();
+        $invalidSchemeCount = $activeSchemes
+            ->filter(function (AssessmentScheme $scheme): bool {
+                $weight = $scheme->components
+                    ->where('is_active', true)
+                    ->sum(fn ($component): float => (float) $component->weight);
+
+                return abs($weight - 100.0) > 0.0001;
+            })
+            ->count();
+
+        $teacherReady = $activeTeacherCount > 0 && $linkedTeacherCount > 0;
+        $studentReady = $activeRombels->isNotEmpty()
+            && $activeStudentCount > 0
+            && $studentsWithoutActiveRombel === 0;
+        $assignmentReady = $activeSemesterCount > 0
+            && $activeSubjectCount > 0
+            && $activeTeachingCount > 0
+            && $activeHomeroomCount > 0
+            && $unlinkedAssignedTeacherCount === 0;
+        $periodReady = ($astsPeriodCount + $asasPeriodCount) > 0;
+        $schemeReady = $activeSchemes->isNotEmpty() && $invalidSchemeCount === 0;
+        $inputReady = $openPeriodCount > 0;
+
+        $periodUrl = AssessmentPeriodResource::canViewAny()
+            ? AssessmentPeriodResource::getUrl()
+            : null;
+
+        return [
+            'steps' => [
+                [
+                    'number' => '1',
+                    'title' => 'Guru dan Akun Login',
+                    'subtitle' => "{$linkedTeacherCount} akun tertaut dari {$activeTeacherCount} guru/tendik aktif.",
+                    'detail' => $teacherReady
+                        ? 'Identitas guru sudah tersedia. Periksa kembali nama, status, dan akun login.'
+                        : 'Lengkapi guru aktif dan tautkan akun pengguna sebelum membuat penugasan.',
+                    'ready' => $teacherReady,
+                    'url' => GuruTendikResource::canViewAny() ? GuruTendikResource::getUrl() : null,
+                    'action' => 'Buka Guru & Tendik',
+                ],
+                [
+                    'number' => '2',
+                    'title' => 'Rombel dan Siswa Aktif',
+                    'subtitle' => "{$activeStudentCount} siswa dalam {$activeRombels->count()} rombel aktif.",
+                    'detail' => $studentsWithoutActiveRombel > 0
+                        ? "{$studentsWithoutActiveRombel} siswa aktif belum cocok dengan rombel aktif."
+                        : 'Siswa akan diambil otomatis sesuai rombel yang dipilih pada periode.',
+                    'ready' => $studentReady,
+                    'url' => DataSiswaResource::canViewAny() ? DataSiswaResource::getUrl() : null,
+                    'action' => 'Periksa Siswa per Kelas',
+                ],
+                [
+                    'number' => '3',
+                    'title' => 'Mapel dan Penugasan Resmi',
+                    'subtitle' => "{$activeSubjectCount} mapel · {$activeTeachingCount} penugasan · {$activeHomeroomCount} wali kelas.",
+                    'detail' => $unlinkedAssignedTeacherCount > 0
+                        ? "{$unlinkedAssignedTeacherCount} guru pada penugasan belum memiliki akun tertaut."
+                        : 'Impor memasangkan semester, guru, mapel, kelas, dan wali kelas secara terstruktur.',
+                    'ready' => $assignmentReady,
+                    'url' => AssessmentMasterImport::canAccess() ? AssessmentMasterImport::getUrl() : null,
+                    'action' => 'Buka Impor Master',
+                ],
+                [
+                    'number' => '4',
+                    'title' => 'Buat Periode ASTS / ASAS',
+                    'subtitle' => "{$astsPeriodCount} periode ASTS · {$asasPeriodCount} periode ASAS.",
+                    'detail' => 'Pilih tahun, semester, jenis penilaian, jadwal input, dan rombel peserta.',
+                    'ready' => $periodReady,
+                    'url' => $periodUrl,
+                    'action' => 'Kelola Periode',
+                ],
+                [
+                    'number' => '5',
+                    'title' => 'Komponen dan Bobot',
+                    'subtitle' => $activeSchemes->count().' skema aktif · '.$invalidSchemeCount.' perlu diperbaiki.',
+                    'detail' => 'Pastikan komponen wajib tersedia dan total bobot aktif tepat 100%.',
+                    'ready' => $schemeReady,
+                    'url' => AssessmentSchemeResource::canViewAny() ? AssessmentSchemeResource::getUrl() : null,
+                    'action' => 'Atur Komponen',
+                ],
+                [
+                    'number' => '6',
+                    'title' => 'Preflight dan Buka Periode',
+                    'subtitle' => "{$openPeriodCount} periode sudah dibuka atau diproses.",
+                    'detail' => 'Klik Buka Periode. Sistem menyalin siswa, kelas, guru, mapel, dan wali kelas menjadi snapshot.',
+                    'ready' => $inputReady,
+                    'url' => $periodUrl,
+                    'action' => 'Buka dan Periksa Periode',
+                ],
+            ],
+            'notes' => [
+                'Menu Guru & Tendik dipakai untuk memperbarui identitas guru dan memastikan akun login tertaut.',
+                'Kolom label mapel pada profil guru hanya keterangan tampilan; penugasan ASTS/ASAS memakai pasangan resmi guru–mapel–kelas–semester dari Impor Master.',
+                'Saat periode dibuka, hanya siswa berstatus aktif yang nama rombelnya cocok dengan rombel aktif pilihan periode yang dimasukkan.',
+            ],
+            'asts_url' => AstsHub::canAccess() ? AstsHub::getUrl() : null,
+            'asas_url' => AsasHub::canAccess() ? AsasHub::getUrl() : null,
         ];
     }
 

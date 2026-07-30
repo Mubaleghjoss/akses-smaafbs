@@ -27,3 +27,9 @@
 - Mengubah ringkasan pengaturan serta pekerjaan ASTS/ASAS menjadi kartu
   responsif dengan ikon, status, jumlah data, dan tombol tindakan yang aman
   pada layar HP.
+- Menambahkan alur penyiapan enam langkah bergaya kartu Materi Boarding pada
+  Pengaturan Penilaian. Setiap kartu membaca kesiapan guru/akun, rombel/siswa,
+  penugasan terstruktur, periode, bobot skema, dan status pembukaan secara
+  langsung dari data.
+- Menambahkan petunjuk eksplisit bahwa label mapel pada profil guru tidak
+  menggantikan penugasan resmi guru–mapel–kelas–semester.

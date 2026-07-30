@@ -3439,3 +3439,31 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
         padding: 0.5rem;
     }
 }
+
+/* Assessment setup follows the numbered Boarding material cards, but six
+   workflow steps read better as two balanced rows on wide screens. */
+.assessment-setup-flow .boarding-material-card {
+    min-height: 9.5rem;
+}
+
+.assessment-setup-flow .boarding-material-card__body {
+    align-content: start;
+}
+
+@media (min-width: 768px) {
+    .assessment-setup-flow .boarding-material-menu__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 1280px) {
+    .assessment-setup-flow .boarding-material-menu__grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 480px) {
+    .assessment-setup-flow .boarding-material-card {
+        min-height: auto;
+    }
+}

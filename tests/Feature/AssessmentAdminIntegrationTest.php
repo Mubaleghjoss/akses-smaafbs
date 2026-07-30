@@ -348,6 +348,12 @@ class AssessmentAdminIntegrationTest extends TestCase
 
         Livewire::actingAs($admin)
             ->test(AssessmentDashboard::class)
+            ->assertSee('Alur Menyiapkan ASTS dan ASAS')
+            ->assertSee('Guru dan Akun Login')
+            ->assertSee('Rombel dan Siswa Aktif')
+            ->assertSee('Mapel dan Penugasan Resmi')
+            ->assertSee('Preflight dan Buka Periode')
+            ->assertSee('penugasan ASTS/ASAS memakai pasangan resmi')
             ->assertSee('Menu Pengaturan')
             ->assertSee('Periode Penilaian')
             ->assertSee('Komponen dan Bobot')

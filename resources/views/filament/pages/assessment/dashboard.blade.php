@@ -2,6 +2,7 @@
     @php
         $metrics = $this->getMetrics();
         $settingCards = $this->getSettingCards();
+        $setupWorkflow = $this->getSetupWorkflow();
     @endphp
 
     <div class="space-y-6">
@@ -28,6 +29,73 @@
                         @endforelse
                     </select>
                 </label>
+            </div>
+        </section>
+
+        <section class="boarding-material-menu assessment-setup-flow" aria-labelledby="assessment-setup-flow-title">
+            <div class="boarding-material-menu__head">
+                <div>
+                    <span class="boarding-material-menu__eyebrow">Mulai dari sini</span>
+                    <h3 id="assessment-setup-flow-title">Alur Menyiapkan ASTS dan ASAS</h3>
+                </div>
+                <p>Ikuti kartu bernomor secara berurutan. Warna hijau berarti data dasar pada langkah tersebut sudah tersedia.</p>
+            </div>
+
+            <div class="boarding-material-menu__grid">
+                @foreach ($setupWorkflow['steps'] as $step)
+                    @if ($step['url'])
+                        <a
+                            href="{{ $step['url'] }}"
+                            wire:navigate
+                            @class([
+                                'boarding-material-card',
+                                'boarding-material-card--active' => $step['ready'],
+                            ])
+                            aria-label="{{ $step['action'] }}: {{ $step['title'] }}"
+                        >
+                            @include('filament.pages.assessment.partials.setup-step-content', ['step' => $step])
+                        </a>
+                    @else
+                        <div
+                            @class([
+                                'boarding-material-card',
+                                'boarding-material-card--active' => $step['ready'],
+                            ])
+                        >
+                            @include('filament.pages.assessment.partials.setup-step-content', ['step' => $step])
+                        </div>
+                    @endif
+                @endforeach
+            </div>
+
+            <div class="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
+                @foreach ($setupWorkflow['notes'] as $noteIndex => $note)
+                    <article class="flex min-w-0 items-start gap-3 rounded-xl border border-primary-200 bg-primary-50 p-3 dark:border-primary-500/20 dark:bg-primary-950/20">
+                        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-xs font-black text-white">
+                            {{ $noteIndex + 1 }}
+                        </span>
+                        <p class="min-w-0 break-words text-xs font-semibold leading-5 text-primary-900 dark:text-primary-100">{{ $note }}</p>
+                    </article>
+                @endforeach
+            </div>
+
+            <div class="mt-4 flex min-w-0 flex-col gap-2 rounded-xl border border-gray-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between dark:border-white/10 dark:bg-gray-900">
+                <div class="min-w-0">
+                    <p class="font-bold text-gray-950 dark:text-white">Sesudah periode berhasil dibuka</p>
+                    <p class="mt-1 break-words text-xs leading-5 text-gray-500">Guru akan melihat penugasan sesuai akun, mapel, dan kelasnya. Admin dapat langsung memeriksa kedua pusat penilaian.</p>
+                </div>
+                <div class="flex shrink-0 flex-wrap gap-2">
+                    @if ($setupWorkflow['asts_url'])
+                        <x-filament::button tag="a" :href="$setupWorkflow['asts_url']" wire:navigate size="sm" icon="heroicon-o-document-check">
+                            Buka ASTS
+                        </x-filament::button>
+                    @endif
+                    @if ($setupWorkflow['asas_url'])
+                        <x-filament::button tag="a" :href="$setupWorkflow['asas_url']" wire:navigate size="sm" color="gray" icon="heroicon-o-book-open">
+                            Buka ASAS
+                        </x-filament::button>
+                    @endif
+                </div>
             </div>
         </section>
 

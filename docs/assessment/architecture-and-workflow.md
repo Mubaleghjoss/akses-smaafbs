@@ -12,6 +12,29 @@
 
 Referensi ke `data_siswa`, `guru_tendik`, dan `rombels` tidak memakai cascade. Foreign key penuh hanya dipakai antartabel assessment. Penghapusan master lama tidak boleh menghapus nilai/snapshot historis.
 
+## Alur penyiapan dari admin
+
+Halaman **Pengaturan Penilaian** menampilkan enam kartu bernomor yang harus
+diikuti berurutan:
+
+1. Periksa identitas guru dan tautan akun login pada **Guru & Tendik**.
+2. Periksa rombel aktif dan siswa aktif per kelas.
+3. Impor tahun, semester, mata pelajaran, penugasan guru–mapel–kelas, dan wali
+   kelas melalui **Impor Master Resmi**.
+4. Buat periode ASTS atau ASAS dan pilih rombel peserta.
+5. Buat skema serta komponen dengan total bobot aktif tepat 100%.
+6. Jalankan preflight melalui aksi **Buka Periode**.
+
+`users.guru_mapel_label` tetap hanya label tampilan. Mengubah label tersebut
+melalui halaman Guru & Tendik tidak membuat
+`assessment_teaching_assignments`. Penugasan transaksi selalu berasal dari
+pasangan terstruktur semester, guru, mata pelajaran, dan rombel.
+
+Saat periode dibuka, siswa diambil dari `data_siswa` yang berstatus aktif dan
+`rombel_saat_ini`-nya sama dengan nama rombel aktif yang dipilih. Guru pengampu
+dan wali kelas wajib memiliki akun `users.guru_tendik_id` yang tertaut sebelum
+snapshot dapat dibuat.
+
 ## Status
 
 Periode:
