@@ -148,13 +148,13 @@
         <section>
             <div class="mb-3">
                 <h2 class="text-base font-bold text-gray-950 dark:text-white">Kesiapan Fondasi</h2>
-                <p class="mt-1 text-sm text-gray-500">Empat data dasar ini harus tersedia sebelum periode dibuka.</p>
+                <p class="mt-1 text-sm text-gray-500">Lima data dasar ini harus tersedia sebelum periode dibuka.</p>
             </div>
-            <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div class="assessment-readiness-grid grid grid-cols-2 gap-3 lg:grid-cols-4">
                 @foreach ($this->getReadiness() as $item)
-                    <article class="min-w-0 rounded-xl border p-3 shadow-sm sm:p-4 {{ $item['ready'] ? 'border-success-200 bg-success-50 dark:border-success-500/30 dark:bg-success-950/20' : 'border-warning-200 bg-warning-50 dark:border-warning-500/30 dark:bg-warning-950/20' }}">
+                    <article class="assessment-readiness-card {{ $item['ready'] ? 'is-ready' : 'is-warning' }} min-w-0 rounded-xl border p-3 shadow-sm sm:p-4 {{ $item['ready'] ? 'border-success-200 bg-success-50 dark:border-success-500/30 dark:bg-success-950/20' : 'border-warning-200 bg-warning-50 dark:border-warning-500/30 dark:bg-warning-950/20' }}">
                         <div class="flex min-w-0 items-center gap-3">
-                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg {{ $item['ready'] ? 'bg-success-100 text-success-700 dark:bg-success-500/15 dark:text-success-300' : 'bg-warning-100 text-warning-700 dark:bg-warning-500/15 dark:text-warning-300' }}">
+                            <span class="assessment-readiness-card__icon flex h-9 w-9 shrink-0 items-center justify-center rounded-lg {{ $item['ready'] ? 'bg-success-100 text-success-700 dark:bg-success-500/15 dark:text-success-300' : 'bg-warning-100 text-warning-700 dark:bg-warning-500/15 dark:text-warning-300' }}">
                                 <x-filament::icon :icon="$item['ready'] ? 'heroicon-o-check-circle' : 'heroicon-o-exclamation-triangle'" class="h-5 w-5" />
                             </span>
                             <div class="min-w-0">
@@ -171,7 +171,7 @@
         </section>
 
         @if ($metrics['period'])
-            <section class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5 dark:border-white/10 dark:bg-gray-900">
+            <section class="assessment-status-shell rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5 dark:border-white/10 dark:bg-gray-900">
                 <div class="flex min-w-0 flex-wrap items-start justify-between gap-3">
                     <div class="min-w-0">
                         <h2 class="font-bold text-gray-950 dark:text-white">Status Pengumpulan</h2>
@@ -179,13 +179,13 @@
                             {{ $metrics['student_count'] }} siswa · {{ $metrics['class_count'] }} kelas · {{ $metrics['assignment_count'] }} penugasan
                         </p>
                     </div>
-                    <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700 dark:bg-white/10 dark:text-gray-200">
+                    <span class="assessment-status-badge rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700 dark:bg-white/10 dark:text-gray-200">
                         {{ $metrics['period']->status->label() }}
                     </span>
                 </div>
-                <div class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+                <div class="assessment-status-grid mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
                     @foreach ($metrics['cards'] as $card)
-                        <a href="{{ $card['url'] }}" wire:navigate class="min-w-0 rounded-xl border border-gray-200 bg-gray-50 p-3 transition hover:border-primary-400 hover:bg-primary-50 sm:p-4 dark:border-white/10 dark:bg-gray-950 dark:hover:border-primary-500/50 dark:hover:bg-primary-950/20">
+                        <a href="{{ $card['url'] }}" wire:navigate class="assessment-status-card min-w-0 rounded-xl border border-gray-200 bg-gray-50 p-3 transition hover:border-primary-400 hover:bg-primary-50 sm:p-4 dark:border-white/10 dark:bg-gray-950 dark:hover:border-primary-500/50 dark:hover:bg-primary-950/20">
                             <p class="break-words text-[11px] font-semibold uppercase tracking-wide text-gray-500">{{ $card['label'] }}</p>
                             <p class="mt-1 text-xl font-bold text-gray-950 sm:text-2xl dark:text-white">{{ $card['count'] }}</p>
                             <p class="mt-2 break-words text-xs font-semibold text-primary-600 dark:text-primary-300">Buka daftar terfilter →</p>
@@ -194,7 +194,7 @@
                 </div>
             </section>
         @else
-            <section class="rounded-2xl border border-dashed border-gray-300 p-6 text-center dark:border-white/15">
+            <section class="assessment-status-empty rounded-2xl border border-dashed border-gray-300 p-6 text-center dark:border-white/15">
                 <span class="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300">
                     <x-filament::icon icon="heroicon-o-calendar-days" class="h-6 w-6" />
                 </span>
@@ -203,12 +203,12 @@
             </section>
         @endif
 
-        <section class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-gray-900">
-            <div class="border-b border-gray-200 p-4 dark:border-white/10">
+        <section class="assessment-audit-shell overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-gray-900">
+            <div class="assessment-audit-shell__head border-b border-gray-200 p-4 dark:border-white/10">
                 <h2 class="font-bold text-gray-950 dark:text-white">Aktivitas Terbaru</h2>
                 <p class="mt-1 text-sm text-gray-500">Jejak perubahan pada periode yang dipilih.</p>
             </div>
-            <div class="divide-y divide-gray-200 dark:divide-white/10">
+            <div class="assessment-audit-shell__body divide-y divide-gray-200 dark:divide-white/10">
                 @forelse ($this->getRecentAuditRows() as $row)
                     <article class="grid min-w-0 gap-1 p-4 sm:grid-cols-[minmax(0,1fr)_auto]">
                         <div class="min-w-0">

@@ -45,3 +45,12 @@
 - Memperbaiki validasi pembuatan dan perubahan skema agar membaca komponen dari
   raw state repeater relasi Filament. Satu atau beberapa komponen yang sudah
   terlihat pada form tidak lagi keliru dianggap kosong saat disimpan.
+- Mengintegrasikan penugasan guru mapel, kelas mengajar, dan wali kelas ke
+  halaman Guru & Tendik melalui tab Penilaian ASTS–ASAS. Form langsung memakai
+  tabel master terstruktur yang sama dengan Impor Master, memperbarui snapshot
+  nama, memeriksa duplikasi, menjalankan Policy, dan menulis audit log.
+- Menambahkan ringkasan penugasan dan aksi Atur Mapel & Walas pada daftar guru,
+  serta kartu pintas Guru Mapel dan Wali Kelas pada Pengaturan Penilaian.
+- Memberi CSS panel eksplisit pada card Pengaturan, kesiapan fondasi, status
+  pengumpulan, aktivitas, serta hub ASTS/ASAS agar tidak jatuh menjadi teks
+  polos dan tetap responsif pada layar HP.

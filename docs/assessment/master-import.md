@@ -64,3 +64,19 @@ Guru tanpa akun dan rombel nonaktif tampil sebagai warning; preflight pembukaan 
 Importer tidak memberi atau mengganti role user. Setelah apply, admin wajib
 memeriksa akun tertaut dan menetapkan role `guru_mapel`/`wali_kelas` sesuai
 surat penugasan resmi sebelum membuka periode.
+
+## Pengaturan langsung per guru
+
+Untuk perubahan satu atau beberapa guru, admin tidak wajib mengunggah ulang
+workbook:
+
+1. Buka **Guru & Tendik**.
+2. Pilih **Atur Mapel & Walas** pada guru.
+3. Pada tab **Penilaian ASTS–ASAS**, tambah pasangan semester, mapel, dan kelas.
+4. Jika guru menjadi wali kelas, tambah semester dan rombel pada kartu Wali
+   Kelas.
+
+Form langsung dan importer menulis tabel master terstruktur yang sama. Unique
+index tetap mencegah penugasan ganda, snapshot nama diperbarui saat baris
+disimpan, dan perubahan tercatat pada log Penilaian. Pengaturan langsung tidak
+mengubah snapshot periode yang sudah dibuka.

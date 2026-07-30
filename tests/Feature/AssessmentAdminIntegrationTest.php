@@ -13,6 +13,9 @@ use App\Filament\Resources\AssessmentAuditLogResource\Pages\ListAssessmentAuditL
 use App\Filament\Resources\AssessmentPeriodResource;
 use App\Filament\Resources\AssessmentSchemeResource;
 use App\Filament\Resources\AssessmentSchemeResource\Pages\CreateAssessmentScheme;
+use App\Filament\Resources\GuruTendikResource\Pages\EditGuruTendik;
+use App\Filament\Resources\GuruTendikResource\RelationManagers\AssessmentHomeroomAssignmentsRelationManager;
+use App\Filament\Resources\GuruTendikResource\RelationManagers\AssessmentTeachingAssignmentsRelationManager;
 use App\Models\Assessment\AcademicYear;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentScheme;
@@ -356,15 +359,22 @@ class AssessmentAdminIntegrationTest extends TestCase
             ->assertSee('Guru dan Akun Login')
             ->assertSee('Rombel dan Siswa Aktif')
             ->assertSee('Mapel dan Penugasan Resmi')
+            ->assertSee('Guru Mapel & Kelas')
+            ->assertSee('Wali Kelas')
+            ->assertSee('Atur di Guru & Tendik')
             ->assertSee('Preflight dan Buka Periode')
-            ->assertSee('penugasan ASTS/ASAS memakai pasangan resmi')
+            ->assertSee('Penilaian ASTS–ASAS')
             ->assertSee('Menu Pengaturan')
             ->assertSee('Periode Penilaian')
             ->assertSee('Komponen dan Bobot')
-            ->assertSee('Template Rapor');
+            ->assertSee('Template Rapor')
+            ->assertSeeHtml('assessment-readiness-grid')
+            ->assertSeeHtml('assessment-audit-shell');
 
         Livewire::actingAs($admin)
             ->test(AstsHub::class)
+            ->assertSeeHtml('assessment-type-hero')
+            ->assertSeeHtml('assessment-type-action-card')
             ->assertSee('Semua kebutuhan ASTS dalam satu halaman')
             ->assertSee('Input Nilai Saya')
             ->assertSee('Status Pengumpulan')
@@ -373,6 +383,8 @@ class AssessmentAdminIntegrationTest extends TestCase
 
         Livewire::actingAs($admin)
             ->test(AsasHub::class)
+            ->assertSeeHtml('assessment-type-hero')
+            ->assertSeeHtml('assessment-type-action-card')
             ->assertSee('Semua kebutuhan ASAS dalam satu halaman')
             ->assertSee('Input Nilai Saya')
             ->assertSee('Status Pengumpulan')
@@ -464,6 +476,101 @@ class AssessmentAdminIntegrationTest extends TestCase
             ->assertSee('Rincian pratinjau')
             ->assertSee('Tahun Pelajaran 2026/2027')
             ->assertSee('1 baris');
+    }
+
+    public function test_teacher_subject_and_homeroom_assignments_are_managed_from_guru_tendik(): void
+    {
+        $admin = $this->createUser('assessment-guru-assignment-admin', 'admin');
+        $year = AcademicYear::query()->create([
+            'code' => '2030-2031',
+            'name' => 'Tahun Pelajaran 2030/2031',
+            'is_active' => true,
+        ]);
+        $semester = Semester::query()->create([
+            'assessment_academic_year_id' => $year->getKey(),
+            'code' => '2030-2031-GANJIL',
+            'name' => 'Semester Ganjil',
+            'is_active' => true,
+        ]);
+        $subject = Subject::query()->create([
+            'code' => 'MAT-2030',
+            'name' => 'Matematika',
+            'is_active' => true,
+        ]);
+        $rombel = Rombel::query()->create([
+            'nama' => 'XI 1',
+            'angkatan' => '2030',
+            'is_active' => true,
+        ]);
+        $guru = GuruTendik::query()->create([
+            'nama' => 'Guru Penilaian Terintegrasi',
+            'status' => 'aktif',
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(AssessmentTeachingAssignmentsRelationManager::class, [
+                'ownerRecord' => $guru,
+                'pageClass' => EditGuruTendik::class,
+            ])
+            ->call('loadTable')
+            ->assertSee('Mapel dan Kelas Mengajar')
+            ->callTableAction('create', data: [
+                'assessment_semester_id' => $semester->getKey(),
+                'assessment_subject_id' => $subject->getKey(),
+                'rombel_id' => $rombel->getKey(),
+                'is_active' => true,
+            ])
+            ->assertHasNoFormErrors();
+
+        Livewire::actingAs($admin)
+            ->test(AssessmentHomeroomAssignmentsRelationManager::class, [
+                'ownerRecord' => $guru,
+                'pageClass' => EditGuruTendik::class,
+            ])
+            ->call('loadTable')
+            ->assertSee('Wali Kelas')
+            ->callTableAction('create', data: [
+                'assessment_semester_id' => $semester->getKey(),
+                'rombel_id' => $rombel->getKey(),
+                'is_active' => true,
+            ])
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('assessment_teaching_assignments', [
+            'assessment_semester_id' => $semester->getKey(),
+            'assessment_subject_id' => $subject->getKey(),
+            'teacher_id' => $guru->getKey(),
+            'rombel_id' => $rombel->getKey(),
+            'teacher_name_snapshot' => $guru->nama,
+            'subject_name_snapshot' => $subject->name,
+            'rombel_name_snapshot' => $rombel->nama,
+            'is_active' => true,
+        ]);
+        $this->assertDatabaseHas('assessment_homeroom_assignments', [
+            'assessment_semester_id' => $semester->getKey(),
+            'teacher_id' => $guru->getKey(),
+            'rombel_id' => $rombel->getKey(),
+            'teacher_name_snapshot' => $guru->nama,
+            'rombel_name_snapshot' => $rombel->nama,
+            'is_active' => true,
+        ]);
+        $this->assertDatabaseHas('assessment_audit_logs', [
+            'event' => 'teaching_assignment.created',
+            'subject_type' => TeachingAssignment::class,
+        ]);
+        $this->assertDatabaseHas('assessment_audit_logs', [
+            'event' => 'homeroom_assignment.created',
+            'subject_type' => HomeroomAssignment::class,
+        ]);
+
+        $this->view('filament.resources.guru-tendik-resource.partials.assessment-integration', [
+            'guru' => $guru,
+            'teachingCount' => 1,
+            'homeroomCount' => 1,
+        ])
+            ->assertSeeHtml('guru-assessment-integration')
+            ->assertSee('Mapel, kelas mengajar, dan wali kelas')
+            ->assertSee('Penilaian ASTS–ASAS');
     }
 
     public function test_scheme_guide_and_weight_preview_explain_the_result_before_save(): void

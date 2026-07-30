@@ -19,16 +19,23 @@ diikuti berurutan:
 
 1. Periksa identitas guru dan tautan akun login pada **Guru & Tendik**.
 2. Periksa rombel aktif dan siswa aktif per kelas.
-3. Impor tahun, semester, mata pelajaran, penugasan guru–mapel–kelas, dan wali
-   kelas melalui **Impor Master Resmi**.
+3. Siapkan tahun, semester, dan mata pelajaran melalui **Impor Master Resmi**.
+   Penugasan guru–mapel–kelas dan wali kelas dapat diterapkan massal dari
+   workbook atau dikelola per guru melalui **Guru & Tendik → Penilaian
+   ASTS–ASAS**.
 4. Buat periode ASTS atau ASAS dan pilih rombel peserta.
 5. Buat skema serta komponen dengan total bobot aktif tepat 100%.
 6. Jalankan preflight melalui aksi **Buka Periode**.
 
-`users.guru_mapel_label` tetap hanya label tampilan. Mengubah label tersebut
-melalui halaman Guru & Tendik tidak membuat
-`assessment_teaching_assignments`. Penugasan transaksi selalu berasal dari
-pasangan terstruktur semester, guru, mata pelajaran, dan rombel.
+`users.guru_mapel_label` tetap hanya label tampilan lama dan tidak menjadi
+sumber transaksi. Pengaturan baru pada tab **Penilaian ASTS–ASAS** di halaman
+Guru & Tendik menulis langsung ke `assessment_teaching_assignments` dan
+`assessment_homeroom_assignments`, sama dengan target data Impor Master.
+Penugasan transaksi selalu berasal dari pasangan terstruktur semester, guru,
+mata pelajaran, dan rombel.
+
+Perubahan master melalui Guru & Tendik hanya memengaruhi periode yang dibuka
+setelah perubahan. Snapshot periode yang sudah dibuka tetap immutable.
 
 Saat periode dibuka, siswa diambil dari `data_siswa` yang berstatus aktif dan
 `rombel_saat_ini`-nya sama dengan nama rombel aktif yang dipilih. Guru pengampu

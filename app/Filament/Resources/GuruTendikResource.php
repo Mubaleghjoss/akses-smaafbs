@@ -6,8 +6,11 @@ use App\Filament\Concerns\HasConfirmedDeleteActions;
 use App\Filament\Concerns\HasModulePermissions;
 use App\Filament\Concerns\HasOptimizedAdminTable;
 use App\Filament\Resources\GuruTendikResource\Pages;
+use App\Filament\Resources\GuruTendikResource\RelationManagers\AssessmentHomeroomAssignmentsRelationManager;
+use App\Filament\Resources\GuruTendikResource\RelationManagers\AssessmentTeachingAssignmentsRelationManager;
 use App\Filament\Resources\GuruTendikResource\RelationManagers\BerkasGurusRelationManager;
 use App\Filament\Resources\GuruTendikResource\RelationManagers\TugasTambahanRelationManager;
+use App\Models\Assessment\TeachingAssignment;
 use App\Models\BerkasGuru;
 use App\Models\GuruTendik;
 use App\Support\Admin\AdminRoleTemplateSupport;
@@ -19,13 +22,17 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Forms;
 use Filament\Notifications\Notification;
+use Filament\Resources\RelationManagers\RelationGroup;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\View as SchemaView;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Schema as DatabaseSchema;
 use Illuminate\Support\HtmlString;
 
 class GuruTendikResource extends Resource
@@ -101,6 +108,17 @@ class GuruTendikResource extends Resource
                         Forms\Components\TextInput::make('status')
                             ->default('aktif'),
                     ]),
+                SchemaView::make('filament.resources.guru-tendik-resource.partials.assessment-integration')
+                    ->viewData(fn (?GuruTendik $record): array => [
+                        'guru' => $record,
+                        'teachingCount' => $record && DatabaseSchema::hasTable('assessment_teaching_assignments')
+                            ? $record->assessmentTeachingAssignments()->where('is_active', true)->count()
+                            : 0,
+                        'homeroomCount' => $record && DatabaseSchema::hasTable('assessment_homeroom_assignments')
+                            ? $record->assessmentHomeroomAssignments()->where('is_active', true)->count()
+                            : 0,
+                    ])
+                    ->columnSpanFull(),
                 Section::make('Profil Publik')
                     ->description('Informasi ini dipakai untuk halaman biografi publik saat data guru/tendik dihubungkan ke struktur organisasi.')
                     ->columns(['default' => 1, 'md' => 2])
@@ -198,20 +216,29 @@ class GuruTendikResource extends Resource
             emptyStateHeading: 'Belum ada data guru/tendik',
             emptyStateDescription: 'Tambahkan data guru atau sinkronkan akun agar pengelolaan dokumen lebih mudah.'
         )
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->select([
-                'id',
-                'nama',
-                'nip',
-                'nuptk',
-                'nik',
-                'jenis_ptk',
-                'jk',
-                'tempat_lahir',
-                'tanggal_lahir',
-                'status',
-                'created_at',
-                'updated_at',
-            ]))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query
+                ->select([
+                    'id',
+                    'nama',
+                    'nip',
+                    'nuptk',
+                    'nik',
+                    'jenis_ptk',
+                    'jk',
+                    'tempat_lahir',
+                    'tanggal_lahir',
+                    'status',
+                    'created_at',
+                    'updated_at',
+                ])
+                ->when(
+                    DatabaseSchema::hasTable('assessment_teaching_assignments')
+                        && DatabaseSchema::hasTable('assessment_homeroom_assignments'),
+                    fn (Builder $teachers): Builder => $teachers->withCount([
+                        'assessmentTeachingAssignments as active_assessment_teaching_assignments_count' => fn (Builder $assignments): Builder => $assignments->where('is_active', true),
+                        'assessmentHomeroomAssignments as active_assessment_homeroom_assignments_count' => fn (Builder $assignments): Builder => $assignments->where('is_active', true),
+                    ]),
+                ))
             ->columns([
                 Tables\Columns\TextColumn::make('nama')
                     ->label('Nama')
@@ -274,13 +301,26 @@ class GuruTendikResource extends Resource
                     ->placeholder('Belum ada akun')
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('userAccount.guru_mapel_label')
-                    ->label('Mapel')
-                    ->toggleable(),
+                    ->label('Label Mapel Lama')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('userAccount.guru_walas_scope')
-                    ->label('Scope Walas')
+                    ->label('Scope Walas Lama')
                     ->state(fn (GuruTendik $record): string => collect($record->userAccount?->guruWalasScopes() ?? [])->implode(', ') ?: '-')
                     ->wrap()
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('assessment_assignment_summary')
+                    ->label('Penugasan Penilaian')
+                    ->state(fn (GuruTendik $record): string => sprintf(
+                        '%d mapel/kelas · %d wali kelas',
+                        (int) ($record->active_assessment_teaching_assignments_count ?? 0),
+                        (int) ($record->active_assessment_homeroom_assignments_count ?? 0),
+                    ))
+                    ->badge()
+                    ->color(fn (GuruTendik $record): string => (
+                        (int) ($record->active_assessment_teaching_assignments_count ?? 0)
+                        + (int) ($record->active_assessment_homeroom_assignments_count ?? 0)
+                    ) > 0 ? 'success' : 'gray')
+                    ->wrap(),
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -300,6 +340,37 @@ class GuruTendikResource extends Resource
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Status')
                     ->options(fn (): array => GuruTendik::statusOptions()),
+                Tables\Filters\SelectFilter::make('assessment_assignment')
+                    ->label('Penugasan Penilaian')
+                    ->options([
+                        'teaching' => 'Punya mapel/kelas',
+                        'homeroom' => 'Wali kelas',
+                        'unassigned' => 'Belum punya penugasan',
+                    ])
+                    ->visible(fn (): bool => DatabaseSchema::hasTable('assessment_teaching_assignments')
+                        && DatabaseSchema::hasTable('assessment_homeroom_assignments'))
+                    ->query(function (Builder $query, array $data): Builder {
+                        return match ($data['value'] ?? null) {
+                            'teaching' => $query->whereHas(
+                                'assessmentTeachingAssignments',
+                                fn (Builder $assignments): Builder => $assignments->where('is_active', true),
+                            ),
+                            'homeroom' => $query->whereHas(
+                                'assessmentHomeroomAssignments',
+                                fn (Builder $assignments): Builder => $assignments->where('is_active', true),
+                            ),
+                            'unassigned' => $query
+                                ->whereDoesntHave(
+                                    'assessmentTeachingAssignments',
+                                    fn (Builder $assignments): Builder => $assignments->where('is_active', true),
+                                )
+                                ->whereDoesntHave(
+                                    'assessmentHomeroomAssignments',
+                                    fn (Builder $assignments): Builder => $assignments->where('is_active', true),
+                                ),
+                            default => $query,
+                        };
+                    }),
                 Tables\Filters\SelectFilter::make('division_template')
                     ->label('Akses Divisi')
                     ->options(AdminRoleTemplateSupport::options())
@@ -354,6 +425,20 @@ class GuruTendikResource extends Resource
                     }),
             ])
             ->actions([
+                Action::make('aturPenilaian')
+                    ->label('Atur Mapel & Walas')
+                    ->icon('heroicon-o-academic-cap')
+                    ->color('success')
+                    ->url(fn (GuruTendik $record): string => static::getUrl('edit', [
+                        'record' => $record,
+                        'relation' => '0',
+                    ]))
+                    ->authorize(fn (GuruTendik $record): bool => static::canEdit($record)
+                        && DatabaseSchema::hasTable('assessment_teaching_assignments')
+                        && Gate::allows('viewAny', TeachingAssignment::class))
+                    ->visible(fn (GuruTendik $record): bool => static::canEdit($record)
+                        && DatabaseSchema::hasTable('assessment_teaching_assignments')
+                        && Gate::allows('viewAny', TeachingAssignment::class)),
                 Action::make('kelolaAkun')
                     ->label(fn (GuruTendik $record): string => $record->userAccount ? 'Kelola Akun' : 'Buat Akun')
                     ->icon('heroicon-o-user-circle')
@@ -679,6 +764,15 @@ class GuruTendikResource extends Resource
     public static function getRelations(): array
     {
         return [
+            RelationGroup::make('Penilaian ASTS–ASAS', [
+                AssessmentTeachingAssignmentsRelationManager::class,
+                AssessmentHomeroomAssignmentsRelationManager::class,
+            ])
+                ->icon('heroicon-o-academic-cap')
+                ->badge(fn (GuruTendik $ownerRecord): string => (string) (
+                    $ownerRecord->assessmentTeachingAssignments()->where('is_active', true)->count()
+                    + $ownerRecord->assessmentHomeroomAssignments()->where('is_active', true)->count()
+                )),
             TugasTambahanRelationManager::class,
             BerkasGurusRelationManager::class,
         ];
@@ -975,7 +1069,3 @@ class GuruTendikResource extends Resource
         return $records;
     }
 }
-
-
-
-

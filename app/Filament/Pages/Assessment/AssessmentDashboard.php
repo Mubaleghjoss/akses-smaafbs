@@ -83,6 +83,28 @@ class AssessmentDashboard extends AssessmentPage
     {
         return [
             [
+                'title' => 'Guru Mapel & Kelas',
+                'description' => 'Pilih guru lalu atur pasangan semester, mata pelajaran, dan kelas mengajar langsung dari data Guru & Tendik.',
+                'icon' => 'heroicon-o-book-open',
+                'tone' => 'success',
+                'value' => GuruTendikResource::canViewAny()
+                    ? TeachingAssignment::query()->where('is_active', true)->count()
+                    : '—',
+                'caption' => 'penugasan mapel aktif',
+                'url' => GuruTendikResource::canViewAny() ? GuruTendikResource::getUrl() : null,
+            ],
+            [
+                'title' => 'Wali Kelas',
+                'description' => 'Pilih guru lalu tetapkan wali kelas per semester. Data ini menentukan akses rekap dan identitas wali pada rapor.',
+                'icon' => 'heroicon-o-user-group',
+                'tone' => 'warning',
+                'value' => GuruTendikResource::canViewAny()
+                    ? HomeroomAssignment::query()->where('is_active', true)->count()
+                    : '—',
+                'caption' => 'penugasan walas aktif',
+                'url' => GuruTendikResource::canViewAny() ? GuruTendikResource::getUrl() : null,
+            ],
+            [
                 'title' => 'Periode Penilaian',
                 'description' => 'Buat periode ASTS atau ASAS, pilih kelas, jalankan preflight, dan atur tahap pengumpulan.',
                 'icon' => 'heroicon-o-calendar-days',
@@ -270,10 +292,10 @@ class AssessmentDashboard extends AssessmentPage
                     'subtitle' => "{$activeSubjectCount} mapel · {$activeTeachingCount} penugasan · {$activeHomeroomCount} wali kelas.",
                     'detail' => $unlinkedAssignedTeacherCount > 0
                         ? "{$unlinkedAssignedTeacherCount} guru pada penugasan belum memiliki akun tertaut."
-                        : 'Impor memasangkan semester, guru, mapel, kelas, dan wali kelas secara terstruktur.',
+                        : 'Atur per guru untuk perubahan harian; gunakan Impor Master untuk pembaruan massal.',
                     'ready' => $assignmentReady,
-                    'url' => AssessmentMasterImport::canAccess() ? AssessmentMasterImport::getUrl() : null,
-                    'action' => 'Buka Impor Master',
+                    'url' => GuruTendikResource::canViewAny() ? GuruTendikResource::getUrl() : null,
+                    'action' => 'Atur di Guru & Tendik',
                 ],
                 [
                     'number' => '4',
@@ -304,8 +326,9 @@ class AssessmentDashboard extends AssessmentPage
                 ],
             ],
             'notes' => [
-                'Menu Guru & Tendik dipakai untuk memperbarui identitas guru dan memastikan akun login tertaut.',
-                'Kolom label mapel pada profil guru hanya keterangan tampilan; penugasan ASTS/ASAS memakai pasangan resmi guru–mapel–kelas–semester dari Impor Master.',
+                'Pada Guru & Tendik, buka data guru lalu gunakan tab Penilaian ASTS–ASAS untuk mengatur mapel, kelas mengajar, dan wali kelas.',
+                'Impor Master tetap tersedia untuk perubahan massal. Perubahan satu guru dapat dilakukan langsung tanpa mengunggah ulang workbook.',
+                'Kolom label mapel lama pada akun hanya keterangan. Penilaian memakai pasangan terstruktur guru–mapel–kelas–semester.',
                 'Saat periode dibuka, hanya siswa berstatus aktif yang nama rombelnya cocok dengan rombel aktif pilihan periode yang dimasukkan.',
             ],
             'asts_url' => AstsHub::canAccess() ? AstsHub::getUrl() : null,
@@ -319,6 +342,7 @@ class AssessmentDashboard extends AssessmentPage
             ['label' => 'Tahun Pelajaran', 'count' => AcademicYear::query()->count(), 'ready' => AcademicYear::query()->exists()],
             ['label' => 'Mata Pelajaran', 'count' => Subject::query()->where('is_active', true)->count(), 'ready' => Subject::query()->where('is_active', true)->exists()],
             ['label' => 'Penugasan Guru', 'count' => TeachingAssignment::query()->where('is_active', true)->count(), 'ready' => TeachingAssignment::query()->where('is_active', true)->exists()],
+            ['label' => 'Wali Kelas', 'count' => HomeroomAssignment::query()->where('is_active', true)->count(), 'ready' => HomeroomAssignment::query()->where('is_active', true)->exists()],
             ['label' => 'Periode', 'count' => AssessmentPeriod::query()->count(), 'ready' => AssessmentPeriod::query()->exists()],
         ];
     }
