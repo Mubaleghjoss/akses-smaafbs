@@ -26,7 +26,7 @@ class AssessmentAuditLogResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-check';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Penilaian';
+    protected static string|\UnitEnum|null $navigationGroup = 'Manajemen Sekolah';
 
     protected static ?string $navigationLabel = 'Log Perubahan';
 

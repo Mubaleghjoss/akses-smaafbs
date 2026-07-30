@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssessmentType;
+use App\Filament\Pages\Assessment\AsasInputScores;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Assessment\AstsInputScores;
 use App\Filament\Resources\AssessmentPeriodResource;
@@ -20,6 +21,7 @@ use App\Models\GuruTendik;
 use App\Models\Rombel;
 use App\Models\User;
 use App\Support\Admin\AdminModuleAccess;
+use App\Support\Admin\AdminSchoolNavigation;
 use App\Support\AssessmentMaster\AssessmentMasterWorkbookImporter;
 use Database\Seeders\InitialAdminSeeder;
 use Illuminate\Database\Schema\Blueprint;
@@ -224,10 +226,33 @@ class AssessmentAdminIntegrationTest extends TestCase
 
         $admin = $this->createUser('assessment-admin', 'admin');
 
-        $this->assertContains('Penilaian', User::navigationGroupOptions());
+        $this->assertContains(AdminSchoolNavigation::GROUP, User::navigationGroupOptions());
+        $this->assertNotContains('Penilaian', User::navigationGroupOptions());
         $this->assertSame(
-            'Penilaian',
+            AdminSchoolNavigation::GROUP,
             AdminModuleAccess::definition('penilaian')['group'],
+        );
+        $this->assertSame(
+            AdminSchoolNavigation::GROUP,
+            AdminSchoolNavigation::effectiveGroupForClass(AstsInputScores::class),
+        );
+        $this->assertSame(
+            AdminSchoolNavigation::GROUP,
+            AdminSchoolNavigation::effectiveGroupForClass(AssessmentPeriodResource::class),
+        );
+        $assessmentParents = collect(AdminSchoolNavigation::parentNavigationItems([
+            AstsInputScores::class,
+            AsasInputScores::class,
+            AssessmentPeriodResource::class,
+        ]))->keyBy(fn ($item): string => $item->getLabel());
+        $this->assertSame(
+            ['ASTS', 'ASAS', 'Pengaturan Penilaian'],
+            $assessmentParents->keys()->all(),
+        );
+        $this->assertTrue(
+            $assessmentParents->every(
+                fn ($item): bool => $item->getGroup() === AdminSchoolNavigation::GROUP,
+            ),
         );
         $this->assertContains(
             AssessmentDashboard::class,

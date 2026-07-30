@@ -46,7 +46,6 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
         'Siswa' => 'Siswa',
         'Guru/Tendik' => 'Guru/Tendik',
         'UKS' => 'UKS',
-        'Penilaian' => 'Penilaian',
     ];
 
     protected static ?bool $permissionRelationsAvailable = null;

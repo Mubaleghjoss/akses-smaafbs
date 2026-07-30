@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Schema;
 
 abstract class AssessmentPage extends Page
 {
-    protected static string|\UnitEnum|null $navigationGroup = 'Penilaian';
+    protected static string|\UnitEnum|null $navigationGroup = 'Manajemen Sekolah';
 
     protected static string $assessmentPermission = 'penilaian.view';
 

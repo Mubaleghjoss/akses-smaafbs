@@ -15,3 +15,6 @@
   header workbook, KKM eksplisit, detail audit, dan validasi input rekap.
 - Memperketat revisi/publish/retry rapor, validasi checksum aktual, path unik,
   serta shared overlap lock agar job deploy lama dan baru tetap idempoten.
+- Memindahkan Dashboard Penilaian, ASTS, ASAS, dan Pengaturan Penilaian ke
+  kelompok navigasi **Manajemen Sekolah** agar tidak membuat kelompok menu
+  terpisah.

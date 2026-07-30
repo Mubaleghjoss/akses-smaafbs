@@ -32,7 +32,7 @@ class AssessmentReportTemplateResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Penilaian';
+    protected static string|\UnitEnum|null $navigationGroup = 'Manajemen Sekolah';
 
     protected static ?string $navigationLabel = 'Template Rapor';
 

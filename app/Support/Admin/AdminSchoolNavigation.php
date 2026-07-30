@@ -69,9 +69,9 @@ class AdminSchoolNavigation
         'Agenda' => ['icon' => 'heroicon-o-calendar-days', 'sort' => 190],
         'Konten' => ['icon' => 'heroicon-o-newspaper', 'sort' => 200],
         'Perpustakaan' => ['icon' => 'heroicon-o-book-open', 'sort' => 210],
-        'ASTS' => ['icon' => 'heroicon-o-document-check', 'sort' => 10, 'group' => 'Penilaian'],
-        'ASAS' => ['icon' => 'heroicon-o-academic-cap', 'sort' => 20, 'group' => 'Penilaian'],
-        'Pengaturan Penilaian' => ['icon' => 'heroicon-o-cog-6-tooth', 'sort' => 30, 'group' => 'Penilaian'],
+        'ASTS' => ['icon' => 'heroicon-o-document-check', 'sort' => 10],
+        'ASAS' => ['icon' => 'heroicon-o-academic-cap', 'sort' => 20],
+        'Pengaturan Penilaian' => ['icon' => 'heroicon-o-cog-6-tooth', 'sort' => 30],
     ];
 
     /**
@@ -128,20 +128,7 @@ class AdminSchoolNavigation
      * @var array<class-string, string>
      */
     protected const CLASS_GROUP_MAP = [
-        AssessmentDashboard::class => 'Penilaian',
-        AstsInputScores::class => 'Penilaian',
-        AstsSubmissionStatus::class => 'Penilaian',
-        AstsHomeroomRecap::class => 'Penilaian',
-        AstsReports::class => 'Penilaian',
-        AsasInputScores::class => 'Penilaian',
-        AsasSubmissionStatus::class => 'Penilaian',
-        AsasHomeroomRecap::class => 'Penilaian',
-        AsasReports::class => 'Penilaian',
-        AssessmentPeriodResource::class => 'Penilaian',
-        AssessmentSchemeResource::class => 'Penilaian',
-        AssessmentReportTemplateResource::class => 'Penilaian',
-        AssessmentAuditLogResource::class => 'Penilaian',
-        AssessmentMasterImport::class => 'Penilaian',
+        AssessmentDashboard::class => self::GROUP,
     ];
 
     public static function shouldClassify(string $class): bool
