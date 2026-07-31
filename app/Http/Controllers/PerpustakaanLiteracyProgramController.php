@@ -454,10 +454,13 @@ class PerpustakaanLiteracyProgramController extends Controller
         $material = $this->resolveDirectLinkMaterial($slug);
         $this->ensureMaterialHasOpened($material);
         $validated = $request->validate([
-            'event_code' => ['required', 'in:client_retry_exhausted'],
+            'event_code' => ['required', 'in:client_retry_exhausted,unexpected_success_payload'],
             'submission_ticket' => ['nullable', 'string', 'max:64'],
             'submission_request_id' => ['nullable', 'uuid'],
             'retry_statuses' => ['nullable', 'string', 'max:120'],
+            'http_status' => ['nullable', 'integer', 'min:0', 'max:599'],
+            'content_type' => ['nullable', 'string', 'max:100'],
+            'payload_status' => ['nullable', 'string', 'max:60'],
         ]);
         $ticket = filled($validated['submission_ticket'] ?? null)
             ? PerpustakaanLiterasiSubmissionTicket::query()
@@ -466,18 +469,26 @@ class PerpustakaanLiteracyProgramController extends Controller
                 ->first()
             : null;
 
-        $recorder->record('client_retry_exhausted', [
+        $eventCode = (string) $validated['event_code'];
+        $recorder->record($eventCode, [
             'material_id' => $material->getKey(),
             'data_siswa_id' => $ticket?->data_siswa_id,
             'ticket_id' => $ticket?->getKey(),
-            'http_status' => collect(explode(',', (string) ($validated['retry_statuses'] ?? '')))
-                ->map(fn (string $status): int => (int) trim($status))
-                ->filter()
-                ->last(),
+            'http_status' => isset($validated['http_status'])
+                ? (int) $validated['http_status']
+                : collect(explode(',', (string) ($validated['retry_statuses'] ?? '')))
+                    ->map(fn (string $status): int => (int) trim($status))
+                    ->filter()
+                    ->last(),
             'retry_statuses' => $validated['retry_statuses'] ?? null,
             'context' => [
                 'operation' => $ticket?->operation ?? 'unknown',
-                'reason' => 'retry_window_exhausted',
+                'reason' => $eventCode === 'unexpected_success_payload'
+                    ? 'success_payload_missing_receipt_redirect'
+                    : 'retry_window_exhausted',
+                'request_kind' => 'final_submission',
+                'content_type' => $validated['content_type'] ?? null,
+                'payload_status' => $validated['payload_status'] ?? null,
             ],
         ]);
 

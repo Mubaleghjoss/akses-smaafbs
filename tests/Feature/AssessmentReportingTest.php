@@ -877,7 +877,7 @@ class AssessmentReportingTest extends TestCase
     public function test_report_page_and_private_preview_render_with_card_workflow(): void
     {
         Storage::fake('local');
-        [$period, , $students, $template] = $this->reportingFoundation();
+        [$period, $rombel, $students, $template] = $this->reportingFoundation();
         $snapshot = $this->snapshot($period, $students[0], $template, 1);
         $this->actingAs(User::query()->findOrFail(99));
 
@@ -888,7 +888,45 @@ class AssessmentReportingTest extends TestCase
             ->assertOk()
             ->assertSee('Pipeline PDF ringan')
             ->assertSee('Hentikan Semua Antrean PDF')
+            ->assertSee('Atur Guru Mapel')
+            ->assertSee('Atur Wali Kelas')
+            ->assertSee('Buka Template Rapor')
+            ->assertSee('Buka Wizard Kelengkapan')
+            ->assertSeeHtml('assessment-report-preflight-issue is-actionable')
             ->assertSeeHtml('assessment-report-card');
+
+        $subject = Subject::query()->create([
+            'code' => 'BIO-PREFLIGHT',
+            'name' => 'Biologi Preflight',
+            'report_group_code' => 'A',
+            'report_group_name' => 'Kelompok A',
+            'report_group_sort_order' => 1,
+            'sort_order' => 1,
+            'is_active' => true,
+        ]);
+        AssessmentPeriodAssignment::query()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'teacher_id' => 41,
+            'assessment_subject_id' => $subject->getKey(),
+            'teacher_name_snapshot' => 'Guru Biologi',
+            'subject_name_snapshot' => 'Biologi Preflight',
+            'subject_group_code_snapshot' => 'A',
+            'subject_group_name_snapshot' => 'Kelompok A',
+            'subject_group_sort_order_snapshot' => 1,
+            'subject_sort_order_snapshot' => 1,
+            'rombel_name_snapshot' => $rombel->rombel_name_snapshot,
+            'status' => 'draft',
+            'lock_version' => 0,
+        ]);
+
+        $this->get(AstsReports::getUrl([
+            'period' => $period->getKey(),
+            'template' => $template->getKey(),
+        ]))
+            ->assertOk()
+            ->assertSee('Buka Status Pengumpulan')
+            ->assertSee('Buka Input Nilai');
 
         $previewResponse = $this->get(route('assessment.reports.preview', $snapshot));
         $previewResponse

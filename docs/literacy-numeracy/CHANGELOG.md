@@ -9,6 +9,10 @@
 - Kunci Esai ditampilkan sebagai teks; Benar/Salah sebagai tabel; Menjodohkan
   sebagai pasangan kiri ke kanan.
 - History dengan materi yang hilang tetap dapat dibuka read-only tanpa error.
+- Memperbaiki penggabungan header submit JSON dan menambahkan pemulihan Struk
+  untuk respons HTTP sukses yang kosong/tidak lengkap.
+- Pemulihan memakai tiket dan request ID yang sama, menyediakan tombol periksa
+  ulang, serta mencatat diagnostik aman tanpa jawaban atau token.
 
 ## 2026-07-30 - Struk aman, direct link, dan dispensasi
 

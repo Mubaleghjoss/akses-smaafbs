@@ -29,6 +29,16 @@ Retry memakai request ID dan tiket yang sama agar koneksi putus tidak membuat re
 - Selama retry, isian tetap berada di form dan disalin ke `sessionStorage`; murid tidak perlu menekan Kirim berulang dan harus mempertahankan tab tetap terbuka.
 - Draf bukan bukti respons sudah tersimpan di server. Bukti konfirmasi yang mudah dipahami murid adalah halaman **Struk Pengiriman** beserta kode edit.
 - Jika retry otomatis habis, murid diminta memeriksa koneksi lalu menekan Kirim satu kali. Request ID yang sama menjaga retry tetap idempoten.
+- Respons sukses yang tidak lengkap, misalnya HTTP 2xx berisi HTML, JSON kosong,
+  atau JSON tanpa `redirect_url`, tidak langsung dianggap gagal. Browser memakai
+  tiket dan `submission_request_id` yang sama untuk memeriksa status dan
+  memulihkan flash session Struk tanpa membuat respons kedua.
+- Saat Struk belum dapat dibuka, panel pemulihan menyediakan **Periksa Status
+  Lagi** dan **Kembali Perbaiki Jawaban**. Menutup panel tidak membatalkan tiket
+  yang sudah `processing` atau `completed`.
+- Event `unexpected_success_payload` hanya mencatat status HTTP, content type,
+  status tiket, dan waktu. Isi jawaban, token, serta payload mentah tidak boleh
+  masuk log diagnostik.
 
 ## Struk aman dan cache
 

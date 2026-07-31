@@ -153,6 +153,7 @@
                 const title = form.querySelector('[data-literacy-queue-title]');
                 const message = form.querySelector('[data-literacy-queue-message]');
                 const cancelButton = form.querySelector('[data-literacy-queue-cancel]');
+                const repairButton = form.querySelector('[data-literacy-queue-repair]');
                 const massModeEnabled = form.dataset.literacyMassMode === '1';
                 const initialJitterSeconds = Math.max(0, Number.parseInt(
                     massModeEnabled
@@ -179,6 +180,7 @@
                 let queueAction = 'cancel';
                 let lastValidationField = '';
                 let clientFailureReported = false;
+                let unexpectedPayloadReported = false;
 
                 const wait = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
                 const csrfToken = () => form.querySelector('input[name="_token"]')?.value || '';
@@ -286,6 +288,8 @@
                 const setQueueAction = (action, label = '') => {
                     queueAction = action;
 
+                    repairButton?.classList.toggle('hidden', action !== 'recover');
+
                     if (!cancelButton) {
                         return;
                     }
@@ -294,6 +298,7 @@
                     cancelButton.textContent = label || {
                         repair: 'Perbaiki jawaban',
                         dismiss: 'Tutup pesan',
+                        recover: 'Periksa Status Lagi',
                         cancel: 'Berhenti mencoba otomatis',
                     }[action] || 'Tutup pesan';
                 };
@@ -366,18 +371,29 @@
                         container.classList.remove('hidden');
                     });
                 };
-                const reportClientFailure = (retryStatuses = []) => {
-                    if (clientFailureReported || !form.dataset.literacyEventEndpoint) {
+                const reportSubmissionEvent = (eventCode, attributes = {}) => {
+                    if (!form.dataset.literacyEventEndpoint) {
                         return;
                     }
 
-                    clientFailureReported = true;
                     const body = new FormData();
                     body.append('_token', csrfToken());
-                    body.append('event_code', 'client_retry_exhausted');
+                    body.append('event_code', eventCode);
                     body.append('submission_ticket', ticketInput?.value || '');
                     body.append('submission_request_id', requestIdInput?.value || '');
-                    body.append('retry_statuses', retryStatuses.join(','));
+                    body.append('retry_statuses', (attributes.retryStatuses || []).join(','));
+
+                    if (attributes.httpStatus) {
+                        body.append('http_status', String(attributes.httpStatus));
+                    }
+
+                    if (attributes.contentType) {
+                        body.append('content_type', String(attributes.contentType).slice(0, 100));
+                    }
+
+                    if (attributes.payloadStatus) {
+                        body.append('payload_status', String(attributes.payloadStatus).slice(0, 60));
+                    }
 
                     fetch(form.dataset.literacyEventEndpoint, {
                         method: 'POST',
@@ -389,6 +405,27 @@
                         },
                         body,
                     }).catch(() => {});
+                };
+                const reportClientFailure = (retryStatuses = []) => {
+                    if (clientFailureReported) {
+                        return;
+                    }
+
+                    clientFailureReported = true;
+                    reportSubmissionEvent('client_retry_exhausted', { retryStatuses });
+                };
+                const reportUnexpectedPayload = (error) => {
+                    if (unexpectedPayloadReported) {
+                        return;
+                    }
+
+                    unexpectedPayloadReported = true;
+                    reportSubmissionEvent('unexpected_success_payload', {
+                        retryStatuses: currentRetryStatuses(),
+                        httpStatus: error?.httpStatus || error?.status || 0,
+                        contentType: error?.contentType || '',
+                        payloadStatus: error?.payloadStatus || '',
+                    });
                 };
 
                 const stopQueue = () => {
@@ -533,15 +570,21 @@
 
                 const requestJson = async (url, options = {}) => {
                     try {
+                        const {
+                            headers: optionHeaders = {},
+                            validatePayload = null,
+                            ...fetchOptions
+                        } = options;
                         const response = await fetch(url, {
                             credentials: 'same-origin',
+                            ...fetchOptions,
                             headers: {
                                 Accept: 'application/json',
                                 'X-CSRF-TOKEN': csrfToken(),
-                                ...(options.headers || {}),
+                                ...optionHeaders,
                             },
-                            ...options,
                         });
+                        const contentType = response.headers.get('Content-Type') || '';
                         const payload = await response.json().catch(() => ({}));
 
                         if (!response.ok) {
@@ -558,6 +601,13 @@
                             throw error;
                         }
 
+                        if (typeof validatePayload === 'function') {
+                            validatePayload(payload, {
+                                httpStatus: response.status,
+                                contentType,
+                            });
+                        }
+
                         return payload;
                     } catch (error) {
                         if (typeof error?.retryable === 'boolean') {
@@ -572,8 +622,12 @@
                     }
                 };
 
-                const requestWithRetry = async (url, options = {}) => {
+                const requestWithRetry = async (url, options = {}, retryOptions = {}) => {
                     let failureCount = 0;
+                    const retryDeadlineMs = Math.max(
+                        5000,
+                        Number.parseInt(retryOptions.windowMs || retryWindowMs, 10)
+                    );
 
                     while (!cancelled) {
                         try {
@@ -585,9 +639,13 @@
 
                             recordRetryStatus(error.status);
 
-                            if (Date.now() - retryStartedAt >= retryWindowMs) {
-                                const exhaustedError = new Error(`Belum berhasil terhubung setelah ${waitLabel(Math.ceil(retryWindowMs / 1000))}. ${draftSafetyText()}`);
+                            if (Date.now() - retryStartedAt >= retryDeadlineMs) {
+                                const exhaustedError = new Error(`Belum berhasil terhubung setelah ${waitLabel(Math.ceil(retryDeadlineMs / 1000))}. ${draftSafetyText()}`);
                                 exhaustedError.exhausted = true;
+                                exhaustedError.unexpectedPayload = Boolean(error?.unexpectedPayload);
+                                exhaustedError.httpStatus = error?.httpStatus || error?.status || 0;
+                                exhaustedError.contentType = error?.contentType || '';
+                                exhaustedError.payloadStatus = error?.payloadStatus || '';
                                 throw exhaustedError;
                             }
 
@@ -595,7 +653,12 @@
                             const baseDelay = Math.max(2, error.retryAfter || configuredDelay);
                             const delaySeconds = Math.ceil(baseDelay * (1 + (Math.random() * 0.3)));
                             failureCount += 1;
-                            const presentation = retryPresentation(error.status);
+                            const presentation = error?.unexpectedPayload
+                                ? {
+                                    heading: 'Struk belum berhasil dibuka',
+                                    detail: 'Server sudah menerima proses pengiriman, tetapi respons konfirmasi belum lengkap. Sistem sedang memeriksa ulang secara otomatis.',
+                                }
+                                : retryPresentation(error.status);
 
                             await countdownWait(delaySeconds, (remaining) => {
                                 showQueue(
@@ -698,25 +761,52 @@
                             headers: {
                                 Accept: 'application/json',
                             },
-                        });
+                            validatePayload: (candidate, responseMeta) => {
+                                const contentType = String(responseMeta?.contentType || '').toLowerCase();
+                                const validPayload = contentType.includes('application/json')
+                                    && candidate?.status === 'completed'
+                                    && Boolean(candidate?.redirect_url);
 
-                        if (!payload?.redirect_url) {
-                            throw new Error('Server tidak mengirim tujuan halaman hasil.');
-                        }
+                                if (validPayload) {
+                                    return;
+                                }
+
+                                const unexpectedError = new Error('Respons konfirmasi server belum lengkap.');
+                                unexpectedError.status = Number(responseMeta?.httpStatus || 0);
+                                unexpectedError.httpStatus = Number(responseMeta?.httpStatus || 0);
+                                unexpectedError.contentType = contentType;
+                                unexpectedError.payloadStatus = String(candidate?.status || '');
+                                unexpectedError.retryAfter = 2;
+                                unexpectedError.retryable = true;
+                                unexpectedError.unexpectedPayload = true;
+                                reportUnexpectedPayload(unexpectedError);
+                                throw unexpectedError;
+                            },
+                        }, {
+                            windowMs: Math.min(retryWindowMs, 45000),
+                        });
 
                         removeDraft();
                         showQueue('Jawaban berhasil disimpan', 'Server sudah mengonfirmasi penyimpanan. Struk Pengiriman sedang dibuka...');
                         window.location.replace(payload.redirect_url);
                     } catch (error) {
+                        const needsReceiptRecovery = Boolean(error?.unexpectedPayload);
                         showQueue(
-                            error?.exhausted ? 'Belum ada konfirmasi penyimpanan dari server' : 'Jawaban belum dapat disimpan',
-                            error?.exhausted
+                            needsReceiptRecovery
+                                ? 'Struk belum berhasil dibuka'
+                                : (error?.exhausted ? 'Belum ada konfirmasi penyimpanan dari server' : 'Jawaban belum dapat disimpan'),
+                            needsReceiptRecovery
+                                ? `Server sudah menerima proses pengiriman, tetapi Struk belum berhasil dibuka. Sistem telah berhenti sejenak agar status tiket dapat diperiksa. Jangan menekan Kirim berulang dan jangan menutup tab. ${draftSafetyText()}`
+                                : (error?.exhausted
                                 ? `Percobaan otomatis dihentikan sementara. ${draftSafetyText()} Jangan tutup tab. Periksa koneksi, lalu tekan Kirim satu kali untuk melanjutkan. ${receiptSafetyText()}`
                                 : (error?.message || `Silakan periksa jawaban lalu coba lagi. ${draftSafetyText()} ${receiptSafetyText()}`)
+                                )
                         );
                         const isValidationError = error?.status === 422;
 
-                        if (isValidationError) {
+                        if (needsReceiptRecovery) {
+                            setQueueAction('recover');
+                        } else if (isValidationError) {
                             lastValidationField = error?.validationField || '';
                             renderValidationErrors(error?.validationErrors || {});
                             clearTicketState();
@@ -907,6 +997,14 @@
                 });
 
                 cancelButton?.addEventListener('click', async () => {
+                    if (queueAction === 'recover') {
+                        setQueueAction('cancel');
+                        stopQueue();
+                        runQueue({ resume: Boolean(statusUrl && ticketInput?.value) });
+
+                        return;
+                    }
+
                     if (queueAction === 'repair') {
                         panel?.classList.add('hidden');
                         setQueueAction('cancel');
@@ -932,6 +1030,14 @@
                     clearTicketState();
                     panel?.classList.add('hidden');
                     stopQueue();
+                });
+
+                repairButton?.addEventListener('click', () => {
+                    panel?.classList.add('hidden');
+                    setQueueAction('cancel');
+                    stopQueue();
+                    submitButton?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    submitButton?.focus({ preventScroll: true });
                 });
 
                 if (restoredDraft) {

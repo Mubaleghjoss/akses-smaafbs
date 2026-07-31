@@ -124,6 +124,13 @@ lengkap. Hasil ditampilkan sebagai kartu per kelompok dengan jumlah dan sampel
 kelas, mapel, atau siswa. Preview tidak melewati pagar ini karena selalu
 berlabel bukan dokumen resmi.
 
+Setiap masalah preflight memiliki aksi perbaikan yang period-aware:
+**Kelola Mapel**, **Atur Guru Mapel**, **Atur Wali Kelas**, **Buka Input
+Nilai**, **Buka Status Pengumpulan**, **Buka Rekap Wali**, atau **Ubah Template
+Rapor**. Tautan ASTS/ASAS selalu membawa ID periode aktif. Pengguna tanpa izin
+tetap melihat masalahnya, tetapi tidak memperoleh tombol tindakan yang tidak
+diizinkan.
+
 Nilai yang tampil pada Input Nilai, preview, rekap, dan PDF dibatasi maksimal
 dua desimal dan nol berlebih dibuang. Nilai database `decimal:4`, formula, serta
 detail perhitungan tidak diubah.

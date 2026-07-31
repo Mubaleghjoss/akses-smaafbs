@@ -160,11 +160,18 @@
                         </div>
 
                         <h3 class="mt-4 break-words text-base font-bold text-gray-950 dark:text-white">{{ $card['title'] }}</h3>
-                        <p class="mt-2 flex-1 break-words text-sm leading-6 text-gray-600 dark:text-gray-300">{{ $card['description'] }}</p>
+                        <ul class="assessment-settings-card__points mt-3 flex-1 space-y-2">
+                            @foreach($card['points'] as $point)
+                                <li>
+                                    <x-filament::icon icon="heroicon-o-check-circle" />
+                                    <span>{{ $point }}</span>
+                                </li>
+                            @endforeach
+                        </ul>
 
                         @if ($card['url'])
                             <a href="{{ $card['url'] }}" wire:navigate class="assessment-settings-card__action mt-5 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:ring-offset-gray-900">
-                                Buka {{ $card['title'] }}
+                                {{ $card['action'] }}
                                 <x-filament::icon icon="heroicon-o-arrow-right" class="h-4 w-4" />
                             </a>
                         @else
@@ -235,22 +242,58 @@
             </section>
         @endif
 
-        <section class="assessment-audit-shell overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-gray-900">
-            <div class="assessment-audit-shell__head border-b border-gray-200 p-4 dark:border-white/10">
-                <h2 class="font-bold text-gray-950 dark:text-white">Aktivitas Terbaru</h2>
-                <p class="mt-1 text-sm text-gray-500">Jejak perubahan pada periode yang dipilih.</p>
+        <section class="assessment-audit-shell rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5 dark:border-white/10 dark:bg-gray-900">
+            <div class="assessment-audit-shell__head flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div class="min-w-0">
+                    <h2 class="font-bold text-gray-950 dark:text-white">Aktivitas Terbaru</h2>
+                    <p class="mt-1 text-sm text-gray-500">Jejak perubahan pada periode yang dipilih.</p>
+                </div>
+                @if(\App\Filament\Resources\AssessmentAuditLogResource::canViewAny())
+                    <x-filament::button
+                        tag="a"
+                        :href="\App\Filament\Resources\AssessmentAuditLogResource::getUrl()"
+                        wire:navigate
+                        size="sm"
+                        color="gray"
+                        icon="heroicon-o-clipboard-document-list"
+                    >
+                        Buka Semua Histori
+                    </x-filament::button>
+                @endif
             </div>
-            <div class="assessment-audit-shell__body divide-y divide-gray-200 dark:divide-white/10">
+            <div class="assessment-audit-card-grid mt-4">
                 @forelse ($this->getRecentAuditRows() as $row)
-                    <article class="grid min-w-0 gap-1 p-4 sm:grid-cols-[minmax(0,1fr)_auto]">
-                        <div class="min-w-0">
-                            <p class="break-words font-semibold text-gray-900 dark:text-white">{{ $row['event'] }}</p>
-                            <p class="break-words text-sm text-gray-500">{{ $row['actor'] }}{{ $row['reason'] ? ' · '.$row['reason'] : '' }}</p>
+                    <article class="assessment-audit-card">
+                        <div class="assessment-audit-card__head">
+                            <span class="assessment-audit-card__icon">
+                                <x-filament::icon icon="heroicon-o-clock" />
+                            </span>
+                            <div class="min-w-0">
+                                <h3>{{ $row['event'] }}</h3>
+                                <time>{{ $row['time'] }}</time>
+                            </div>
                         </div>
-                        <time class="text-xs text-gray-500">{{ $row['time'] }}</time>
+                        <ul class="assessment-audit-card__points">
+                            <li><strong>Pelaku</strong><span>{{ $row['actor'] }}</span></li>
+                            <li><strong>Periode</strong><span>{{ $row['period'] }}</span></li>
+                            <li><strong>Subjek</strong><span>{{ $row['subject'] }}</span></li>
+                            <li><strong>Alasan</strong><span>{{ $row['reason'] }}</span></li>
+                        </ul>
+                        <x-filament::button
+                            size="sm"
+                            color="gray"
+                            icon="heroicon-o-eye"
+                            wire:click="mountAction('viewAuditLog', { record: {{ $row['id'] }} })"
+                        >
+                            Lihat Detail
+                        </x-filament::button>
                     </article>
                 @empty
-                    <div class="p-8 text-center text-sm text-gray-500">Belum ada aktivitas pada periode ini.</div>
+                    <div class="assessment-audit-empty">
+                        <x-filament::icon icon="heroicon-o-clipboard-document-list" />
+                        <strong>Belum ada aktivitas pada periode ini</strong>
+                        <span>Perubahan sensitif akan tercatat otomatis di sini.</span>
+                    </div>
                 @endforelse
             </div>
         </section>

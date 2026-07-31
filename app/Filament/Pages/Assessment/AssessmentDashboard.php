@@ -26,8 +26,10 @@ use App\Models\DataSiswa;
 use App\Models\GuruTendik;
 use App\Models\Rombel;
 use App\Models\User;
+use Filament\Actions\Action;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Attributes\Url;
 
@@ -85,7 +87,11 @@ class AssessmentDashboard extends AssessmentPage
         return [
             [
                 'title' => 'Guru Mapel & Kelas',
-                'description' => 'Pilih guru lalu atur pasangan semester, mata pelajaran, dan kelas mengajar langsung dari data Guru & Tendik.',
+                'points' => [
+                    'Hubungkan guru dengan mapel dan kelas per semester.',
+                    'Menentukan penugasan nilai yang tampil pada akun guru.',
+                ],
+                'action' => 'Atur Guru Mapel',
                 'icon' => 'heroicon-o-book-open',
                 'tone' => 'success',
                 'value' => GuruTendikResource::canViewAny()
@@ -96,7 +102,11 @@ class AssessmentDashboard extends AssessmentPage
             ],
             [
                 'title' => 'Wali Kelas',
-                'description' => 'Pilih guru lalu tetapkan wali kelas per semester. Data ini menentukan akses rekap dan identitas wali pada rapor.',
+                'points' => [
+                    'Tetapkan satu wali kelas untuk setiap rombel dan semester.',
+                    'Menentukan akses rekap dan identitas wali pada rapor.',
+                ],
+                'action' => 'Atur Wali Kelas',
                 'icon' => 'heroicon-o-user-group',
                 'tone' => 'warning',
                 'value' => GuruTendikResource::canViewAny()
@@ -107,7 +117,11 @@ class AssessmentDashboard extends AssessmentPage
             ],
             [
                 'title' => 'Periode Penilaian',
-                'description' => 'Buat periode ASTS atau ASAS, pilih kelas, jalankan preflight, dan atur tahap pengumpulan.',
+                'points' => [
+                    'Buat periode ASTS atau ASAS dan pilih kelas peserta.',
+                    'Buka, verifikasi, kunci, dan terbitkan periode.',
+                ],
+                'action' => 'Kelola Periode',
                 'icon' => 'heroicon-o-calendar-days',
                 'tone' => 'primary',
                 'value' => AssessmentPeriodResource::canViewAny() ? AssessmentPeriod::query()->count() : '—',
@@ -116,7 +130,11 @@ class AssessmentDashboard extends AssessmentPage
             ],
             [
                 'title' => 'Komponen dan Bobot',
-                'description' => 'Atur komponen nilai, bobot 100%, KKM, predikat, dan sumber nilai ASTS untuk ASAS.',
+                'points' => [
+                    'Atur komponen, KKM, predikat, dan sumber nilai.',
+                    'Total bobot komponen aktif wajib tepat 100%.',
+                ],
+                'action' => 'Atur Komponen',
                 'icon' => 'heroicon-o-adjustments-horizontal',
                 'tone' => 'success',
                 'value' => AssessmentSchemeResource::canViewAny() ? AssessmentScheme::query()->count() : '—',
@@ -125,7 +143,11 @@ class AssessmentDashboard extends AssessmentPage
             ],
             [
                 'title' => 'Template Rapor',
-                'description' => 'Kelola identitas dokumen dan template A4 yang dipakai untuk snapshot rapor privat.',
+                'points' => [
+                    'Atur identitas sekolah, tanda tangan, layout, dan watermark.',
+                    'Template yang sudah dipakai tetap menjadi versi historis.',
+                ],
+                'action' => 'Kelola Template',
                 'icon' => 'heroicon-o-document-text',
                 'tone' => 'info',
                 'value' => AssessmentReportTemplateResource::canViewAny() ? ReportTemplate::query()->count() : '—',
@@ -134,7 +156,11 @@ class AssessmentDashboard extends AssessmentPage
             ],
             [
                 'title' => 'Impor Master Resmi',
-                'description' => 'Unduh workbook, pratinjau guru, mapel, rombel, dan wali kelas sebelum menerapkan data.',
+                'points' => [
+                    'Unduh workbook resmi dan lengkapi master secara massal.',
+                    'Selalu tinjau preview sebelum data diterapkan.',
+                ],
+                'action' => 'Buka Impor Master',
                 'icon' => 'heroicon-o-arrow-up-tray',
                 'tone' => 'warning',
                 'value' => 'Excel',
@@ -143,7 +169,11 @@ class AssessmentDashboard extends AssessmentPage
             ],
             [
                 'title' => 'Log Perubahan',
-                'description' => 'Telusuri perubahan periode, nilai, verifikasi, penerbitan, dan alasan koreksi.',
+                'points' => [
+                    'Telusuri perubahan periode, nilai, dan penerbitan.',
+                    'Lihat pelaku, waktu, serta alasan setiap koreksi.',
+                ],
+                'action' => 'Buka Log Perubahan',
                 'icon' => 'heroicon-o-clipboard-document-check',
                 'tone' => 'gray',
                 'value' => AssessmentAuditLogResource::canViewAny() ? AuditLog::query()->count() : '—',
@@ -523,17 +553,60 @@ class AssessmentDashboard extends AssessmentPage
 
         return AuditLog::query()
             ->where('assessment_period_id', $scopedPeriodId)
-            ->with('actor')
+            ->with(['actor', 'period'])
             ->latest('created_at')
             ->limit(8)
             ->get()
             ->map(fn (AuditLog $log): array => [
+                'id' => (int) $log->getKey(),
                 'event' => (string) $log->event,
                 'actor' => (string) ($log->actor?->name ?: 'Sistem'),
-                'time' => $log->created_at?->diffForHumans(),
-                'reason' => $log->reason,
+                'period' => (string) ($log->period?->name ?: 'Tanpa periode'),
+                'subject' => filled($log->subject_type)
+                    ? class_basename((string) $log->subject_type).' #'.$log->subject_id
+                    : 'Aktivitas sistem',
+                'time' => $log->created_at?->format('d/m/Y H:i:s') ?? '-',
+                'reason' => filled($log->reason) ? (string) $log->reason : 'Tidak ada alasan tambahan.',
             ])
             ->all();
+    }
+
+    public function viewAuditLogAction(): Action
+    {
+        return Action::make('viewAuditLog')
+            ->label('Lihat Detail')
+            ->icon('heroicon-o-eye')
+            ->color('gray')
+            ->modalWidth('5xl')
+            ->modalSubmitAction(false)
+            ->modalCancelActionLabel('Tutup')
+            ->modalHeading(function (array $arguments): string {
+                $record = $this->authorizedAuditLog((int) ($arguments['record'] ?? 0));
+
+                return 'Detail Log - '.$record->event;
+            })
+            ->modalContent(function (array $arguments) {
+                $record = $this->authorizedAuditLog((int) ($arguments['record'] ?? 0));
+
+                return view(
+                    'filament.resources.assessment-audit-log-resource.audit-detail',
+                    ['record' => $record],
+                );
+            });
+    }
+
+    protected function authorizedAuditLog(int $recordId): AuditLog
+    {
+        abort_unless($recordId > 0, 404);
+
+        $record = AuditLog::query()
+            ->with(['actor', 'period'])
+            ->whereKey($recordId)
+            ->firstOrFail();
+
+        Gate::authorize('view', $record);
+
+        return $record;
     }
 
     protected function statusUrl(AssessmentPeriod $period, AssignmentStatus $status): string

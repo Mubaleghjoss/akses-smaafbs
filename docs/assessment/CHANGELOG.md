@@ -28,6 +28,10 @@
   dibekukan ke snapshot.
 - Menambah kontras terang/gelap dan perilaku mobile untuk kartu, pilihan kelas,
   progres, modal stop, serta daftar siswa.
+- Mengubah setiap masalah Kelengkapan Data Rapor menjadi kartu aksi yang menuju
+  halaman perbaikan tepat dengan periode dan tipe ASTS/ASAS tetap terpilih.
+- Merapikan kartu Pengaturan dan Aktivitas Terbaru pada dashboard, serta Log
+  Perubahan menjadi grid kartu responsif dengan tombol detail eksplisit.
 
 ## 2026-07-30
 

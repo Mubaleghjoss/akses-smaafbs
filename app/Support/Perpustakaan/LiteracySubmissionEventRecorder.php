@@ -15,6 +15,7 @@ class LiteracySubmissionEventRecorder
         'cancelled',
         'expired',
         'client_retry_exhausted',
+        'unexpected_success_payload',
     ];
 
     public function record(string $eventCode, array $attributes = []): void
@@ -78,6 +79,8 @@ class LiteracySubmissionEventRecorder
                 'reason',
                 'request_kind',
                 'exception',
+                'content_type',
+                'payload_status',
             ])
             ->map(function (mixed $value): mixed {
                 if (is_array($value)) {

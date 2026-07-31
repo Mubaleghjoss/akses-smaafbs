@@ -11,6 +11,8 @@ use Filament\Actions\Action;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables;
+use Filament\Tables\Columns\Layout\Split;
+use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
@@ -79,39 +81,57 @@ class AssessmentAuditLogResource extends Resource
         )
             ->modifyQueryUsing(fn ($query) => $query->with(['actor', 'period']))
             ->defaultSort('created_at', 'desc')
+            ->contentGrid([
+                'default' => 1,
+                'md' => 2,
+                'xl' => 3,
+            ])
+            ->recordClasses('assessment-audit-log-card')
             ->columns([
-                Tables\Columns\TextColumn::make('created_at')
-                    ->label('Waktu')
-                    ->dateTime('d/m/Y H:i:s')
-                    ->sortable(),
-                Tables\Columns\TextColumn::make('event')
-                    ->label('Peristiwa')
-                    ->badge()
-                    ->searchable()
-                    ->wrap(),
-                Tables\Columns\TextColumn::make('actor.name')
-                    ->label('Pelaku')
-                    ->placeholder('Sistem')
-                    ->searchable()
-                    ->visibleFrom('md'),
-                Tables\Columns\TextColumn::make('period.name')
-                    ->label('Periode')
-                    ->placeholder('-')
-                    ->visibleFrom('lg')
-                    ->wrap(),
-                Tables\Columns\TextColumn::make('subject_type')
-                    ->label('Subjek')
-                    ->formatStateUsing(fn (string $state): string => class_basename($state))
-                    ->description(fn (AuditLog $record): string => '#'.$record->subject_id)
-                    ->visibleFrom('md'),
-                Tables\Columns\TextColumn::make('reason')
-                    ->label('Alasan')
-                    ->placeholder('-')
-                    ->limit(80)
-                    ->wrap(),
-                Tables\Columns\TextColumn::make('ip_address')
-                    ->label('IP')
-                    ->toggleable(isToggledHiddenByDefault: true),
+                Stack::make([
+                    Split::make([
+                        Tables\Columns\TextColumn::make('event')
+                            ->label('Peristiwa')
+                            ->badge()
+                            ->searchable()
+                            ->wrap(),
+                        Tables\Columns\TextColumn::make('created_at')
+                            ->label('Waktu')
+                            ->icon('heroicon-o-clock')
+                            ->dateTime('d/m/Y H:i:s')
+                            ->sortable(),
+                    ])->from('sm'),
+                    Tables\Columns\TextColumn::make('actor.name')
+                        ->label('Pelaku')
+                        ->icon('heroicon-o-user')
+                        ->prefix('Pelaku: ')
+                        ->placeholder('Pelaku: Sistem')
+                        ->searchable()
+                        ->wrap(),
+                    Tables\Columns\TextColumn::make('period.name')
+                        ->label('Periode')
+                        ->icon('heroicon-o-calendar-days')
+                        ->prefix('Periode: ')
+                        ->placeholder('Periode: -')
+                        ->wrap(),
+                    Tables\Columns\TextColumn::make('subject_type')
+                        ->label('Subjek')
+                        ->icon('heroicon-o-document-magnifying-glass')
+                        ->formatStateUsing(fn (?string $state): string => filled($state) ? class_basename($state) : 'Aktivitas sistem')
+                        ->description(fn (AuditLog $record): string => $record->subject_id ? '#'.$record->subject_id : '-')
+                        ->wrap(),
+                    Tables\Columns\TextColumn::make('reason')
+                        ->label('Alasan')
+                        ->icon('heroicon-o-chat-bubble-left-ellipsis')
+                        ->prefix('Alasan: ')
+                        ->placeholder('Alasan: Tidak ada alasan tambahan')
+                        ->limit(120)
+                        ->wrap(),
+                    Tables\Columns\TextColumn::make('ip_address')
+                        ->label('IP')
+                        ->prefix('IP: ')
+                        ->toggleable(isToggledHiddenByDefault: true),
+                ])->space(2),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('assessment_period_id')
@@ -130,6 +150,7 @@ class AssessmentAuditLogResource extends Resource
                     ->label('Detail')
                     ->icon('heroicon-o-eye')
                     ->color('gray')
+                    ->button()
                     ->authorize(fn (AuditLog $record): bool => static::canAccess()
                         && Gate::allows('view', $record))
                     ->modalHeading(fn (AuditLog $record): string => 'Detail Log - '.$record->event)

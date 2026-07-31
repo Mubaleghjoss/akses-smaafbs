@@ -20,5 +20,8 @@
         </ol>
     </div>
 
-    <button class="mt-3 min-h-10 rounded-xl border border-sky-300 px-3 py-2 text-xs font-semibold text-sky-900" type="button" data-literacy-queue-cancel>Berhenti mencoba otomatis</button>
+    <div class="mt-3 flex flex-wrap gap-2">
+        <button class="min-h-10 rounded-xl border border-sky-300 bg-white px-3 py-2 text-xs font-semibold text-sky-900" type="button" data-literacy-queue-cancel>Berhenti mencoba otomatis</button>
+        <button class="hidden min-h-10 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800" type="button" data-literacy-queue-repair>Kembali Perbaiki Jawaban</button>
+    </div>
 </div>

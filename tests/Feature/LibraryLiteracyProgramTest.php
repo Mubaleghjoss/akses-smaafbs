@@ -184,6 +184,11 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->get(route('library.literacy.show', $material->slug))
             ->assertHeaderContains('cache-control', 'no-store')
             ->assertSee('window.location.replace(payload.redirect_url);', false)
+            ->assertSee('unexpected_success_payload')
+            ->assertSee('Periksa Status Lagi')
+            ->assertSee('Kembali Perbaiki Jawaban')
+            ->assertSee('Server sudah menerima proses pengiriman, tetapi Struk belum berhasil dibuka')
+            ->assertDontSee('Server tidak mengirim tujuan halaman hasil.')
             ->assertSee("window.addEventListener('pageshow'", false)
             ->assertSee('if (!event.persisted)', false);
     }
@@ -1453,6 +1458,37 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertSame('validation_failed', $event->event_code);
         $this->assertSame(['answers.'.$question->getKey()], $event->context['fields']);
         $this->assertStringNotContainsString('jawaban-rahasia-siswa', json_encode($event->toArray()));
+    }
+
+    public function test_unexpected_success_payload_event_records_only_safe_diagnostics(): void
+    {
+        $student = $this->createStudent('Codex Pemulihan Struk', 'XI 2');
+        $material = $this->createMaterial('Materi Pemulihan Struk', [
+            'student_verification_enabled' => false,
+        ]);
+
+        $this->postJson(route('library.literacy.submission-event', $material->slug), [
+            'event_code' => 'unexpected_success_payload',
+            'submission_request_id' => (string) Str::uuid(),
+            'retry_statuses' => '200',
+            'http_status' => 200,
+            'content_type' => 'text/html; charset=UTF-8',
+            'payload_status' => 'completed',
+            'answer' => 'isi-rahasia-yang-tidak-boleh-disimpan',
+        ])->assertNoContent();
+
+        $event = PerpustakaanLiterasiSubmissionEvent::query()->sole();
+        $this->assertSame('unexpected_success_payload', $event->event_code);
+        $this->assertSame(200, $event->http_status);
+        $this->assertSame('text/html; charset=UTF-8', $event->context['content_type']);
+        $this->assertSame('completed', $event->context['payload_status']);
+        $this->assertSame('success_payload_missing_receipt_redirect', $event->context['reason']);
+        $this->assertStringNotContainsString(
+            'isi-rahasia-yang-tidak-boleh-disimpan',
+            json_encode($event->toArray()),
+        );
+        $this->assertNull($event->data_siswa_id);
+        $this->assertDatabaseHas('data_siswa', ['id' => $student->getKey()]);
     }
 
     public function test_question_limit_cannot_be_lowered_below_saved_answer(): void

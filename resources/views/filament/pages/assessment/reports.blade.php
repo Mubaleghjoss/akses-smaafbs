@@ -51,12 +51,38 @@
                             @if($group['issues'] === [])
                                 <p>Semua pemeriksaan pada bagian ini sudah lengkap.</p>
                             @else
-                                <ul>
+                                <ul class="assessment-report-preflight-issues">
                                     @foreach($group['issues'] as $issue)
                                         <li>
-                                            <span>{{ $issue['message'] }} <b>{{ $issue['count'] }}</b></span>
-                                            @if($issue['samples'] !== [])
-                                                <small>{{ implode(' · ', $issue['samples']) }}</small>
+                                            @php($repair = $issue['repair'] ?? null)
+                                            @if($repair)
+                                                <a
+                                                    href="{{ $repair['url'] }}"
+                                                    wire:navigate
+                                                    class="assessment-report-preflight-issue is-actionable"
+                                                    aria-label="{{ $repair['label'] }}: {{ $issue['message'] }}"
+                                                >
+                                                    <span class="assessment-report-preflight-issue__copy">
+                                                        <span>{{ $issue['message'] }} <b>{{ $issue['count'] }}</b></span>
+                                                        @if($issue['samples'] !== [])
+                                                            <small>{{ implode(' · ', $issue['samples']) }}</small>
+                                                        @endif
+                                                    </span>
+                                                    <span class="assessment-report-preflight-issue__action">
+                                                        <x-filament::icon :icon="$repair['icon']" />
+                                                        {{ $repair['label'] }}
+                                                    </span>
+                                                </a>
+                                            @else
+                                                <div class="assessment-report-preflight-issue">
+                                                    <span class="assessment-report-preflight-issue__copy">
+                                                        <span>{{ $issue['message'] }} <b>{{ $issue['count'] }}</b></span>
+                                                        @if($issue['samples'] !== [])
+                                                            <small>{{ implode(' · ', $issue['samples']) }}</small>
+                                                        @endif
+                                                    </span>
+                                                    <span class="assessment-report-preflight-issue__restricted">Tidak ada akses perbaikan</span>
+                                                </div>
                                             @endif
                                         </li>
                                     @endforeach

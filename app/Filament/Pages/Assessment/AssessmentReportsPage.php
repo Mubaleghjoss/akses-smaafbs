@@ -5,6 +5,9 @@ namespace App\Filament\Pages\Assessment;
 use App\Enums\Assessment\AssessmentType;
 use App\Enums\Assessment\ReportGenerationStatus;
 use App\Filament\Pages\Assessment\Concerns\HasAssessmentTypeNavigation;
+use App\Filament\Resources\AssessmentReportTemplateResource;
+use App\Filament\Resources\AssessmentSubjectResource;
+use App\Filament\Resources\GuruTendikResource;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodHomeroom;
 use App\Models\Assessment\ClassReportArtifact;
@@ -250,11 +253,125 @@ abstract class AssessmentReportsPage extends AssessmentPage
             return ['ready' => false, 'groups' => []];
         }
 
-        return app(AssessmentReportPreflight::class)->inspect(
+        $preflight = app(AssessmentReportPreflight::class)->inspect(
             $period,
             $template,
             $this->selectedClassIds,
         );
+
+        foreach ($preflight['groups'] as &$group) {
+            foreach ($group['issues'] as &$issue) {
+                $issue['repair'] = $this->preflightRepairAction(
+                    (string) ($issue['code'] ?? ''),
+                    $period,
+                    $template,
+                );
+            }
+            unset($issue);
+        }
+        unset($group);
+
+        return $preflight;
+    }
+
+    /**
+     * @return array{label:string,url:string,icon:string}|null
+     */
+    protected function preflightRepairAction(
+        string $code,
+        AssessmentPeriod $period,
+        ReportTemplate $template,
+    ): ?array {
+        if ($code === 'subjects_ungrouped' && AssessmentSubjectResource::canViewAny()) {
+            return [
+                'label' => 'Kelola Mapel',
+                'url' => AssessmentSubjectResource::getUrl(),
+                'icon' => 'heroicon-o-book-open',
+            ];
+        }
+
+        if (in_array($code, ['assignments_missing', 'assignments_incomplete'], true)
+            && GuruTendikResource::canViewAny()) {
+            return [
+                'label' => 'Atur Guru Mapel',
+                'url' => GuruTendikResource::getUrl(),
+                'icon' => 'heroicon-o-academic-cap',
+            ];
+        }
+
+        if ($code === 'homerooms_missing' && GuruTendikResource::canViewAny()) {
+            return [
+                'label' => 'Atur Wali Kelas',
+                'url' => GuruTendikResource::getUrl(),
+                'icon' => 'heroicon-o-user-group',
+            ];
+        }
+
+        $type = $period->type instanceof AssessmentType
+            ? $period->type
+            : AssessmentType::from((string) $period->type);
+
+        if ($code === 'assignments_unlocked') {
+            $page = $type === AssessmentType::ASTS
+                ? AstsSubmissionStatus::class
+                : AsasSubmissionStatus::class;
+
+            if ($page::canAccess()) {
+                return [
+                    'label' => 'Buka Status Pengumpulan',
+                    'url' => $page::getUrl(['period' => $period->getKey()]),
+                    'icon' => 'heroicon-o-clipboard-document-check',
+                ];
+            }
+        }
+
+        if ($code === 'results_missing') {
+            $page = $type === AssessmentType::ASTS
+                ? AstsInputScores::class
+                : AsasInputScores::class;
+
+            if ($page::canAccess()) {
+                return [
+                    'label' => 'Buka Input Nilai',
+                    'url' => $page::getUrl(['period' => $period->getKey()]),
+                    'icon' => 'heroicon-o-pencil-square',
+                ];
+            }
+        }
+
+        if ($code === 'attitudes_missing') {
+            $page = $type === AssessmentType::ASTS
+                ? AstsHomeroomRecap::class
+                : AsasHomeroomRecap::class;
+
+            if ($page::canAccess()) {
+                return [
+                    'label' => 'Buka Rekap Wali',
+                    'url' => $page::getUrl(['period' => $period->getKey()]),
+                    'icon' => 'heroicon-o-users',
+                ];
+            }
+        }
+
+        if (str_starts_with($code, 'template_')) {
+            if (AssessmentReportTemplateResource::canEdit($template)) {
+                return [
+                    'label' => 'Ubah Template Rapor',
+                    'url' => AssessmentReportTemplateResource::getUrl('edit', ['record' => $template]),
+                    'icon' => 'heroicon-o-document-text',
+                ];
+            }
+
+            if (AssessmentReportTemplateResource::canViewAny()) {
+                return [
+                    'label' => 'Buka Template Rapor',
+                    'url' => AssessmentReportTemplateResource::getUrl(),
+                    'icon' => 'heroicon-o-document-text',
+                ];
+            }
+        }
+
+        return null;
     }
 
     public function selectAllClasses(): void

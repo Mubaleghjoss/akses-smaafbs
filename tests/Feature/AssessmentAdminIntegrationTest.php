@@ -484,6 +484,8 @@ class AssessmentAdminIntegrationTest extends TestCase
             ->assertSee('Rombel dan Siswa Aktif')
             ->assertSee('Mapel dan Penugasan Resmi')
             ->assertSee('Guru Mapel & Kelas')
+            ->assertSee('Hubungkan guru dengan mapel dan kelas per semester.')
+            ->assertSee('Atur Guru Mapel')
             ->assertSee('Wali Kelas')
             ->assertSee('Atur di Guru & Tendik')
             ->assertSee('Preflight dan Buka Periode')
@@ -492,8 +494,10 @@ class AssessmentAdminIntegrationTest extends TestCase
             ->assertSee('Periode Penilaian')
             ->assertSee('Komponen dan Bobot')
             ->assertSee('Template Rapor')
+            ->assertSee('Buka Log Perubahan')
             ->assertSeeHtml('assessment-readiness-grid')
-            ->assertSeeHtml('assessment-audit-shell');
+            ->assertSeeHtml('assessment-audit-shell')
+            ->assertSeeHtml('assessment-audit-empty');
 
         Livewire::actingAs($admin)
             ->test(AstsHub::class)
@@ -928,6 +932,51 @@ class AssessmentAdminIntegrationTest extends TestCase
         $this->assertSame([], $component->instance()->getRecentAuditRows());
     }
 
+    public function test_dashboard_recent_audit_uses_cards_with_explicit_detail_action(): void
+    {
+        $admin = $this->createUser('assessment-audit-card-admin', 'admin');
+        $year = AcademicYear::query()->create([
+            'code' => '2029-2030',
+            'name' => 'Tahun Pelajaran 2029/2030',
+            'is_active' => true,
+        ]);
+        $semester = Semester::query()->create([
+            'assessment_academic_year_id' => $year->getKey(),
+            'code' => '2029-2030-GANJIL',
+            'name' => 'Semester Ganjil',
+            'is_active' => true,
+        ]);
+        $period = AssessmentPeriod::query()->create([
+            'assessment_academic_year_id' => $year->getKey(),
+            'assessment_semester_id' => $semester->getKey(),
+            'code' => 'ASTS-HISTORI-KARTU',
+            'name' => 'ASTS Histori Kartu',
+            'type' => AssessmentType::ASTS,
+            'status' => AssessmentPeriodStatus::DRAFT,
+            'settings' => ['rombel_ids' => []],
+            'created_by' => $admin->getKey(),
+        ]);
+        AuditLog::query()->create([
+            'assessment_period_id' => $period->getKey(),
+            'actor_id' => $admin->getKey(),
+            'event' => 'period.card_history_test',
+            'subject_type' => AssessmentPeriod::class,
+            'subject_id' => $period->getKey(),
+            'reason' => 'Memastikan histori mudah dibaca.',
+            'created_at' => now(),
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(AssessmentDashboard::class)
+            ->set('periodId', $period->getKey())
+            ->assertSeeHtml('assessment-audit-card-grid')
+            ->assertSeeHtml('assessment-audit-card__points')
+            ->assertSee('period.card_history_test')
+            ->assertSee('Memastikan histori mudah dibaca.')
+            ->assertSee('Lihat Detail')
+            ->assertSee('Buka Semua Histori');
+    }
+
     public function test_audit_detail_action_is_visible_only_to_an_authorized_audit_viewer(): void
     {
         $viewer = $this->createUser('assessment-audit-viewer', 'kurikulum');
@@ -949,6 +998,7 @@ class AssessmentAdminIntegrationTest extends TestCase
         Livewire::actingAs($viewer)
             ->test(ListAssessmentAuditLogs::class)
             ->call('loadTable')
+            ->assertSeeHtml('assessment-audit-log-card')
             ->assertTableActionVisible('details', $log);
     }
 
