@@ -24,7 +24,7 @@ class GenerateStudentReport implements ShouldQueue
     /** @var array<int, int> */
     public array $backoff = [30, 120, 300];
 
-    public function __construct(public readonly int $reportSnapshotId)
+    public function __construct(public int $reportSnapshotId)
     {
         $this->onQueue((string) config('assessment.reports.queue', 'assessment-reports'));
     }

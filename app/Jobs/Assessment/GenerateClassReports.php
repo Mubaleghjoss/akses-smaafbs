@@ -30,7 +30,7 @@ class GenerateClassReports implements ShouldQueue
     /** @var array<int, int> */
     public array $backoff = [60, 180, 600];
 
-    public function __construct(public readonly int $classReportArtifactId)
+    public function __construct(public int $classReportArtifactId)
     {
         $this->onQueue((string) config('assessment.reports.queue', 'assessment-reports'));
     }

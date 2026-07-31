@@ -281,6 +281,14 @@ class AssessmentReportingTest extends TestCase
         $this->assertGreaterThan($classJob->timeout, $classLock->expiresAfter);
         $this->assertLessThan(180, $studentLock->expiresAfter);
         $this->assertLessThan(180, $classLock->expiresAfter);
+        $this->assertInstanceOf(
+            GenerateStudentReportJob::class,
+            unserialize(serialize($studentJob)),
+        );
+        $this->assertInstanceOf(
+            GenerateClassReportsJob::class,
+            unserialize(serialize($classJob)),
+        );
     }
 
     public function test_report_storage_rejects_a_public_or_non_local_disk(): void
