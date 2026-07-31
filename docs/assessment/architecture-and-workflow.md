@@ -8,7 +8,7 @@
 | Snapshot periode | `assessment_periods`, `assessment_period_rombels`, `assessment_period_students`, `assessment_period_assignments`, `assessment_period_homerooms` |
 | Nilai | `assessment_schemes`, `assessment_components`, `assessment_scores`, `assessment_student_subject_results` |
 | Wali kelas | `assessment_homeroom_reports` |
-| Rapor/audit | `assessment_report_templates`, `assessment_report_snapshots`, `assessment_class_report_artifacts`, `assessment_report_share_links`, `assessment_audit_logs` |
+| Rapor/audit | `assessment_report_templates`, `assessment_report_generation_runs`, `assessment_report_snapshots`, `assessment_class_report_artifacts`, `assessment_report_share_links`, `assessment_audit_logs` |
 
 Referensi ke `data_siswa`, `guru_tendik`, dan `rombels` tidak memakai cascade. Foreign key penuh hanya dipakai antartabel assessment. Penghapusan master lama tidak boleh menghapus nilai/snapshot historis.
 
@@ -62,7 +62,13 @@ draft -> submitted -> verified -> locked
 
 - Membuka periode membuat snapshot siswa, kelas, penugasan guru, wali kelas, dan cakupan skema dalam satu transaksi.
 - Skema khusus kelas dipilih dari `source_rombel_id` ketika periode masih draf. Saat dibuka, resolver mencocokkannya dengan `assessment_period_rombels.source_rombel_id`; skema tidak bergantung pada snapshot yang belum terbentuk.
+- Status Pengumpulan mendukung verifikasi atau pengembalian beberapa assignment
+  terpilih dalam satu transaksi. Seluruh scope periode, Policy, kelengkapan, dan
+  alasan revisi minimal sepuluh karakter diperiksa sebelum satu record pun
+  diubah.
 - Return dari tahap verifikasi membuka periode secara terkontrol agar assignment terpilih dapat diperbaiki; event dicatat pada audit.
+- Input Nilai menampilkan alasan, pemberi, waktu, mapel, dan kelas untuk
+  assignment `returned`, termasuk hasil aksi **Buka Koreksi** pada Periode.
 - Reopen setelah lock/publish wajib menyertakan alasan dan assignment terpilih. Share link revisi lama dicabut, tetapi snapshot/PDF historis dipertahankan.
 - Rekap wali kelas selalu memuat absensi, ekstrakurikuler, prestasi, dan catatan.
   Kolom status semester mengikuti `settings.collect_promotion_status`; jika
@@ -120,7 +126,9 @@ Role baru bersifat aditif: `super_admin`, `kurikulum`, `guru_mapel`, `wali_kelas
   Kelas. Penugasan `submitted`, `verified`, dan `locked` tetap dapat ditinjau
   tetapi tidak dibuka kembali secara diam-diam.
 - Guru dapat mencentang siswa lalu menerapkan satu nilai komponen dan/atau satu
-  deskripsi ke banyak siswa. Opsi aman bawaan hanya mengisi kolom kosong.
+  deskripsi ke banyak siswa. Mode bawaan menimpa data lama siswa terpilih dan
+  menampilkan konfirmasi jumlah nilai/deskripsi yang berubah. Opsi **Hanya isi
+  yang kosong** tetap tersedia.
 - Aksi massal hanya mengubah state formulir dan draf browser. Database tetap
   berubah melalui tombol **Simpan Draf** sehingga batch satu assignment dan
   `lock_version` tetap berlaku.

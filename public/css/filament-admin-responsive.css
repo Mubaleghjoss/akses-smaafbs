@@ -3,6 +3,629 @@
     display: none !important;
 }
 
+/* Assessment workflow: bulk status, revision notice, and report pipeline. */
+.assessment-status-bulk-card,
+.assessment-revision-card,
+.assessment-report-card,
+.assessment-report-share-result {
+    min-width: 0;
+    border: 1px solid #dbe4ee;
+    border-radius: 1rem;
+    background: #fff;
+    color: #172033;
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+}
+
+.dark .assessment-status-bulk-card,
+.dark .assessment-revision-card,
+.dark .assessment-report-card,
+.dark .assessment-report-share-result {
+    border-color: rgb(255 255 255 / 0.1);
+    background: #111827;
+    color: #f8fafc;
+}
+
+.assessment-status-bulk-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem;
+    border-color: #99f6e4;
+    background: #f0fdfa;
+}
+
+.dark .assessment-status-bulk-card {
+    border-color: rgb(45 212 191 / 0.28);
+    background: rgb(13 148 136 / 0.1);
+}
+
+.assessment-status-bulk-card h2,
+.assessment-report-card h2,
+.assessment-report-share-result h2,
+.assessment-revision-card h2 {
+    margin: 0;
+    color: #0f172a;
+    font-weight: 800;
+}
+
+.dark .assessment-status-bulk-card h2,
+.dark .assessment-report-card h2,
+.dark .assessment-report-share-result h2,
+.dark .assessment-revision-card h2 {
+    color: #fff;
+}
+
+.assessment-status-bulk-card p,
+.assessment-report-card p {
+    margin: 0.25rem 0 0;
+    color: #64748b;
+    font-size: 0.875rem;
+    line-height: 1.55;
+}
+
+.dark .assessment-status-bulk-card p,
+.dark .assessment-report-card p {
+    color: #cbd5e1;
+}
+
+.assessment-status-bulk-actions,
+.assessment-report-primary-actions,
+.assessment-report-class-actions,
+.assessment-report-result-actions,
+.assessment-report-student-actions {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.55rem;
+}
+
+.assessment-status-return-field,
+.assessment-report-stop-field {
+    display: grid;
+    gap: 0.45rem;
+    color: #334155;
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+
+.dark .assessment-status-return-field,
+.dark .assessment-report-stop-field {
+    color: #e2e8f0;
+}
+
+.assessment-status-return-field textarea,
+.assessment-report-stop-field textarea {
+    width: 100%;
+    min-width: 0;
+    resize: vertical;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.75rem;
+    background: #fff;
+    color: #0f172a;
+    padding: 0.75rem;
+}
+
+.dark .assessment-status-return-field textarea,
+.dark .assessment-report-stop-field textarea {
+    border-color: rgb(255 255 255 / 0.15);
+    background: #0f172a;
+    color: #f8fafc;
+}
+
+.assessment-status-return-field small {
+    color: #dc2626;
+}
+
+.assessment-revision-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.9rem;
+    margin-top: 0.8rem;
+    border-color: #fcd34d;
+    background: #fffbeb;
+    padding: 1rem;
+}
+
+.dark .assessment-revision-card {
+    border-color: rgb(245 158 11 / 0.35);
+    background: rgb(146 64 14 / 0.16);
+}
+
+.assessment-revision-card__icon {
+    display: inline-flex;
+    width: 2.5rem;
+    height: 2.5rem;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.75rem;
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.assessment-revision-card__icon svg {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+.assessment-revision-card__eyebrow,
+.assessment-report-eyebrow {
+    display: block;
+    margin-bottom: 0.2rem;
+    color: #0f766e;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.assessment-revision-card p {
+    margin: 0.45rem 0;
+    color: #78350f;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+}
+
+.assessment-revision-card small {
+    color: #92400e;
+}
+
+.dark .assessment-revision-card p,
+.dark .assessment-revision-card small {
+    color: #fde68a;
+}
+
+.assessment-reports-page {
+    display: grid;
+    min-width: 0;
+    gap: 1rem;
+}
+
+.assessment-report-card.is-step {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 1rem;
+    padding: 1rem;
+}
+
+.assessment-report-card.is-share {
+    padding: 1rem;
+}
+
+.assessment-report-step {
+    display: inline-flex;
+    width: 2.45rem;
+    height: 2.45rem;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.8rem;
+    background: #0f766e;
+    color: #fff;
+    font-weight: 900;
+}
+
+.assessment-report-card__body {
+    display: grid;
+    min-width: 0;
+    gap: 1rem;
+}
+
+.assessment-report-card__head {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.assessment-report-form-grid,
+.assessment-report-class-grid,
+.assessment-report-stat-grid,
+.assessment-report-class-result-grid {
+    display: grid;
+    min-width: 0;
+    gap: 0.75rem;
+}
+
+.assessment-report-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.assessment-report-class-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.assessment-report-stat-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.assessment-report-class-result-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.assessment-report-form-grid label,
+.assessment-report-preview-row label,
+.assessment-report-share-toolbar label {
+    display: grid;
+    min-width: 0;
+    gap: 0.4rem;
+    color: #334155;
+    font-size: 0.8rem;
+    font-weight: 800;
+}
+
+.dark .assessment-report-form-grid label,
+.dark .assessment-report-preview-row label,
+.dark .assessment-report-share-toolbar label {
+    color: #e2e8f0;
+}
+
+.assessment-report-form-grid select,
+.assessment-report-preview-row select,
+.assessment-report-share-toolbar select,
+.assessment-report-revision-box textarea,
+.assessment-report-share-result input,
+.assessment-report-share-result textarea {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.75rem;
+    background: #fff;
+    color: #0f172a;
+    padding: 0.65rem 0.75rem;
+}
+
+.dark .assessment-report-form-grid select,
+.dark .assessment-report-preview-row select,
+.dark .assessment-report-share-toolbar select,
+.dark .assessment-report-revision-box textarea,
+.dark .assessment-report-share-result input,
+.dark .assessment-report-share-result textarea {
+    border-color: rgb(255 255 255 / 0.15);
+    background: #0f172a;
+    color: #f8fafc;
+}
+
+.assessment-report-preview-row,
+.assessment-report-share-toolbar {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 0.75rem;
+}
+
+.assessment-report-preview-row label {
+    flex: 1 1 20rem;
+}
+
+.assessment-report-inline-note {
+    display: block;
+    min-width: 0;
+    border: 1px solid #bfdbfe;
+    border-radius: 0.75rem;
+    background: #eff6ff;
+    color: #1e40af;
+    padding: 0.7rem 0.85rem;
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+
+.dark .assessment-report-inline-note {
+    border-color: rgb(96 165 250 / 0.3);
+    background: rgb(30 64 175 / 0.16);
+    color: #bfdbfe;
+}
+
+.assessment-report-class-actions > span {
+    color: #64748b;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.assessment-report-class-choice {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.6rem;
+    border: 1px solid #dbe4ee;
+    border-radius: 0.75rem;
+    background: #f8fafc;
+    color: #334155;
+    padding: 0.7rem 0.8rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.dark .assessment-report-class-choice {
+    border-color: rgb(255 255 255 / 0.1);
+    background: rgb(255 255 255 / 0.035);
+    color: #e2e8f0;
+}
+
+.assessment-report-class-choice input {
+    flex: 0 0 auto;
+}
+
+.assessment-report-revision-box {
+    display: grid;
+    gap: 0.65rem;
+    border: 1px solid #fde68a;
+    border-radius: 0.85rem;
+    background: #fffbeb;
+    padding: 0.85rem;
+}
+
+.dark .assessment-report-revision-box {
+    border-color: rgb(245 158 11 / 0.28);
+    background: rgb(146 64 14 / 0.13);
+}
+
+.assessment-report-revision-box > label {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    color: #78350f;
+}
+
+.dark .assessment-report-revision-box > label {
+    color: #fde68a;
+}
+
+.assessment-report-revision-box small {
+    display: block;
+    margin-top: 0.15rem;
+    font-size: 0.75rem;
+    font-weight: 400;
+}
+
+.assessment-report-status {
+    display: inline-flex;
+    max-width: 100%;
+    flex: 0 0 auto;
+    align-items: center;
+    border-radius: 999px;
+    background: #e2e8f0;
+    color: #334155;
+    padding: 0.32rem 0.65rem;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.assessment-report-status.is-completed {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.assessment-report-status.is-processing,
+.assessment-report-status.is-running,
+.assessment-report-status.is-pending {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.assessment-report-status.is-failed,
+.assessment-report-status.is-cancelled {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.dark .assessment-report-status {
+    background: rgb(255 255 255 / 0.1);
+    color: #e2e8f0;
+}
+
+.assessment-report-stat-grid article,
+.assessment-report-class-result-grid > article {
+    min-width: 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.85rem;
+    background: #f8fafc;
+    padding: 0.85rem;
+}
+
+.dark .assessment-report-stat-grid article,
+.dark .assessment-report-class-result-grid > article {
+    border-color: rgb(255 255 255 / 0.1);
+    background: rgb(255 255 255 / 0.035);
+}
+
+.assessment-report-stat-grid strong {
+    display: block;
+    color: #0f172a;
+    font-size: 1.25rem;
+}
+
+.dark .assessment-report-stat-grid strong {
+    color: #fff;
+}
+
+.assessment-report-stat-grid span,
+.assessment-report-class-result-grid small,
+.assessment-report-student-copy span {
+    display: block;
+    color: #64748b;
+    font-size: 0.75rem;
+}
+
+.assessment-report-result-head {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.65rem;
+}
+
+.assessment-report-progress {
+    height: 0.45rem;
+    margin-top: 0.75rem;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #e2e8f0;
+}
+
+.assessment-report-progress span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: #0d9488;
+}
+
+.assessment-report-error {
+    color: #dc2626 !important;
+    overflow-wrap: anywhere;
+}
+
+.assessment-report-empty {
+    grid-column: 1 / -1;
+    border: 1px dashed #cbd5e1;
+    border-radius: 0.85rem;
+    color: #64748b;
+    padding: 1.25rem;
+    text-align: center;
+}
+
+.assessment-report-share-result {
+    display: grid;
+    gap: 0.7rem;
+    border-color: #86efac;
+    background: #f0fdf4;
+    padding: 1rem;
+}
+
+.dark .assessment-report-share-result {
+    border-color: rgb(34 197 94 / 0.3);
+    background: rgb(20 83 45 / 0.22);
+}
+
+.assessment-report-share-result > div {
+    display: flex;
+    min-width: 0;
+    gap: 0.6rem;
+}
+
+.assessment-report-share-result textarea {
+    resize: vertical;
+}
+
+.assessment-report-share-result small {
+    color: #166534;
+}
+
+.assessment-report-share-toolbar label {
+    min-width: 9rem;
+}
+
+.assessment-report-student-list {
+    display: grid;
+    min-width: 0;
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.9rem;
+}
+
+.dark .assessment-report-student-list {
+    border-color: rgb(255 255 255 / 0.1);
+}
+
+.assessment-report-student-list > article {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.8rem;
+}
+
+.assessment-report-student-list > article + article {
+    border-top: 1px solid #e2e8f0;
+}
+
+.dark .assessment-report-student-list > article + article {
+    border-color: rgb(255 255 255 / 0.1);
+}
+
+.assessment-report-student-copy {
+    min-width: 0;
+}
+
+.assessment-report-student-copy strong {
+    display: block;
+    color: #0f172a;
+    overflow-wrap: anywhere;
+}
+
+.dark .assessment-report-student-copy strong {
+    color: #fff;
+}
+
+@media (max-width: 767px) {
+    .assessment-status-bulk-card,
+    .assessment-report-card__head,
+    .assessment-report-preview-row,
+    .assessment-report-share-toolbar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .assessment-status-bulk-actions > *,
+    .assessment-report-primary-actions > *,
+    .assessment-report-preview-row > *,
+    .assessment-report-share-toolbar > * {
+        width: 100%;
+    }
+
+    .assessment-report-card.is-step {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .assessment-report-step {
+        width: 2.1rem;
+        height: 2.1rem;
+    }
+
+    .assessment-report-form-grid,
+    .assessment-report-class-grid,
+    .assessment-report-stat-grid,
+    .assessment-report-class-result-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .assessment-report-share-result > div {
+        flex-direction: column;
+    }
+
+    .assessment-report-student-list {
+        border: 0;
+        gap: 0.75rem;
+        overflow: visible;
+    }
+
+    .assessment-report-student-list > article {
+        grid-template-columns: auto minmax(0, 1fr);
+        border: 1px solid #e2e8f0;
+        border-radius: 0.85rem;
+    }
+
+    .dark .assessment-report-student-list > article {
+        border-color: rgb(255 255 255 / 0.1);
+    }
+
+    .assessment-report-student-list > article + article {
+        border-top-width: 1px;
+    }
+
+    .assessment-report-student-list .assessment-report-status,
+    .assessment-report-student-actions {
+        grid-column: 1 / -1;
+    }
+}
+
 .fi-fo-date-time-picker {
     position: relative;
     z-index: 20;

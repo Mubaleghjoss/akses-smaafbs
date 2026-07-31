@@ -13,9 +13,9 @@ use App\Http\Controllers\Admin\DataSiswaProfileExportController;
 use App\Http\Controllers\Admin\ForceGuruPasswordChangeController;
 use App\Http\Controllers\Admin\GuruTendikExportController;
 use App\Http\Controllers\Admin\GuruTendikImportTemplateController;
+use App\Http\Controllers\Admin\PerpustakaanLiterasiDispensationController;
 use App\Http\Controllers\Admin\ProkerExportController;
 use App\Http\Controllers\Admin\ProkerImportTemplateController;
-use App\Http\Controllers\Admin\PerpustakaanLiterasiDispensationController;
 use App\Http\Controllers\Admin\SarprasActivityDocumentController;
 use App\Http\Controllers\Admin\SarprasBospInventoryDocumentController;
 use App\Http\Controllers\Admin\SarprasMonthlyAgendaDocumentController;
@@ -34,6 +34,7 @@ use App\Http\Controllers\SarprasBospInventoryPublicController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\SurveiPublicController;
 use App\Http\Middleware\AdminAwareVerifyCsrfToken;
+use App\Support\Media\PublicImageOptimizer;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -67,6 +68,13 @@ Route::middleware('auth')->group(function (): void {
         '/admin/penilaian/rapor/siswa/{reportSnapshot}/download',
         [AssessmentReportController::class, 'downloadSnapshot'],
     )->name('assessment.reports.snapshot.download');
+
+    Route::get(
+        '/admin/penilaian/rapor/siswa/{reportSnapshot}/preview',
+        [AssessmentReportController::class, 'preview'],
+    )
+        ->middleware('throttle:10,1')
+        ->name('assessment.reports.preview');
 
     Route::get(
         '/admin/penilaian/rapor/kelas/{classReportArtifact}/download',
@@ -223,7 +231,7 @@ Route::get('/manifest.webmanifest', function () {
     /** @var SiteSettingsAccessor $settings */
     $settings = app(SiteSettingsAccessor::class);
     $siteSettings = $settings->all();
-    $imageOptimizer = app(\App\Support\Media\PublicImageOptimizer::class);
+    $imageOptimizer = app(PublicImageOptimizer::class);
 
     $iconUrl = $siteSettings['favicon_path']
         ?? $siteSettings['logo_path']

@@ -3,7 +3,7 @@
 namespace App\Support\Assessment\Reporting;
 
 use App\Enums\Assessment\ReportGenerationStatus;
-use App\Jobs\Assessment\GenerateClassReportsJob;
+use App\Jobs\Assessment\GenerateClassReportPipeline;
 use App\Jobs\Assessment\GenerateStudentReportJob;
 use App\Models\Assessment\AuditLog;
 use App\Models\Assessment\ClassReportArtifact;
@@ -65,7 +65,7 @@ final class RetryReportGenerationAction
             ])->save();
             $this->auditRetry($actor, $locked, 'class_report_retry_requested', $oldValues);
 
-            GenerateClassReportsJob::dispatch($locked->getKey())->afterCommit();
+            GenerateClassReportPipeline::dispatch($locked->getKey())->afterCommit();
 
             return $locked->refresh();
         }, 3);

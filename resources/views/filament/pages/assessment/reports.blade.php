@@ -1,113 +1,227 @@
 <x-filament-panels::page>
-    <div class="space-y-5">
+    <div class="assessment-reports-page">
         @include('filament.pages.assessment.partials.type-navigation', ['showAccess' => false])
 
-        <section class="grid gap-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-gray-900 md:grid-cols-2">
-            <label class="min-w-0 text-sm font-semibold">Periode
-                <select wire:model.live="periodId" class="mt-2 w-full min-w-0 rounded-lg border-gray-300 dark:border-white/10 dark:bg-gray-950">
-                    @foreach ($this->getPeriodOptions() as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach
-                </select>
-            </label>
-            <label class="min-w-0 text-sm font-semibold">Template
-                <select wire:model.live="templateId" class="mt-2 w-full min-w-0 rounded-lg border-gray-300 dark:border-white/10 dark:bg-gray-950">
-                    @foreach ($this->getTemplateOptions() as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach
-                </select>
-            </label>
+        <section class="assessment-report-card is-step">
+            <span class="assessment-report-step">1</span>
+            <div class="assessment-report-card__body">
+                <div class="assessment-report-card__head">
+                    <div>
+                        <span class="assessment-report-eyebrow">Persiapan</span>
+                        <h2>Pilih periode dan template</h2>
+                        <p>Snapshot, PDF, dan tautan selalu terikat pada periode serta revisi template ini.</p>
+                    </div>
+                </div>
+                <div class="assessment-report-form-grid">
+                    <label><span>Periode</span>
+                        <select wire:model.live="periodId">
+                            @foreach ($this->getPeriodOptions() as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach
+                        </select>
+                    </label>
+                    <label><span>Template</span>
+                        <select wire:model.live="templateId">
+                            @foreach ($this->getTemplateOptions() as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach
+                        </select>
+                    </label>
+                </div>
+            </div>
         </section>
 
-        @can('penilaian.report.generate')
-            <section class="rounded-xl border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-gray-900">
-                <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-                    <div class="min-w-0">
-                        <label class="flex items-center gap-2 text-sm font-semibold">
-                            <input type="checkbox" wire:model.live="regenerate" class="rounded border-gray-300">
-                            Buat revisi baru
+        <section class="assessment-report-card">
+            <div class="assessment-report-card__body">
+                <div class="assessment-report-card__head">
+                    <div>
+                        <span class="assessment-report-eyebrow">Pratinjau satu siswa</span>
+                        <h2>Periksa tampilan PDF dan watermark</h2>
+                        <p>Pratinjau memakai snapshot siswa nyata, tidak disimpan, tidak membuat job, dan bukan rapor resmi.</p>
+                    </div>
+                </div>
+                <div class="assessment-report-preview-row">
+                    <label><span>Siswa</span>
+                        <select wire:model.live="previewSnapshotId">
+                            <option value="">Pilih siswa</option>
+                            @foreach ($this->getPreviewOptions() as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach
+                        </select>
+                    </label>
+                    @if ($this->previewUrl())
+                        <x-filament::button tag="a" href="{{ $this->previewUrl() }}" target="_blank" color="gray" icon="heroicon-o-eye">Buka Pratinjau PDF</x-filament::button>
+                    @else
+                        <span class="assessment-report-inline-note">Snapshot belum tersedia. Jadwalkan kelas terlebih dahulu, lalu preview dapat dibuka.</span>
+                    @endif
+                </div>
+            </div>
+        </section>
+
+        @if ($this->canGenerateReports())
+            <section class="assessment-report-card is-step">
+                <span class="assessment-report-step">2</span>
+                <div class="assessment-report-card__body">
+                    <div class="assessment-report-card__head">
+                        <div>
+                            <span class="assessment-report-eyebrow">Pipeline PDF ringan</span>
+                            <h2>Pilih kelas yang akan diproses</h2>
+                            <p>Satu job memproses maksimal {{ config('assessment.reports.pipeline.students_per_job', 3) }} siswa atau sekitar {{ config('assessment.reports.pipeline.max_seconds', 40) }} detik, lalu dilanjutkan pada putaran berikutnya.</p>
+                        </div>
+                    </div>
+
+                    <div class="assessment-report-class-actions">
+                        <x-filament::button size="sm" color="gray" wire:click="selectAllClasses">Pilih Semua Kelas</x-filament::button>
+                        <x-filament::button size="sm" color="gray" wire:click="clearClassSelection">Kosongkan</x-filament::button>
+                        <span>{{ count($selectedClassIds) }} kelas dipilih</span>
+                    </div>
+                    <div class="assessment-report-class-grid">
+                        @foreach ($this->getClassOptions() as $id => $label)
+                            <label class="assessment-report-class-choice">
+                                <input type="checkbox" value="{{ $id }}" wire:model.live="selectedClassIds">
+                                <span>{{ $label }}</span>
+                            </label>
+                        @endforeach
+                    </div>
+
+                    <div class="assessment-report-revision-box">
+                        <label>
+                            <input type="checkbox" wire:model.live="regenerate">
+                            <span><strong>Buat revisi baru</strong><small>Gunakan hanya jika isi rapor atau template berubah. Melanjutkan kelas yang dihentikan tidak perlu revisi baru.</small></span>
                         </label>
                         @if ($regenerate)
-                            <textarea wire:model="regenerationReason" rows="2" class="mt-3 w-full rounded-lg border-gray-300 dark:border-white/10 dark:bg-gray-950" placeholder="Alasan revisi wajib diisi"></textarea>
-                        @else
-                            <p class="mt-2 text-sm text-gray-500">Jika snapshot terbaru sudah ada, sistem tidak menggandakan rapor.</p>
+                            <textarea wire:model="regenerationReason" rows="2" maxlength="1000" placeholder="Alasan revisi wajib diisi"></textarea>
                         @endif
                     </div>
-                    <x-filament::button wire:click="generateReports" wire:loading.attr="disabled" icon="heroicon-o-play">Buat PDF Bertahap</x-filament::button>
-                </div>
-            </section>
-        @endcan
 
-        @if ($latestShareUrl)
-            <section x-data="{ copied:false }" class="rounded-xl border border-success-200 bg-success-50 p-4 dark:border-success-500/30 dark:bg-success-950/30">
-                <h2 class="font-semibold text-success-800 dark:text-success-200">Tautan sementara baru</h2>
-                <div class="mt-2 flex min-w-0 flex-col gap-2 sm:flex-row">
-                    <input readonly value="{{ $latestShareUrl }}" class="min-w-0 flex-1 rounded-lg border-success-300 bg-white text-sm dark:bg-gray-950">
-                    <x-filament::button color="success" x-on:click="navigator.clipboard.writeText(@js($latestShareUrl)); copied=true" x-text="copied ? 'Tersalin' : 'Salin Tautan'"></x-filament::button>
+                    <div class="assessment-report-primary-actions">
+                        <x-filament::button wire:click="generateReports" wire:loading.attr="disabled" icon="heroicon-o-play">Jadwalkan / Lanjutkan Kelas</x-filament::button>
+                        <x-filament::button color="danger" x-on:click="$dispatch('open-modal', { id: 'assessment-stop-reports-modal' })" icon="heroicon-o-stop">Hentikan Semua Antrean PDF</x-filament::button>
+                    </div>
                 </div>
-                <p class="mt-2 text-xs text-success-700 dark:text-success-300">Token tidak disimpan dalam bentuk asli dan hanya ditampilkan pada pembuatan ini.</p>
             </section>
         @endif
 
+        @php($run = $this->getGenerationRun())
         @php($classRows = $this->getClassRows())
-        <section class="rounded-xl border border-gray-200 bg-white p-4 dark:border-white/10 dark:bg-gray-900">
-            <h2 class="font-bold text-gray-950 dark:text-white">PDF Gabungan Per Kelas</h2>
-            <div class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                @forelse ($classRows as $row)
-                    <article class="min-w-0 rounded-xl border border-gray-200 p-3 dark:border-white/10">
-                        <div class="flex items-start justify-between gap-2">
-                            <div class="min-w-0"><strong class="break-words">{{ $row['rombel'] }}</strong><p class="text-xs text-gray-500">Revisi {{ $row['revision'] }}</p></div>
-                            <span class="shrink-0 rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold dark:bg-white/10">{{ $row['status_label'] }}</span>
-                        </div>
-                        @if ($row['error'])<p class="mt-2 break-words text-xs text-danger-600">{{ $row['error'] }}</p>@endif
-                        <div class="mt-3 flex flex-wrap gap-2">
-                            @if ($row['download_url'])<x-filament::button tag="a" href="{{ $row['download_url'] }}" target="_blank" size="sm" color="gray">Download</x-filament::button>@endif
-                            @can('penilaian.report.generate')
-                                @if ($row['status'] === 'failed')<x-filament::button wire:click="retryClass({{ $row['id'] }})" size="sm" color="warning">Coba Lagi</x-filament::button>@endif
-                            @endcan
-                        </div>
-                    </article>
-                @empty
-                    <p class="text-sm text-gray-500">Belum ada PDF kelas.</p>
-                @endforelse
+        <section class="assessment-report-card is-step">
+            <span class="assessment-report-step">3</span>
+            <div class="assessment-report-card__body">
+                <div class="assessment-report-card__head">
+                    <div>
+                        <span class="assessment-report-eyebrow">Progres</span>
+                        <h2>Pembuatan PDF per kelas</h2>
+                        <p>PDF individual dibuat bertahap, kemudian digabung menjadi satu PDF kelas.</p>
+                    </div>
+                    @if ($run)
+                        <span class="assessment-report-status is-{{ $run->status->value }}">{{ $run->status->label() }} · Revisi {{ $run->revision }}</span>
+                    @endif
+                </div>
+
+                @if ($run)
+                    <div class="assessment-report-stat-grid">
+                        <article><strong>{{ $run->completed_students }}/{{ $run->total_students }}</strong><span>PDF siswa selesai</span></article>
+                        <article><strong>{{ $run->completed_classes }}/{{ $run->total_classes }}</strong><span>PDF kelas selesai</span></article>
+                        <article><strong>{{ $run->status->label() }}</strong><span>Status pipeline</span></article>
+                    </div>
+                @endif
+
+                <div class="assessment-report-class-result-grid">
+                    @forelse ($classRows as $row)
+                        <article>
+                            <div class="assessment-report-result-head">
+                                <div><strong>{{ $row['rombel'] }}</strong><small>Revisi {{ $row['revision'] }}</small></div>
+                                <span class="assessment-report-status is-{{ $row['status'] }}">{{ $row['status_label'] }}</span>
+                            </div>
+                            <div class="assessment-report-progress"><span style="width: {{ $row['student_count'] > 0 ? round($row['completed_students'] / $row['student_count'] * 100) : 0 }}%"></span></div>
+                            <p>{{ $row['completed_students'] }}/{{ $row['student_count'] }} PDF siswa selesai.</p>
+                            @if ($row['error'])<p class="assessment-report-error">{{ $row['error'] }}</p>@endif
+                            <div class="assessment-report-result-actions">
+                                @if ($row['download_url'])<x-filament::button tag="a" href="{{ $row['download_url'] }}" target="_blank" size="sm" color="gray">Download PDF Kelas</x-filament::button>@endif
+                                @if ($this->canGenerateReports())
+                                    @if ($row['status'] === 'failed')<x-filament::button wire:click="retryClass({{ $row['id'] }})" size="sm" color="warning">Coba Lagi</x-filament::button>@endif
+                                @endif
+                            </div>
+                        </article>
+                    @empty
+                        <div class="assessment-report-empty">Belum ada pipeline kelas pada periode dan template ini.</div>
+                    @endforelse
+                </div>
             </div>
         </section>
 
+        @if ($latestShareUrl)
+            <section x-data="{ copied:false }" class="assessment-report-share-result">
+                <h2>Tautan sementara baru</h2>
+                <div><input readonly value="{{ $latestShareUrl }}"><x-filament::button color="success" x-on:click="navigator.clipboard.writeText(@js($latestShareUrl)); copied=true" x-text="copied ? 'Tersalin' : 'Salin Tautan'"></x-filament::button></div>
+            </section>
+        @endif
+
+        @if ($latestShareLinks !== [])
+            @php($latestShareLinksText = implode("\n\n", $latestShareLinks))
+            <section x-data="{ copied:false }" class="assessment-report-share-result">
+                <h2>{{ count($latestShareLinks) }} tautan berhasil dibuat</h2>
+                <textarea readonly rows="{{ min(14, count($latestShareLinks) * 3) }}">{{ $latestShareLinksText }}</textarea>
+                <x-filament::button color="success" x-on:click="navigator.clipboard.writeText(@js($latestShareLinksText)); copied=true" x-text="copied ? 'Semua Tersalin' : 'Salin Semua Tautan'"></x-filament::button>
+                <small>Token asli hanya ditampilkan pada pembuatan ini.</small>
+            </section>
+        @endif
+
         @php($snapshotRows = $this->getSnapshotRows())
-        <section class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/10 dark:bg-gray-900">
-            <div class="border-b border-gray-200 p-4 dark:border-white/10">
-                <h2 class="font-bold text-gray-950 dark:text-white">Rapor Individual</h2>
-                @can('penilaian.publish')
-                    <label class="mt-3 block max-w-xs text-sm font-semibold">Masa Tautan
-                        <select wire:model="shareExpiryDays" class="mt-1 w-full rounded-lg border-gray-300 dark:border-white/10 dark:bg-gray-950">
-                            <option value="1">1 hari</option><option value="3">3 hari</option><option value="7">7 hari</option>
-                        </select>
-                    </label>
-                @endcan
-            </div>
-            <div class="divide-y divide-gray-200 dark:divide-white/10">
-                @forelse ($snapshotRows as $row)
-                    <article class="grid min-w-0 gap-3 p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-                        <div class="min-w-0">
-                            <div class="flex flex-wrap items-center gap-2">
-                                <strong class="break-words">{{ $row['student'] }}</strong>
-                                <span class="rounded-full bg-gray-100 px-2 py-1 text-xs dark:bg-white/10">{{ $row['rombel'] }}</span>
-                                <span class="rounded-full bg-gray-100 px-2 py-1 text-xs dark:bg-white/10">{{ $row['status_label'] }}</span>
+        <section class="assessment-report-card is-share is-step">
+            <span class="assessment-report-step">4</span>
+            <div class="assessment-report-card__body">
+                <div class="assessment-report-card__head">
+                    <div>
+                        <span class="assessment-report-eyebrow">Distribusi opsional</span>
+                        <h2>Pilih siswa yang akan dibuatkan tautan</h2>
+                        <p>Tautan tidak memakai queue. Maksimal 50 siswa per proses dan hanya tersedia setelah periode diterbitkan.</p>
+                    </div>
+                </div>
+                @if ($this->canPublishReports())
+                    <div class="assessment-report-share-toolbar">
+                        <label><span>Masa aktif</span>
+                            <select wire:model="shareExpiryDays"><option value="1">1 hari</option><option value="3">3 hari</option><option value="7">7 hari</option></select>
+                        </label>
+                        <x-filament::button size="sm" color="gray" wire:click="selectAllShareableSnapshots">Pilih Maks. 50</x-filament::button>
+                        <x-filament::button size="sm" color="gray" wire:click="clearShareSelection">Kosongkan</x-filament::button>
+                        <x-filament::button size="sm" color="success" wire:click="issueSelectedShareLinks" wire:confirm="Buat tautan sementara untuk seluruh siswa terpilih?" :disabled="count($selectedShareSnapshotIds) === 0 || ! $this->selectedPeriodIsPublished()">Buat {{ count($selectedShareSnapshotIds) }} Tautan</x-filament::button>
+                    </div>
+                    @if (! $this->selectedPeriodIsPublished())<div class="assessment-report-inline-note">Periode belum published. Selesaikan seluruh PDF dan terbitkan periode sebelum membuat tautan.</div>@endif
+                @endif
+
+                <div class="assessment-report-student-list">
+                    @forelse ($snapshotRows as $row)
+                        <article>
+                            @if ($this->canPublishReports())
+                                <input type="checkbox" value="{{ $row['id'] }}" wire:model.live="selectedShareSnapshotIds" @disabled($row['status'] !== 'completed') aria-label="Pilih {{ $row['student'] }}">
+                            @endif
+                            <div class="assessment-report-student-copy">
+                                <strong>{{ $row['student'] }}</strong>
+                                <span>{{ $row['rombel'] }} · Revisi {{ $row['revision'] }} · tautan aktif {{ $row['active_links'] }}</span>
+                                @if ($row['error'])<small class="assessment-report-error">{{ $row['error'] }}</small>@endif
                             </div>
-                            <p class="mt-1 text-xs text-gray-500">Revisi {{ $row['revision'] }} · tautan aktif {{ $row['active_links'] }}</p>
-                            @if ($row['error'])<p class="mt-1 break-words text-xs text-danger-600">{{ $row['error'] }}</p>@endif
-                        </div>
-                        <div class="flex flex-wrap gap-2 md:justify-end">
-                            @if ($row['download_url'])<x-filament::button tag="a" href="{{ $row['download_url'] }}" target="_blank" size="sm" color="gray">Download</x-filament::button>@endif
-                            @can('penilaian.report.generate')
-                                @if ($row['status'] === 'failed')<x-filament::button wire:click="retrySnapshot({{ $row['id'] }})" size="sm" color="warning">Coba Lagi</x-filament::button>@endif
-                            @endcan
-                            @can('penilaian.publish')
-                                @if ($row['status'] === 'completed')<x-filament::button wire:click="issueShareLink({{ $row['id'] }})" size="sm" color="success">Buat Tautan</x-filament::button>@endif
-                                @if ($row['active_links'] > 0)<x-filament::button wire:click="revokeShareLinks({{ $row['id'] }})" wire:confirm="Cabut seluruh tautan aktif rapor ini?" size="sm" color="danger">Cabut</x-filament::button>@endif
-                            @endcan
-                        </div>
-                    </article>
-                @empty
-                    <div class="p-8 text-center text-sm text-gray-500">Belum ada snapshot rapor.</div>
-                @endforelse
+                            <span class="assessment-report-status is-{{ $row['status'] }}">{{ $row['status_label'] }}</span>
+                            <div class="assessment-report-student-actions">
+                                <x-filament::button tag="a" href="{{ $row['preview_url'] }}" target="_blank" size="sm" color="gray">Preview</x-filament::button>
+                                @if ($row['download_url'])<x-filament::button tag="a" href="{{ $row['download_url'] }}" target="_blank" size="sm" color="gray">Download</x-filament::button>@endif
+                                @if ($this->canGenerateReports())
+                                    @if ($row['status'] === 'failed')<x-filament::button wire:click="retrySnapshot({{ $row['id'] }})" size="sm" color="warning">Coba Lagi</x-filament::button>@endif
+                                @endif
+                                @if ($this->canPublishReports())
+                                    @if ($row['active_links'] > 0)<x-filament::button wire:click="revokeShareLinks({{ $row['id'] }})" wire:confirm="Cabut seluruh tautan aktif rapor ini?" size="sm" color="danger">Cabut</x-filament::button>@endif
+                                @endif
+                            </div>
+                        </article>
+                    @empty
+                        <div class="assessment-report-empty">Belum ada snapshot rapor.</div>
+                    @endforelse
+                </div>
             </div>
         </section>
+
+        <x-filament::modal id="assessment-stop-reports-modal" width="lg">
+            <x-slot name="heading">Hentikan Semua Antrean PDF</x-slot>
+            <x-slot name="description">Hanya queue assessment-reports yang dibersihkan. Queue Literasi dan default tidak disentuh; PDF yang sudah selesai tetap tersimpan.</x-slot>
+            <label class="assessment-report-stop-field"><span>Alasan penghentian</span><textarea wire:model="stopReason" rows="4" maxlength="1000" placeholder="Minimal 10 karakter"></textarea></label>
+            <x-slot name="footerActions">
+                <x-filament::button color="gray" x-on:click="$dispatch('close-modal', { id: 'assessment-stop-reports-modal' })">Batal</x-filament::button>
+                <x-filament::button color="danger" wire:click="stopAllReportJobs" wire:confirm="Konfirmasi terakhir: hapus SELURUH job assessment-reports dan tandai proses berjalan sebagai dihentikan?">Ya, Hentikan Semua PDF</x-filament::button>
+            </x-slot>
+        </x-filament::modal>
     </div>
 </x-filament-panels::page>

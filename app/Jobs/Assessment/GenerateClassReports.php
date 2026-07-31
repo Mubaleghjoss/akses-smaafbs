@@ -57,6 +57,10 @@ class GenerateClassReports implements ShouldQueue
             return;
         }
 
+        if (! in_array($this->statusValue($artifact->generation_status), ['pending', 'processing', 'failed'], true)) {
+            return;
+        }
+
         if ($this->isCompletedAndValid($artifact, $storage)) {
             return;
         }
@@ -119,6 +123,13 @@ class GenerateClassReports implements ShouldQueue
             $renderer->renderClass($snapshots, $template),
         );
 
+        $fresh = ClassReportArtifact::query()->find($this->classReportArtifactId);
+        if (! $fresh || $this->statusValue($fresh->generation_status) === 'cancelled') {
+            $storage->disk()->delete($stored['path']);
+
+            return;
+        }
+
         DB::transaction(function () use ($stored): void {
             $artifact = ClassReportArtifact::query()->lockForUpdate()->find($this->classReportArtifactId);
 
@@ -162,10 +173,9 @@ class GenerateClassReports implements ShouldQueue
             return;
         }
 
-        $status = $artifact->generation_status;
-        $status = $status instanceof \BackedEnum ? $status->value : (string) $status;
+        $status = $this->statusValue($artifact->generation_status);
 
-        if ($status === 'completed') {
+        if (in_array($status, ['completed', 'cancelled', 'not_scheduled'], true)) {
             return;
         }
 
@@ -204,5 +214,10 @@ class GenerateClassReports implements ShouldQueue
 
         return $status === 'completed'
             && $storage->isValid($artifact->pdf_path, $artifact->checksum);
+    }
+
+    private function statusValue(mixed $status): string
+    {
+        return $status instanceof \BackedEnum ? (string) $status->value : (string) $status;
     }
 }

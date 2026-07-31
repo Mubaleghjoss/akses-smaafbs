@@ -145,6 +145,22 @@ class AssessmentTeacherExperienceTest extends TestCase
             ->assertSet("scoreRows.{$studentId}.description", 'Menunjukkan pemahaman yang baik.')
             ->assertSee('Data belum masuk server sampai tombol');
 
+        Livewire::actingAs($teacher)
+            ->test(AstsInputScores::class)
+            ->set('periodId', $period->getKey())
+            ->set('assignmentId', $assignment->getKey())
+            ->call('loadAssignment')
+            ->set("scoreRows.{$studentId}.scores.{$component->getKey()}", 70)
+            ->set("scoreRows.{$studentId}.description", 'Deskripsi lama.')
+            ->set('selectedStudentIds', [$studentId])
+            ->set('bulkComponentId', $component->getKey())
+            ->set('bulkScore', '91')
+            ->set('bulkDescription', 'Deskripsi hasil bulk terbaru.')
+            ->assertSet('bulkFillEmptyOnly', false)
+            ->call('applyBulkValues')
+            ->assertSet("scoreRows.{$studentId}.scores.{$component->getKey()}", 91.0)
+            ->assertSet("scoreRows.{$studentId}.description", 'Deskripsi hasil bulk terbaru.');
+
         $this->assertTrue(AstsHomeroomRecap::canAccess());
         $this->assertTrue(Gate::forUser($teacher)->allows('view', $homeroom));
         $this->assertTrue(Gate::forUser($teacher)->allows('create', [HomeroomReport::class, $homeroom]));
@@ -167,6 +183,90 @@ class AssessmentTeacherExperienceTest extends TestCase
 
         $this->assertSame(AssignmentStatus::DRAFT, $assignment->refresh()->status);
         $this->assertSame(AssignmentStatus::SUBMITTED, $submittedAssignment->refresh()->status);
+    }
+
+    public function test_admin_can_verify_and_return_filtered_assignments_atomically_with_visible_revision_note(): void
+    {
+        $admin = User::query()->create([
+            'name' => 'Admin Kurikulum',
+            'username' => 'admin-kurikulum-test',
+            'password' => 'test-password',
+        ]);
+        Role::findOrCreate('admin', 'web');
+        $admin->assignRole('admin');
+        $period = AssessmentPeriod::factory()->asts()->create([
+            'status' => AssessmentPeriodStatus::VERIFICATION,
+        ]);
+        $rombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'rombel_name_snapshot' => 'XI 1',
+        ]);
+        $secondRombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'rombel_name_snapshot' => 'XI 2',
+        ]);
+        $subject = Subject::factory()->create(['name' => 'Matematika']);
+        $scheme = AssessmentScheme::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_subject_id' => null,
+            'assessment_period_rombel_id' => null,
+        ]);
+        AssessmentComponent::factory()->create([
+            'assessment_scheme_id' => $scheme->getKey(),
+            'name' => 'Nilai ASTS',
+        ]);
+        $assignments = collect([
+            [$rombel->getKey(), 'XI 1'],
+            [$secondRombel->getKey(), 'XI 2'],
+        ])->map(function (array $class) use ($period, $subject) {
+            return AssessmentPeriodAssignment::factory()->create([
+                'assessment_period_id' => $period->getKey(),
+                'assessment_period_rombel_id' => $class[0],
+                'assessment_subject_id' => $subject->getKey(),
+                'teacher_id' => 348,
+                'teacher_name_snapshot' => 'Putra Kamulyan',
+                'subject_name_snapshot' => 'Matematika',
+                'rombel_name_snapshot' => $class[1],
+                'status' => AssignmentStatus::SUBMITTED,
+            ]);
+        });
+
+        Livewire::actingAs($admin)
+            ->test(AstsSubmissionStatus::class)
+            ->set('periodId', $period->getKey())
+            ->set('selectedAssignmentIds', $assignments->pluck('id')->all())
+            ->call('verifySelectedAssignments')
+            ->assertSet('selectedAssignmentIds', []);
+
+        $this->assertSame(
+            2,
+            AssessmentPeriodAssignment::query()->where('status', AssignmentStatus::VERIFIED->value)->count(),
+        );
+
+        $reason = 'Mohon periksa kembali nilai dan deskripsi capaian siswa.';
+        Livewire::actingAs($admin)
+            ->test(AstsSubmissionStatus::class)
+            ->set('periodId', $period->getKey())
+            ->set('selectedAssignmentIds', $assignments->pluck('id')->all())
+            ->call('prepareReturn')
+            ->set('returnReason', $reason)
+            ->call('confirmReturnAssignments')
+            ->assertSet('selectedAssignmentIds', []);
+
+        $returned = $assignments->first()->fresh();
+        $this->assertSame(AssignmentStatus::RETURNED, $returned->status);
+        $this->assertSame($reason, $returned->returned_reason);
+        $this->assertSame($admin->getKey(), $returned->returned_by);
+
+        Livewire::actingAs($admin)
+            ->test(AstsInputScores::class)
+            ->set('periodId', $period->getKey())
+            ->set('assignmentId', $returned->getKey())
+            ->call('loadAssignment')
+            ->assertSet('assignmentId', $returned->getKey())
+            ->assertSet('assignmentMeta.returned_reason', $reason)
+            ->assertSet('assignmentMeta.returned_by', 'Admin Kurikulum')
+            ->assertSee('Perlu Revisi');
     }
 
     private function teacher(int $teacherId): User

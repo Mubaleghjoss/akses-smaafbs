@@ -20,6 +20,7 @@ class ReportSnapshot extends Model
         'assessment_period_id',
         'assessment_period_student_id',
         'assessment_report_template_id',
+        'assessment_report_generation_run_id',
         'revision',
         'template_version',
         'snapshot_data',
@@ -50,6 +51,7 @@ class ReportSnapshot extends Model
                 'assessment_period_id',
                 'assessment_period_student_id',
                 'assessment_report_template_id',
+                'assessment_report_generation_run_id',
                 'revision',
                 'template_version',
                 'snapshot_data',
@@ -77,6 +79,11 @@ class ReportSnapshot extends Model
     public function template(): BelongsTo
     {
         return $this->belongsTo(ReportTemplate::class, 'assessment_report_template_id');
+    }
+
+    public function generationRun(): BelongsTo
+    {
+        return $this->belongsTo(ReportGenerationRun::class, 'assessment_report_generation_run_id');
     }
 
     public function generator(): BelongsTo

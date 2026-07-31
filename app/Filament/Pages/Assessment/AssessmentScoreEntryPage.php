@@ -62,7 +62,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
 
     public string $bulkDescription = '';
 
-    public bool $bulkFillEmptyOnly = true;
+    public bool $bulkFillEmptyOnly = false;
 
     public static function canAccess(): bool
     {
@@ -223,7 +223,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
 
         /** @var AssessmentPeriodAssignment|null $assignment */
         $assignment = $this->assignmentQuery()
-            ->with(['period', 'periodRombel'])
+            ->with(['period', 'periodRombel', 'returner'])
             ->find($this->assignmentId);
 
         if (! $assignment) {
@@ -289,6 +289,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
         $status = $assignment->status instanceof AssignmentStatus
             ? $assignment->status
             : AssignmentStatus::from((string) $assignment->status);
+        $revisionAssignment = $assignment->fresh('returner') ?: $assignment;
         $this->lockVersion = (int) $assignment->lock_version;
         $this->assignmentMeta = [
             'id' => (int) $assignment->getKey(),
@@ -300,7 +301,11 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             'status_label' => $status->label(),
             'editable' => $status->isEditable()
                 && Gate::forUser(auth()->user())->allows('updateScores', $assignment),
-            'returned_reason' => $assignment->returned_reason,
+            'returned_reason' => $revisionAssignment->returned_reason,
+            'returned_at' => $revisionAssignment->returned_at?->format('d/m/Y H:i'),
+            'returned_by' => $revisionAssignment->returner?->name
+                ?: $revisionAssignment->returner?->username
+                ?: 'Admin/Kurikulum',
         ];
     }
 
@@ -489,6 +494,36 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             ->success()
             ->duration(12000)
             ->send();
+    }
+
+    public function bulkConfirmationMessage(): string
+    {
+        $selected = collect($this->selectedStudentIds)
+            ->map(fn (mixed $id): int => (int) $id)
+            ->filter(fn (int $id): bool => isset($this->scoreRows[$id]));
+
+        if ($this->bulkFillEmptyOnly) {
+            return "Terapkan isian massal hanya pada kolom kosong untuk {$selected->count()} siswa terpilih?";
+        }
+
+        $overwritten = 0;
+        foreach ($selected as $studentId) {
+            if ($this->bulkComponentId && trim($this->bulkScore) !== '') {
+                $current = data_get($this->scoreRows, "{$studentId}.scores.{$this->bulkComponentId}");
+                if ($current !== null && $current !== '') {
+                    $overwritten++;
+                }
+            }
+
+            if (trim($this->bulkDescription) !== '') {
+                $current = trim((string) data_get($this->scoreRows, "{$studentId}.description", ''));
+                if ($current !== '') {
+                    $overwritten++;
+                }
+            }
+        }
+
+        return "Timpa {$overwritten} nilai/deskripsi lama pada {$selected->count()} siswa terpilih? Perubahan masih harus disimpan melalui tombol Simpan Draf.";
     }
 
     public function draftKey(): string

@@ -104,9 +104,15 @@
                     <span class="assessment-score-pill">Versi {{ $lockVersion }}</span>
                 </div>
                 @if ($assignmentMeta['returned_reason'])
-                    <div class="mt-3 rounded-xl border border-warning-200 bg-warning-50 p-3 text-sm text-warning-800 dark:border-warning-500/30 dark:bg-warning-950/30 dark:text-warning-200">
-                        <strong>Catatan pengembalian:</strong> {{ $assignmentMeta['returned_reason'] }}
-                    </div>
+                    <section class="assessment-revision-card">
+                        <span class="assessment-revision-card__icon"><x-filament::icon icon="heroicon-o-exclamation-triangle" /></span>
+                        <div>
+                            <span class="assessment-revision-card__eyebrow">{{ $assignmentMeta['status'] === 'returned' ? 'Perlu Revisi' : 'Riwayat Revisi Terakhir' }}</span>
+                            <h2>{{ $assignmentMeta['subject'] }} · {{ $assignmentMeta['rombel'] }}</h2>
+                            <p>{{ $assignmentMeta['returned_reason'] }}</p>
+                            <small>Diberikan oleh {{ $assignmentMeta['returned_by'] }}{{ $assignmentMeta['returned_at'] ? ' pada '.$assignmentMeta['returned_at'] : '' }}.</small>
+                        </div>
+                    </section>
                 @endif
             </section>
 
@@ -194,7 +200,7 @@
                             </label>
                             <label class="is-wide flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200">
                                 <input type="checkbox" wire:model="bulkFillEmptyOnly" class="mt-1 rounded border-gray-300">
-                                <span><strong>Hanya isi kolom yang masih kosong</strong><small class="block text-gray-500">Nonaktifkan hanya jika nilai/deskripsi lama memang ingin ditimpa.</small></span>
+                                <span><strong>Hanya isi kolom yang masih kosong</strong><small class="block text-gray-500">Bawaan nonaktif: nilai/deskripsi lama pada siswa terpilih akan ditimpa setelah konfirmasi.</small></span>
                             </label>
                         </div>
 
@@ -202,7 +208,15 @@
                             <x-filament::button type="button" size="sm" color="gray" wire:click="selectAllStudents">Pilih Semua</x-filament::button>
                             <x-filament::button type="button" size="sm" color="gray" wire:click="clearStudentSelection">Kosongkan Pilihan</x-filament::button>
                             <span class="text-xs font-semibold text-gray-500">{{ count($selectedStudentIds) }} siswa dipilih</span>
-                            <x-filament::button type="button" size="sm" wire:click="applyBulkValues" wire:loading.attr="disabled" icon="heroicon-o-bolt" class="sm:ml-auto">
+                            <x-filament::button
+                                type="button"
+                                size="sm"
+                                wire:click="applyBulkValues"
+                                wire:confirm="{{ $this->bulkConfirmationMessage() }}"
+                                wire:loading.attr="disabled"
+                                icon="heroicon-o-bolt"
+                                class="sm:ml-auto"
+                            >
                                 Terapkan ke Form
                             </x-filament::button>
                         </div>

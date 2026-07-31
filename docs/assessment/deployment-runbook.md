@@ -19,6 +19,8 @@ ASSESSMENT_REPORT_DISK=local
 ASSESSMENT_REPORT_QUEUE=assessment-reports
 ASSESSMENT_REPORT_WORKER_MAX_TIME=50
 ASSESSMENT_REPORT_WORKER_TIMEOUT=180
+ASSESSMENT_REPORT_STUDENTS_PER_JOB=3
+ASSESSMENT_REPORT_PIPELINE_MAX_SECONDS=40
 DB_QUEUE_RETRY_AFTER=180
 ```
 
@@ -42,6 +44,10 @@ Setelah deploy:
 7. Buat satu periode pilot nyata; jangan membuat siswa/data palsu di produksi.
 8. Periksa halaman HP 360/390 dan desktop.
 9. Saat report dibuat, cek queue Literasi tetap didahulukan dan file berada pada storage privat.
+10. Sebelum mengubah antrean lama, jalankan
+    `php artisan assessment:reports-reconcile-queue` dan simpan angka dry-run.
+    Apply hanya setelah backup dengan `--apply --actor=<id-admin>
+    --reason="<alasan minimal 10 karakter>"`.
 
 ## Rollback aman
 
@@ -83,6 +89,11 @@ Baca error preflight: pilihan rombel, siswa aktif, akun guru, wali kelas, skema,
 - Cek `schedule:list`, cron, tabel `jobs`, dan failed jobs.
 - Cek `AssessmentReportQueueGate`.
 - Pastikan disk `local` dapat ditulis dan tidak mengarah ke webroot.
+- Cek kartu run dan progres per kelas. Status `not_scheduled` berarti kelas
+  belum dipilih; `cancelled` berarti dapat diteruskan dari kelas terpilih.
+- Jangan menghapus queue dengan perintah umum. Gunakan UI **Hentikan Semua
+  Antrean PDF** atau command rekonsiliasi agar hanya `assessment-reports` yang
+  disentuh.
 
 ### Link 404/410
 

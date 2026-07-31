@@ -13,14 +13,13 @@ use App\Actions\Assessment\StartAssessmentVerificationAction;
 use App\Actions\Assessment\SubmitAssessmentAssignmentAction;
 use App\Actions\Assessment\VerifyAssessmentAssignmentAction;
 use App\Enums\Assessment\AssessmentPeriodStatus;
-use App\Enums\Assessment\AssignmentStatus;
 use App\Enums\Assessment\AssessmentType;
+use App\Enums\Assessment\AssignmentStatus;
 use App\Enums\Assessment\ReportGenerationStatus;
 use App\Enums\Assessment\ScoreSource;
 use App\Models\Assessment\AcademicYear;
 use App\Models\Assessment\AssessmentComponent;
 use App\Models\Assessment\AssessmentPeriod;
-use App\Models\Assessment\AssessmentPeriodAssignment;
 use App\Models\Assessment\AssessmentScheme;
 use App\Models\Assessment\AssessmentScore;
 use App\Models\Assessment\ClassReportArtifact;
@@ -35,6 +34,7 @@ use App\Models\GuruTendik;
 use App\Models\Rombel;
 use App\Models\User;
 use App\Support\Admin\AdminModuleAccess;
+use App\Support\Assessment\AssessmentSchemeResolver;
 use App\Support\Assessment\Reporting\AssessmentReportStorage;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Queue;
@@ -59,6 +59,8 @@ class AssessmentWorkflowTest extends TestCase
         $this->bootstrapUserAndPermissionTables();
         $migration = require database_path('migrations/2026_07_31_080000_create_assessment_foundation_tables.php');
         $migration->up();
+        $pipelineMigration = require database_path('migrations/2026_07_31_190000_add_assessment_report_generation_runs.php');
+        $pipelineMigration->up();
         $this->artisan('assessment:install-defaults')->assertSuccessful();
         app(PermissionRegistrar::class)->forgetCachedPermissions();
         Queue::fake();
@@ -446,7 +448,7 @@ class AssessmentWorkflowTest extends TestCase
         $save = app(SaveAssessmentScoresAction::class);
 
         foreach ($assignments as $assignment) {
-            $component = app(\App\Support\Assessment\AssessmentSchemeResolver::class)
+            $component = app(AssessmentSchemeResolver::class)
                 ->forAssignment($assignment)
                 ->components
                 ->firstOrFail();
@@ -495,7 +497,7 @@ class AssessmentWorkflowTest extends TestCase
         $this->assertNull(data_get($period->settings, '_reporting.pending'));
         $period->forceFill(['entry_end_at' => now()->subMinute()])->save();
 
-        $component = app(\App\Support\Assessment\AssessmentSchemeResolver::class)
+        $component = app(AssessmentSchemeResolver::class)
             ->forAssignment($selected)
             ->components
             ->firstOrFail();
@@ -740,8 +742,7 @@ class AssessmentWorkflowTest extends TestCase
         array $context,
         AssessmentType $type,
         ScoreSource $scoreSource = ScoreSource::MANUAL,
-    ): AssessmentPeriod
-    {
+    ): AssessmentPeriod {
         $period = AssessmentPeriod::query()->create([
             'assessment_academic_year_id' => $context['year']->getKey(),
             'assessment_semester_id' => $context['semester']->getKey(),

@@ -6,6 +6,8 @@ use App\Actions\Assessment\PublishAssessmentPeriodAction;
 use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssessmentType;
 use App\Enums\Assessment\ReportGenerationStatus;
+use App\Filament\Pages\Assessment\AstsReports;
+use App\Jobs\Assessment\GenerateClassReportPipeline;
 use App\Jobs\Assessment\GenerateClassReports;
 use App\Jobs\Assessment\GenerateClassReportsJob;
 use App\Jobs\Assessment\GenerateStudentReport;
@@ -26,8 +28,11 @@ use App\Support\Assessment\Reporting\AssessmentReportQueueGate;
 use App\Support\Assessment\Reporting\AssessmentReportRenderer;
 use App\Support\Assessment\Reporting\AssessmentReportShareService;
 use App\Support\Assessment\Reporting\AssessmentReportStorage;
+use App\Support\Assessment\Reporting\AssessmentReportWatermark;
 use App\Support\Assessment\Reporting\CreateReportSnapshotsAction;
 use App\Support\Assessment\Reporting\RetryReportGenerationAction;
+use App\Support\Assessment\Reporting\ScheduleReportClassesAction;
+use App\Support\Assessment\Reporting\StopAssessmentReportQueueAction;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -57,6 +62,8 @@ class AssessmentReportingTest extends TestCase
         $permissionMigration->up();
         $migration = require database_path('migrations/2026_07_31_080000_create_assessment_foundation_tables.php');
         $migration->up();
+        $pipelineMigration = require database_path('migrations/2026_07_31_190000_add_assessment_report_generation_runs.php');
+        $pipelineMigration->up();
         DB::table('users')->insert([
             'id' => 99,
             'name' => 'Kurikulum Test',
@@ -403,7 +410,7 @@ class AssessmentReportingTest extends TestCase
         $this->assertNull($retriedSnapshot->error_message);
         $this->assertNotNull($retriedArtifact->queued_at);
         Queue::assertPushed(GenerateStudentReportJob::class, 1);
-        Queue::assertPushed(GenerateClassReportsJob::class, 1);
+        Queue::assertPushed(GenerateClassReportPipeline::class, 1);
         $this->assertDatabaseHas('assessment_audit_logs', [
             'event' => 'student_report_retry_requested',
             'subject_id' => $snapshot->getKey(),
@@ -635,8 +642,9 @@ class AssessmentReportingTest extends TestCase
         );
         $this->assertDatabaseCount('assessment_report_snapshots', 1);
         $this->assertDatabaseCount('assessment_class_report_artifacts', 1);
-        Queue::assertPushed(GenerateStudentReportJob::class, 1);
-        Queue::assertPushed(GenerateClassReportsJob::class, 1);
+        $this->assertDatabaseCount('assessment_report_generation_runs', 1);
+        $this->assertSame('not_scheduled', $stored->generation_status->value);
+        Queue::assertNothingPushed();
     }
 
     public function test_promotion_status_snapshot_follows_period_configuration(): void
@@ -674,6 +682,118 @@ class AssessmentReportingTest extends TestCase
         )->firstOrFail();
 
         $this->assertSame('Naik Kelas', data_get($configured->snapshot_data, 'homeroom.promotion_status'));
+    }
+
+    public function test_class_pipeline_schedules_one_job_instead_of_one_job_per_student(): void
+    {
+        Queue::fake();
+        [$period, $rombel, , $template] = $this->reportingFoundation(studentCount: 5);
+        $snapshots = app(CreateReportSnapshotsAction::class)->execute($period, $template, generatedBy: 99);
+
+        $run = app(ScheduleReportClassesAction::class)->execute(
+            User::query()->findOrFail(99),
+            $period,
+            $template,
+            [$rombel->getKey()],
+        );
+
+        $this->assertCount(5, $snapshots);
+        $this->assertSame('running', $run->status->value);
+        $this->assertSame(5, $run->total_students);
+        $this->assertSame(1, $run->total_classes);
+        $this->assertSame(
+            5,
+            ReportSnapshot::query()->where('generation_status', 'pending')->count(),
+        );
+        Queue::assertPushed(GenerateClassReportPipeline::class, 1);
+        Queue::assertNotPushed(GenerateStudentReportJob::class);
+    }
+
+    public function test_class_pipeline_generates_individual_and_combined_pdf_in_one_bounded_run(): void
+    {
+        Storage::fake('local');
+        Queue::fake();
+        config([
+            'assessment.reports.pipeline.students_per_job' => 3,
+            'assessment.reports.pipeline.max_seconds' => 40,
+        ]);
+        [$period, $rombel, , $template] = $this->reportingFoundation(studentCount: 2);
+        app(CreateReportSnapshotsAction::class)->execute($period, $template, generatedBy: 99);
+        app(ScheduleReportClassesAction::class)->execute(
+            User::query()->findOrFail(99),
+            $period,
+            $template,
+            [$rombel->getKey()],
+        );
+        $artifact = ClassReportArtifact::query()->firstOrFail();
+
+        (new GenerateClassReportPipeline($artifact->getKey()))->handle(
+            app(AssessmentReportRenderer::class),
+            app(AssessmentReportStorage::class),
+        );
+
+        $this->assertSame(2, ReportSnapshot::query()->where('generation_status', 'completed')->count());
+        $this->assertSame('completed', $artifact->fresh()->generation_status->value);
+        $this->assertSame('completed', $artifact->fresh()->generationRun->status->value);
+        Storage::disk('local')->assertExists($artifact->fresh()->pdf_path);
+    }
+
+    public function test_stop_all_removes_only_assessment_report_jobs_and_preserves_completed_pdf(): void
+    {
+        Queue::fake();
+        config(['queue.default' => 'database']);
+        [$period, $rombel, $students, $template] = $this->reportingFoundation(studentCount: 2);
+        app(CreateReportSnapshotsAction::class)->execute($period, $template, generatedBy: 99);
+        app(ScheduleReportClassesAction::class)->execute(
+            User::query()->findOrFail(99),
+            $period,
+            $template,
+            [$rombel->getKey()],
+        );
+        $completed = ReportSnapshot::query()->firstOrFail();
+        $completed->forceFill([
+            'generation_status' => 'completed',
+            'pdf_path' => 'assessment-reports/completed.pdf',
+            'checksum' => str_repeat('a', 64),
+        ])->save();
+
+        foreach (['assessment-reports', 'default', 'literacy-analysis'] as $queue) {
+            DB::table('jobs')->insert([
+                'queue' => $queue,
+                'payload' => '{}',
+                'attempts' => 0,
+                'reserved_at' => null,
+                'available_at' => now()->timestamp,
+                'created_at' => now()->timestamp,
+            ]);
+        }
+
+        $result = app(StopAssessmentReportQueueAction::class)->execute(
+            User::query()->findOrFail(99),
+            'Menghentikan antrean lama untuk beralih ke pipeline kelas.',
+        );
+
+        $this->assertSame(1, $result['jobs']);
+        $this->assertDatabaseMissing('jobs', ['queue' => 'assessment-reports']);
+        $this->assertDatabaseHas('jobs', ['queue' => 'default']);
+        $this->assertDatabaseHas('jobs', ['queue' => 'literacy-analysis']);
+        $this->assertSame('completed', $completed->fresh()->generation_status->value);
+        $this->assertSame(
+            1,
+            ReportSnapshot::query()->where('generation_status', 'cancelled')->count(),
+        );
+
+        $cancelledSnapshot = ReportSnapshot::query()
+            ->where('generation_status', 'cancelled')
+            ->firstOrFail();
+        $cancelledArtifact = ClassReportArtifact::query()->firstOrFail();
+        (new GenerateStudentReportJob($cancelledSnapshot->getKey()))
+            ->failed(new RuntimeException('Worker lama selesai setelah penghentian.'));
+        (new GenerateClassReportsJob($cancelledArtifact->getKey()))
+            ->failed(new RuntimeException('Worker lama selesai setelah penghentian.'));
+
+        $this->assertSame('cancelled', $cancelledSnapshot->fresh()->generation_status->value);
+        $this->assertSame('cancelled', $cancelledArtifact->fresh()->generation_status->value);
     }
 
     public function test_report_worker_waits_for_higher_priority_queues(): void
@@ -742,6 +862,48 @@ class AssessmentReportingTest extends TestCase
         $this->assertDatabaseCount('assessment_audit_logs', 0);
     }
 
+    public function test_report_page_and_private_preview_render_with_card_workflow(): void
+    {
+        Storage::fake('local');
+        [$period, , $students, $template] = $this->reportingFoundation();
+        $snapshot = $this->snapshot($period, $students[0], $template, 1);
+        $this->actingAs(User::query()->findOrFail(99));
+
+        $this->get(AstsReports::getUrl([
+            'period' => $period->getKey(),
+            'template' => $template->getKey(),
+        ]))
+            ->assertOk()
+            ->assertSee('Pipeline PDF ringan')
+            ->assertSee('Hentikan Semua Antrean PDF')
+            ->assertSeeHtml('assessment-report-card');
+
+        $previewResponse = $this->get(route('assessment.reports.preview', $snapshot));
+        $previewResponse
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringContainsString('no-store', (string) $previewResponse->headers->get('Cache-Control'));
+    }
+
+    public function test_watermark_is_frozen_as_private_data_without_leaking_path(): void
+    {
+        Storage::fake('local');
+        $path = 'assessment-report-template-assets/optimized/watermark.png';
+        Storage::disk('local')->put($path, base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+        ));
+
+        $settings = app(AssessmentReportWatermark::class)->freezeSettings([
+            'watermark_enabled' => true,
+            'watermark_path' => $path,
+            'watermark_opacity' => 10,
+        ]);
+
+        $this->assertArrayNotHasKey('watermark_path', $settings);
+        $this->assertStringStartsWith('data:image/png;base64,', $settings['watermark_data_uri']);
+        $this->assertSame(10, $settings['watermark_opacity']);
+    }
+
     public function test_public_share_route_uses_configured_rate_limit(): void
     {
         $route = Route::getRoutes()->getByName('assessment.reports.shared.download');
@@ -759,13 +921,14 @@ class AssessmentReportingTest extends TestCase
         $blade = File::get(resource_path('views/filament/pages/assessment/reports.blade.php'));
 
         $this->assertStringContainsString(
-            "@can('penilaian.report.generate')\n                                @if (\$row['status'] === 'failed')<x-filament::button wire:click=\"retryClass",
+            'wire:click="retryClass',
             $blade,
         );
         $this->assertStringContainsString(
-            "@can('penilaian.report.generate')\n                                @if (\$row['status'] === 'failed')<x-filament::button wire:click=\"retrySnapshot",
+            'wire:click="retrySnapshot',
             $blade,
         );
+        $this->assertGreaterThanOrEqual(3, substr_count($blade, '$this->canGenerateReports()'));
     }
 
     /**

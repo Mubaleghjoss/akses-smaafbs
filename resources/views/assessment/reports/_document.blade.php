@@ -15,6 +15,9 @@
     $predicateLabel = trim((string) data_get($templateSettings, 'predicate_label', 'Predikat'));
     $showPredicate = (bool) data_get($templateSettings, 'show_predicate', true);
     $showDescription = (bool) data_get($templateSettings, 'show_description', true);
+    $watermark = trim((string) data_get($templateSettings, 'watermark_data_uri'));
+    $watermarkSafe = preg_match('#^data:image/png;base64,#i', $watermark) === 1;
+    $watermarkOpacity = min(25, max(5, (int) data_get($templateSettings, 'watermark_opacity', 10))) / 100;
     $scoreColumnCount = 3 + (int) $showPredicate + (int) $showDescription;
     $extracurricular = data_get($homeroom, 'extracurricular', data_get($homeroom, 'extracurricular_data', []));
     $achievements = data_get($homeroom, 'achievements', data_get($homeroom, 'achievement_data', []));
@@ -23,6 +26,11 @@
 @endphp
 
 <section class="report-page">
+    @if ($watermarkSafe && (bool) data_get($templateSettings, 'watermark_enabled', false))
+        <div class="report-watermark" style="opacity: {{ $watermarkOpacity }}">
+            <img src="{{ $watermark }}" alt="">
+        </div>
+    @endif
     <table class="letterhead">
         <tr>
             <td class="letterhead__logo">

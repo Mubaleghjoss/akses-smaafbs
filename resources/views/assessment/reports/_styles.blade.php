@@ -8,7 +8,16 @@
         font-size: 9.5px;
         line-height: 1.35;
     }
-    .report-page { width: 100%; }
+    .report-page { position: relative; width: 100%; }
+    .report-watermark {
+        position: fixed;
+        z-index: -1;
+        top: 34%;
+        left: 22%;
+        width: 56%;
+        text-align: center;
+    }
+    .report-watermark img { width: 100%; height: auto; }
     .report-page-break { page-break-after: always; }
     .report-page-break:last-child { page-break-after: auto; }
     .letterhead { width: 100%; border-collapse: collapse; margin-bottom: 7px; }

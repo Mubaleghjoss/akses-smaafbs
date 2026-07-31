@@ -8,6 +8,7 @@ use App\Filament\Concerns\HasOptimizedAdminTable;
 use App\Filament\Resources\AssessmentReportTemplateResource\Pages;
 use App\Models\Assessment\ReportTemplate;
 use App\Support\Assessment\AssessmentAuditLogger;
+use App\Support\Assessment\Reporting\AssessmentReportWatermark;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -15,6 +16,7 @@ use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -80,6 +82,9 @@ class AssessmentReportTemplateResource extends Resource
                 'data.version' => 'Versi template minimal 1.',
             ]);
         }
+
+        $settings = is_array($data['settings'] ?? null) ? $data['settings'] : [];
+        $data['settings'] = app(AssessmentReportWatermark::class)->optimizeSettings($settings);
 
         return $data;
     }
@@ -174,6 +179,37 @@ class AssessmentReportTemplateResource extends Resource
                     Forms\Components\TextInput::make('settings.place')
                         ->label('Tempat Terbit')
                         ->maxLength(100),
+                ]),
+            Section::make('Watermark Opsional')
+                ->description('Gambar disimpan privat dan dibekukan ke snapshot. Untuk template yang sudah dipakai, buat versi baru.')
+                ->columns(['default' => 1, 'md' => 2])
+                ->schema([
+                    Forms\Components\Toggle::make('settings.watermark_enabled')
+                        ->label('Tampilkan Watermark')
+                        ->default(false)
+                        ->live()
+                        ->inline(false),
+                    Forms\Components\FileUpload::make('settings.watermark_path')
+                        ->label('Gambar Watermark')
+                        ->disk('local')
+                        ->directory('assessment-report-template-assets/uploads')
+                        ->acceptedFileTypes(['image/png', 'image/jpeg', 'image/webp'])
+                        ->maxSize(1024)
+                        ->visibility('private')
+                        ->required(fn (Get $get): bool => (bool) $get('settings.watermark_enabled'))
+                        ->helperText('PNG/JPG/WebP maksimal 1 MB. Gambar dioptimalkan maksimal 1600 px.')
+                        ->columnSpanFull(),
+                    Forms\Components\Select::make('settings.watermark_opacity')
+                        ->label('Transparansi')
+                        ->options([
+                            5 => '5% · sangat tipis',
+                            10 => '10% · disarankan',
+                            15 => '15%',
+                            20 => '20%',
+                            25 => '25% · paling tegas',
+                        ])
+                        ->default(10)
+                        ->native(false),
                 ]),
         ]);
     }

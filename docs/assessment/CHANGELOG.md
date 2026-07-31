@@ -1,5 +1,21 @@
 # Riwayat Perubahan Penilaian
 
+## 2026-07-31
+
+- Menambahkan bulk verifikasi dan pengembalian assignment secara atomik pada
+  Status Pengumpulan, lengkap dengan modal alasan revisi.
+- Menampilkan alasan, aktor, dan waktu revisi pada Input Nilai serta mengubah
+  bulk nilai agar mode bawaan dapat menimpa data lama setelah konfirmasi.
+- Mengganti job per siswa dengan pipeline per kelas yang memproses maksimal
+  tiga siswa atau sekitar 40 detik per putaran, lalu membuat PDF gabungan.
+- Menambahkan run pengendali, status `not_scheduled`/`cancelled`, lanjutkan kelas,
+  penghentian khusus queue `assessment-reports`, serta rekonsiliasi dry-run CLI.
+- Menyusun Cetak Rapor menjadi kartu bernomor, preview siswa nyata, progres
+  kelas, bulk tautan langsung maksimal 50 siswa, dan watermark privat yang
+  dibekukan ke snapshot.
+- Menambah kontras terang/gelap dan perilaku mobile untuk kartu, pilihan kelas,
+  progres, modal stop, serta daftar siswa.
+
 ## 2026-07-30
 
 - Menambahkan fondasi terisolasi ASTS–ASAS, enum, model, factory, Policy, permission, dan template standar.

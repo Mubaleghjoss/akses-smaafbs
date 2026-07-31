@@ -5,15 +5,57 @@ namespace App\Http\Controllers;
 use App\Models\Assessment\AuditLog;
 use App\Models\Assessment\ClassReportArtifact;
 use App\Models\Assessment\ReportSnapshot;
+use App\Support\Assessment\Reporting\AssessmentReportRenderer;
 use App\Support\Assessment\Reporting\AssessmentReportShareService;
 use App\Support\Assessment\Reporting\AssessmentReportStorage;
+use App\Support\Assessment\Reporting\AssessmentReportWatermark;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AssessmentReportController extends Controller
 {
+    public function preview(
+        ReportSnapshot $reportSnapshot,
+        AssessmentReportRenderer $renderer,
+        AssessmentReportWatermark $watermark,
+    ): Response {
+        $this->abortUnlessEnabled();
+        Gate::authorize('view', $reportSnapshot);
+        $reportSnapshot->loadMissing('template');
+        $template = $reportSnapshot->template;
+        abort_unless($template, 404);
+
+        $snapshotData = is_array($reportSnapshot->snapshot_data) ? $reportSnapshot->snapshot_data : [];
+        data_set(
+            $snapshotData,
+            'template.settings',
+            $watermark->freezeSettings(is_array($template->settings) ? $template->settings : []),
+        );
+        data_set($snapshotData, 'meta.preview', true);
+
+        $preview = new ReportSnapshot([
+            'assessment_period_id' => $reportSnapshot->assessment_period_id,
+            'assessment_period_student_id' => $reportSnapshot->assessment_period_student_id,
+            'assessment_report_template_id' => $reportSnapshot->assessment_report_template_id,
+            'assessment_report_generation_run_id' => $reportSnapshot->assessment_report_generation_run_id,
+            'revision' => $reportSnapshot->revision,
+            'template_version' => $template->version,
+            'snapshot_data' => $snapshotData,
+        ]);
+
+        return response($renderer->renderStudent($preview), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="pratinjau-rapor.pdf"',
+            'Cache-Control' => 'private, no-store, max-age=0, must-revalidate',
+            'Pragma' => 'no-cache',
+            'X-Content-Type-Options' => 'nosniff',
+            'X-Robots-Tag' => 'noindex, nofollow, noarchive',
+        ]);
+    }
+
     public function downloadSnapshot(
         ReportSnapshot $reportSnapshot,
         AssessmentReportStorage $storage,

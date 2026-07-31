@@ -14,6 +14,8 @@ use App\Models\User;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Url;
 use Throwable;
 
@@ -34,6 +36,14 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
 
     #[Url(as: 'status')]
     public string $statusFilter = 'all';
+
+    /** @var array<int, int|string> */
+    public array $selectedAssignmentIds = [];
+
+    /** @var array<int, int> */
+    public array $returnTargetIds = [];
+
+    public string $returnReason = '';
 
     public function mount(): void
     {
@@ -60,6 +70,124 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
     public function getStatusOptions(): array
     {
         return ['all' => 'Semua Status'] + AssignmentStatus::options();
+    }
+
+    public function updatedPeriodId(): void
+    {
+        $this->selectedAssignmentIds = [];
+    }
+
+    public function updatedStatusFilter(): void
+    {
+        $this->selectedAssignmentIds = [];
+    }
+
+    public function selectAllFilteredAssignments(): void
+    {
+        $this->selectedAssignmentIds = collect($this->getAssignmentRows())
+            ->pluck('id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all();
+    }
+
+    public function clearAssignmentSelection(): void
+    {
+        $this->selectedAssignmentIds = [];
+    }
+
+    public function verifySelectedAssignments(): void
+    {
+        $this->authorizeAssessment('penilaian.verify');
+
+        try {
+            $assignments = $this->selectedScopedAssignments();
+            DB::transaction(function () use ($assignments): void {
+                foreach ($assignments as $assignment) {
+                    if ($this->assignmentStatus($assignment) !== AssignmentStatus::SUBMITTED) {
+                        throw ValidationException::withMessages([
+                            'assignments' => "{$assignment->rombel_name_snapshot} · {$assignment->subject_name_snapshot} belum berstatus Dikirim.",
+                        ]);
+                    }
+                }
+
+                foreach ($assignments as $assignment) {
+                    app(VerifyAssessmentAssignmentAction::class)->execute(auth()->user(), $assignment);
+                }
+            }, 3);
+
+            $count = $assignments->count();
+            $this->selectedAssignmentIds = [];
+            Notification::make()->title("{$count} penugasan terverifikasi")->success()->send();
+        } catch (Throwable $exception) {
+            report($exception);
+            Notification::make()->title('Verifikasi massal dibatalkan')->body($exception->getMessage())->danger()->send();
+        }
+    }
+
+    public function prepareReturn(?int $assignmentId = null): void
+    {
+        $this->authorizeAssessment('penilaian.verify');
+        $this->returnReason = '';
+        $this->returnTargetIds = $assignmentId
+            ? [$assignmentId]
+            : collect($this->selectedAssignmentIds)->map(fn (mixed $id): int => (int) $id)->all();
+
+        if ($this->returnTargetIds === []) {
+            Notification::make()->title('Pilih minimal satu penugasan')->warning()->send();
+
+            return;
+        }
+
+        $this->dispatch('open-modal', id: 'assessment-return-modal');
+    }
+
+    public function confirmReturnAssignments(): void
+    {
+        $this->authorizeAssessment('penilaian.verify');
+        $reason = trim($this->returnReason);
+
+        if (mb_strlen($reason) < 10) {
+            $this->addError('returnReason', 'Alasan revisi minimal 10 karakter.');
+
+            return;
+        }
+
+        try {
+            $originalSelection = $this->selectedAssignmentIds;
+            try {
+                $this->selectedAssignmentIds = $this->returnTargetIds;
+                $assignments = $this->selectedScopedAssignments();
+            } finally {
+                $this->selectedAssignmentIds = $originalSelection;
+            }
+
+            DB::transaction(function () use ($assignments, $reason): void {
+                foreach ($assignments as $assignment) {
+                    if (! in_array($this->assignmentStatus($assignment), [AssignmentStatus::SUBMITTED, AssignmentStatus::VERIFIED], true)) {
+                        throw ValidationException::withMessages([
+                            'assignments' => "{$assignment->rombel_name_snapshot} · {$assignment->subject_name_snapshot} tidak dapat dikembalikan pada status saat ini.",
+                        ]);
+                    }
+                }
+
+                foreach ($assignments as $assignment) {
+                    app(ReturnAssessmentAssignmentAction::class)->execute(auth()->user(), $assignment, $reason);
+                }
+            }, 3);
+
+            $count = $assignments->count();
+            $this->selectedAssignmentIds = array_values(array_diff(
+                array_map('intval', $this->selectedAssignmentIds),
+                $assignments->modelKeys(),
+            ));
+            $this->returnTargetIds = [];
+            $this->returnReason = '';
+            $this->dispatch('close-modal', id: 'assessment-return-modal');
+            Notification::make()->title("{$count} penugasan dikembalikan untuk revisi")->success()->send();
+        } catch (Throwable $exception) {
+            report($exception);
+            Notification::make()->title('Pengembalian massal dibatalkan')->body($exception->getMessage())->danger()->send();
+        }
     }
 
     /**
@@ -157,6 +285,45 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
                 ->where('assessment_period_id', $this->periodId)
                 ->whereHas('period', fn (Builder $query): Builder => $query->where('type', static::$assessmentType->value)),
         )->findOrFail($id);
+    }
+
+    protected function selectedScopedAssignments()
+    {
+        $ids = collect($this->selectedAssignmentIds)
+            ->map(fn (mixed $id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            throw ValidationException::withMessages([
+                'assignments' => 'Pilih minimal satu penugasan.',
+            ]);
+        }
+
+        $assignments = $this->scopeAssignments(
+            AssessmentPeriodAssignment::query()
+                ->where('assessment_period_id', $this->periodId)
+                ->whereHas('period', fn (Builder $query): Builder => $query->where('type', static::$assessmentType->value)),
+        )
+            ->whereIn('id', $ids)
+            ->orderBy('id')
+            ->get();
+
+        if ($assignments->count() !== $ids->count()) {
+            throw ValidationException::withMessages([
+                'assignments' => 'Sebagian pilihan tidak valid atau tidak berada dalam cakupan Anda.',
+            ]);
+        }
+
+        return $assignments;
+    }
+
+    protected function assignmentStatus(AssessmentPeriodAssignment $assignment): AssignmentStatus
+    {
+        return $assignment->status instanceof AssignmentStatus
+            ? $assignment->status
+            : AssignmentStatus::from((string) $assignment->status);
     }
 
     protected function scopeAssignments(Builder $query): Builder

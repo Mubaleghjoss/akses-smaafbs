@@ -3,11 +3,10 @@
 namespace App\Support\Assessment\Reporting;
 
 use App\Contracts\SiteSettingsAccessor;
-use App\Jobs\Assessment\GenerateClassReportsJob;
-use App\Jobs\Assessment\GenerateStudentReportJob;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AuditLog;
 use App\Models\Assessment\ClassReportArtifact;
+use App\Models\Assessment\ReportGenerationRun;
 use App\Models\Assessment\ReportShareLink;
 use App\Models\Assessment\ReportSnapshot;
 use App\Models\Assessment\ReportTemplate;
@@ -118,6 +117,23 @@ class CreateReportSnapshotsAction
                 ]);
             }
 
+            $periodRombelIds = $students
+                ->pluck('assessment_period_rombel_id')
+                ->map(fn (mixed $id): int => (int) $id)
+                ->unique()
+                ->values();
+            $run = ReportGenerationRun::query()->create([
+                'assessment_period_id' => $period->getKey(),
+                'assessment_report_template_id' => $template->getKey(),
+                'revision' => $revision,
+                'status' => 'prepared',
+                'total_students' => $students->count(),
+                'completed_students' => 0,
+                'total_classes' => $periodRombelIds->count(),
+                'completed_classes' => 0,
+                'requested_by' => $generatedBy,
+            ]);
+
             $results = DB::table('assessment_student_subject_results as results')
                 ->join(
                     'assessment_period_assignments as assignments',
@@ -165,7 +181,9 @@ class CreateReportSnapshotsAction
             $semester = DB::table('assessment_semesters')
                 ->where('id', $period->assessment_semester_id)
                 ->first();
-            $templateSettings = is_array($template->settings) ? $template->settings : [];
+            $templateSettings = app(AssessmentReportWatermark::class)->freezeSettings(
+                is_array($template->settings) ? $template->settings : [],
+            );
             $collectPromotionStatus = data_get($period->settings, 'collect_promotion_status');
             if (! is_bool($collectPromotionStatus)) {
                 $collectPromotionStatus = $this->enumValue($period->type) === 'asas';
@@ -186,6 +204,7 @@ class CreateReportSnapshotsAction
                     'assessment_period_id' => $period->getKey(),
                     'assessment_period_student_id' => $student->id,
                     'assessment_report_template_id' => $template->getKey(),
+                    'assessment_report_generation_run_id' => $run->getKey(),
                     'revision' => $revision,
                     'template_version' => $template->version,
                     'snapshot_data' => [
@@ -264,7 +283,7 @@ class CreateReportSnapshotsAction
                             'settings' => $templateSettings,
                         ],
                     ],
-                    'generation_status' => 'pending',
+                    'generation_status' => 'not_scheduled',
                     'pdf_path' => null,
                     'checksum' => null,
                     'error_message' => null,
@@ -292,7 +311,6 @@ class CreateReportSnapshotsAction
                     'created_at' => Carbon::now(),
                 ]);
 
-                GenerateStudentReportJob::dispatch($snapshot->getKey())->afterCommit();
             }
 
             if ($regenerate) {
@@ -323,13 +341,14 @@ class CreateReportSnapshotsAction
                 }
             }
 
-            foreach ($students->pluck('assessment_period_rombel_id')->unique() as $periodRombelId) {
+            foreach ($periodRombelIds as $periodRombelId) {
                 $artifact = ClassReportArtifact::query()->create([
                     'assessment_period_id' => $period->getKey(),
                     'assessment_period_rombel_id' => $periodRombelId,
                     'assessment_report_template_id' => $template->getKey(),
+                    'assessment_report_generation_run_id' => $run->getKey(),
                     'revision' => $revision,
-                    'generation_status' => 'pending',
+                    'generation_status' => 'not_scheduled',
                     'pdf_path' => null,
                     'checksum' => null,
                     'error_message' => null,
@@ -339,7 +358,6 @@ class CreateReportSnapshotsAction
                     'generated_by' => $generatedBy,
                 ]);
 
-                GenerateClassReportsJob::dispatch($artifact->getKey())->afterCommit();
             }
 
             if ($revisingPublished) {

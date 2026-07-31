@@ -23,6 +23,10 @@ return [
             'max_time' => (int) env('ASSESSMENT_REPORT_WORKER_MAX_TIME', 50),
             'timeout' => (int) env('ASSESSMENT_REPORT_WORKER_TIMEOUT', 180),
         ],
+        'pipeline' => [
+            'students_per_job' => max(1, (int) env('ASSESSMENT_REPORT_STUDENTS_PER_JOB', 3)),
+            'max_seconds' => max(10, (int) env('ASSESSMENT_REPORT_PIPELINE_MAX_SECONDS', 40)),
+        ],
     ],
 
     'share_links' => [

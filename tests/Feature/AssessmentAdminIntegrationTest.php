@@ -62,6 +62,10 @@ class AssessmentAdminIntegrationTest extends TestCase
             'migrations/2026_07_31_080000_create_assessment_foundation_tables.php',
         );
         $migration->up();
+        $pipelineMigration = require database_path(
+            'migrations/2026_07_31_190000_add_assessment_report_generation_runs.php',
+        );
+        $pipelineMigration->up();
 
         Artisan::call('assessment:install-defaults');
         config(['assessment.enabled' => true]);

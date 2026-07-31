@@ -22,11 +22,38 @@
         </section>
 
         @php($rows = $this->getAssignmentRows())
+        @can('penilaian.verify')
+            <section class="assessment-status-bulk-card">
+                <div>
+                    <h2>Aksi Massal</h2>
+                    <p>{{ count($selectedAssignmentIds) }} dari {{ count($rows) }} penugasan dipilih.</p>
+                </div>
+                <div class="assessment-status-bulk-actions">
+                    <x-filament::button size="sm" color="gray" wire:click="selectAllFilteredAssignments">Pilih Semua Terfilter</x-filament::button>
+                    <x-filament::button size="sm" color="gray" wire:click="clearAssignmentSelection">Kosongkan Pilihan</x-filament::button>
+                    <x-filament::button
+                        size="sm"
+                        color="success"
+                        wire:click="verifySelectedAssignments"
+                        wire:confirm="Verifikasi seluruh penugasan terpilih? Semua pilihan harus berstatus Dikirim."
+                        :disabled="count($selectedAssignmentIds) === 0"
+                    >Verifikasi Terpilih</x-filament::button>
+                    <x-filament::button
+                        size="sm"
+                        color="warning"
+                        wire:click="prepareReturn"
+                        :disabled="count($selectedAssignmentIds) === 0"
+                    >Kembalikan untuk Revisi</x-filament::button>
+                </div>
+            </section>
+        @endcan
+
         <section class="assessment-status-data-card">
             <div class="assessment-status-desktop">
                 <table class="assessment-status-table">
                     <thead class="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:bg-white/5">
                         <tr>
+                            @can('penilaian.verify')<th class="p-3"><span class="sr-only">Pilih</span></th>@endcan
                             <th class="p-3">Kelas / Mapel</th>
                             <th class="p-3">Guru</th>
                             <th class="p-3">Status</th>
@@ -38,6 +65,11 @@
                     <tbody class="divide-y divide-gray-200 dark:divide-white/10">
                         @foreach ($rows as $row)
                             <tr>
+                                @can('penilaian.verify')
+                                    <td class="p-3">
+                                        <input type="checkbox" value="{{ $row['id'] }}" wire:model.live="selectedAssignmentIds" aria-label="Pilih {{ $row['rombel'] }} {{ $row['subject'] }}">
+                                    </td>
+                                @endcan
                                 <td class="p-3">
                                     <div class="font-semibold text-gray-950 dark:text-white">{{ $row['rombel'] }}</div>
                                     <div class="text-sm text-gray-500">{{ $row['subject'] }}</div>
@@ -63,7 +95,7 @@
                                                 <x-filament::button
                                                     size="sm"
                                                     color="warning"
-                                                    x-on:click="const reason = prompt('Alasan pengembalian (minimal 10 karakter):'); if (reason) $wire.returnAssignment({{ $row['id'] }}, reason)"
+                                                    wire:click="prepareReturn({{ $row['id'] }})"
                                                 >Kembalikan</x-filament::button>
                                             @endif
                                         @endcan
@@ -79,6 +111,9 @@
                 @forelse ($rows as $row)
                     <article class="assessment-status-mobile-card">
                         <div class="flex items-start justify-between gap-3">
+                            @can('penilaian.verify')
+                                <input type="checkbox" value="{{ $row['id'] }}" wire:model.live="selectedAssignmentIds" aria-label="Pilih {{ $row['rombel'] }} {{ $row['subject'] }}">
+                            @endcan
                             <div class="min-w-0">
                                 <h2 class="break-words font-bold text-gray-950 dark:text-white">{{ $row['rombel'] }} · {{ $row['subject'] }}</h2>
                                 <p class="mt-1 break-words text-sm text-gray-500">{{ $row['teacher'] }}</p>
@@ -102,7 +137,7 @@
                                     <x-filament::button size="sm" color="success" wire:click="verifyAssignment({{ $row['id'] }})" wire:confirm="Verifikasi penugasan ini?">Verifikasi</x-filament::button>
                                 @endif
                                 @if (in_array($row['status'], ['submitted', 'verified'], true))
-                                    <x-filament::button size="sm" color="warning" x-on:click="const reason = prompt('Alasan pengembalian (minimal 10 karakter):'); if (reason) $wire.returnAssignment({{ $row['id'] }}, reason)">Kembalikan</x-filament::button>
+                                    <x-filament::button size="sm" color="warning" wire:click="prepareReturn({{ $row['id'] }})">Kembalikan</x-filament::button>
                                 @endif
                             @endcan
                         </div>
@@ -112,5 +147,21 @@
                 @endforelse
             </div>
         </section>
+
+        <x-filament::modal id="assessment-return-modal" width="lg">
+            <x-slot name="heading">Kembalikan untuk Revisi</x-slot>
+            <x-slot name="description">{{ count($returnTargetIds) }} penugasan akan dikembalikan secara atomik.</x-slot>
+
+            <label class="assessment-status-return-field">
+                <span>Alasan revisi</span>
+                <textarea wire:model="returnReason" rows="4" maxlength="1000" placeholder="Jelaskan data yang perlu diperbaiki, minimal 10 karakter."></textarea>
+                @error('returnReason')<small>{{ $message }}</small>@enderror
+            </label>
+
+            <x-slot name="footerActions">
+                <x-filament::button color="gray" x-on:click="$dispatch('close-modal', { id: 'assessment-return-modal' })">Batal</x-filament::button>
+                <x-filament::button color="warning" wire:click="confirmReturnAssignments" wire:loading.attr="disabled">Kembalikan Penugasan</x-filament::button>
+            </x-slot>
+        </x-filament::modal>
     </div>
 </x-filament-panels::page>

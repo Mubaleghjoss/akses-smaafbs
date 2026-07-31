@@ -8,6 +8,7 @@ use App\Filament\Pages\Assessment\Concerns\HasAssessmentTypeNavigation;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodHomeroom;
 use App\Models\Assessment\ClassReportArtifact;
+use App\Models\Assessment\ReportGenerationRun;
 use App\Models\Assessment\ReportShareLink;
 use App\Models\Assessment\ReportSnapshot;
 use App\Models\Assessment\ReportTemplate;
@@ -15,8 +16,11 @@ use App\Models\User;
 use App\Support\Assessment\Reporting\AssessmentReportShareService;
 use App\Support\Assessment\Reporting\CreateReportSnapshotsAction;
 use App\Support\Assessment\Reporting\RetryReportGenerationAction;
+use App\Support\Assessment\Reporting\ScheduleReportClassesAction;
+use App\Support\Assessment\Reporting\StopAssessmentReportQueueAction;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Url as UrlAttribute;
 use Throwable;
 
@@ -46,6 +50,19 @@ abstract class AssessmentReportsPage extends AssessmentPage
 
     public ?string $latestShareUrl = null;
 
+    /** @var array<int, int|string> */
+    public array $selectedClassIds = [];
+
+    /** @var array<int, int|string> */
+    public array $selectedShareSnapshotIds = [];
+
+    /** @var array<int, string> */
+    public array $latestShareLinks = [];
+
+    public ?int $previewSnapshotId = null;
+
+    public string $stopReason = '';
+
     public function mount(): void
     {
         $this->shareExpiryDays = AssessmentReportShareService::defaultExpiryDays();
@@ -54,6 +71,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
             $this->periodId = $periodIds[0] ?? null;
         }
         $this->selectDefaultTemplate();
+        $this->selectDefaultClassAndPreview();
     }
 
     public static function canAccess(): bool
@@ -81,9 +99,20 @@ abstract class AssessmentReportsPage extends AssessmentPage
             : 'Cetak Rapor Semester';
     }
 
-    public function getSubheading(): string|Htmlable|null
+    public function canGenerateReports(): bool
     {
-        return 'PDF dibuat dari snapshot immutable dan disimpan privat. PDF kelas hanya tersedia di panel.';
+        $user = auth()->user();
+
+        return $user instanceof User
+            && ($user->hasFullAdminAccess() || $user->can('penilaian.report.generate'));
+    }
+
+    public function canPublishReports(): bool
+    {
+        $user = auth()->user();
+
+        return $user instanceof User
+            && ($user->hasFullAdminAccess() || $user->can('penilaian.publish'));
     }
 
     public function getPeriodOptions(): array
@@ -111,11 +140,55 @@ abstract class AssessmentReportsPage extends AssessmentPage
     public function updatedPeriodId(): void
     {
         $this->latestShareUrl = null;
+        $this->latestShareLinks = [];
+        $this->selectedClassIds = [];
+        $this->selectedShareSnapshotIds = [];
+        $this->selectDefaultClassAndPreview();
     }
 
     public function updatedTemplateId(): void
     {
         $this->latestShareUrl = null;
+        $this->latestShareLinks = [];
+        $this->selectedShareSnapshotIds = [];
+        $this->selectDefaultClassAndPreview();
+    }
+
+    public function getClassOptions(): array
+    {
+        $period = $this->selectedPeriod();
+
+        return $period
+            ? $period->periodRombels()->orderBy('rombel_name_snapshot')->pluck('rombel_name_snapshot', 'id')->all()
+            : [];
+    }
+
+    public function getPreviewOptions(): array
+    {
+        if (! $this->periodId || ! $this->templateId) {
+            return [];
+        }
+
+        $latestRevision = (int) $this->snapshotQuery()->max('revision');
+
+        return $latestRevision > 0
+            ? $this->snapshotQuery()
+                ->where('revision', $latestRevision)
+                ->with('student')
+                ->get()
+                ->sortBy(fn (ReportSnapshot $snapshot): string => $snapshot->student?->rombel_name_snapshot.'|'.$snapshot->student?->student_name_snapshot)
+                ->mapWithKeys(fn (ReportSnapshot $snapshot): array => [
+                    $snapshot->getKey() => "{$snapshot->student?->rombel_name_snapshot} · {$snapshot->student?->student_name_snapshot}",
+                ])
+                ->all()
+            : [];
+    }
+
+    public function previewUrl(): ?string
+    {
+        return $this->previewSnapshotId
+            ? route('assessment.reports.preview', ['reportSnapshot' => $this->previewSnapshotId])
+            : null;
     }
 
     public function generateReports(): void
@@ -138,17 +211,54 @@ abstract class AssessmentReportsPage extends AssessmentPage
                 $this->regenerate,
                 $this->regenerate ? $this->regenerationReason : null,
             );
+            $run = app(ScheduleReportClassesAction::class)->execute(
+                auth()->user(),
+                $period,
+                $template,
+                $this->selectedClassIds,
+            );
             $this->regenerate = false;
             $this->regenerationReason = '';
+            $this->selectDefaultClassAndPreview();
             Notification::make()
-                ->title('Pembuatan rapor masuk antrean')
-                ->body($snapshots->count().' rapor siswa dan PDF kelas akan diproses bertahap tanpa membebani submit Literasi.')
+                ->title('Pipeline kelas masuk antrean')
+                ->body(count($this->selectedClassIds).' kelas diproses bertahap dari '.$snapshots->count().' snapshot. Run revisi '.$run->revision.' tidak membuat job per siswa.')
                 ->success()
                 ->duration(12000)
                 ->send();
         } catch (Throwable $exception) {
             report($exception);
             Notification::make()->title('Rapor belum dapat dibuat')->body($exception->getMessage())->danger()->duration(15000)->send();
+        }
+    }
+
+    public function selectAllClasses(): void
+    {
+        $this->selectedClassIds = array_map('intval', array_keys($this->getClassOptions()));
+    }
+
+    public function clearClassSelection(): void
+    {
+        $this->selectedClassIds = [];
+    }
+
+    public function stopAllReportJobs(): void
+    {
+        $this->authorizeAssessment('penilaian.report.generate');
+
+        try {
+            $result = app(StopAssessmentReportQueueAction::class)->execute(auth()->user(), $this->stopReason);
+            $this->stopReason = '';
+            $this->dispatch('close-modal', id: 'assessment-stop-reports-modal');
+            Notification::make()
+                ->title('Seluruh antrean PDF dihentikan')
+                ->body("{$result['jobs']} job assessment-reports dihapus; {$result['snapshots']} PDF siswa dan {$result['classes']} kelas ditandai dihentikan. Queue Literasi/default tidak disentuh.")
+                ->warning()
+                ->duration(15000)
+                ->send();
+        } catch (Throwable $exception) {
+            report($exception);
+            Notification::make()->title('Antrean belum dihentikan')->body($exception->getMessage())->danger()->send();
         }
     }
 
@@ -189,6 +299,81 @@ abstract class AssessmentReportsPage extends AssessmentPage
         } catch (Throwable $exception) {
             report($exception);
             Notification::make()->title('Tautan tidak dapat dibuat')->body($exception->getMessage())->danger()->send();
+        }
+    }
+
+    public function selectAllShareableSnapshots(): void
+    {
+        $this->selectedShareSnapshotIds = collect($this->getSnapshotRows())
+            ->filter(fn (array $row): bool => $row['status'] === 'completed')
+            ->take(50)
+            ->pluck('id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all();
+    }
+
+    public function clearShareSelection(): void
+    {
+        $this->selectedShareSnapshotIds = [];
+    }
+
+    public function issueSelectedShareLinks(): void
+    {
+        $this->authorizeAssessment('penilaian.publish');
+        $ids = collect($this->selectedShareSnapshotIds)
+            ->map(fn (mixed $id): int => (int) $id)
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty() || $ids->count() > 50) {
+            Notification::make()
+                ->title('Pilih 1 sampai 50 siswa')
+                ->body('Tautan dibuat langsung tanpa queue agar tetap ringan.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $snapshots = $this->snapshotQuery()
+            ->whereIn('id', $ids)
+            ->where('generation_status', 'completed')
+            ->with('student')
+            ->get()
+            ->sortBy(fn (ReportSnapshot $snapshot): string => mb_strtolower(
+                (string) $snapshot->student?->rombel_name_snapshot.'|'.(string) $snapshot->student?->student_name_snapshot,
+            ))
+            ->values();
+
+        if ($snapshots->count() !== $ids->count()) {
+            Notification::make()->title('Sebagian PDF belum siap atau di luar cakupan')->danger()->send();
+
+            return;
+        }
+
+        try {
+            $links = DB::transaction(function () use ($snapshots): array {
+                $issuedLinks = [];
+                foreach ($snapshots as $snapshot) {
+                    $issued = app(AssessmentReportShareService::class)->issue(
+                        $snapshot,
+                        (int) auth()->id(),
+                        $this->shareExpiryDays,
+                    );
+                    $issuedLinks[] = "{$snapshot->student?->student_name_snapshot} · {$snapshot->student?->rombel_name_snapshot}\n"
+                        .route('assessment.reports.shared.download', ['token' => $issued['token']]);
+                }
+
+                return $issuedLinks;
+            }, 3);
+            $this->latestShareLinks = $links;
+            $this->latestShareUrl = null;
+            $this->selectedShareSnapshotIds = [];
+            Notification::make()->title(count($links).' tautan sementara dibuat')->success()->duration(12000)->send();
+        } catch (Throwable $exception) {
+            report($exception);
+            Notification::make()->title('Tautan belum dapat dibuat')->body($exception->getMessage())->danger()->send();
         }
     }
 
@@ -240,6 +425,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
                     'download_url' => $status === ReportGenerationStatus::COMPLETED
                         ? route('assessment.reports.snapshot.download', $snapshot)
                         : null,
+                    'preview_url' => route('assessment.reports.preview', ['reportSnapshot' => $snapshot]),
                 ];
             })
             ->values()
@@ -266,6 +452,14 @@ abstract class AssessmentReportsPage extends AssessmentPage
                     ? $artifact->generation_status
                     : ReportGenerationStatus::from((string) $artifact->generation_status);
 
+                $studentQuery = ReportSnapshot::query()
+                    ->where('assessment_period_id', $artifact->assessment_period_id)
+                    ->where('assessment_report_template_id', $artifact->assessment_report_template_id)
+                    ->where('revision', $artifact->revision)
+                    ->whereHas('student', fn ($students) => $students
+                        ->where('assessment_period_rombel_id', $artifact->assessment_period_rombel_id)
+                        ->where('is_active', true));
+
                 return [
                     'id' => (int) $artifact->getKey(),
                     'rombel' => (string) $artifact->periodRombel?->rombel_name_snapshot,
@@ -274,6 +468,8 @@ abstract class AssessmentReportsPage extends AssessmentPage
                     'status_label' => $status->label(),
                     'generated_at' => $artifact->generated_at?->format('d/m/Y H:i'),
                     'error' => $artifact->error_message,
+                    'completed_students' => (clone $studentQuery)->where('generation_status', 'completed')->count(),
+                    'student_count' => $studentQuery->count(),
                     'download_url' => $status === ReportGenerationStatus::COMPLETED
                         ? route('assessment.reports.class.download', $artifact)
                         : null,
@@ -289,6 +485,41 @@ abstract class AssessmentReportsPage extends AssessmentPage
         if (! $this->templateId || ! in_array($this->templateId, $ids, true)) {
             $this->templateId = $ids[0] ?? null;
         }
+    }
+
+    protected function selectDefaultClassAndPreview(): void
+    {
+        $classIds = array_map('intval', array_keys($this->getClassOptions()));
+        if ($this->selectedClassIds === [] && $classIds !== []) {
+            $this->selectedClassIds = [$classIds[0]];
+        }
+
+        $previewIds = array_map('intval', array_keys($this->getPreviewOptions()));
+        if (! $this->previewSnapshotId || ! in_array($this->previewSnapshotId, $previewIds, true)) {
+            $this->previewSnapshotId = $previewIds[0] ?? null;
+        }
+    }
+
+    public function getGenerationRun(): ?ReportGenerationRun
+    {
+        if (! $this->periodId || ! $this->templateId) {
+            return null;
+        }
+
+        return ReportGenerationRun::query()
+            ->where('assessment_period_id', $this->periodId)
+            ->where('assessment_report_template_id', $this->templateId)
+            ->latest('revision')
+            ->first();
+    }
+
+    public function selectedPeriodIsPublished(): bool
+    {
+        $period = $this->selectedPeriod();
+        $status = $period?->status;
+        $status = $status instanceof \BackedEnum ? $status->value : (string) $status;
+
+        return $status === 'published';
     }
 
     protected function selectedPeriod(): ?AssessmentPeriod

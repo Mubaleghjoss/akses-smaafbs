@@ -49,6 +49,10 @@ class GenerateStudentReport implements ShouldQueue
             return;
         }
 
+        if (! in_array($this->statusValue($snapshot->generation_status), ['pending', 'processing', 'failed'], true)) {
+            return;
+        }
+
         if ($this->isCompletedAndValid($snapshot, $storage)) {
             return;
         }
@@ -74,6 +78,13 @@ class GenerateStudentReport implements ShouldQueue
             $storage->individualPath($snapshot),
             $renderer->renderStudent($snapshot),
         );
+
+        $fresh = ReportSnapshot::query()->find($this->reportSnapshotId);
+        if (! $fresh || $this->statusValue($fresh->generation_status) === 'cancelled') {
+            $storage->disk()->delete($stored['path']);
+
+            return;
+        }
 
         DB::transaction(function () use ($stored): void {
             $snapshot = ReportSnapshot::query()->lockForUpdate()->find($this->reportSnapshotId);
@@ -121,7 +132,7 @@ class GenerateStudentReport implements ShouldQueue
         $status = $snapshot->generation_status;
         $status = $status instanceof \BackedEnum ? $status->value : (string) $status;
 
-        if ($status === 'completed') {
+        if (in_array($status, ['completed', 'cancelled', 'not_scheduled'], true)) {
             return;
         }
 
@@ -155,10 +166,14 @@ class GenerateStudentReport implements ShouldQueue
         ReportSnapshot $snapshot,
         AssessmentReportStorage $storage,
     ): bool {
-        $status = $snapshot->generation_status;
-        $status = $status instanceof \BackedEnum ? $status->value : (string) $status;
+        $status = $this->statusValue($snapshot->generation_status);
 
         return $status === 'completed'
             && $storage->isValid($snapshot->pdf_path, $snapshot->checksum);
+    }
+
+    private function statusValue(mixed $status): string
+    {
+        return $status instanceof \BackedEnum ? (string) $status->value : (string) $status;
     }
 }
