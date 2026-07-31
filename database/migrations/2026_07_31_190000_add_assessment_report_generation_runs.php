@@ -10,11 +10,15 @@ return new class extends Migration
     {
         Schema::create('assessment_report_generation_runs', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('assessment_period_id')
-                ->constrained('assessment_periods')
+            $table->unsignedBigInteger('assessment_period_id');
+            $table->foreign('assessment_period_id', 'assessment_report_run_period_fk')
+                ->references('id')
+                ->on('assessment_periods')
                 ->cascadeOnDelete();
-            $table->foreignId('assessment_report_template_id')
-                ->constrained('assessment_report_templates')
+            $table->unsignedBigInteger('assessment_report_template_id');
+            $table->foreign('assessment_report_template_id', 'assessment_report_run_template_fk')
+                ->references('id')
+                ->on('assessment_report_templates')
                 ->restrictOnDelete();
             $table->unsignedInteger('revision');
             $table->string('status', 30)->default('prepared')->index();
