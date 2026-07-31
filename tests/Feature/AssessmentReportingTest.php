@@ -25,6 +25,8 @@ use App\Models\Assessment\StudentSubjectResult;
 use App\Models\Assessment\Subject;
 use App\Models\User;
 use App\Support\Assessment\Reporting\AssessmentReportQueueGate;
+use App\Support\Assessment\Reporting\AssessmentReportLayout;
+use App\Support\Assessment\Reporting\AssessmentReportPreflight;
 use App\Support\Assessment\Reporting\AssessmentReportRenderer;
 use App\Support\Assessment\Reporting\AssessmentReportShareService;
 use App\Support\Assessment\Reporting\AssessmentReportStorage;
@@ -62,6 +64,8 @@ class AssessmentReportingTest extends TestCase
         $permissionMigration->up();
         $migration = require database_path('migrations/2026_07_31_080000_create_assessment_foundation_tables.php');
         $migration->up();
+        $reportStructureMigration = require database_path('migrations/2026_07_31_120000_extend_assessment_report_structure.php');
+        $reportStructureMigration->up();
         $pipelineMigration = require database_path('migrations/2026_07_31_190000_add_assessment_report_generation_runs.php');
         $pipelineMigration->up();
         DB::table('users')->insert([
@@ -891,6 +895,35 @@ class AssessmentReportingTest extends TestCase
             ->assertOk()
             ->assertHeader('Content-Type', 'application/pdf');
         $this->assertStringContainsString('no-store', (string) $previewResponse->headers->get('Cache-Control'));
+    }
+
+    public function test_live_preview_remains_available_when_preflight_is_incomplete_without_creating_jobs_or_snapshots(): void
+    {
+        Storage::fake('local');
+        [$period, , $students, $template] = $this->reportingFoundation();
+        $template->forceFill([
+            'settings' => [
+                'school_name' => 'SMA AFBS',
+                'report_title' => 'Rapor ASTS',
+                'layout' => ['sections' => AssessmentReportLayout::threePageDefaults()],
+            ],
+        ])->save();
+        $this->actingAs(User::query()->findOrFail(99));
+
+        $preflight = app(AssessmentReportPreflight::class)->inspect($period, $template);
+        $this->assertFalse($preflight['ready']);
+        $this->assertNotEmpty($preflight['groups']['master']['issues']);
+
+        $response = $this->get(route('assessment.reports.live-preview', [
+            'assessmentPeriod' => $period,
+            'reportTemplate' => $template,
+            'periodStudent' => $students[0],
+        ]));
+
+        $response->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
+        $this->assertDatabaseCount('assessment_report_snapshots', 0);
+        $this->assertDatabaseCount('jobs', 0);
     }
 
     public function test_watermark_is_frozen_as_private_data_without_leaking_path(): void

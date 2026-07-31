@@ -15,6 +15,7 @@ use App\Models\Assessment\ReportTemplate;
 use App\Models\User;
 use App\Support\Assessment\Reporting\AssessmentReportShareService;
 use App\Support\Assessment\Reporting\CreateReportSnapshotsAction;
+use App\Support\Assessment\Reporting\AssessmentReportPreflight;
 use App\Support\Assessment\Reporting\RetryReportGenerationAction;
 use App\Support\Assessment\Reporting\ScheduleReportClassesAction;
 use App\Support\Assessment\Reporting\StopAssessmentReportQueueAction;
@@ -59,7 +60,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
     /** @var array<int, string> */
     public array $latestShareLinks = [];
 
-    public ?int $previewSnapshotId = null;
+    public ?int $previewStudentId = null;
 
     public string $stopReason = '';
 
@@ -169,25 +170,25 @@ abstract class AssessmentReportsPage extends AssessmentPage
             return [];
         }
 
-        $latestRevision = (int) $this->snapshotQuery()->max('revision');
-
-        return $latestRevision > 0
-            ? $this->snapshotQuery()
-                ->where('revision', $latestRevision)
-                ->with('student')
-                ->get()
-                ->sortBy(fn (ReportSnapshot $snapshot): string => $snapshot->student?->rombel_name_snapshot.'|'.$snapshot->student?->student_name_snapshot)
-                ->mapWithKeys(fn (ReportSnapshot $snapshot): array => [
-                    $snapshot->getKey() => "{$snapshot->student?->rombel_name_snapshot} · {$snapshot->student?->student_name_snapshot}",
-                ])
-                ->all()
-            : [];
+        return $this->selectedPeriod()?->students()
+            ->where('is_active', true)
+            ->orderBy('rombel_name_snapshot')
+            ->orderBy('student_name_snapshot')
+            ->get()
+            ->mapWithKeys(fn ($student): array => [
+                $student->getKey() => "{$student->rombel_name_snapshot} · {$student->student_name_snapshot}",
+            ])
+            ->all() ?? [];
     }
 
     public function previewUrl(): ?string
     {
-        return $this->previewSnapshotId
-            ? route('assessment.reports.preview', ['reportSnapshot' => $this->previewSnapshotId])
+        return $this->previewStudentId && $this->periodId && $this->templateId
+            ? route('assessment.reports.live-preview', [
+                'assessmentPeriod' => $this->periodId,
+                'reportTemplate' => $this->templateId,
+                'periodStudent' => $this->previewStudentId,
+            ])
             : null;
     }
 
@@ -204,6 +205,11 @@ abstract class AssessmentReportsPage extends AssessmentPage
         }
 
         try {
+            app(AssessmentReportPreflight::class)->assertReady(
+                $period,
+                $template,
+                $this->selectedClassIds,
+            );
             $snapshots = app(CreateReportSnapshotsAction::class)->execute(
                 $period,
                 $template,
@@ -230,6 +236,25 @@ abstract class AssessmentReportsPage extends AssessmentPage
             report($exception);
             Notification::make()->title('Rapor belum dapat dibuat')->body($exception->getMessage())->danger()->duration(15000)->send();
         }
+    }
+
+    /**
+     * @return array{ready:bool,groups:array<string, array{label:string,issues:array}>}
+     */
+    public function getReportPreflight(): array
+    {
+        $period = $this->selectedPeriod();
+        $template = $this->selectedTemplate();
+
+        if (! $period || ! $template) {
+            return ['ready' => false, 'groups' => []];
+        }
+
+        return app(AssessmentReportPreflight::class)->inspect(
+            $period,
+            $template,
+            $this->selectedClassIds,
+        );
     }
 
     public function selectAllClasses(): void
@@ -495,8 +520,8 @@ abstract class AssessmentReportsPage extends AssessmentPage
         }
 
         $previewIds = array_map('intval', array_keys($this->getPreviewOptions()));
-        if (! $this->previewSnapshotId || ! in_array($this->previewSnapshotId, $previewIds, true)) {
-            $this->previewSnapshotId = $previewIds[0] ?? null;
+        if (! $this->previewStudentId || ! in_array($this->previewStudentId, $previewIds, true)) {
+            $this->previewStudentId = $previewIds[0] ?? null;
         }
     }
 

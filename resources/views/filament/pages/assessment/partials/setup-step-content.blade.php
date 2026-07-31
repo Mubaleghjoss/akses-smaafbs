@@ -21,7 +21,7 @@
         <span class="break-words">{{ $step['ready'] ? 'Data tersedia' : 'Perlu dilengkapi' }}</span>
     </span>
     @if ($step['url'])
-        <span class="mt-1 break-words text-[0.7rem] font-bold text-primary-700 dark:text-primary-300">
+        <span class="mt-1 break-words text-[0.7rem] font-bold text-gray-700 dark:text-gray-200">
             {{ $step['action'] }}
         </span>
     @endif

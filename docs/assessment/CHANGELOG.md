@@ -2,6 +2,19 @@
 
 ## 2026-07-31
 
+- Menambahkan formatter tampilan nilai bersama: `99.9900` menjadi `99.99`,
+  `85.5000` menjadi `85.5`, dan nilai bulat tidak memiliki nol desimal.
+- Menambahkan kelompok dan urutan mapel pada master serta snapshot assignment,
+  dengan kompatibilitas workbook lama melalui kelompok sementara `BELUM`.
+- Menambahkan predikat/deskripsi sikap spiritual dan sosial serta bulk isi pada
+  Rekap Wali Kelas.
+- Menambahkan builder layout aman maksimal tiga halaman, draft template
+  **SMA AFBS 3 Halaman**, posisi/ukuran watermark, preview data periode tanpa
+  file permanen, serta preflight rapor resmi.
+- Menambahkan wizard tujuh langkah Kelengkapan Data Rapor dan halaman koreksi
+  langsung Mapel Penilaian tanpa menambah item sidebar.
+- Memperbaiki kontras navigasi Penilaian terang/gelap dan menjaga tab tetap
+  dapat digeser pada layar HP.
 - Menambahkan bulk verifikasi dan pengembalian assignment secara atomik pada
   Status Pengumpulan, lengkap dengan modal alasan revisi.
 - Menampilkan alasan, aktor, dan waktu revisi pada Input Nilai serta mengubah

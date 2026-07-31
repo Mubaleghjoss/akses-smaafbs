@@ -26,8 +26,15 @@ SEMESTER_KODE, SEMESTER_NAMA, SEMESTER_MULAI, SEMESTER_SELESAI, AKTIF
 `MAPEL`:
 
 ```text
-KODE_MAPEL, NAMA_MAPEL, DESKRIPSI, URUTAN, AKTIF
+KODE_MAPEL, NAMA_MAPEL, DESKRIPSI, KELOMPOK_KODE, KELOMPOK_NAMA,
+URUTAN_KELOMPOK, URUTAN_MAPEL, AKTIF
 ```
+
+Workbook lama dengan kolom `KODE_MAPEL, NAMA_MAPEL, DESKRIPSI, URUTAN,
+AKTIF` tetap diterima. Mapel dari format lama masuk kelompok sementara
+`BELUM / Belum Dikelompokkan` dan muncul sebagai pekerjaan wajib pada wizard
+serta preflight rapor. Admin dapat memperbaikinya langsung melalui kartu
+**Mapel, Kelompok, dan Urutan Rapor** tanpa mengunggah ulang seluruh workbook.
 
 `PENUGASAN_GURU`:
 
@@ -44,7 +51,7 @@ NAMA_ROMBEL, ID_ROMBEL_SISTEM, AKTIF
 ```
 
 Tanggal memakai `YYYY-MM-DD`; boolean memakai `YA` atau `TIDAK`.
-Empat header transaksi wajib sama persis dan tetap pada urutan tersebut.
+Header transaksi wajib sama persis dan tetap pada urutan tersebut.
 Importer menolak judul yang diubah, kolom yang hilang, kolom tambahan, atau
 urutan yang dipindahkan. Rentang tanggal juga diperiksa: mulai tidak boleh
 melewati selesai dan tanggal semester harus berada dalam tahun pelajaran.
@@ -80,3 +87,24 @@ Form langsung dan importer menulis tabel master terstruktur yang sama. Unique
 index tetap mencegah penugasan ganda, snapshot nama diperbarui saat baris
 disimpan, dan perubahan tercatat pada log Penilaian. Pengaturan langsung tidak
 mengubah snapshot periode yang sudah dibuka.
+
+## Wizard kelengkapan rapor
+
+Dashboard Pengaturan Penilaian menyediakan tujuh pintasan yang membaca kondisi
+database, bukan checklist manual:
+
+1. identitas sekolah dan penanda tangan;
+2. tahun pelajaran dan semester;
+3. mapel, kelompok, dan urutan rapor;
+4. guru-mapel-kelas;
+5. wali kelas;
+6. siswa, nilai, data wali kelas, dan periode;
+7. layout, watermark, serta preflight.
+
+Gunakan workbook untuk pembaruan massal. Gunakan halaman Mapel Penilaian dan
+tab Penilaian pada Guru & Tendik untuk koreksi harian yang kecil.
+
+Jika periode sudah dibuka sebelum kolom kelompok tersedia, pilih mapel yang
+sudah diperbaiki lalu jalankan bulk **Terapkan Kelompok ke Periode Berjalan**.
+Aksi eksplisit ini hanya menyentuh assignment periode yang belum
+`locked/published`, tidak mengubah nilai, dan tidak menyentuh snapshot/PDF lama.

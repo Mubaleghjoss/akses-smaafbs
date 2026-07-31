@@ -13,11 +13,14 @@ use App\Filament\Resources\AssessmentAuditLogResource\Pages\ListAssessmentAuditL
 use App\Filament\Resources\AssessmentPeriodResource;
 use App\Filament\Resources\AssessmentSchemeResource;
 use App\Filament\Resources\AssessmentSchemeResource\Pages\CreateAssessmentScheme;
+use App\Filament\Resources\AssessmentSubjectResource\Pages\ListAssessmentSubjects;
 use App\Filament\Resources\GuruTendikResource\Pages\EditGuruTendik;
 use App\Filament\Resources\GuruTendikResource\RelationManagers\AssessmentHomeroomAssignmentsRelationManager;
 use App\Filament\Resources\GuruTendikResource\RelationManagers\AssessmentTeachingAssignmentsRelationManager;
 use App\Models\Assessment\AcademicYear;
 use App\Models\Assessment\AssessmentPeriod;
+use App\Models\Assessment\AssessmentPeriodAssignment;
+use App\Models\Assessment\AssessmentPeriodRombel;
 use App\Models\Assessment\AssessmentScheme;
 use App\Models\Assessment\AuditLog;
 use App\Models\Assessment\HomeroomAssignment;
@@ -62,6 +65,10 @@ class AssessmentAdminIntegrationTest extends TestCase
             'migrations/2026_07_31_080000_create_assessment_foundation_tables.php',
         );
         $migration->up();
+        $reportStructureMigration = require database_path(
+            'migrations/2026_07_31_120000_extend_assessment_report_structure.php',
+        );
+        $reportStructureMigration->up();
         $pipelineMigration = require database_path(
             'migrations/2026_07_31_190000_add_assessment_report_generation_runs.php',
         );
@@ -146,6 +153,119 @@ class AssessmentAdminIntegrationTest extends TestCase
         $this->assertSame(2, Subject::query()->count());
         $this->assertSame(1, TeachingAssignment::query()->count());
         $this->assertSame(1, HomeroomAssignment::query()->count());
+    }
+
+    public function test_new_workbook_imports_report_group_and_order_while_legacy_workbook_stays_compatible(): void
+    {
+        [$teacher, $rombel] = $this->createLegacyReferences();
+        $legacyPath = $this->makeWorkbook(
+            yearCode: '2026-2027',
+            semesterCode: '2026-2027-GANJIL',
+            subjectCode: 'LEGACY',
+            subjectName: 'Mapel Format Lama',
+            teacherId: (int) $teacher->getKey(),
+            rombelId: (int) $rombel->getKey(),
+        );
+        $legacyPreview = app(AssessmentMasterWorkbookImporter::class)->preview($legacyPath);
+
+        $this->assertSame([], $legacyPreview['errors']);
+        $this->assertSame('BELUM', $legacyPreview['payload']['subjects'][0]['report_group_code']);
+        $this->assertStringContainsString('format lama', mb_strtolower(implode(' ', $legacyPreview['warnings'])));
+
+        $newPath = $this->makeWorkbook(
+            yearCode: '2026-2027',
+            semesterCode: '2026-2027-GANJIL',
+            subjectCode: 'MAT',
+            subjectName: 'Matematika',
+            teacherId: (int) $teacher->getKey(),
+            rombelId: (int) $rombel->getKey(),
+        );
+        $spreadsheet = IOFactory::load($newPath);
+        $spreadsheet->getSheetByName('MAPEL')->fromArray([
+            ['KODE_MAPEL', 'NAMA_MAPEL', 'DESKRIPSI', 'KELOMPOK_KODE', 'KELOMPOK_NAMA', 'URUTAN_KELOMPOK', 'URUTAN_MAPEL', 'AKTIF'],
+            ['MAT', 'Matematika', 'Numerasi', 'A', 'Kelompok A', 10, 20, 'YA'],
+        ], null, 'A1');
+        (new Xlsx($spreadsheet))->save($newPath);
+        $spreadsheet->disconnectWorksheets();
+
+        $preview = app(AssessmentMasterWorkbookImporter::class)->preview($newPath);
+
+        $this->assertSame([], $preview['errors']);
+        $this->assertSame('A', $preview['payload']['subjects'][0]['report_group_code']);
+        $this->assertSame('Kelompok A', $preview['payload']['subjects'][0]['report_group_name']);
+        $this->assertSame(10, $preview['payload']['subjects'][0]['report_group_sort_order']);
+        $this->assertSame(20, $preview['payload']['subjects'][0]['sort_order']);
+
+        app(AssessmentMasterWorkbookImporter::class)->apply($preview, null);
+        $this->assertDatabaseHas('assessment_subjects', [
+            'code' => 'MAT',
+            'report_group_code' => 'A',
+            'report_group_name' => 'Kelompok A',
+            'report_group_sort_order' => 10,
+            'sort_order' => 20,
+        ]);
+    }
+
+    public function test_subject_report_metadata_can_be_explicitly_synced_only_to_unlocked_periods(): void
+    {
+        $admin = $this->createUser('assessment-subject-sync-admin', 'admin');
+        $year = AcademicYear::query()->create([
+            'code' => 'SYNC-2026',
+            'name' => 'Tahun Sinkronisasi',
+            'is_active' => true,
+        ]);
+        $semester = Semester::query()->create([
+            'assessment_academic_year_id' => $year->getKey(),
+            'code' => 'SYNC-GANJIL',
+            'name' => 'Semester Sinkronisasi',
+            'is_active' => true,
+        ]);
+        $subject = Subject::query()->create([
+            'code' => 'SYNC-MAT',
+            'name' => 'Matematika Sinkron',
+            'report_group_code' => 'A',
+            'report_group_name' => 'Kelompok A',
+            'report_group_sort_order' => 10,
+            'sort_order' => 20,
+            'is_active' => true,
+        ]);
+        $period = AssessmentPeriod::query()->create([
+            'assessment_academic_year_id' => $year->getKey(),
+            'assessment_semester_id' => $semester->getKey(),
+            'code' => 'ASTS-SYNC',
+            'name' => 'ASTS Sinkron',
+            'type' => AssessmentType::ASTS,
+            'status' => AssessmentPeriodStatus::OPEN,
+            'created_by' => $admin->getKey(),
+        ]);
+        $rombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+        ]);
+        $assignment = AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'assessment_subject_id' => $subject->getKey(),
+            'subject_group_code_snapshot' => 'BELUM',
+            'subject_group_name_snapshot' => 'Belum Dikelompokkan',
+            'subject_group_sort_order_snapshot' => 999,
+            'subject_sort_order_snapshot' => 0,
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(ListAssessmentSubjects::class)
+            ->callTableBulkAction('syncUnlockedPeriodMetadata', [$subject])
+            ->assertHasNoTableBulkActionErrors();
+
+        $assignment->refresh();
+        $this->assertSame('A', $assignment->subject_group_code_snapshot);
+        $this->assertSame('Kelompok A', $assignment->subject_group_name_snapshot);
+        $this->assertSame(10, $assignment->subject_group_sort_order_snapshot);
+        $this->assertSame(20, $assignment->subject_sort_order_snapshot);
+        $this->assertDatabaseHas('assessment_audit_logs', [
+            'assessment_period_id' => $period->getKey(),
+            'event' => 'assignment.report_metadata_synchronized',
+            'subject_id' => $assignment->getKey(),
+        ]);
     }
 
     public function test_preview_fingerprint_prevents_modified_payload_from_being_applied(): void

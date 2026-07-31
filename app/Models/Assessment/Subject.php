@@ -12,12 +12,22 @@ class Subject extends Model
 
     protected $table = 'assessment_subjects';
 
-    protected $fillable = ['code', 'name', 'description', 'is_active', 'sort_order'];
+    protected $fillable = [
+        'code',
+        'name',
+        'description',
+        'report_group_code',
+        'report_group_name',
+        'report_group_sort_order',
+        'is_active',
+        'sort_order',
+    ];
 
     protected function casts(): array
     {
         return [
             'is_active' => 'boolean',
+            'report_group_sort_order' => 'integer',
             'sort_order' => 'integer',
         ];
     }

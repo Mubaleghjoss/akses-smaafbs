@@ -39,6 +39,10 @@ class AssessmentFoundationTest extends TestCase
             'migrations/2026_07_31_080000_create_assessment_foundation_tables.php',
         );
         $migration->up();
+        $reportStructureMigration = require database_path(
+            'migrations/2026_07_31_120000_extend_assessment_report_structure.php',
+        );
+        $reportStructureMigration->up();
     }
 
     public function test_assessment_schema_is_additive_and_complete(): void
@@ -84,6 +88,24 @@ class AssessmentFoundationTest extends TestCase
             'source_score_snapshot',
         ]));
         $this->assertTrue(Schema::hasColumn('assessment_schemes', 'source_rombel_id'));
+        $this->assertTrue(Schema::hasColumns('assessment_subjects', [
+            'report_group_code',
+            'report_group_name',
+            'report_group_sort_order',
+            'sort_order',
+        ]));
+        $this->assertTrue(Schema::hasColumns('assessment_period_assignments', [
+            'subject_group_code_snapshot',
+            'subject_group_name_snapshot',
+            'subject_group_sort_order_snapshot',
+            'subject_sort_order_snapshot',
+        ]));
+        $this->assertTrue(Schema::hasColumns('assessment_homeroom_reports', [
+            'spiritual_predicate',
+            'spiritual_description',
+            'social_predicate',
+            'social_description',
+        ]));
     }
 
     public function test_asts_and_asas_are_separate_but_duplicate_type_is_rejected(): void
@@ -132,7 +154,7 @@ class AssessmentFoundationTest extends TestCase
         $this->assertSame(0, Artisan::call('assessment:install-defaults'));
         $this->assertSame(0, Artisan::call('assessment:install-defaults'));
 
-        $this->assertSame(2, ReportTemplate::query()->count());
+        $this->assertSame(4, ReportTemplate::query()->count());
         $this->assertSame(
             count(InstallAssessmentDefaults::PERMISSIONS),
             Permission::query()->whereIn('name', InstallAssessmentDefaults::PERMISSIONS)->count(),

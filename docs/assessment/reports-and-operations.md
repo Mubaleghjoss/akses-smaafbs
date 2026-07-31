@@ -92,9 +92,17 @@ record snapshot/artifact untuk mengulang.
 Retry revisi historis atau PDF yang sudah completed ditolak oleh server,
 meskipun method Livewire dipanggil secara langsung.
 
-## Preview dan watermark
+## Layout aman, preview, dan watermark
 
-- Preview memakai satu snapshot siswa nyata, dirender sinkron tanpa
+- Template layout versi 2 hanya menerima daftar section terstruktur. Tidak ada
+  input HTML, Blade, CSS, atau PHP bebas dari admin.
+- Bagian dapat diaktifkan, diurutkan, dan ditempatkan pada halaman 1-3.
+  Identitas siswa, minimal satu bagian akademik, dan tanda tangan wajib ada.
+- Template draft **SMA AFBS 3 Halaman** membagi isi menjadi sikap/ringkasan,
+  capaian kompetensi, lalu ekstrakurikuler-prestasi-absensi-catatan-tanggapan
+  orang tua-tanda tangan.
+
+- Preview memakai satu siswa nyata dari periode, dirender sinkron tanpa
   snapshot/job/file permanen, diberi label **Pratinjau—bukan rapor resmi**,
   rate limit, Policy, `no-store`, dan `noindex`.
 - Watermark template hanya menerima PNG/JPEG/WebP pada disk `local` privat,
@@ -102,3 +110,20 @@ meskipun method Livewire dipanggil secara langsung.
 - Saat snapshot dibuat, gambar watermark dibekukan sebagai data image di JSON.
   Path privat tidak masuk snapshot dan perubahan template berikutnya tidak
   mengubah revisi lama.
+
+Preview tetap tersedia ketika data belum lengkap dan diberi penanda
+**PRATINJAU - DATA BELUM LENGKAP**. Watermark mendukung posisi
+atas/tengah/bawah, lebar 20-90%, dan opacity 5-25%.
+
+## Preflight rapor resmi
+
+Generate ditolak sebelum membuat snapshot/job jika kelas terpilih masih
+memiliki mapel tanpa kelompok, assignment belum terkunci, wali kelas hilang,
+nilai akhir siswa kosong, sikap wajib kosong, atau identitas template belum
+lengkap. Hasil ditampilkan sebagai kartu per kelompok dengan jumlah dan sampel
+kelas, mapel, atau siswa. Preview tidak melewati pagar ini karena selalu
+berlabel bukan dokumen resmi.
+
+Nilai yang tampil pada Input Nilai, preview, rekap, dan PDF dibatasi maksimal
+dua desimal dan nol berlebih dibuang. Nilai database `decimal:4`, formula, serta
+detail perhitungan tidak diubah.

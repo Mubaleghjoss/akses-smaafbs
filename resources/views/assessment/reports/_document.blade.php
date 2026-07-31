@@ -26,6 +26,11 @@
 @endphp
 
 <section class="report-page">
+    @if ((bool) data_get($snapshot, 'meta.preview', false))
+        <div class="report-preview-label">
+            {{ (bool) data_get($snapshot, 'meta.preview_data_incomplete', false) ? 'PRATINJAU — DATA BELUM LENGKAP' : 'PRATINJAU — BUKAN RAPOR RESMI' }}
+        </div>
+    @endif
     @if ($watermarkSafe && (bool) data_get($templateSettings, 'watermark_enabled', false))
         <div class="report-watermark" style="opacity: {{ $watermarkOpacity }}">
             <img src="{{ $watermark }}" alt="">
@@ -96,7 +101,7 @@
                 <tr>
                     <td class="scores__number">{{ $index + 1 }}</td>
                     <td>{{ data_get($subject, 'name', data_get($subject, 'subject_name', '-')) }}</td>
-                    <td class="scores__score">{{ data_get($subject, 'final_score', data_get($subject, 'score', '-')) }}</td>
+                    <td class="scores__score">{{ \App\Support\Assessment\AssessmentNumberFormatter::score(data_get($subject, 'final_score', data_get($subject, 'score'))) }}</td>
                     @if ($showPredicate)
                         <td class="scores__predicate">{{ data_get($subject, 'predicate', '-') }}</td>
                     @endif

@@ -7,20 +7,18 @@ use App\Models\PerpustakaanLiterasiAnswer;
 use App\Models\PerpustakaanLiterasiMaterial;
 use App\Models\PerpustakaanLiterasiResponse;
 use App\Models\PerpustakaanLiterasiSimilarityMatch;
+use App\Support\Literacy\LiteracyResponseGrading;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Page;
-use Filament\Schemas\Components\Section;
 use Filament\Tables;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\HtmlString;
 
 class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
 {
@@ -614,186 +612,22 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
 
     protected function isResponseFullyGraded(PerpustakaanLiterasiResponse $record): bool
     {
-        $total = (int) ($record->score_possible_total ?? 0);
-        $graded = (int) ($record->graded_points_total ?? 0);
-
-        return $total > 0 && $graded >= $total;
+        return app(LiteracyResponseGrading::class)->isFullyGraded($record);
     }
 
     protected function gradingFormSchema(PerpustakaanLiterasiResponse $record): array
     {
-        $record->loadMissing('material.questions', 'answers.question');
-        $answers = $record->answers->keyBy('question_id');
-        $plagiarismMatchesByAnswer = $record->laterSimilarityMatches()
-            ->with(['matchedResponse', 'matchedAnswer'])
-            ->get()
-            ->groupBy('later_answer_id');
-
-        return collect([$this->integritySummarySection($record)])
-            ->merge($record->material->questions
-            ->map(function ($question, int $index) use ($answers, $plagiarismMatchesByAnswer): Section {
-                $answer = $answers->get($question->getKey());
-                $answerId = (int) $answer?->getKey();
-                $plagiarismMatches = $answerId > 0
-                    ? $plagiarismMatchesByAnswer->get($answerId, collect())
-                    : collect();
-                $schema = [
-                    Forms\Components\Placeholder::make('question_'.$question->getKey())
-                        ->label('Pertanyaan')
-                        ->content(new HtmlString('<div class="whitespace-pre-line text-sm leading-6">'.e($question->prompt).'</div>'))
-                        ->columnSpanFull(),
-                    Forms\Components\Placeholder::make('answer_'.$answerId)
-                        ->label('Jawaban Siswa')
-                        ->content(new HtmlString('<div class="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-3 text-sm leading-6 dark:border-white/10 dark:bg-white/5">'.nl2br(e((string) ($answer?->answer_text ?: '-'))).'</div>'))
-                        ->columnSpanFull(),
-                ];
-
-                if ($plagiarismMatches->isNotEmpty()) {
-                    $schema[] = Forms\Components\Placeholder::make('answer_'.$answerId.'_plagiarism_info')
-                        ->label('Indikasi Plagiasi')
-                        ->content($this->plagiarismMatchesHtml($plagiarismMatches))
-                        ->columnSpanFull();
-                    $schema[] = Forms\Components\Radio::make('answer_'.$answerId.'_plagiarism_status')
-                        ->label('Status Plagiasi')
-                        ->options(PerpustakaanLiterasiSimilarityMatch::reviewStatusOptions())
-                        ->default(PerpustakaanLiterasiSimilarityMatch::REVIEW_SUSPECTED)
-                        ->inline()
-                        ->required()
-                        ->columnSpanFull();
-                }
-
-                if (! $question->isEssay()) {
-                    $possible = max(1, (int) ($answer?->score_possible ?? $question->objectiveItemCount()));
-                    $schema[] = Forms\Components\Placeholder::make('answer_'.$answerId.'_automatic_score')
-                        ->label('Nilai Otomatis')
-                        ->content(number_format((int) ($answer?->score_earned ?? 0), 0, ',', '.').'/'.number_format($possible, 0, ',', '.').' poin');
-                    $schema[] = Forms\Components\TextInput::make('answer_'.$answerId.'_score')
-                        ->label('Koreksi Poin')
-                        ->numeric()
-                        ->integer()
-                        ->minValue(0)
-                        ->maxValue($possible)
-                        ->required();
-                } else {
-                    $schema[] = Forms\Components\Radio::make('answer_'.$answerId.'_status')
-                        ->label('Penilaian')
-                        ->options([
-                            'ungraded' => 'Belum dinilai',
-                            'correct' => 'Benar',
-                            'wrong' => 'Salah',
-                        ])
-                        ->default('ungraded')
-                        ->inline()
-                        ->required();
-                }
-                $schema[] = Forms\Components\Textarea::make('answer_'.$answerId.'_note')
-                    ->label('Catatan')
-                    ->rows(2)
-                    ->maxLength(1000);
-
-                return Section::make('Pertanyaan '.($index + 1))
-                    ->columns(['default' => 1, 'md' => 2])
-                    ->schema($schema);
-            })
-            ->values())
-            ->values()
-            ->all();
-    }
-
-    protected function integritySummarySection(PerpustakaanLiterasiResponse $record): Section
-    {
-        return Section::make('Tindakan Keluar Halaman')
-            ->columns(['default' => 1, 'md' => 2])
-            ->schema([
-                Forms\Components\Placeholder::make('app_hidden_count')
-                    ->label('Halaman Disembunyikan > 10 Detik')
-                    ->content(number_format((int) ($record->app_hidden_count ?? 0), 0, ',', '.').'x'),
-                Forms\Components\Placeholder::make('submitted_at')
-                    ->label('Submit jawaban')
-                    ->content($record->submitted_at?->format('d/m/Y H:i') ?? '-'),
-            ]);
+        return app(LiteracyResponseGrading::class)->schema($record);
     }
 
     protected function gradingFormData(PerpustakaanLiterasiResponse $record): array
     {
-        $record->loadMissing('answers', 'laterSimilarityMatches');
-        $data = [];
-        $plagiarismMatchesByAnswer = $record->laterSimilarityMatches->groupBy('later_answer_id');
-
-        foreach ($record->answers as $answer) {
-            $key = 'answer_'.$answer->getKey();
-            $data[$key.'_score'] = $answer->score_earned;
-            $data[$key.'_status'] = match ($answer->is_correct) {
-                true => 'correct',
-                false => 'wrong',
-                default => 'ungraded',
-            };
-            $data[$key.'_note'] = (string) ($answer->grading_note ?? '');
-
-            $plagiarismMatches = $plagiarismMatchesByAnswer->get($answer->getKey(), collect());
-
-            if ($plagiarismMatches->isNotEmpty()) {
-                $data[$key.'_plagiarism_status'] = $this->resolvePlagiarismReviewStatus($plagiarismMatches);
-            }
-        }
-
-        return $data;
+        return app(LiteracyResponseGrading::class)->data($record);
     }
 
     protected function saveGrades(PerpustakaanLiterasiResponse $record, array $data): void
     {
-        $record->loadMissing('answers.question');
-        $userId = auth()->id();
-
-        DB::transaction(function () use ($data, $record, $userId): void {
-            foreach ($record->answers as $answer) {
-                $key = 'answer_'.$answer->getKey();
-                $status = (string) ($data[$key.'_status'] ?? 'ungraded');
-                $note = trim((string) ($data[$key.'_note'] ?? ''));
-
-                $this->savePlagiarismReview($record, $answer, $data, $userId);
-
-                if ($answer->question && ! $answer->question->isEssay()) {
-                    $possible = max(1, (int) ($answer->score_possible ?? $answer->question->objectiveItemCount()));
-                    $score = min($possible, max(0, (int) ($data[$key.'_score'] ?? 0)));
-                    $answer->forceFill([
-                        'score_earned' => $score,
-                        'score_possible' => $possible,
-                        'grading_source' => 'manual',
-                        'is_correct' => $score === $possible,
-                        'graded_by' => $userId,
-                        'graded_at' => now(),
-                        'grading_note' => $note !== '' ? $note : 'Poin dikoreksi manual oleh admin/guru.',
-                    ])->save();
-
-                    continue;
-                }
-
-                if (! in_array($status, ['correct', 'wrong'], true)) {
-                    $answer->forceFill([
-                        'is_correct' => null,
-                        'score_earned' => null,
-                        'score_possible' => 1,
-                        'grading_source' => null,
-                        'graded_by' => null,
-                        'graded_at' => null,
-                        'grading_note' => null,
-                    ])->save();
-
-                    continue;
-                }
-
-                $answer->forceFill([
-                    'is_correct' => $status === 'correct',
-                    'score_earned' => $status === 'correct' ? 1 : 0,
-                    'score_possible' => 1,
-                    'grading_source' => 'manual',
-                    'graded_by' => $userId,
-                    'graded_at' => now(),
-                    'grading_note' => $note !== '' ? $note : null,
-                ])->save();
-            }
-        });
+        app(LiteracyResponseGrading::class)->save($record, $data, auth()->id());
 
         Notification::make()
             ->title('Nilai history siswa tersimpan')
@@ -818,71 +652,6 @@ class StudentHistoryPerpustakaanLiterasi extends Page implements HasTable
             ['automatic', 'answer_key'],
             true,
         )) ? 'Sistem otomatis' : 'Belum dinilai';
-    }
-
-    protected function plagiarismMatchesHtml($matches): HtmlString
-    {
-        $items = $matches
-            ->map(function (PerpustakaanLiterasiSimilarityMatch $match): string {
-                $student = $match->matchedResponse?->student_name_snapshot ?: 'Pembanding sebelumnya';
-                $class = $match->matchedResponse?->student_class_snapshot ?: '-';
-                $score = number_format((float) $match->similarity_score, 2, ',', '.').'%';
-                $status = PerpustakaanLiterasiSimilarityMatch::reviewStatusLabel($match->review_status);
-
-                return '<li><strong>'.e($score).'</strong> mirip dengan '.e($student).' ('.e($class).') - '.e($status).'</li>';
-            })
-            ->implode('');
-
-        return new HtmlString(
-            '<div class="literasi-plagiarism-review">'.
-            '<div class="literasi-plagiarism-review__title">Jawaban ini terdeteksi mirip dengan jawaban sebelumnya.</div>'.
-            '<ul>'.$items.'</ul>'.
-            '</div>'
-        );
-    }
-
-    protected function resolvePlagiarismReviewStatus($matches): string
-    {
-        if ($matches->contains(fn (PerpustakaanLiterasiSimilarityMatch $match): bool => $match->review_status === PerpustakaanLiterasiSimilarityMatch::REVIEW_CONFIRMED)) {
-            return PerpustakaanLiterasiSimilarityMatch::REVIEW_CONFIRMED;
-        }
-
-        if ($matches->every(fn (PerpustakaanLiterasiSimilarityMatch $match): bool => $match->review_status === PerpustakaanLiterasiSimilarityMatch::REVIEW_CLEARED)) {
-            return PerpustakaanLiterasiSimilarityMatch::REVIEW_CLEARED;
-        }
-
-        return PerpustakaanLiterasiSimilarityMatch::REVIEW_SUSPECTED;
-    }
-
-    protected function savePlagiarismReview(
-        PerpustakaanLiterasiResponse $record,
-        PerpustakaanLiterasiAnswer $answer,
-        array $data,
-        ?int $userId
-    ): void {
-        if (! Schema::hasTable('perpustakaan_literasi_similarity_matches')
-            || ! Schema::hasColumn('perpustakaan_literasi_similarity_matches', 'review_status')) {
-            return;
-        }
-
-        $key = 'answer_'.$answer->getKey();
-        $status = (string) ($data[$key.'_plagiarism_status'] ?? '');
-
-        if (! array_key_exists($status, PerpustakaanLiterasiSimilarityMatch::reviewStatusOptions())) {
-            return;
-        }
-
-        $attributes = [
-            'review_status' => $status,
-            'reviewed_by' => $status === PerpustakaanLiterasiSimilarityMatch::REVIEW_SUSPECTED ? null : $userId,
-            'reviewed_at' => $status === PerpustakaanLiterasiSimilarityMatch::REVIEW_SUSPECTED ? null : now(),
-            'review_note' => null,
-        ];
-
-        PerpustakaanLiterasiSimilarityMatch::query()
-            ->where('later_response_id', $record->getKey())
-            ->where('later_answer_id', $answer->getKey())
-            ->update($attributes);
     }
 
     /**

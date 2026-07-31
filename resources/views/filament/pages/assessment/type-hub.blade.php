@@ -10,7 +10,7 @@
         <section class="assessment-dashboard-hero assessment-type-hero overflow-hidden rounded-2xl border border-primary-200 bg-gradient-to-br from-primary-50 via-white to-white shadow-sm dark:border-primary-500/20 dark:from-primary-950/30 dark:via-gray-900 dark:to-gray-900">
             <div class="assessment-dashboard-hero__layout grid gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,24rem)] lg:items-center">
                 <div class="min-w-0">
-                    <span class="inline-flex items-center gap-2 rounded-full bg-primary-100 px-3 py-1 text-xs font-bold text-primary-700 dark:bg-primary-500/15 dark:text-primary-300">
+                    <span class="inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700 dark:bg-white/10 dark:text-gray-200">
                         <x-filament::icon icon="heroicon-o-academic-cap" class="h-4 w-4" />
                         Pusat {{ $this->getAssessmentTypeLabel() }}
                     </span>

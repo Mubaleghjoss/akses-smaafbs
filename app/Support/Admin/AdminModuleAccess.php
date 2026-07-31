@@ -20,6 +20,7 @@ use App\Filament\Resources\AssessmentAuditLogResource;
 use App\Filament\Resources\AssessmentPeriodResource;
 use App\Filament\Resources\AssessmentReportTemplateResource;
 use App\Filament\Resources\AssessmentSchemeResource;
+use App\Filament\Resources\AssessmentSubjectResource;
 use App\Filament\Resources\BeritaResource;
 use App\Filament\Resources\BerkasGuruResource;
 use App\Filament\Resources\BerkasSiswaResource;
@@ -128,6 +129,7 @@ class AdminModuleAccess
             AsasReports::class,
             AssessmentPeriodResource::class,
             AssessmentSchemeResource::class,
+            AssessmentSubjectResource::class,
             AssessmentReportTemplateResource::class,
             AssessmentAuditLogResource::class,
             AssessmentMasterImport::class,

@@ -24,6 +24,10 @@ class AssessmentPeriodAssignment extends Model
         'assessment_subject_id',
         'teacher_name_snapshot',
         'subject_name_snapshot',
+        'subject_group_code_snapshot',
+        'subject_group_name_snapshot',
+        'subject_group_sort_order_snapshot',
+        'subject_sort_order_snapshot',
         'rombel_name_snapshot',
         'status',
         'lock_version',
@@ -42,6 +46,8 @@ class AssessmentPeriodAssignment extends Model
     {
         return [
             'teacher_id' => 'integer',
+            'subject_group_sort_order_snapshot' => 'integer',
+            'subject_sort_order_snapshot' => 'integer',
             'status' => AssignmentStatus::class,
             'lock_version' => 'integer',
             'submitted_at' => 'datetime',

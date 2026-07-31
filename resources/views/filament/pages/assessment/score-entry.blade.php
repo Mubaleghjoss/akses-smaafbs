@@ -272,7 +272,7 @@
                                                 </span>
                                             </label>
                                             @if ($row['final_score'] !== null)
-                                                <div class="mt-2 text-xs font-semibold text-primary-600">Nilai akhir: {{ $row['final_score'] }}</div>
+                                                <div class="assessment-final-score mt-2">Nilai akhir: {{ \App\Support\Assessment\AssessmentNumberFormatter::score($row['final_score']) }}</div>
                                             @endif
                                         </td>
                                         @foreach ($components as $component)
@@ -320,8 +320,11 @@
                                         <span class="mt-1 block text-xs text-gray-500">{{ $row['nis'] }}</span>
                                     </span>
                                 </label>
-                                <span class="assessment-score-pill">{{ $index + 1 }}/{{ count($scoreRows) }}</span>
-                            </div>
+                                    <span class="assessment-score-pill">{{ $index + 1 }}/{{ count($scoreRows) }}</span>
+                                </div>
+                                @if ($row['final_score'] !== null)
+                                    <div class="assessment-final-score">Nilai akhir: {{ \App\Support\Assessment\AssessmentNumberFormatter::score($row['final_score']) }}</div>
+                                @endif
                             <div class="assessment-mobile-grid">
                                 @foreach ($components as $component)
                                     <label class="assessment-mobile-score">

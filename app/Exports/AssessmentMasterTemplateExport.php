@@ -29,8 +29,8 @@ class AssessmentMasterTemplateExport implements WithMultipleSheets
                 ['2026-2027', 'Tahun Pelajaran 2026/2027', '2026-07-01', '2027-06-30', '2026-2027-GANJIL', 'Semester Ganjil', '2026-07-01', '2026-12-31', 'YA'],
             ], 'TAHUN_SEMESTER'),
             new AssessmentArraySheetExport([
-                ['KODE_MAPEL', 'NAMA_MAPEL', 'DESKRIPSI', 'URUTAN', 'AKTIF'],
-                ['BIN', 'Bahasa Indonesia', '', 10, 'YA'],
+                ['KODE_MAPEL', 'NAMA_MAPEL', 'DESKRIPSI', 'KELOMPOK_KODE', 'KELOMPOK_NAMA', 'URUTAN_KELOMPOK', 'URUTAN_MAPEL', 'AKTIF'],
+                ['BIN', 'Bahasa Indonesia', '', 'A', 'Kelompok A (Umum)', 10, 10, 'YA'],
             ], 'MAPEL'),
             new AssessmentArraySheetExport([
                 ['SEMESTER_KODE', 'MAPEL_KODE', 'NAMA_GURU', 'ID_GURU_SISTEM', 'NAMA_ROMBEL', 'ID_ROMBEL_SISTEM', 'AKTIF'],
@@ -72,8 +72,9 @@ class AssessmentMasterTemplateExport implements WithMultipleSheets
             ['3', 'Satu guru tanpa akun boleh dipreview, tetapi harus dibuatkan akun sebelum periode dibuka.'],
             ['4', 'Impor selalu masuk tahap pratinjau. Database baru berubah setelah tombol Terapkan Impor ditekan.'],
             ['5', 'Baris yang tidak ada di workbook tidak dihapus dan tidak otomatis dinonaktifkan.'],
-            ['6', 'Nilai AKTIF menerima YA/TIDAK. Tanggal memakai format YYYY-MM-DD.'],
-            ['7', 'Jangan mengganti nama sheet atau judul kolom. Simpan sebagai .xlsx.'],
+            ['6', 'Pada MAPEL, isi kelompok dan urutan agar rapor dapat dikelompokkan dengan benar.'],
+            ['7', 'Nilai AKTIF menerima YA/TIDAK. Tanggal memakai format YYYY-MM-DD.'],
+            ['8', 'Jangan mengganti nama sheet atau judul kolom. Simpan sebagai .xlsx.'],
         ];
     }
 }

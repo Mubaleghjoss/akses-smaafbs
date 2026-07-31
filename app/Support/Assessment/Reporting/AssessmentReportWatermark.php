@@ -17,7 +17,12 @@ final class AssessmentReportWatermark
         $enabled = (bool) data_get($settings, 'watermark_enabled', false);
         $path = trim((string) data_get($settings, 'watermark_path'));
         $opacity = min(25, max(5, (int) data_get($settings, 'watermark_opacity', 10)));
+        $position = (string) data_get($settings, 'watermark_position', 'center');
+        $position = in_array($position, ['top', 'center', 'bottom'], true) ? $position : 'center';
+        $width = min(90, max(20, (int) data_get($settings, 'watermark_width', 60)));
         data_set($settings, 'watermark_opacity', $opacity);
+        data_set($settings, 'watermark_position', $position);
+        data_set($settings, 'watermark_width', $width);
 
         if (! $enabled || $path === '') {
             return $settings;

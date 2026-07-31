@@ -9,6 +9,22 @@
         line-height: 1.35;
     }
     .report-page { position: relative; width: 100%; }
+    .report-preview-label {
+        margin: 0 0 7px;
+        border: 1px solid #b45309;
+        background: #fffbeb;
+        color: #92400e;
+        padding: 4px 7px;
+        text-align: center;
+        font-size: 8px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+    }
+    .report-page--structured {
+        min-height: 265mm;
+        page-break-after: always;
+    }
+    .report-page--structured:last-child { page-break-after: auto; }
     .report-watermark {
         position: fixed;
         z-index: -1;
@@ -18,6 +34,15 @@
         text-align: center;
     }
     .report-watermark img { width: 100%; height: auto; }
+    .report-page--structured .report-watermark {
+        position: absolute;
+        left: 50%;
+        top: 36%;
+        transform: translateX(-50%);
+    }
+    .report-page--structured .report-watermark--top { top: 12%; }
+    .report-page--structured .report-watermark--center { top: 36%; }
+    .report-page--structured .report-watermark--bottom { top: 66%; }
     .report-page-break { page-break-after: always; }
     .report-page-break:last-child { page-break-after: auto; }
     .letterhead { width: 100%; border-collapse: collapse; margin-bottom: 7px; }
@@ -37,6 +62,7 @@
     .scores { width: 100%; border-collapse: collapse; }
     .scores th, .scores td { padding: 4px 5px; border: 1px solid #374151; }
     .scores th { background: #e5e7eb; text-align: center; font-weight: 700; }
+    .scores .scores__group td { background: #f3f4f6; font-weight: 700; }
     .scores__number { width: 28px; text-align: center; }
     .scores__score { width: 50px; text-align: center; }
     .scores__predicate { width: 55px; text-align: center; }
@@ -45,6 +71,9 @@
     .summary-table { width: 100%; border-collapse: collapse; }
     .summary-table th, .summary-table td { padding: 4px 5px; border: 1px solid #6b7280; }
     .summary-table th { width: 32%; background: #f3f4f6; text-align: left; }
+    .report-writing-space { min-height: 34px; height: 34px; vertical-align: top; }
+    .report-writing-space--parent { height: 58px; }
+    .report-competencies td { page-break-inside: avoid; }
     .empty-row { color: #6b7280; text-align: center; }
     .signatures { width: 100%; border-collapse: collapse; margin-top: 18px; page-break-inside: avoid; }
     .signatures td { width: 33.333%; padding: 0 9px; text-align: center; vertical-align: top; }

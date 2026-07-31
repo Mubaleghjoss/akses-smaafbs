@@ -9,6 +9,7 @@ use App\Filament\Resources\AssessmentAuditLogResource;
 use App\Filament\Resources\AssessmentPeriodResource;
 use App\Filament\Resources\AssessmentReportTemplateResource;
 use App\Filament\Resources\AssessmentSchemeResource;
+use App\Filament\Resources\AssessmentSubjectResource;
 use App\Filament\Resources\DataSiswaResource;
 use App\Filament\Resources\GuruTendikResource;
 use App\Models\Assessment\AcademicYear;
@@ -344,6 +345,109 @@ class AssessmentDashboard extends AssessmentPage
             ['label' => 'Penugasan Guru', 'count' => TeachingAssignment::query()->where('is_active', true)->count(), 'ready' => TeachingAssignment::query()->where('is_active', true)->exists()],
             ['label' => 'Wali Kelas', 'count' => HomeroomAssignment::query()->where('is_active', true)->count(), 'ready' => HomeroomAssignment::query()->where('is_active', true)->exists()],
             ['label' => 'Periode', 'count' => AssessmentPeriod::query()->count(), 'ready' => AssessmentPeriod::query()->exists()],
+        ];
+    }
+
+    /**
+     * @return array{steps:array<int, array<string,mixed>>,notes:array<int,string>}
+     */
+    public function getReportSetupWorkflow(): array
+    {
+        $activeTemplates = ReportTemplate::query()->where('is_active', true)->get();
+        $templateIdentityReady = $activeTemplates->contains(function (ReportTemplate $template): bool {
+            $settings = is_array($template->settings) ? $template->settings : [];
+
+            return filled(data_get($settings, 'school_name'))
+                && filled(data_get($settings, 'principal_name'))
+                && filled(data_get($settings, 'place'));
+        });
+        $subjectCount = Subject::query()->where('is_active', true)->count();
+        $ungroupedSubjectCount = Subject::query()
+            ->where('is_active', true)
+            ->where(function (Builder $query): void {
+                $query->whereNull('report_group_code')
+                    ->orWhere('report_group_code', '')
+                    ->orWhere('report_group_code', 'BELUM');
+            })
+            ->count();
+        $teachingCount = TeachingAssignment::query()->where('is_active', true)->count();
+        $homeroomCount = HomeroomAssignment::query()->where('is_active', true)->count();
+        $periodCount = AssessmentPeriod::query()->count();
+        $studentCount = Schema::hasTable('data_siswa')
+            ? DataSiswa::query()->where('status', 'aktif')->count()
+            : 0;
+
+        return [
+            'steps' => [
+                [
+                    'number' => '1',
+                    'title' => 'Identitas Sekolah dan Penanda Tangan',
+                    'subtitle' => $templateIdentityReady ? 'Template aktif sudah memiliki identitas wajib.' : 'Nama sekolah, kepala sekolah, atau tempat terbit belum lengkap.',
+                    'detail' => 'Lengkapi data yang akan dibekukan ke setiap snapshot rapor.',
+                    'ready' => $templateIdentityReady,
+                    'url' => AssessmentReportTemplateResource::canViewAny() ? AssessmentReportTemplateResource::getUrl() : null,
+                    'action' => 'Buka Template Rapor',
+                ],
+                [
+                    'number' => '2',
+                    'title' => 'Tahun Pelajaran dan Semester',
+                    'subtitle' => AcademicYear::query()->count().' tahun pelajaran · '.Semester::query()->count().' semester.',
+                    'detail' => 'Gunakan wizard impor untuk perubahan massal dan preview sebelum data diterapkan.',
+                    'ready' => AcademicYear::query()->exists() && Semester::query()->exists(),
+                    'url' => AssessmentMasterImport::canAccess() ? AssessmentMasterImport::getUrl() : null,
+                    'action' => 'Buka Impor Master',
+                ],
+                [
+                    'number' => '3',
+                    'title' => 'Mapel, Kelompok, dan Urutan Rapor',
+                    'subtitle' => "{$subjectCount} mapel aktif · {$ungroupedSubjectCount} belum dikelompokkan.",
+                    'detail' => 'Perbaiki langsung melalui kartu mapel atau unggah workbook resmi.',
+                    'ready' => $subjectCount > 0 && $ungroupedSubjectCount === 0,
+                    'url' => AssessmentSubjectResource::canViewAny() ? AssessmentSubjectResource::getUrl() : null,
+                    'action' => 'Kelola Mapel',
+                ],
+                [
+                    'number' => '4',
+                    'title' => 'Guru–Mapel–Kelas',
+                    'subtitle' => "{$teachingCount} penugasan mengajar aktif.",
+                    'detail' => 'Penugasan terstruktur dikelola dari tab Penilaian pada Guru & Tendik.',
+                    'ready' => $teachingCount > 0,
+                    'url' => GuruTendikResource::canViewAny() ? GuruTendikResource::getUrl() : null,
+                    'action' => 'Atur Guru Mapel',
+                ],
+                [
+                    'number' => '5',
+                    'title' => 'Wali Kelas',
+                    'subtitle' => "{$homeroomCount} penugasan wali kelas aktif.",
+                    'detail' => 'Setiap kelas periode wajib memiliki tepat satu wali kelas.',
+                    'ready' => $homeroomCount > 0,
+                    'url' => GuruTendikResource::canViewAny() ? GuruTendikResource::getUrl() : null,
+                    'action' => 'Atur Wali Kelas',
+                ],
+                [
+                    'number' => '6',
+                    'title' => 'Siswa, Nilai, dan Periode',
+                    'subtitle' => "{$studentCount} siswa aktif · {$periodCount} periode.",
+                    'detail' => 'Buka periode untuk membekukan siswa, kelas, guru, mapel, dan wali kelas.',
+                    'ready' => $studentCount > 0 && $periodCount > 0,
+                    'url' => AssessmentPeriodResource::canViewAny() ? AssessmentPeriodResource::getUrl() : null,
+                    'action' => 'Periksa Periode',
+                ],
+                [
+                    'number' => '7',
+                    'title' => 'Layout, Watermark, dan Preflight',
+                    'subtitle' => $activeTemplates->count().' template aktif.',
+                    'detail' => 'Preview boleh dibuka kapan saja; PDF resmi hanya dibuat ketika preflight hijau.',
+                    'ready' => $activeTemplates->isNotEmpty() && $templateIdentityReady,
+                    'url' => AssessmentReportTemplateResource::canViewAny() ? AssessmentReportTemplateResource::getUrl() : null,
+                    'action' => 'Atur Template',
+                ],
+            ],
+            'notes' => [
+                'Workbook lama tetap diterima, tetapi mapel tanpa kelompok diberi status Belum Dikelompokkan.',
+                'Perubahan master tidak mengubah snapshot periode atau rapor yang sudah dibuat.',
+                'Pratinjau menampilkan penanda besar ketika data wajib belum lengkap.',
+            ],
         ];
     }
 

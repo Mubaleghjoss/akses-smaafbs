@@ -152,6 +152,10 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
                 'sick_days' => (int) ($report?->sick_days ?? 0),
                 'permission_days' => (int) ($report?->permission_days ?? 0),
                 'absent_days' => (int) ($report?->absent_days ?? 0),
+                'spiritual_predicate' => $report?->spiritual_predicate,
+                'spiritual_description' => $report?->spiritual_description,
+                'social_predicate' => $report?->social_predicate,
+                'social_description' => $report?->social_description,
                 'extracurricular' => $this->listToText($report?->extracurricular_data),
                 'achievement' => $this->listToText($report?->achievement_data),
                 'homeroom_note' => $report?->homeroom_note,
@@ -186,6 +190,10 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
             'sick_days' => 'Jumlah Hari Sakit',
             'permission_days' => 'Jumlah Hari Izin',
             'absent_days' => 'Jumlah Hari Alpa',
+            'spiritual_predicate' => 'Predikat Sikap Spiritual',
+            'spiritual_description' => 'Deskripsi Sikap Spiritual',
+            'social_predicate' => 'Predikat Sikap Sosial',
+            'social_description' => 'Deskripsi Sikap Sosial',
             'extracurricular' => 'Ekstrakurikuler',
             'achievement' => 'Prestasi',
             'homeroom_note' => 'Catatan Wali Kelas',
@@ -196,6 +204,19 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
         }
 
         return $options;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function getAttitudePredicateOptions(): array
+    {
+        return [
+            'Sangat Baik' => 'Sangat Baik',
+            'Baik' => 'Baik',
+            'Cukup' => 'Cukup',
+            'Perlu Bimbingan' => 'Perlu Bimbingan',
+        ];
     }
 
     public function selectAllStudents(): void
@@ -254,6 +275,7 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
         }
 
         $numericFields = ['sick_days', 'permission_days', 'absent_days'];
+        $predicateFields = ['spiritual_predicate', 'social_predicate'];
         if (in_array($this->bulkField, $numericFields, true)) {
             if (! ctype_digit($value) || (int) $value > 366) {
                 Notification::make()
@@ -266,8 +288,20 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
             }
 
             $value = (int) $value;
+        } elseif (in_array($this->bulkField, $predicateFields, true)) {
+            if (! array_key_exists($value, $this->getAttitudePredicateOptions())) {
+                Notification::make()
+                    ->title('Predikat sikap tidak valid')
+                    ->body('Pilih predikat yang tersedia pada form.')
+                    ->danger()
+                    ->send();
+
+                return;
+            }
         } else {
             $maximum = match ($this->bulkField) {
+                'spiritual_predicate', 'social_predicate' => 30,
+                'spiritual_description', 'social_description' => 2000,
                 'homeroom_note' => 2000,
                 'promotion_status' => 50,
                 default => 4000,
@@ -324,6 +358,10 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
                     'rows.*.sick_days' => ['required', 'integer', 'min:0', 'max:366'],
                     'rows.*.permission_days' => ['required', 'integer', 'min:0', 'max:366'],
                     'rows.*.absent_days' => ['required', 'integer', 'min:0', 'max:366'],
+                    'rows.*.spiritual_predicate' => ['nullable', 'string', 'max:30'],
+                    'rows.*.spiritual_description' => ['nullable', 'string', 'max:2000'],
+                    'rows.*.social_predicate' => ['nullable', 'string', 'max:30'],
+                    'rows.*.social_description' => ['nullable', 'string', 'max:2000'],
                     'rows.*.extracurricular' => ['nullable', 'string', 'max:4000'],
                     'rows.*.achievement' => ['nullable', 'string', 'max:4000'],
                     'rows.*.homeroom_note' => ['nullable', 'string', 'max:2000'],
@@ -392,6 +430,18 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
                         'sick_days' => max(0, (int) ($row['sick_days'] ?? 0)),
                         'permission_days' => max(0, (int) ($row['permission_days'] ?? 0)),
                         'absent_days' => max(0, (int) ($row['absent_days'] ?? 0)),
+                        'spiritual_predicate' => filled($row['spiritual_predicate'] ?? null)
+                            ? trim((string) $row['spiritual_predicate'])
+                            : null,
+                        'spiritual_description' => filled($row['spiritual_description'] ?? null)
+                            ? trim((string) $row['spiritual_description'])
+                            : null,
+                        'social_predicate' => filled($row['social_predicate'] ?? null)
+                            ? trim((string) $row['social_predicate'])
+                            : null,
+                        'social_description' => filled($row['social_description'] ?? null)
+                            ? trim((string) $row['social_description'])
+                            : null,
                         'extracurricular_data' => $this->textToList($row['extracurricular'] ?? null),
                         'achievement_data' => $this->textToList($row['achievement'] ?? null),
                         'homeroom_note' => filled($row['homeroom_note'] ?? null) ? trim($row['homeroom_note']) : null,

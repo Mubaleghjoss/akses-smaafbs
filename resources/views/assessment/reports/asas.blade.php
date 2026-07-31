@@ -6,6 +6,10 @@
     @include('assessment.reports._styles')
 </head>
 <body>
-    @include('assessment.reports._document', ['reportKind' => 'ASAS'])
+    @if (data_get($templateSettings, 'layout.version') === \App\Support\Assessment\Reporting\AssessmentReportLayout::VERSION)
+        @include('assessment.reports._document-flexible', ['reportKind' => 'ASAS'])
+    @else
+        @include('assessment.reports._document', ['reportKind' => 'ASAS'])
+    @endif
 </body>
 </html>

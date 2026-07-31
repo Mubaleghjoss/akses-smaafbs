@@ -1,5 +1,15 @@
 # Riwayat Literasi Numerasi
 
+## 2026-07-31 - Form nilai bersama
+
+- Menyatukan form Detail/Nilai pada daftar responden materi dan History
+  Pengerjaan Siswa melalui satu service grading.
+- Menampilkan urutan Pertanyaan, Jawaban Siswa, Kunci Jawaban, status
+  plagiasi/nilai otomatis, koreksi nilai, dan catatan guru.
+- Kunci Esai ditampilkan sebagai teks; Benar/Salah sebagai tabel; Menjodohkan
+  sebagai pasangan kiri ke kanan.
+- History dengan materi yang hilang tetap dapat dibuka read-only tanpa error.
+
 ## 2026-07-30 - Struk aman, direct link, dan dispensasi
 
 - Menambahkan daftar status teman satu kelas pada Struk Pengiriman dan pesan Amal Salih untuk mengingatkan teman yang belum mengisi.

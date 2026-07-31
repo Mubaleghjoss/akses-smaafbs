@@ -41,7 +41,10 @@ class AssessmentMasterWorkbookImporter
             'KODE_MAPEL',
             'NAMA_MAPEL',
             'DESKRIPSI',
-            'URUTAN',
+            'KELOMPOK_KODE',
+            'KELOMPOK_NAMA',
+            'URUTAN_KELOMPOK',
+            'URUTAN_MAPEL',
             'AKTIF',
         ],
         'PENUGASAN_GURU' => [
@@ -63,6 +66,14 @@ class AssessmentMasterWorkbookImporter
         ],
     ];
 
+    public const LEGACY_MAPEL_HEADERS = [
+        'KODE_MAPEL',
+        'NAMA_MAPEL',
+        'DESKRIPSI',
+        'URUTAN',
+        'AKTIF',
+    ];
+
     /**
      * @return array<string, mixed>
      */
@@ -82,7 +93,10 @@ class AssessmentMasterWorkbookImporter
             foreach (self::REQUIRED_HEADERS as $sheetName => $expectedHeaders) {
                 $actualHeaders = $this->headings($spreadsheet->getSheetByName($sheetName));
 
-                if ($actualHeaders !== $expectedHeaders) {
+                $isLegacyMapel = $sheetName === 'MAPEL' && $actualHeaders === self::LEGACY_MAPEL_HEADERS;
+                if ($isLegacyMapel) {
+                    $warnings[] = 'Workbook memakai format MAPEL lama. Data tetap dapat diimpor, tetapi mapel akan ditandai Belum Dikelompokkan sampai kelompok rapor dilengkapi.';
+                } elseif ($actualHeaders !== $expectedHeaders) {
                     $errors[] = "Header sheet {$sheetName} harus persis dan berurutan: "
                         .implode(', ', $expectedHeaders).'. Jangan mengganti, menghapus, atau memindahkan judul kolom.';
                 }
@@ -218,9 +232,15 @@ class AssessmentMasterWorkbookImporter
                 'code' => $code,
                 'name' => $name,
                 'description' => $this->nullableText($row['DESKRIPSI'] ?? null),
-                'sort_order' => max(0, (int) ($row['URUTAN'] ?? 0)),
+                'report_group_code' => $this->text($row['KELOMPOK_KODE'] ?? null) ?: 'BELUM',
+                'report_group_name' => $this->text($row['KELOMPOK_NAMA'] ?? null) ?: 'Belum Dikelompokkan',
+                'report_group_sort_order' => max(0, (int) ($row['URUTAN_KELOMPOK'] ?? 999)),
+                'sort_order' => max(0, (int) ($row['URUTAN_MAPEL'] ?? $row['URUTAN'] ?? 0)),
                 'is_active' => $this->boolean($row['AKTIF'] ?? 'YA'),
             ];
+            if ($subject['report_group_code'] === 'BELUM') {
+                $warnings[] = "MAPEL baris {$rowNumber}: {$name} belum memiliki kelompok rapor.";
+            }
             $subject['action'] = $this->actionFor(Subject::query()->where('code', $code)->first(), $subject);
             $payload['subjects'][] = $subject;
             $seenSubjects[$code] = true;

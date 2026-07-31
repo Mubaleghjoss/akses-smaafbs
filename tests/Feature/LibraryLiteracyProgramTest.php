@@ -1889,6 +1889,18 @@ class LibraryLiteracyProgramTest extends TestCase
 
         $this->assertStringContainsString('Jawaban kunci untuk dicek guru.', $answerKeyContent);
 
+        $historyComponent = Livewire::actingAs($guru)
+            ->test(StudentHistoryPerpustakaanLiterasi::class);
+        $historySchemaMethod = new \ReflectionMethod(StudentHistoryPerpustakaanLiterasi::class, 'gradingFormSchema');
+        $historySchemaMethod->setAccessible(true);
+        $historySchema = $historySchemaMethod->invoke($historyComponent->instance(), $response);
+        $historyAnswerKey = collect($historySchema)
+            ->flatMap(fn ($section): array => $childComponents->getValue($section)['default'] ?? [])
+            ->first(fn ($component): bool => method_exists($component, 'getName')
+                && $component->getName() === 'answer_'.$answer->getKey().'_answer_key');
+
+        $this->assertNotNull($historyAnswerKey, 'History siswa harus memakai form nilai bersama yang menampilkan kunci jawaban.');
+
         Livewire::actingAs($guru)
             ->test(ResponsesRelationManager::class, [
                 'ownerRecord' => $material,
@@ -2236,8 +2248,9 @@ class LibraryLiteracyProgramTest extends TestCase
         $answerC1 = $responseC->answers()->firstOrFail();
         $answerC1->forceFill(['is_correct' => false, 'graded_at' => now()])->save();
 
-        $oldResponse = $this->createResponseWithAnswer($material, $this->createStudent('Codex Ranking Old', 'X Ranking'), $questionOne, 'Jawaban bulan lalu.', now()->subMonth());
-        $oldResponse->answers()->firstOrFail()->forceFill(['is_correct' => true, 'graded_at' => now()->subMonth()])->save();
+        $previousMonth = now()->subMonthNoOverflow()->startOfMonth();
+        $oldResponse = $this->createResponseWithAnswer($material, $this->createStudent('Codex Ranking Old', 'X Ranking'), $questionOne, 'Jawaban bulan lalu.', $previousMonth);
+        $oldResponse->answers()->firstOrFail()->forceFill(['is_correct' => true, 'graded_at' => $previousMonth])->save();
 
         PerpustakaanLiterasiSimilarityMatch::query()->create([
             'material_id' => $material->getKey(),

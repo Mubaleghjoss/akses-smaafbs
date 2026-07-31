@@ -98,6 +98,7 @@ final class CreateAssessmentPeriodSnapshotAction
                 ->get()
                 ->groupBy('rombel_saat_ini');
             $teachingByRombel = TeachingAssignment::query()
+                ->with('subject')
                 ->where('assessment_semester_id', $locked->assessment_semester_id)
                 ->where('is_active', true)
                 ->whereIn('rombel_id', $rombelIds)
@@ -198,6 +199,10 @@ final class CreateAssessmentPeriodSnapshotAction
                             'source_teaching_assignment_id' => $teaching->getKey(),
                             'teacher_name_snapshot' => $teaching->teacher_name_snapshot,
                             'subject_name_snapshot' => $teaching->subject_name_snapshot,
+                            'subject_group_code_snapshot' => $teaching->subject?->report_group_code ?: 'BELUM',
+                            'subject_group_name_snapshot' => $teaching->subject?->report_group_name ?: 'Belum Dikelompokkan',
+                            'subject_group_sort_order_snapshot' => (int) ($teaching->subject?->report_group_sort_order ?? 999),
+                            'subject_sort_order_snapshot' => (int) ($teaching->subject?->sort_order ?? 0),
                             'rombel_name_snapshot' => $rombel->nama,
                             'status' => AssignmentStatus::DRAFT,
                             'lock_version' => 1,

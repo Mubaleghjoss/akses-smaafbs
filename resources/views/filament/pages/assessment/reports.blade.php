@@ -27,18 +27,71 @@
             </div>
         </section>
 
+        @php($preflight = $this->getReportPreflight())
+        <section class="assessment-report-card assessment-report-preflight {{ $preflight['ready'] ? 'is-ready' : 'is-warning' }}">
+            <div class="assessment-report-card__body">
+                <div class="assessment-report-card__head">
+                    <div>
+                        <span class="assessment-report-eyebrow">Kelengkapan Data Rapor</span>
+                        <h2>{{ $preflight['ready'] ? 'Siap membuat rapor resmi' : 'Data wajib masih perlu dilengkapi' }}</h2>
+                        <p>
+                            {{ $preflight['ready']
+                                ? 'Nilai, kelompok mapel, data wali kelas, dan identitas template sudah lolos pemeriksaan.'
+                                : 'Pratinjau tetap dapat dipakai. Pembuatan PDF resmi ditahan sampai seluruh pemeriksaan berwarna hijau.' }}
+                        </p>
+                    </div>
+                    <span class="assessment-report-status {{ $preflight['ready'] ? 'is-completed' : 'is-failed' }}">
+                        {{ $preflight['ready'] ? 'Siap' : 'Perlu dilengkapi' }}
+                    </span>
+                </div>
+                <div class="assessment-report-preflight-grid">
+                    @foreach($preflight['groups'] as $group)
+                        <article class="{{ $group['issues'] === [] ? 'is-ready' : 'is-warning' }}">
+                            <strong>{{ $group['label'] }}</strong>
+                            @if($group['issues'] === [])
+                                <p>Semua pemeriksaan pada bagian ini sudah lengkap.</p>
+                            @else
+                                <ul>
+                                    @foreach($group['issues'] as $issue)
+                                        <li>
+                                            <span>{{ $issue['message'] }} <b>{{ $issue['count'] }}</b></span>
+                                            @if($issue['samples'] !== [])
+                                                <small>{{ implode(' · ', $issue['samples']) }}</small>
+                                            @endif
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            @endif
+                        </article>
+                    @endforeach
+                </div>
+                @if (! $preflight['ready'])
+                    <div class="assessment-report-primary-actions">
+                        <x-filament::button
+                            tag="a"
+                            href="{{ \App\Filament\Pages\Assessment\AssessmentDashboard::getUrl(['period' => $periodId]) }}"
+                            color="gray"
+                            icon="heroicon-o-wrench-screwdriver"
+                        >
+                            Buka Wizard Kelengkapan
+                        </x-filament::button>
+                    </div>
+                @endif
+            </div>
+        </section>
+
         <section class="assessment-report-card">
             <div class="assessment-report-card__body">
                 <div class="assessment-report-card__head">
                     <div>
                         <span class="assessment-report-eyebrow">Pratinjau satu siswa</span>
                         <h2>Periksa tampilan PDF dan watermark</h2>
-                        <p>Pratinjau memakai snapshot siswa nyata, tidak disimpan, tidak membuat job, dan bukan rapor resmi.</p>
+                        <p>Pratinjau memakai data siswa nyata dari periode, tidak disimpan, tidak membuat job, dan bukan rapor resmi.</p>
                     </div>
                 </div>
                 <div class="assessment-report-preview-row">
                     <label><span>Siswa</span>
-                        <select wire:model.live="previewSnapshotId">
+                        <select wire:model.live="previewStudentId">
                             <option value="">Pilih siswa</option>
                             @foreach ($this->getPreviewOptions() as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach
                         </select>
@@ -46,7 +99,7 @@
                     @if ($this->previewUrl())
                         <x-filament::button tag="a" href="{{ $this->previewUrl() }}" target="_blank" color="gray" icon="heroicon-o-eye">Buka Pratinjau PDF</x-filament::button>
                     @else
-                        <span class="assessment-report-inline-note">Snapshot belum tersedia. Jadwalkan kelas terlebih dahulu, lalu preview dapat dibuka.</span>
+                        <span class="assessment-report-inline-note">Pilih periode yang sudah memiliki siswa agar pratinjau dapat dibuka.</span>
                     @endif
                 </div>
             </div>

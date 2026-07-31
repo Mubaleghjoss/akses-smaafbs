@@ -8,6 +8,7 @@ use App\Filament\Concerns\HasOptimizedAdminTable;
 use App\Filament\Resources\AssessmentReportTemplateResource\Pages;
 use App\Models\Assessment\ReportTemplate;
 use App\Support\Assessment\AssessmentAuditLogger;
+use App\Support\Assessment\Reporting\AssessmentReportLayout;
 use App\Support\Assessment\Reporting\AssessmentReportWatermark;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
@@ -84,6 +85,7 @@ class AssessmentReportTemplateResource extends Resource
         }
 
         $settings = is_array($data['settings'] ?? null) ? $data['settings'] : [];
+        $settings = app(AssessmentReportLayout::class)->validateAndNormalize($settings);
         $data['settings'] = app(AssessmentReportWatermark::class)->optimizeSettings($settings);
 
         return $data;
@@ -180,6 +182,48 @@ class AssessmentReportTemplateResource extends Resource
                         ->label('Tempat Terbit')
                         ->maxLength(100),
                 ]),
+            Section::make('Susunan Halaman Rapor')
+                ->description('Pilih bagian yang ditampilkan, halaman 1–3, dan urutannya. Identitas, minimal satu bagian akademik, serta tanda tangan wajib tersedia.')
+                ->schema([
+                    Forms\Components\Repeater::make('settings.layout.sections')
+                        ->label('Bagian Rapor')
+                        ->default(AssessmentReportLayout::threePageDefaults())
+                        ->minItems(3)
+                        ->maxItems(16)
+                        ->reorderable()
+                        ->reorderableWithButtons()
+                        ->addActionLabel('Tambah Bagian')
+                        ->itemLabel(fn (?array $state): ?string => AssessmentReportLayout::sectionOptions()[$state['type'] ?? ''] ?? 'Bagian baru')
+                        ->columns(['default' => 1, 'md' => 4])
+                        ->schema([
+                            Forms\Components\Select::make('type')
+                                ->label('Jenis Bagian')
+                                ->options(AssessmentReportLayout::sectionOptions())
+                                ->required()
+                                ->native(false),
+                            Forms\Components\TextInput::make('title')
+                                ->label('Judul pada Rapor')
+                                ->maxLength(120),
+                            Forms\Components\Select::make('page')
+                                ->label('Halaman')
+                                ->options([1 => 'Halaman 1', 2 => 'Halaman 2', 3 => 'Halaman 3'])
+                                ->required()
+                                ->native(false),
+                            Forms\Components\TextInput::make('sort_order')
+                                ->label('Urutan')
+                                ->numeric()
+                                ->integer()
+                                ->minValue(0)
+                                ->maxValue(999)
+                                ->default(10)
+                                ->required(),
+                            Forms\Components\Toggle::make('enabled')
+                                ->label('Tampilkan')
+                                ->default(true)
+                                ->inline(false),
+                        ])
+                        ->columnSpanFull(),
+                ]),
             Section::make('Watermark Opsional')
                 ->description('Gambar disimpan privat dan dibekukan ke snapshot. Untuk template yang sudah dipakai, buat versi baru.')
                 ->columns(['default' => 1, 'md' => 2])
@@ -209,6 +253,26 @@ class AssessmentReportTemplateResource extends Resource
                             25 => '25% · paling tegas',
                         ])
                         ->default(10)
+                        ->native(false),
+                    Forms\Components\Select::make('settings.watermark_position')
+                        ->label('Posisi')
+                        ->options([
+                            'top' => 'Bagian Atas',
+                            'center' => 'Tengah',
+                            'bottom' => 'Bagian Bawah',
+                        ])
+                        ->default('center')
+                        ->native(false),
+                    Forms\Components\Select::make('settings.watermark_width')
+                        ->label('Ukuran')
+                        ->options([
+                            30 => '30% · kecil',
+                            45 => '45%',
+                            60 => '60% · disarankan',
+                            75 => '75%',
+                            90 => '90% · besar',
+                        ])
+                        ->default(60)
                         ->native(false),
                 ]),
         ]);

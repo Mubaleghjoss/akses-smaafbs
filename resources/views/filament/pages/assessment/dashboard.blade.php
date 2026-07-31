@@ -3,13 +3,14 @@
         $metrics = $this->getMetrics();
         $settingCards = $this->getSettingCards();
         $setupWorkflow = $this->getSetupWorkflow();
+        $reportSetupWorkflow = $this->getReportSetupWorkflow();
     @endphp
 
     <div class="space-y-6">
         <section class="assessment-dashboard-hero overflow-hidden rounded-2xl border border-primary-200 bg-gradient-to-br from-primary-50 via-white to-white shadow-sm dark:border-primary-500/20 dark:from-primary-950/30 dark:via-gray-900 dark:to-gray-900">
             <div class="assessment-dashboard-hero__layout grid gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,24rem)] lg:items-center">
                 <div class="min-w-0">
-                    <span class="inline-flex items-center gap-2 rounded-full bg-primary-100 px-3 py-1 text-xs font-bold text-primary-700 dark:bg-primary-500/15 dark:text-primary-300">
+                    <span class="inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700 dark:bg-white/10 dark:text-gray-200">
                         <x-filament::icon icon="heroicon-o-cog-6-tooth" class="h-4 w-4" />
                         Pusat Pengaturan
                     </span>
@@ -29,6 +30,37 @@
                         @endforelse
                     </select>
                 </label>
+            </div>
+        </section>
+
+        <section class="boarding-material-menu assessment-setup-flow" aria-labelledby="assessment-report-setup-title">
+            <div class="boarding-material-menu__head">
+                <div>
+                    <span class="boarding-material-menu__eyebrow">Wizard Kelengkapan Rapor</span>
+                    <h3 id="assessment-report-setup-title">Lengkapi Data Rapor dari Satu Alur</h3>
+                    <p>Ikuti tujuh kartu secara berurutan. Setiap tombol menuju sumber data yang benar.</p>
+                </div>
+            </div>
+            <div class="boarding-material-menu__grid">
+                @foreach ($reportSetupWorkflow['steps'] as $step)
+                    @if ($step['url'])
+                        <a href="{{ $step['url'] }}" wire:navigate class="boarding-material-menu__card">
+                            @include('filament.pages.assessment.partials.setup-step-content', ['step' => $step])
+                        </a>
+                    @else
+                        <article class="boarding-material-menu__card is-disabled">
+                            @include('filament.pages.assessment.partials.setup-step-content', ['step' => $step])
+                        </article>
+                    @endif
+                @endforeach
+            </div>
+            <div class="assessment-setup-notes">
+                @foreach ($reportSetupWorkflow['notes'] as $noteIndex => $note)
+                    <article>
+                        <span>{{ $noteIndex + 1 }}</span>
+                        <p>{{ $note }}</p>
+                    </article>
+                @endforeach
             </div>
         </section>
 
@@ -74,7 +106,7 @@
                         <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-xs font-black text-white">
                             {{ $noteIndex + 1 }}
                         </span>
-                        <p class="min-w-0 break-words text-xs font-semibold leading-5 text-primary-900 dark:text-primary-100">{{ $note }}</p>
+                        <p class="min-w-0 break-words text-xs font-semibold leading-5 text-gray-700 dark:text-gray-200">{{ $note }}</p>
                     </article>
                 @endforeach
             </div>

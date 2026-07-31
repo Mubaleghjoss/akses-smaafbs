@@ -157,10 +157,14 @@ class CreateReportSnapshotsAction
                     'results.formula_version',
                     'assignments.assessment_subject_id',
                     'assignments.subject_name_snapshot',
+                    'assignments.subject_group_code_snapshot',
+                    'assignments.subject_group_name_snapshot',
+                    'assignments.subject_group_sort_order_snapshot',
+                    'assignments.subject_sort_order_snapshot',
                     'assignments.teacher_name_snapshot',
-                    'subjects.sort_order',
                 ])
-                ->orderBy('subjects.sort_order')
+                ->orderBy('assignments.subject_group_sort_order_snapshot')
+                ->orderBy('assignments.subject_sort_order_snapshot')
                 ->orderBy('assignments.subject_name_snapshot')
                 ->get()
                 ->groupBy('assessment_period_student_id');
@@ -247,7 +251,10 @@ class CreateReportSnapshotsAction
                                     'subject_id' => $result->assessment_subject_id,
                                     'name' => $result->subject_name_snapshot,
                                     'teacher_name' => $result->teacher_name_snapshot,
-                                    'sort_order' => (int) $result->sort_order,
+                                    'group_code' => $result->subject_group_code_snapshot,
+                                    'group_name' => $result->subject_group_name_snapshot,
+                                    'group_sort_order' => (int) $result->subject_group_sort_order_snapshot,
+                                    'sort_order' => (int) $result->subject_sort_order_snapshot,
                                     'final_score' => $result->final_score !== null
                                         ? number_format((float) $result->final_score, $precision, '.', '')
                                         : null,
@@ -263,6 +270,10 @@ class CreateReportSnapshotsAction
                             'sick_days' => (int) ($homeroom?->sick_days ?? 0),
                             'permission_days' => (int) ($homeroom?->permission_days ?? 0),
                             'absent_days' => (int) ($homeroom?->absent_days ?? 0),
+                            'spiritual_predicate' => $homeroom?->spiritual_predicate,
+                            'spiritual_description' => $homeroom?->spiritual_description,
+                            'social_predicate' => $homeroom?->social_predicate,
+                            'social_description' => $homeroom?->social_description,
                             'extracurricular_data' => $this->decodeJson($homeroom?->extracurricular_data),
                             'achievement_data' => $this->decodeJson($homeroom?->achievement_data),
                             'homeroom_note' => $homeroom?->homeroom_note,

@@ -4,11 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Models\Assessment\AuditLog;
 use App\Models\Assessment\ClassReportArtifact;
+use App\Models\Assessment\AssessmentPeriod;
+use App\Models\Assessment\AssessmentPeriodStudent;
 use App\Models\Assessment\ReportSnapshot;
+use App\Models\Assessment\ReportTemplate;
 use App\Support\Assessment\Reporting\AssessmentReportRenderer;
 use App\Support\Assessment\Reporting\AssessmentReportShareService;
 use App\Support\Assessment\Reporting\AssessmentReportStorage;
 use App\Support\Assessment\Reporting\AssessmentReportWatermark;
+use App\Support\Assessment\Reporting\BuildAssessmentReportPreviewSnapshot;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
@@ -17,6 +21,38 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AssessmentReportController extends Controller
 {
+    public function livePreview(
+        AssessmentPeriod $assessmentPeriod,
+        ReportTemplate $reportTemplate,
+        AssessmentPeriodStudent $periodStudent,
+        AssessmentReportRenderer $renderer,
+        BuildAssessmentReportPreviewSnapshot $builder,
+    ): Response {
+        $this->abortUnlessEnabled();
+        Gate::authorize('view', $assessmentPeriod);
+        Gate::authorize('view', $reportTemplate);
+        abort_unless((int) $periodStudent->assessment_period_id === (int) $assessmentPeriod->getKey(), 404);
+
+        $periodType = $assessmentPeriod->type instanceof \BackedEnum
+            ? $assessmentPeriod->type->value
+            : (string) $assessmentPeriod->type;
+        $templateType = $reportTemplate->type instanceof \BackedEnum
+            ? $reportTemplate->type->value
+            : (string) $reportTemplate->type;
+        abort_unless($periodType === $templateType, 422);
+
+        $preview = $builder->build($assessmentPeriod, $reportTemplate, $periodStudent);
+
+        return response($renderer->renderStudent($preview), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="pratinjau-rapor.pdf"',
+            'Cache-Control' => 'private, no-store, max-age=0, must-revalidate',
+            'Pragma' => 'no-cache',
+            'X-Content-Type-Options' => 'nosniff',
+            'X-Robots-Tag' => 'noindex, nofollow, noarchive',
+        ]);
+    }
+
     public function preview(
         ReportSnapshot $reportSnapshot,
         AssessmentReportRenderer $renderer,

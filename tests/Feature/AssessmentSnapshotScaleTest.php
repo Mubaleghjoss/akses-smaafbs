@@ -37,6 +37,8 @@ class AssessmentSnapshotScaleTest extends TestCase
         $this->bootstrapUserAndPermissionTables();
         $migration = require database_path('migrations/2026_07_31_080000_create_assessment_foundation_tables.php');
         $migration->up();
+        $reportStructureMigration = require database_path('migrations/2026_07_31_120000_extend_assessment_report_structure.php');
+        $reportStructureMigration->up();
         $this->artisan('assessment:install-defaults')->assertSuccessful();
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }

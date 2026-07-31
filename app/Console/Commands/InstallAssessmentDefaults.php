@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Enums\Assessment\AssessmentType;
 use App\Models\Assessment\ReportTemplate;
+use App\Support\Assessment\Reporting\AssessmentReportLayout;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -168,6 +169,46 @@ class InstallAssessmentDefaults extends Command
                     'report_title' => 'LAPORAN HASIL ASESMEN AKHIR SEMESTER',
                 ],
                 'is_active' => true,
+                'effective_from' => null,
+            ],
+            [
+                'code' => 'ASTS-SMAAFBS-3P',
+                'type' => AssessmentType::ASTS,
+                'name' => 'SMA AFBS 3 Halaman · ASTS',
+                'version' => 1,
+                'view_path' => 'assessment.reports.asts',
+                'settings' => $baseSettings + [
+                    'report_title' => 'CAPAIAN HASIL BELAJAR ASTS',
+                    'watermark_enabled' => false,
+                    'watermark_opacity' => 10,
+                    'watermark_position' => 'center',
+                    'watermark_width' => 60,
+                    'layout' => [
+                        'version' => AssessmentReportLayout::VERSION,
+                        'sections' => AssessmentReportLayout::threePageDefaults(),
+                    ],
+                ],
+                'is_active' => false,
+                'effective_from' => null,
+            ],
+            [
+                'code' => 'ASAS-SMAAFBS-3P',
+                'type' => AssessmentType::ASAS,
+                'name' => 'SMA AFBS 3 Halaman · ASAS',
+                'version' => 1,
+                'view_path' => 'assessment.reports.asas',
+                'settings' => $baseSettings + [
+                    'report_title' => 'LAPORAN HASIL BELAJAR',
+                    'watermark_enabled' => false,
+                    'watermark_opacity' => 10,
+                    'watermark_position' => 'center',
+                    'watermark_width' => 60,
+                    'layout' => [
+                        'version' => AssessmentReportLayout::VERSION,
+                        'sections' => AssessmentReportLayout::threePageDefaults(),
+                    ],
+                ],
+                'is_active' => false,
                 'effective_from' => null,
             ],
         ];

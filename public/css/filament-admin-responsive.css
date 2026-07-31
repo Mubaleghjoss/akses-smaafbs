@@ -154,11 +154,25 @@
 .assessment-report-eyebrow {
     display: block;
     margin-bottom: 0.2rem;
-    color: #0f766e;
+    color: #475569;
     font-size: 0.72rem;
     font-weight: 800;
     letter-spacing: 0.06em;
     text-transform: uppercase;
+}
+
+.assessment-revision-card__eyebrow {
+    color: #92400e;
+}
+
+.dark .assessment-report-eyebrow,
+.fi-theme-dark .assessment-report-eyebrow {
+    color: #cbd5e1;
+}
+
+.dark .assessment-revision-card__eyebrow,
+.fi-theme-dark .assessment-revision-card__eyebrow {
+    color: #fde68a;
 }
 
 .assessment-revision-card p {
@@ -219,6 +233,102 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 1rem;
+}
+
+.assessment-report-preflight {
+    padding: 1rem;
+}
+
+.assessment-report-preflight.is-ready {
+    border-color: rgba(5, 150, 105, 0.3);
+    background: #f0fdf4;
+}
+
+.assessment-report-preflight.is-warning {
+    border-color: rgba(245, 158, 11, 0.34);
+    background: #fffbeb;
+}
+
+.assessment-report-preflight-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.assessment-report-preflight-grid article {
+    min-width: 0;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 0.85rem;
+    background: rgba(255, 255, 255, 0.88);
+    padding: 0.85rem;
+}
+
+.assessment-report-preflight-grid article.is-ready {
+    border-color: rgba(5, 150, 105, 0.25);
+}
+
+.assessment-report-preflight-grid article.is-warning {
+    border-color: rgba(245, 158, 11, 0.32);
+}
+
+.assessment-report-preflight-grid strong {
+    color: #0f172a;
+    font-size: 0.82rem;
+}
+
+.assessment-report-preflight-grid ul {
+    display: grid;
+    gap: 0.55rem;
+    margin: 0.6rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.assessment-report-preflight-grid li {
+    display: grid;
+    min-width: 0;
+    gap: 0.2rem;
+    color: #92400e;
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+
+.assessment-report-preflight-grid li small {
+    overflow-wrap: anywhere;
+    color: #64748b;
+}
+
+.dark .assessment-report-preflight.is-ready,
+.fi-theme-dark .assessment-report-preflight.is-ready {
+    border-color: rgba(52, 211, 153, 0.24);
+    background: rgba(6, 78, 59, 0.16);
+}
+
+.dark .assessment-report-preflight.is-warning,
+.fi-theme-dark .assessment-report-preflight.is-warning {
+    border-color: rgba(251, 191, 36, 0.25);
+    background: rgba(120, 53, 15, 0.15);
+}
+
+.dark .assessment-report-preflight-grid article,
+.fi-theme-dark .assessment-report-preflight-grid article {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(15, 23, 42, 0.8);
+}
+
+.dark .assessment-report-preflight-grid strong,
+.fi-theme-dark .assessment-report-preflight-grid strong {
+    color: #f8fafc;
+}
+
+.dark .assessment-report-preflight-grid li,
+.fi-theme-dark .assessment-report-preflight-grid li {
+    color: #fde68a;
+}
+
+.dark .assessment-report-preflight-grid li small,
+.fi-theme-dark .assessment-report-preflight-grid li small {
+    color: #cbd5e1;
 }
 
 .assessment-report-form-grid,
@@ -5216,7 +5326,7 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
     min-width: 0;
     align-items: center;
     gap: 0.35rem;
-    color: #0f766e;
+    color: #334155;
     text-decoration: none;
 }
 
@@ -5244,7 +5354,7 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
     gap: 0.4rem;
     border-radius: 0.75rem;
     padding: 0.55rem 0.75rem;
-    color: #475569;
+    color: #334155 !important;
     font-size: 0.8rem;
     font-weight: 700;
     text-decoration: none;
@@ -5254,7 +5364,12 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .assessment-context-nav__tabs a:hover,
 .assessment-context-nav__tabs a.is-active {
     background: #0f766e;
-    color: #fff;
+    color: #fff !important;
+}
+
+.assessment-context-nav__tabs a > span,
+.assessment-context-nav__tabs a > svg {
+    color: inherit !important;
 }
 
 .assessment-context-nav__tabs svg {
@@ -5381,12 +5496,12 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 
 .dark .assessment-context-nav__crumbs a,
 .fi-theme-dark .assessment-context-nav__crumbs a {
-    color: #5eead4;
+    color: #cbd5e1;
 }
 
 .dark .assessment-context-nav__tabs a,
 .fi-theme-dark .assessment-context-nav__tabs a {
-    color: #cbd5e1;
+    color: #e2e8f0 !important;
 }
 
 .dark .assessment-context-nav__tabs a:hover,
@@ -5394,7 +5509,148 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .fi-theme-dark .assessment-context-nav__tabs a:hover,
 .fi-theme-dark .assessment-context-nav__tabs a.is-active {
     background: #0f766e;
-    color: #fff;
+    color: #fff !important;
+}
+
+.assessment-final-score {
+    display: inline-flex;
+    width: fit-content;
+    max-width: 100%;
+    margin-top: 0.45rem;
+    border: 1px solid rgba(15, 118, 110, 0.24);
+    border-radius: 999px;
+    background: #f0fdfa;
+    padding: 0.28rem 0.6rem;
+    color: #115e59;
+    font-size: 0.72rem;
+    font-weight: 800;
+    line-height: 1.35;
+}
+
+.dark .assessment-final-score,
+.fi-theme-dark .assessment-final-score {
+    border-color: rgba(45, 212, 191, 0.3);
+    background: rgba(13, 148, 136, 0.14);
+    color: #99f6e4;
+}
+
+.literasi-grading-question,
+.literasi-grading-student-answer,
+.literasi-grading-answer-key,
+.literasi-grading-info {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    border-radius: 0.8rem;
+    padding: 0.8rem;
+    font-size: 0.82rem;
+    line-height: 1.65;
+}
+
+.literasi-grading-question {
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    background: #f8fafc;
+    color: #0f172a;
+}
+
+.literasi-grading-student-answer {
+    border: 1px dashed rgba(100, 116, 139, 0.42);
+    background: #fff;
+    color: #1e293b;
+}
+
+.literasi-grading-answer-key {
+    overflow-x: auto;
+    border: 1px solid rgba(5, 150, 105, 0.3);
+    background: #ecfdf5;
+    color: #064e3b;
+}
+
+.literasi-grading-answer-key table {
+    width: 100%;
+    min-width: 30rem;
+    border-collapse: collapse;
+}
+
+.literasi-grading-answer-key th,
+.literasi-grading-answer-key td {
+    border: 1px solid rgba(5, 150, 105, 0.22);
+    padding: 0.55rem;
+    text-align: left;
+    vertical-align: top;
+}
+
+.literasi-grading-answer-key th {
+    background: rgba(167, 243, 208, 0.46);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+}
+
+.literasi-grading-answer-key__arrow {
+    width: 2.2rem;
+    text-align: center !important;
+    font-weight: 900;
+}
+
+.literasi-grading-answer-key--essay {
+    overflow-x: visible;
+}
+
+.literasi-grading-info--success {
+    border: 1px solid rgba(5, 150, 105, 0.28);
+    background: #ecfdf5;
+    color: #065f46;
+}
+
+.literasi-grading-match-meta {
+    margin-top: 0.2rem;
+    font-size: 0.7rem;
+    opacity: 0.82;
+}
+
+.dark .literasi-grading-question,
+.fi-theme-dark .literasi-grading-question,
+.dark .literasi-grading-student-answer,
+.fi-theme-dark .literasi-grading-student-answer {
+    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+    color: #f8fafc;
+}
+
+.dark .literasi-grading-answer-key,
+.fi-theme-dark .literasi-grading-answer-key,
+.dark .literasi-grading-info--success,
+.fi-theme-dark .literasi-grading-info--success {
+    border-color: rgba(52, 211, 153, 0.28);
+    background: rgba(16, 185, 129, 0.1);
+    color: #d1fae5;
+}
+
+@media (max-width: 639px) {
+    .assessment-report-preflight-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .literasi-grading-answer-key table {
+        min-width: 0;
+    }
+
+    .literasi-grading-answer-key thead {
+        display: none;
+    }
+
+    .literasi-grading-answer-key tr,
+    .literasi-grading-answer-key td {
+        display: block;
+        width: 100%;
+    }
+
+    .literasi-grading-answer-key tr + tr {
+        margin-top: 0.55rem;
+    }
+
+    .literasi-grading-answer-key__arrow {
+        padding-block: 0.2rem !important;
+    }
 }
 
 .dark .assessment-access-card,
@@ -5481,7 +5737,8 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .assessment-homeroom-filter-card label,
 .assessment-homeroom-bulk-grid label,
 .assessment-homeroom-absence-grid label,
-.assessment-homeroom-text-grid label {
+.assessment-homeroom-text-grid label,
+.assessment-homeroom-attitude-grid label {
     display: grid;
     min-width: 0;
     gap: 0.4rem;
@@ -5496,10 +5753,13 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .assessment-homeroom-bulk-grid input,
 .assessment-homeroom-bulk-grid textarea,
 .assessment-homeroom-table input,
+.assessment-homeroom-table select,
 .assessment-homeroom-table textarea,
 .assessment-homeroom-absence-grid input,
 .assessment-homeroom-text-grid input,
-.assessment-homeroom-text-grid textarea {
+.assessment-homeroom-text-grid textarea,
+.assessment-homeroom-attitude-grid select,
+.assessment-homeroom-attitude-grid textarea {
     width: 100%;
     min-width: 0;
     border: 1px solid #cbd5e1;
@@ -5522,10 +5782,13 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .assessment-homeroom-bulk-grid input:focus,
 .assessment-homeroom-bulk-grid textarea:focus,
 .assessment-homeroom-table input:focus,
+.assessment-homeroom-table select:focus,
 .assessment-homeroom-table textarea:focus,
 .assessment-homeroom-absence-grid input:focus,
 .assessment-homeroom-text-grid input:focus,
-.assessment-homeroom-text-grid textarea:focus {
+.assessment-homeroom-text-grid textarea:focus,
+.assessment-homeroom-attitude-grid select:focus,
+.assessment-homeroom-attitude-grid textarea:focus {
     outline: 2px solid rgba(13, 148, 136, 0.22);
     border-color: #0d9488;
 }
@@ -5882,6 +6145,33 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
     gap: 0.75rem;
 }
 
+.assessment-homeroom-attitude-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.assessment-homeroom-attitude-grid > section {
+    display: grid;
+    min-width: 0;
+    gap: 0.65rem;
+    border: 1px solid rgba(13, 148, 136, 0.22);
+    border-radius: 0.85rem;
+    background: #f0fdfa;
+    padding: 0.8rem;
+}
+
+.assessment-homeroom-attitude-grid > section > strong {
+    color: #115e59;
+    font-size: 0.78rem;
+}
+
+@media (max-width: 480px) {
+    .assessment-homeroom-attitude-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
 .assessment-homeroom-savebar {
     display: flex;
     min-width: 0;
@@ -5960,20 +6250,26 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .dark .assessment-homeroom-bulk-grid input,
 .dark .assessment-homeroom-bulk-grid textarea,
 .dark .assessment-homeroom-table input,
+.dark .assessment-homeroom-table select,
 .dark .assessment-homeroom-table textarea,
 .dark .assessment-homeroom-absence-grid input,
 .dark .assessment-homeroom-text-grid input,
 .dark .assessment-homeroom-text-grid textarea,
+.dark .assessment-homeroom-attitude-grid select,
+.dark .assessment-homeroom-attitude-grid textarea,
 .fi-theme-dark .assessment-status-filter-card select,
 .fi-theme-dark .assessment-homeroom-filter-card select,
 .fi-theme-dark .assessment-homeroom-bulk-grid select,
 .fi-theme-dark .assessment-homeroom-bulk-grid input,
 .fi-theme-dark .assessment-homeroom-bulk-grid textarea,
 .fi-theme-dark .assessment-homeroom-table input,
+.fi-theme-dark .assessment-homeroom-table select,
 .fi-theme-dark .assessment-homeroom-table textarea,
 .fi-theme-dark .assessment-homeroom-absence-grid input,
 .fi-theme-dark .assessment-homeroom-text-grid input,
-.fi-theme-dark .assessment-homeroom-text-grid textarea {
+.fi-theme-dark .assessment-homeroom-text-grid textarea,
+.fi-theme-dark .assessment-homeroom-attitude-grid select,
+.fi-theme-dark .assessment-homeroom-attitude-grid textarea {
     border-color: rgba(148, 163, 184, 0.28);
     background: #0f172a;
     color: #f8fafc;
@@ -6001,6 +6297,17 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
     border-color: rgba(148, 163, 184, 0.14);
     background: #18181b;
     color: #e2e8f0;
+}
+
+.dark .assessment-homeroom-attitude-grid > section,
+.fi-theme-dark .assessment-homeroom-attitude-grid > section {
+    border-color: rgba(45, 212, 191, 0.22);
+    background: rgba(13, 148, 136, 0.1);
+}
+
+.dark .assessment-homeroom-attitude-grid > section > strong,
+.fi-theme-dark .assessment-homeroom-attitude-grid > section > strong {
+    color: #99f6e4;
 }
 
 .dark .assessment-status-table td > span,

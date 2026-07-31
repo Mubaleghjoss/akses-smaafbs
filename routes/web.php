@@ -77,6 +77,13 @@ Route::middleware('auth')->group(function (): void {
         ->name('assessment.reports.preview');
 
     Route::get(
+        '/admin/penilaian/rapor/pratinjau/{assessmentPeriod}/{reportTemplate}/{periodStudent}',
+        [AssessmentReportController::class, 'livePreview'],
+    )
+        ->middleware('throttle:10,1')
+        ->name('assessment.reports.live-preview');
+
+    Route::get(
         '/admin/penilaian/rapor/kelas/{classReportArtifact}/download',
         [AssessmentReportController::class, 'downloadClass'],
     )->name('assessment.reports.class.download');
