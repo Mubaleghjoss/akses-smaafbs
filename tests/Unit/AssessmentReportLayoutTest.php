@@ -45,4 +45,23 @@ class AssessmentReportLayoutTest extends TestCase
             }
         }
     }
+
+    public function test_asas_three_page_layout_contains_semester_status_on_page_three(): void
+    {
+        $settings = app(AssessmentReportLayout::class)->validateAndNormalize([
+            'layout' => [
+                'sections' => AssessmentReportLayout::threePageAsasDefaults(),
+            ],
+        ]);
+        $pageThree = collect(app(AssessmentReportLayout::class)->pages($settings)[3]);
+
+        $this->assertTrue(app(AssessmentReportLayout::class)->requiresSemesterStatus($settings));
+        $this->assertTrue($pageThree->contains(
+            fn (array $section): bool => $section['type'] === 'semester_status',
+        ));
+        $this->assertSame(
+            ['semester_status', 'parent_response', 'signatures'],
+            $pageThree->pluck('type')->take(-3)->values()->all(),
+        );
+    }
 }

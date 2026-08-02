@@ -44,4 +44,9 @@ class ReportTemplate extends Model
     {
         return $this->hasMany(ClassReportArtifact::class, 'assessment_report_template_id');
     }
+
+    public function generationRuns(): HasMany
+    {
+        return $this->hasMany(ReportGenerationRun::class, 'assessment_report_template_id');
+    }
 }

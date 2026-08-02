@@ -6,7 +6,9 @@ use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssignmentStatus;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodAssignment;
+use App\Models\Assessment\ReportGenerationRun;
 use App\Models\Assessment\ReportShareLink;
+use App\Models\Assessment\ReportTemplate;
 use App\Models\User;
 use App\Support\Assessment\AssessmentAuditLogger;
 use App\Support\Assessment\AssessmentWorkflowGuard;
@@ -21,6 +23,7 @@ final class ReopenAssessmentPeriodAction
     public function __construct(
         private readonly AssessmentWorkflowGuard $guard,
         private readonly AssessmentAuditLogger $audit,
+        private readonly CancelOpenReportRevisionsAction $cancelOpenReportRevisions,
     ) {}
 
     /**
@@ -87,6 +90,24 @@ final class ReopenAssessmentPeriodAction
                 'Hanya periode yang sudah dikunci atau diterbitkan yang dapat dibuka kembali.',
             );
             $oldPeriodStatus = $this->periodStatus($lockedPeriod)?->value;
+            $cancelledReports = ['runs' => 0, 'snapshots' => 0, 'classes' => 0];
+            $openTemplateIds = ReportGenerationRun::query()
+                ->where('assessment_period_id', $lockedPeriod->getKey())
+                ->whereIn('status', ['prepared', 'running', 'failed'])
+                ->pluck('assessment_report_template_id')
+                ->unique();
+
+            foreach (ReportTemplate::query()->whereIn('id', $openTemplateIds)->get() as $reportTemplate) {
+                $cancelled = $this->cancelOpenReportRevisions->execute(
+                    $actor,
+                    $lockedPeriod,
+                    $reportTemplate,
+                    $reason,
+                );
+                foreach ($cancelledReports as $key => $count) {
+                    $cancelledReports[$key] = $count + $cancelled[$key];
+                }
+            }
 
             foreach ($assignments as $assignment) {
                 $oldValues = [
@@ -143,6 +164,9 @@ final class ReopenAssessmentPeriodAction
                     'status' => AssessmentPeriodStatus::OPEN->value,
                     'assignment_ids' => $ids->all(),
                     'revoked_share_links' => $revokedLinks,
+                    'cancelled_report_runs' => $cancelledReports['runs'],
+                    'cancelled_report_snapshots' => $cancelledReports['snapshots'],
+                    'cancelled_report_classes' => $cancelledReports['classes'],
                 ],
                 reason: $reason,
             );

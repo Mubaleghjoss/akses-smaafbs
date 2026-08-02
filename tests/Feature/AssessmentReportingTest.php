@@ -2,11 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Assessment\CancelOpenReportRevisionsAction;
 use App\Actions\Assessment\PublishAssessmentPeriodAction;
+use App\Actions\Assessment\SetPrimaryReportTemplateAction;
 use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssessmentType;
 use App\Enums\Assessment\ReportGenerationStatus;
 use App\Filament\Pages\Assessment\AstsReports;
+use App\Filament\Resources\AssessmentReportTemplateResource;
 use App\Jobs\Assessment\GenerateClassReportPipeline;
 use App\Jobs\Assessment\GenerateClassReports;
 use App\Jobs\Assessment\GenerateClassReportsJob;
@@ -18,6 +21,7 @@ use App\Models\Assessment\AssessmentPeriodAssignment;
 use App\Models\Assessment\AssessmentPeriodRombel;
 use App\Models\Assessment\AssessmentPeriodStudent;
 use App\Models\Assessment\ClassReportArtifact;
+use App\Models\Assessment\ReportGenerationRun;
 use App\Models\Assessment\ReportSnapshot;
 use App\Models\Assessment\ReportTemplate;
 use App\Models\Assessment\Semester;
@@ -38,6 +42,7 @@ use App\Support\Assessment\Reporting\StopAssessmentReportQueueAction;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Route;
@@ -682,6 +687,12 @@ class AssessmentReportingTest extends TestCase
         $astsDefault = $action->execute($period, $template, generatedBy: 99)->firstOrFail();
         $this->assertNull(data_get($astsDefault->snapshot_data, 'homeroom.promotion_status'));
 
+        app(CancelOpenReportRevisionsAction::class)->execute(
+            User::query()->findOrFail(99),
+            $period,
+            $template,
+            'Mengganti revisi setelah konfigurasi status semester diperbarui.',
+        );
         $period->forceFill([
             'settings' => ['collect_promotion_status' => true],
         ])->save();
@@ -890,7 +901,7 @@ class AssessmentReportingTest extends TestCase
             ->assertSee('Hentikan Semua Antrean PDF')
             ->assertSee('Atur Guru Mapel')
             ->assertSee('Atur Wali Kelas')
-            ->assertSee('Buka Template Rapor')
+            ->assertSee('Lihat Detail Template')
             ->assertSee('Buka Wizard Kelengkapan')
             ->assertSeeHtml('assessment-report-preflight-issue is-actionable')
             ->assertSeeHtml('assessment-report-card');
@@ -1008,6 +1019,252 @@ class AssessmentReportingTest extends TestCase
             $blade,
         );
         $this->assertGreaterThanOrEqual(3, substr_count($blade, '$this->canGenerateReports()'));
+    }
+
+    public function test_primary_template_activation_is_atomic_and_rejects_incomplete_or_future_templates(): void
+    {
+        [, , , $current] = $this->reportingFoundation();
+        $current->forceFill([
+            'settings' => [
+                'school_name' => 'SMA AFBS',
+                'principal_name' => 'Kepala Sekolah',
+                'place' => 'Bogor',
+            ],
+        ])->save();
+        $candidate = ReportTemplate::query()->create([
+            'code' => 'ASTS-SMAAFBS-3P',
+            'type' => AssessmentType::ASTS,
+            'name' => 'SMA AFBS 3 Halaman',
+            'version' => 1,
+            'view_path' => 'assessment.reports.asts',
+            'settings' => [
+                'school_name' => 'SMA AFBS',
+                'principal_name' => 'Kepala Sekolah',
+                'place' => 'Bogor',
+            ],
+            'is_active' => false,
+        ]);
+        $actor = User::query()->findOrFail(99);
+
+        app(SetPrimaryReportTemplateAction::class)->execute($actor, $candidate);
+
+        $this->assertFalse($current->fresh()->is_active);
+        $this->assertTrue($candidate->fresh()->is_active);
+        $this->assertSame(
+            1,
+            ReportTemplate::query()->where('type', AssessmentType::ASTS->value)->where('is_active', true)->count(),
+        );
+
+        $incomplete = ReportTemplate::query()->create([
+            'code' => 'ASTS-INCOMPLETE',
+            'type' => AssessmentType::ASTS,
+            'name' => 'Belum Lengkap',
+            'version' => 1,
+            'view_path' => 'assessment.reports.asts',
+            'settings' => ['school_name' => 'SMA AFBS'],
+            'is_active' => false,
+        ]);
+        try {
+            app(SetPrimaryReportTemplateAction::class)->execute($actor, $incomplete);
+            $this->fail('Template belum lengkap seharusnya tidak dapat dijadikan utama.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('template', $exception->errors());
+        }
+
+        $future = ReportTemplate::query()->create([
+            'code' => 'ASTS-FUTURE',
+            'type' => AssessmentType::ASTS,
+            'name' => 'Belum Berlaku',
+            'version' => 1,
+            'view_path' => 'assessment.reports.asts',
+            'settings' => [
+                'school_name' => 'SMA AFBS',
+                'principal_name' => 'Kepala Sekolah',
+                'place' => 'Bogor',
+            ],
+            'effective_from' => now()->addDay(),
+            'is_active' => false,
+        ]);
+        try {
+            app(SetPrimaryReportTemplateAction::class)->execute($actor, $future);
+            $this->fail('Template dengan tanggal berlaku di masa depan seharusnya ditolak.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('template', $exception->errors());
+        }
+
+        $this->assertTrue($candidate->fresh()->is_active);
+    }
+
+    public function test_cancel_open_revisions_preserves_completed_history_and_allows_revision_three_without_queue(): void
+    {
+        Queue::fake();
+        [$period, $rombel, $students, $template] = $this->reportingFoundation();
+        $firstSnapshots = app(CreateReportSnapshotsAction::class)->execute($period, $template, generatedBy: 99);
+        $firstRun = ReportGenerationRun::query()->firstOrFail();
+        $completed = $firstSnapshots->firstOrFail();
+        $completed->forceFill([
+            'generation_status' => 'completed',
+            'pdf_path' => 'assessment-reports/history.pdf',
+            'checksum' => str_repeat('a', 64),
+        ])->save();
+        $secondRun = ReportGenerationRun::query()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_report_template_id' => $template->getKey(),
+            'revision' => 2,
+            'status' => 'prepared',
+            'total_students' => 1,
+            'completed_students' => 0,
+            'total_classes' => 1,
+            'completed_classes' => 0,
+            'requested_by' => 99,
+        ]);
+        $secondSnapshot = ReportSnapshot::query()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_student_id' => $students[0]->getKey(),
+            'assessment_report_template_id' => $template->getKey(),
+            'assessment_report_generation_run_id' => $secondRun->getKey(),
+            'revision' => 2,
+            'template_version' => 1,
+            'snapshot_data' => ['student' => ['name' => 'Siswa 1']],
+            'generation_status' => 'not_scheduled',
+            'generated_by' => 99,
+        ]);
+
+        $result = app(CancelOpenReportRevisionsAction::class)->execute(
+            User::query()->findOrFail(99),
+            $period,
+            $template,
+            'Revisi uji lama digantikan sebelum pilot produksi.',
+        );
+
+        $this->assertSame(2, $result['runs']);
+        $this->assertSame('cancelled', $firstRun->fresh()->status->value);
+        $this->assertSame('cancelled', $secondRun->fresh()->status->value);
+        $this->assertSame('completed', $completed->fresh()->generation_status->value);
+        $this->assertSame('cancelled', $secondSnapshot->fresh()->generation_status->value);
+
+        $third = app(CreateReportSnapshotsAction::class)->execute(
+            $period,
+            $template,
+            generatedBy: 99,
+            regenerate: true,
+            reason: 'Menyiapkan revisi tiga sesudah rekonsiliasi.',
+        );
+
+        $this->assertSame(3, (int) $third->firstOrFail()->revision);
+        $this->assertSame('prepared', ReportGenerationRun::query()->latest('revision')->firstOrFail()->status->value);
+        Queue::assertNothingPushed();
+    }
+
+    public function test_asas_preflight_requires_semester_status_when_enabled_by_period_and_layout(): void
+    {
+        [$period, , , $template] = $this->reportingFoundation();
+        $period->forceFill([
+            'type' => AssessmentType::ASAS,
+            'settings' => ['collect_promotion_status' => true],
+        ])->save();
+        $template->forceFill([
+            'type' => AssessmentType::ASAS,
+            'view_path' => 'assessment.reports.asas',
+            'settings' => [
+                'school_name' => 'SMA AFBS',
+                'principal_name' => 'Kepala Sekolah',
+                'place' => 'Bogor',
+                'layout' => [
+                    'version' => AssessmentReportLayout::VERSION,
+                    'sections' => AssessmentReportLayout::threePageAsasDefaults(),
+                ],
+            ],
+        ])->save();
+
+        $preflight = app(AssessmentReportPreflight::class)->inspect($period->fresh(), $template->fresh());
+        $codes = collect($preflight['groups'])->flatMap(
+            fn (array $group): array => array_column($group['issues'], 'code'),
+        );
+
+        $this->assertTrue($codes->contains('semester_status_missing'));
+    }
+
+    public function test_reconcile_command_installs_asas_and_selects_one_primary_per_type_without_jobs(): void
+    {
+        Queue::fake();
+        [$period, , , $standard] = $this->reportingFoundation();
+        $standard->forceFill(['is_active' => false])->save();
+        $astsThreePage = ReportTemplate::query()->create([
+            'code' => 'ASTS-SMAAFBS-3P',
+            'type' => AssessmentType::ASTS,
+            'name' => 'SMA AFBS 3 Halaman · ASTS',
+            'version' => 1,
+            'view_path' => 'assessment.reports.asts',
+            'settings' => [
+                'school_name' => 'SMA AFBS',
+                'school_address' => 'Bogor',
+                'principal_name' => 'Kepala Sekolah',
+                'principal_identifier' => 'NIY-001',
+                'place' => 'Bogor',
+                'watermark_enabled' => false,
+                'layout' => [
+                    'version' => AssessmentReportLayout::VERSION,
+                    'sections' => AssessmentReportLayout::threePageDefaults(),
+                ],
+            ],
+            'is_active' => true,
+        ]);
+        app(CreateReportSnapshotsAction::class)->execute(
+            $period,
+            $astsThreePage,
+            generatedBy: 99,
+        );
+
+        $this->assertSame(0, Artisan::call('assessment:reconcile-report-templates'));
+        $this->assertDatabaseMissing('assessment_report_templates', ['code' => 'ASAS-SMAAFBS-3P']);
+
+        $this->assertSame(0, Artisan::call('assessment:reconcile-report-templates', [
+            '--apply' => true,
+            '--actor' => 99,
+            '--period' => $period->getKey(),
+            '--cancel-open' => true,
+            '--prepare-new' => true,
+        ]));
+
+        $asas = ReportTemplate::query()->where('code', 'ASAS-SMAAFBS-3P')->firstOrFail();
+        $this->assertTrue($asas->is_active);
+        $this->assertSame('Kepala Sekolah', data_get($asas->settings, 'principal_name'));
+        $this->assertTrue(app(AssessmentReportLayout::class)->requiresSemesterStatus($asas->settings));
+        foreach (AssessmentType::cases() as $type) {
+            $this->assertSame(
+                1,
+                ReportTemplate::query()->where('type', $type->value)->where('is_active', true)->count(),
+            );
+        }
+        $this->assertSame('cancelled', ReportGenerationRun::query()->where('revision', 1)->firstOrFail()->status->value);
+        $this->assertSame('prepared', ReportGenerationRun::query()->where('revision', 2)->firstOrFail()->status->value);
+        Queue::assertNothingPushed();
+    }
+
+    public function test_template_resource_renders_responsive_cards_and_read_only_detail(): void
+    {
+        [, , , $template] = $this->reportingFoundation();
+        $template->forceFill([
+            'settings' => [
+                'school_name' => 'SMA AFBS',
+                'principal_name' => 'Kepala Sekolah',
+                'place' => 'Bogor',
+            ],
+        ])->save();
+        $this->actingAs(User::query()->findOrFail(99));
+
+        $this->get(AssessmentReportTemplateResource::getUrl())
+            ->assertOk()
+            ->assertSee('Template Utama')
+            ->assertSee('Buat Template dari Awal')
+            ->assertSee('Panduan Template Rapor');
+
+        $this->get(AssessmentReportTemplateResource::getUrl('view', ['record' => $template]))
+            ->assertOk()
+            ->assertSee('Sumber Data Rapor')
+            ->assertSee('Riwayat Penggunaan')
+            ->assertSee('Pratinjau');
     }
 
     /**

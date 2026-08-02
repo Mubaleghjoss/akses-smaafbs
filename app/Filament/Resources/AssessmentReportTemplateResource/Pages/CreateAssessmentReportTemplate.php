@@ -13,6 +13,13 @@ class CreateAssessmentReportTemplate extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
+        $data['is_active'] = false;
+
         return AssessmentReportTemplateResource::validateTemplateData($data);
+    }
+
+    protected function getCreatedNotificationTitle(): ?string
+    {
+        return 'Template disimpan sebagai draf';
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages\Assessment;
 
+use App\Actions\Assessment\CancelOpenReportRevisionsAction;
 use App\Enums\Assessment\AssessmentType;
 use App\Enums\Assessment\ReportGenerationStatus;
 use App\Filament\Pages\Assessment\Concerns\HasAssessmentTypeNavigation;
@@ -46,9 +47,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
     #[UrlAttribute(as: 'template')]
     public ?int $templateId = null;
 
-    public bool $regenerate = false;
-
-    public string $regenerationReason = '';
+    public string $restartReason = '';
 
     public int $shareExpiryDays = 1;
 
@@ -134,9 +133,12 @@ abstract class AssessmentReportsPage extends AssessmentPage
             ->where('type', static::$assessmentType->value)
             ->orderByDesc('is_active')
             ->orderByDesc('version')
+            ->orderByDesc('id')
             ->get()
             ->mapWithKeys(fn (ReportTemplate $template): array => [
-                $template->getKey() => "{$template->name} · v{$template->version}".($template->is_active ? ' · aktif' : ''),
+                $template->getKey() => "{$template->name} · v{$template->version}"
+                    .($template->is_active ? ' · UTAMA' : ' · arsip')
+                    .(AssessmentReportTemplateResource::identityIsComplete($template) ? '' : ' · belum lengkap'),
             ])
             ->all();
     }
@@ -195,7 +197,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
             : null;
     }
 
-    public function generateReports(): void
+    public function prepareRevision(): void
     {
         $this->authorizeAssessment('penilaian.report.generate');
         $period = $this->selectedPeriod();
@@ -217,27 +219,96 @@ abstract class AssessmentReportsPage extends AssessmentPage
                 $period,
                 $template,
                 (int) auth()->id(),
-                $this->regenerate,
-                $this->regenerate ? $this->regenerationReason : null,
+                false,
+                null,
             );
+            $this->selectDefaultClassAndPreview();
+            Notification::make()
+                ->title('Revisi rapor sudah disiapkan')
+                ->body($snapshots->count().' snapshot dibekukan tanpa membuat job. Pilih kelas lalu tekan Jadwalkan Kelas Terpilih.')
+                ->success()
+                ->duration(12000)
+                ->send();
+        } catch (Throwable $exception) {
+            report($exception);
+            Notification::make()->title('Revisi belum dapat disiapkan')->body($exception->getMessage())->danger()->duration(15000)->send();
+        }
+    }
+
+    public function scheduleSelectedClasses(): void
+    {
+        $this->authorizeAssessment('penilaian.report.generate');
+        $period = $this->selectedPeriod();
+        $template = $this->selectedTemplate();
+
+        if (! $period || ! $template) {
+            Notification::make()->title('Pilih periode dan template')->warning()->send();
+
+            return;
+        }
+
+        try {
+            $run = $this->getGenerationRun();
+            if (! $run || ! in_array($run->status->value, ['prepared', 'running', 'failed'], true)) {
+                throw new \RuntimeException('Belum ada revisi terbuka. Tekan Siapkan Revisi terlebih dahulu.');
+            }
+
             $run = app(ScheduleReportClassesAction::class)->execute(
                 auth()->user(),
                 $period,
                 $template,
                 $this->selectedClassIds,
             );
-            $this->regenerate = false;
-            $this->regenerationReason = '';
-            $this->selectDefaultClassAndPreview();
             Notification::make()
-                ->title('Pipeline kelas masuk antrean')
-                ->body(count($this->selectedClassIds).' kelas diproses bertahap dari '.$snapshots->count().' snapshot. Run revisi '.$run->revision.' tidak membuat job per siswa.')
+                ->title('Kelas masuk antrean PDF')
+                ->body(count($this->selectedClassIds)." kelas dijadwalkan pada revisi {$run->revision}.")
                 ->success()
                 ->duration(12000)
                 ->send();
         } catch (Throwable $exception) {
             report($exception);
-            Notification::make()->title('Rapor belum dapat dibuat')->body($exception->getMessage())->danger()->duration(15000)->send();
+            Notification::make()->title('Kelas belum dapat dijadwalkan')->body($exception->getMessage())->danger()->duration(15000)->send();
+        }
+    }
+
+    public function restartWithNewRevision(): void
+    {
+        $this->authorizeAssessment('penilaian.report.generate');
+        $period = $this->selectedPeriod();
+        $template = $this->selectedTemplate();
+
+        if (! $period || ! $template) {
+            Notification::make()->title('Pilih periode dan template')->warning()->send();
+
+            return;
+        }
+
+        try {
+            $cancelled = app(CancelOpenReportRevisionsAction::class)->execute(
+                auth()->user(),
+                $period,
+                $template,
+                $this->restartReason,
+            );
+            $snapshots = app(CreateReportSnapshotsAction::class)->execute(
+                $period,
+                $template,
+                (int) auth()->id(),
+                true,
+                $this->restartReason,
+            );
+            $revision = (int) $snapshots->max('revision');
+            $this->restartReason = '';
+
+            Notification::make()
+                ->title("Revisi {$revision} sudah disiapkan")
+                ->body("{$cancelled['runs']} revisi terbuka dihentikan. Belum ada kelas yang masuk antrean.")
+                ->success()
+                ->duration(15000)
+                ->send();
+        } catch (Throwable $exception) {
+            report($exception);
+            Notification::make()->title('Revisi baru belum dapat disiapkan')->body($exception->getMessage())->danger()->duration(15000)->send();
         }
     }
 
@@ -339,7 +410,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
             }
         }
 
-        if ($code === 'attitudes_missing') {
+        if (in_array($code, ['attitudes_missing', 'semester_status_missing'], true)) {
             $page = $type === AssessmentType::ASTS
                 ? AstsHomeroomRecap::class
                 : AsasHomeroomRecap::class;
@@ -362,10 +433,10 @@ abstract class AssessmentReportsPage extends AssessmentPage
                 ];
             }
 
-            if (AssessmentReportTemplateResource::canViewAny()) {
+            if (AssessmentReportTemplateResource::canView($template)) {
                 return [
-                    'label' => 'Buka Template Rapor',
-                    'url' => AssessmentReportTemplateResource::getUrl(),
+                    'label' => $code === 'template_not_primary' ? 'Pilih Template Utama' : 'Lihat Detail Template',
+                    'url' => AssessmentReportTemplateResource::getUrl('view', ['record' => $template]),
                     'icon' => 'heroicon-o-document-text',
                 ];
             }

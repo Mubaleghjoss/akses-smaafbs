@@ -102,6 +102,7 @@ final class BuildAssessmentReportPreviewSnapshot
                     'academic_year' => $period->academicYear?->name ?? $period->academicYear?->code,
                     'semester' => $period->semester?->name ?? $period->semester?->code,
                     'report_date' => $period->report_date?->format('d-m-Y'),
+                    'collect_promotion_status' => (bool) data_get($period->settings, 'collect_promotion_status', false),
                 ],
                 'student' => [
                     'id' => $student->student_id,

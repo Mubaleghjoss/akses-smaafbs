@@ -131,6 +131,7 @@
             </div>
         </section>
 
+        @php($run = $this->getGenerationRun())
         @if ($this->canGenerateReports())
             <section class="assessment-report-card is-step">
                 <span class="assessment-report-step">2</span>
@@ -157,25 +158,43 @@
                         @endforeach
                     </div>
 
-                    <div class="assessment-report-revision-box">
-                        <label>
-                            <input type="checkbox" wire:model.live="regenerate">
-                            <span><strong>Buat revisi baru</strong><small>Gunakan hanya jika isi rapor atau template berubah. Melanjutkan kelas yang dihentikan tidak perlu revisi baru.</small></span>
-                        </label>
-                        @if ($regenerate)
-                            <textarea wire:model="regenerationReason" rows="2" maxlength="1000" placeholder="Alasan revisi wajib diisi"></textarea>
+                    <div class="assessment-report-pipeline-state">
+                        @if (! $run)
+                            <strong>Belum ada revisi yang disiapkan</strong>
+                            <span>Siapkan snapshot terlebih dahulu. Langkah ini belum membuat job PDF.</span>
+                        @elseif ($run->status->value === 'prepared')
+                            <strong>Revisi {{ $run->revision }} siap · kelas belum dijadwalkan</strong>
+                            <span>Snapshot sudah dibekukan. Pilih kelas untuk mulai membuat PDF secara bertahap.</span>
+                        @elseif ($run->status->value === 'running')
+                            <strong>Revisi {{ $run->revision }} sedang diproses</strong>
+                            <span>Kelas yang belum masuk antrean masih dapat dipilih dan dijadwalkan pada revisi yang sama.</span>
+                        @elseif ($run->status->value === 'completed')
+                            <strong>Revisi {{ $run->revision }} sudah selesai</strong>
+                            <span>Gunakan Mulai Ulang dengan Revisi Baru hanya jika nilai atau template memang berubah.</span>
+                        @elseif ($run->status->value === 'cancelled')
+                            <strong>Revisi {{ $run->revision }} telah dihentikan</strong>
+                            <span>Siapkan revisi baru dengan alasan agar riwayat lama tetap dapat diaudit.</span>
+                        @else
+                            <strong>Revisi {{ $run->revision }} perlu diperiksa</strong>
+                            <span>Coba jadwalkan ulang kelas yang gagal atau mulai revisi baru jika datanya berubah.</span>
                         @endif
                     </div>
 
                     <div class="assessment-report-primary-actions">
-                        <x-filament::button wire:click="generateReports" wire:loading.attr="disabled" icon="heroicon-o-play">Jadwalkan / Lanjutkan Kelas</x-filament::button>
+                        @if (! $run)
+                            <x-filament::button wire:click="prepareRevision" wire:loading.attr="disabled" icon="heroicon-o-document-check">Siapkan Revisi</x-filament::button>
+                        @elseif (in_array($run->status->value, ['prepared', 'running', 'failed'], true))
+                            <x-filament::button wire:click="scheduleSelectedClasses" wire:loading.attr="disabled" icon="heroicon-o-play">Jadwalkan Kelas Terpilih</x-filament::button>
+                        @endif
+                        @if ($run)
+                            <x-filament::button color="warning" x-on:click="$dispatch('open-modal', { id: 'assessment-restart-revision-modal' })" icon="heroicon-o-arrow-path">Mulai Ulang dengan Revisi Baru</x-filament::button>
+                        @endif
                         <x-filament::button color="danger" x-on:click="$dispatch('open-modal', { id: 'assessment-stop-reports-modal' })" icon="heroicon-o-stop">Hentikan Semua Antrean PDF</x-filament::button>
                     </div>
                 </div>
             </section>
         @endif
 
-        @php($run = $this->getGenerationRun())
         @php($classRows = $this->getClassRows())
         <section class="assessment-report-card is-step">
             <span class="assessment-report-step">3</span>
@@ -300,6 +319,19 @@
             <x-slot name="footerActions">
                 <x-filament::button color="gray" x-on:click="$dispatch('close-modal', { id: 'assessment-stop-reports-modal' })">Batal</x-filament::button>
                 <x-filament::button color="danger" wire:click="stopAllReportJobs" wire:confirm="Konfirmasi terakhir: hapus SELURUH job assessment-reports dan tandai proses berjalan sebagai dihentikan?">Ya, Hentikan Semua PDF</x-filament::button>
+            </x-slot>
+        </x-filament::modal>
+
+        <x-filament::modal id="assessment-restart-revision-modal" width="lg">
+            <x-slot name="heading">Mulai Ulang dengan Revisi Baru</x-slot>
+            <x-slot name="description">Revisi terbuka akan ditandai dihentikan, bukan dihapus. Snapshot revisi baru disiapkan tanpa menjadwalkan kelas atau job PDF.</x-slot>
+            <label class="assessment-report-stop-field">
+                <span>Alasan revisi baru</span>
+                <textarea wire:model="restartReason" rows="4" maxlength="1000" placeholder="Minimal 10 karakter"></textarea>
+            </label>
+            <x-slot name="footerActions">
+                <x-filament::button color="gray" x-on:click="$dispatch('close-modal', { id: 'assessment-restart-revision-modal' })">Batal</x-filament::button>
+                <x-filament::button color="warning" wire:click="restartWithNewRevision" wire:confirm="Siapkan revisi baru dan hentikan seluruh revisi terbuka untuk periode serta template ini?">Ya, Siapkan Revisi Baru</x-filament::button>
             </x-slot>
         </x-filament::modal>
     </div>

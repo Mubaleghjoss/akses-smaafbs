@@ -49,6 +49,18 @@ class CreateReportSnapshotsAction
 
             $this->validateRequest($period, $template, $regenerate, $reason);
 
+            $openRun = ReportGenerationRun::query()
+                ->where('assessment_period_id', $period->getKey())
+                ->where('assessment_report_template_id', $template->getKey())
+                ->whereIn('status', ['prepared', 'running'])
+                ->latest('revision')
+                ->first();
+            if ($regenerate && $openRun) {
+                throw ValidationException::withMessages([
+                    'reports' => "Revisi {$openRun->revision} masih terbuka. Hentikan atau mulai ulang revisi tersebut sebelum membuat revisi baru.",
+                ]);
+            }
+
             $existingRevision = (int) ReportSnapshot::query()
                 ->where('assessment_period_id', $period->getKey())
                 ->where('assessment_report_template_id', $template->getKey())
@@ -232,6 +244,7 @@ class CreateReportSnapshotsAction
                             'academic_year' => $academicYear?->name ?? $academicYear?->code,
                             'semester' => $semester?->name ?? $semester?->code,
                             'report_date' => $period->report_date?->format('d-m-Y'),
+                            'collect_promotion_status' => (bool) $collectPromotionStatus,
                         ],
                         'student' => [
                             'id' => $student->student_id,

@@ -95,7 +95,7 @@ class InstallAssessmentDefaults extends Command
                 }
             }
 
-            foreach ($this->defaultTemplates() as $attributes) {
+            foreach (self::defaultTemplates() as $attributes) {
                 ReportTemplate::query()->firstOrCreate(
                     [
                         'code' => $attributes['code'],
@@ -127,7 +127,7 @@ class InstallAssessmentDefaults extends Command
     /**
      * @return list<array<string, mixed>>
      */
-    protected function defaultTemplates(): array
+    public static function defaultTemplates(): array
     {
         $baseSettings = [
             'paper' => 'a4',
@@ -156,7 +156,7 @@ class InstallAssessmentDefaults extends Command
                 'settings' => $baseSettings + [
                     'report_title' => 'LAPORAN HASIL ASESMEN TENGAH SEMESTER',
                 ],
-                'is_active' => true,
+                'is_active' => false,
                 'effective_from' => null,
             ],
             [
@@ -168,7 +168,7 @@ class InstallAssessmentDefaults extends Command
                 'settings' => $baseSettings + [
                     'report_title' => 'LAPORAN HASIL ASESMEN AKHIR SEMESTER',
                 ],
-                'is_active' => true,
+                'is_active' => false,
                 'effective_from' => null,
             ],
             [
@@ -205,8 +205,9 @@ class InstallAssessmentDefaults extends Command
                     'watermark_width' => 60,
                     'layout' => [
                         'version' => AssessmentReportLayout::VERSION,
-                        'sections' => AssessmentReportLayout::threePageDefaults(),
+                        'sections' => AssessmentReportLayout::threePageAsasDefaults(),
                     ],
+                    'semester_status_label' => 'Status Semester/Kenaikan Kelas',
                 ],
                 'is_active' => false,
                 'effective_from' => null,

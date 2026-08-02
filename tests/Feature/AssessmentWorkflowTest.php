@@ -25,6 +25,7 @@ use App\Models\Assessment\AssessmentScore;
 use App\Models\Assessment\ClassReportArtifact;
 use App\Models\Assessment\HomeroomAssignment;
 use App\Models\Assessment\ReportSnapshot;
+use App\Models\Assessment\ReportTemplate;
 use App\Models\Assessment\Semester;
 use App\Models\Assessment\StudentSubjectResult;
 use App\Models\Assessment\Subject;
@@ -64,6 +65,22 @@ class AssessmentWorkflowTest extends TestCase
         $pipelineMigration = require database_path('migrations/2026_07_31_190000_add_assessment_report_generation_runs.php');
         $pipelineMigration->up();
         $this->artisan('assessment:install-defaults')->assertSuccessful();
+        ReportTemplate::query()->update(['is_active' => false]);
+        foreach ([
+            AssessmentType::ASTS->value => 'ASTS-SMAAFBS-3P',
+            AssessmentType::ASAS->value => 'ASAS-SMAAFBS-3P',
+        ] as $type => $code) {
+            $template = ReportTemplate::query()->where('code', $code)->firstOrFail();
+            $settings = is_array($template->settings) ? $template->settings : [];
+            data_set($settings, 'school_name', 'SMA AFBS');
+            data_set($settings, 'principal_name', 'Kepala Sekolah');
+            data_set($settings, 'place', 'Bogor');
+            $template->forceFill([
+                'type' => $type,
+                'settings' => $settings,
+                'is_active' => true,
+            ])->save();
+        }
         app(PermissionRegistrar::class)->forgetCachedPermissions();
         Queue::fake();
     }

@@ -22,6 +22,7 @@ final class AssessmentReportLayout
             'achievements' => 'Prestasi',
             'attendance' => 'Ketidakhadiran',
             'homeroom_note' => 'Catatan Wali Kelas',
+            'semester_status' => 'Status Semester/Kenaikan Kelas',
             'parent_response' => 'Tanggapan Orang Tua',
             'signatures' => 'Tanda Tangan',
         ];
@@ -46,6 +47,52 @@ final class AssessmentReportLayout
             ['type' => 'parent_response', 'title' => 'G. Tanggapan Orang Tua/Wali', 'page' => 3, 'sort_order' => 60, 'enabled' => true],
             ['type' => 'signatures', 'title' => 'Pengesahan', 'page' => 3, 'sort_order' => 70, 'enabled' => true],
         ];
+    }
+
+    /**
+     * @return array<int, array{type:string,title:string,page:int,sort_order:int,enabled:bool}>
+     */
+    public static function threePageAsasDefaults(): array
+    {
+        $sections = self::threePageDefaults();
+        $parentResponseIndex = collect($sections)->search(
+            fn (array $section): bool => $section['type'] === 'parent_response',
+        );
+
+        $semesterStatus = [
+            'type' => 'semester_status',
+            'title' => 'G. Status Semester/Kenaikan Kelas',
+            'page' => 3,
+            'sort_order' => 60,
+            'enabled' => true,
+        ];
+
+        if ($parentResponseIndex === false) {
+            $sections[] = $semesterStatus;
+
+            return $sections;
+        }
+
+        array_splice($sections, (int) $parentResponseIndex, 0, [$semesterStatus]);
+
+        foreach ($sections as &$section) {
+            if ($section['page'] !== 3 || $section['type'] === 'semester_status') {
+                continue;
+            }
+
+            if ($section['sort_order'] >= 60) {
+                $section['sort_order'] += 10;
+            }
+
+            if ($section['type'] === 'parent_response') {
+                $section['title'] = 'H. Tanggapan Orang Tua/Wali';
+            } elseif ($section['type'] === 'signatures') {
+                $section['title'] = 'Pengesahan';
+            }
+        }
+        unset($section);
+
+        return $sections;
     }
 
     /**
@@ -160,5 +207,16 @@ final class AssessmentReportLayout
             ->contains(fn (mixed $section): bool => is_array($section)
                 && (bool) ($section['enabled'] ?? true)
                 && ($section['type'] ?? null) === 'attitudes');
+    }
+
+    /**
+     * @param  array<string, mixed>  $settings
+     */
+    public function requiresSemesterStatus(array $settings): bool
+    {
+        return collect(data_get($settings, 'layout.sections', []))
+            ->contains(fn (mixed $section): bool => is_array($section)
+                && (bool) ($section['enabled'] ?? true)
+                && ($section['type'] ?? null) === 'semester_status');
     }
 }

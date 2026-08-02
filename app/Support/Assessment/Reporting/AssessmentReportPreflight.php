@@ -147,7 +147,10 @@ final class AssessmentReportPreflight
         }
 
         $settings = is_array($template->settings) ? $template->settings : [];
-        if (app(AssessmentReportLayout::class)->requiresAttitudes($settings)) {
+        $layout = app(AssessmentReportLayout::class);
+        $reports = null;
+
+        if ($layout->requiresAttitudes($settings)) {
             $reports = HomeroomReport::query()
                 ->where('assessment_period_id', $period->getKey())
                 ->whereIn('assessment_period_student_id', $students->modelKeys())
@@ -175,6 +178,59 @@ final class AssessmentReportPreflight
                     $missingAttitudes->take(8)->values()->all(),
                 );
             }
+        }
+
+        if ((bool) data_get($period->settings, 'collect_promotion_status', false)
+            && $layout->requiresSemesterStatus($settings)) {
+            $reports ??= HomeroomReport::query()
+                ->where('assessment_period_id', $period->getKey())
+                ->whereIn('assessment_period_student_id', $students->modelKeys())
+                ->get()
+                ->keyBy('assessment_period_student_id');
+            $missingSemesterStatus = $students
+                ->filter(function ($student) use ($reports): bool {
+                    $report = $reports->get($student->getKey());
+
+                    return ! $report || blank($report->promotion_status);
+                })
+                ->map(fn ($student): string => "{$student->rombel_name_snapshot} · {$student->student_name_snapshot}");
+
+            if ($missingSemesterStatus->isNotEmpty()) {
+                $this->issue(
+                    $groups,
+                    'homeroom',
+                    'semester_status_missing',
+                    'Status semester atau kenaikan kelas belum lengkap.',
+                    $missingSemesterStatus->count(),
+                    $missingSemesterStatus->take(8)->values()->all(),
+                );
+            }
+        }
+
+        $historicalTemplateId = (int) (
+            data_get($period->settings, '_reporting.published.template_id')
+            ?: data_get($period->settings, '_reporting.pending.template_id')
+        );
+        if (! $template->is_active && $historicalTemplateId !== (int) $template->getKey()) {
+            $this->issue(
+                $groups,
+                'template',
+                'template_not_primary',
+                'Template ini merupakan arsip dan bukan template utama.',
+                1,
+            );
+        }
+
+        $effectiveDate = $template->effective_from?->startOfDay();
+        $referenceDate = $period->report_date?->startOfDay() ?? now()->startOfDay();
+        if ($effectiveDate && $effectiveDate->isAfter($referenceDate)) {
+            $this->issue(
+                $groups,
+                'template',
+                'template_not_effective',
+                'Tanggal berlaku template berada setelah tanggal rapor.',
+                1,
+            );
         }
 
         foreach ([

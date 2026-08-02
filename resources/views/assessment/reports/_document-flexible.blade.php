@@ -189,6 +189,18 @@
                     <table class="summary-table"><tr><td class="report-writing-space">{{ data_get($homeroom, 'homeroom_note', '-') ?: '-' }}</td></tr></table>
                     @break
 
+                @case('semester_status')
+                    @if((bool) data_get($period, 'collect_promotion_status', false))
+                        <p class="section-title">{{ $sectionTitle }}</p>
+                        <table class="summary-table">
+                            <tr>
+                                <th>{{ data_get($templateSettings, 'semester_status_label', 'Status Semester/Kenaikan Kelas') }}</th>
+                                <td>{{ data_get($homeroom, 'promotion_status', '-') ?: '-' }}</td>
+                            </tr>
+                        </table>
+                    @endif
+                    @break
+
                 @case('parent_response')
                     <p class="section-title">{{ $sectionTitle }}</p>
                     <table class="summary-table"><tr><td class="report-writing-space report-writing-space--parent">&nbsp;</td></tr></table>

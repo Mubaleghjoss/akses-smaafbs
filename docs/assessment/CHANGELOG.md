@@ -2,6 +2,17 @@
 
 ## 2026-07-31
 
+- Mengubah status Aktif template menjadi **Template Utama** dengan satu template
+  utama per jenis ASTS/ASAS, aktivasi transaksional, status kelengkapan/kunci,
+  riwayat penggunaan periode, detail read-only, preview, dan versi baru.
+- Memisahkan **Siapkan Revisi** dari **Jadwalkan Kelas Terpilih**, memblokir
+  revisi ganda, serta menambahkan mulai ulang audit-safe tanpa menghapus
+  snapshot/PDF historis.
+- Menambahkan template tiga halaman ASAS dengan bagian Status
+  Semester/Kenaikan Kelas dan preflight sesuai konfigurasi periode.
+- Menambahkan command rekonsiliasi dry-run/apply yang memasang template ASAS,
+  memilih template utama, menghentikan revisi uji lama, dan opsional menyiapkan
+  revisi berikutnya tanpa menjadwalkan job PDF.
 - Menambahkan formatter tampilan nilai bersama: `99.9900` menjadi `99.99`,
   `85.5000` menjadi `85.5`, dan nilai bulat tidak memiliki nol desimal.
 - Menambahkan kelompok dan urutan mapel pada master serta snapshot assignment,

@@ -6699,3 +6699,189 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
         margin-right: 0;
     }
 }
+/* Assessment report template cards and lifecycle guide */
+.assessment-template-guide {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 0.65fr);
+    gap: 1rem;
+    padding: 1.15rem;
+    border: 1px solid rgba(13, 148, 136, 0.24);
+    border-radius: 1rem;
+    background: linear-gradient(135deg, rgba(240, 253, 250, 0.96), rgba(255, 255, 255, 0.98));
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+    color: #0f172a;
+}
+
+.assessment-template-guide h2 {
+    margin: 0.25rem 0 0.55rem;
+    font-size: 1.05rem;
+    font-weight: 800;
+}
+
+.assessment-template-guide ul {
+    display: grid;
+    gap: 0.35rem;
+    margin: 0;
+    padding-left: 1.1rem;
+    color: #334155;
+    font-size: 0.84rem;
+    line-height: 1.55;
+}
+
+.assessment-template-guide__status {
+    display: grid;
+    gap: 0.65rem;
+}
+
+.assessment-template-guide__status article {
+    display: grid;
+    gap: 0.2rem;
+    min-width: 0;
+    padding: 0.75rem 0.85rem;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 0.8rem;
+    background: rgba(255, 255, 255, 0.82);
+}
+
+.assessment-template-guide__status article.is-ready {
+    border-color: rgba(5, 150, 105, 0.3);
+    background: rgba(236, 253, 245, 0.9);
+}
+
+.assessment-template-guide__status article.is-warning {
+    border-color: rgba(217, 119, 6, 0.3);
+    background: rgba(255, 251, 235, 0.94);
+}
+
+.assessment-template-guide__status span {
+    color: #475569;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.assessment-template-guide__status strong {
+    overflow-wrap: anywhere;
+    font-size: 0.88rem;
+}
+
+.fi-ta-content-grid .assessment-template-card {
+    display: flex;
+    min-width: 0;
+    height: 100%;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-radius: 1rem;
+    background: #fff;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.fi-ta-content-grid .assessment-template-card > td {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+}
+
+.fi-ta-content-grid .assessment-template-card .fi-ta-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 0.45rem;
+}
+
+.assessment-report-pipeline-state {
+    display: grid;
+    gap: 0.25rem;
+    margin-top: 1rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid rgba(14, 116, 144, 0.22);
+    border-radius: 0.85rem;
+    background: rgba(236, 254, 255, 0.75);
+}
+
+.assessment-report-pipeline-state strong {
+    color: #164e63;
+    font-size: 0.9rem;
+}
+
+.assessment-report-pipeline-state span {
+    color: #334155;
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+
+.dark .assessment-template-guide,
+.fi-theme-dark .assessment-template-guide {
+    border-color: rgba(45, 212, 191, 0.25);
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(17, 24, 39, 0.98));
+    color: #f8fafc;
+}
+
+.dark .assessment-template-guide ul,
+.fi-theme-dark .assessment-template-guide ul,
+.dark .assessment-template-guide__status span,
+.fi-theme-dark .assessment-template-guide__status span {
+    color: #cbd5e1;
+}
+
+.dark .assessment-template-guide__status article,
+.fi-theme-dark .assessment-template-guide__status article,
+.dark .fi-ta-content-grid .assessment-template-card,
+.fi-theme-dark .fi-ta-content-grid .assessment-template-card {
+    border-color: rgba(148, 163, 184, 0.2);
+    background: rgba(15, 23, 42, 0.82);
+}
+
+.dark .assessment-template-guide__status article.is-ready,
+.fi-theme-dark .assessment-template-guide__status article.is-ready {
+    border-color: rgba(52, 211, 153, 0.32);
+    background: rgba(6, 78, 59, 0.32);
+}
+
+.dark .assessment-template-guide__status article.is-warning,
+.fi-theme-dark .assessment-template-guide__status article.is-warning {
+    border-color: rgba(251, 191, 36, 0.3);
+    background: rgba(120, 53, 15, 0.28);
+}
+
+.dark .assessment-report-pipeline-state,
+.fi-theme-dark .assessment-report-pipeline-state {
+    border-color: rgba(34, 211, 238, 0.22);
+    background: rgba(8, 47, 73, 0.42);
+}
+
+.dark .assessment-report-pipeline-state strong,
+.fi-theme-dark .assessment-report-pipeline-state strong {
+    color: #a5f3fc;
+}
+
+.dark .assessment-report-pipeline-state span,
+.fi-theme-dark .assessment-report-pipeline-state span {
+    color: #cbd5e1;
+}
+
+@media (max-width: 767px) {
+    .assessment-template-guide {
+        grid-template-columns: minmax(0, 1fr);
+        padding: 0.9rem;
+    }
+
+    .assessment-template-guide__status {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .fi-ta-content-grid .assessment-template-card .fi-ta-actions > * {
+        max-width: 100%;
+    }
+
+    .assessment-report-primary-actions {
+        align-items: stretch;
+    }
+
+    .assessment-report-primary-actions .fi-btn {
+        width: 100%;
+        justify-content: center;
+        white-space: normal;
+        text-align: center;
+    }
+}

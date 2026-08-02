@@ -4,6 +4,11 @@
 
 - Periode harus `locked` atau `published`.
 - Template harus sama tipe dengan periode.
+- Hanya satu template yang berstatus **Template Utama** untuk setiap jenis
+  ASTS/ASAS. Aktivasi template baru mengarsipkan template utama lama secara
+  transaksional; snapshot dan PDF historis tidak berubah.
+- Template belum lengkap atau bertanggal berlaku di masa depan tidak dapat
+  dijadikan utama.
 - Pembuatan revisi wajib alasan.
 - Snapshot JSON membekukan identitas, hasil mapel, wali kelas, template, tanda tangan, dan formula.
 - Job membaca snapshot, bukan tabel live.
@@ -34,9 +39,9 @@ Jangan menjalankan worker assessment permanen/paralel pada shared hosting. Janga
 
 ## Pipeline PDF per kelas
 
-1. Pembuatan revisi membekukan snapshot seluruh siswa, tetapi memberi status
-   awal `not_scheduled` dan tidak membuat job per siswa.
-2. Admin memilih kelas. Sistem mengirim sekitar satu
+1. Aksi **Siapkan Revisi** membekukan snapshot seluruh siswa, memberi status
+   awal `not_scheduled`, dan tidak membuat job apa pun.
+2. Admin memilih kelas lalu menjalankan **Jadwalkan Kelas Terpilih**. Sistem mengirim sekitar satu
    `GenerateClassReportPipeline` untuk setiap kelas aktif.
 3. Satu putaran memproses maksimal
    `ASSESSMENT_REPORT_STUDENTS_PER_JOB` siswa (default 3) atau maksimal
@@ -45,6 +50,13 @@ Jangan menjalankan worker assessment permanen/paralel pada shared hosting. Janga
    siswa valid, pipeline membuat satu PDF gabungan kelas.
 5. **Lanjutkan Kelas Terpilih** memakai revisi yang sama; tidak membuat snapshot
    baru dan tidak mengulang PDF yang sudah selesai.
+
+Sistem menolak revisi baru selama masih ada run `prepared` atau `running`.
+Gunakan **Mulai Ulang dengan Revisi Baru**, isi alasan, lalu sistem membatalkan
+run lama secara audit-safe dan menyiapkan revisi berikutnya tanpa job.
+Membuka kembali periode untuk koreksi nilai juga membatalkan run rapor terbuka
+dengan alasan koreksi yang sama, sehingga job lama tidak dapat merender data
+sebelum koreksi.
 
 Tombol **Hentikan Semua Antrean PDF** memerlukan alasan dan konfirmasi dua
 tahap. Aksi ini hanya menghapus baris queue bernama tepat
@@ -101,6 +113,10 @@ meskipun method Livewire dipanggil secara langsung.
 - Template draft **SMA AFBS 3 Halaman** membagi isi menjadi sikap/ringkasan,
   capaian kompetensi, lalu ekstrakurikuler-prestasi-absensi-catatan-tanggapan
   orang tua-tanda tangan.
+- Template ASAS tiga halaman menambahkan bagian
+  **Status Semester/Kenaikan Kelas** pada halaman 3. Bagian ini dirender dan
+  diperiksa preflight hanya ketika periode mengaktifkan
+  `settings.collect_promotion_status`.
 
 - Preview memakai satu siswa nyata dari periode, dirender sinkron tanpa
   snapshot/job/file permanen, diberi label **Pratinjau—bukan rapor resmi**,
@@ -134,3 +150,25 @@ diizinkan.
 Nilai yang tampil pada Input Nilai, preview, rekap, dan PDF dibatasi maksimal
 dua desimal dan nol berlebih dibuang. Nilai database `decimal:4`, formula, serta
 detail perhitungan tidak diubah.
+
+## Rekonsiliasi template produksi
+
+Command ini tidak pernah menjadwalkan job PDF. Jalankan dry-run dahulu:
+
+```bash
+php artisan assessment:reconcile-report-templates --period=1 --cancel-open --prepare-new
+```
+
+Sesudah backup database dan private report storage, terapkan dengan akun admin
+yang sah:
+
+```bash
+php artisan assessment:reconcile-report-templates --apply --actor=1 \
+  --period=1 --cancel-open --prepare-new
+```
+
+Hasilnya memasang template standar dan tiga halaman ASTS/ASAS yang belum ada,
+menjadikan tiga halaman sebagai template utama, menyalin identitas bersama dari
+ASTS ke ASAS, menghentikan revisi terbuka yang digantikan, dan menyiapkan revisi
+berikutnya. Admin tetap harus memilih kelas pilot melalui UI sebelum antrean PDF
+berisi job.
