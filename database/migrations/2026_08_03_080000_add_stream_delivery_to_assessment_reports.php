@@ -55,7 +55,7 @@ return new class extends Migration
                         JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION,
                     );
                     $streamable = empty($row->pdf_path)
-                        && in_array((string) $row->generation_status, ['not_scheduled', 'pending', 'processing'], true);
+                        && in_array((string) $row->generation_status, ['not_scheduled', 'pending', 'processing', 'ready'], true);
 
                     DB::table('assessment_report_snapshots')
                         ->where('id', $row->id)
