@@ -9,14 +9,23 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('assessment_report_snapshots', function (Blueprint $table): void {
-            $table->string('delivery_mode', 20)->default('stored')->after('generation_status')->index();
-            $table->string('snapshot_checksum', 64)->nullable()->after('snapshot_data');
-        });
+        if (! Schema::hasColumn('assessment_report_snapshots', 'delivery_mode')) {
+            Schema::table('assessment_report_snapshots', function (Blueprint $table): void {
+                $table->string('delivery_mode', 20)->default('stored')->after('generation_status')->index();
+            });
+        }
 
-        Schema::table('assessment_class_report_artifacts', function (Blueprint $table): void {
-            $table->dateTime('cache_expires_at')->nullable()->after('generated_at')->index();
-        });
+        if (! Schema::hasColumn('assessment_report_snapshots', 'snapshot_checksum')) {
+            Schema::table('assessment_report_snapshots', function (Blueprint $table): void {
+                $table->string('snapshot_checksum', 64)->nullable()->after('snapshot_data');
+            });
+        }
+
+        if (! Schema::hasColumn('assessment_class_report_artifacts', 'cache_expires_at')) {
+            Schema::table('assessment_class_report_artifacts', function (Blueprint $table): void {
+                $table->dateTime('cache_expires_at')->nullable()->after('generated_at')->index();
+            });
+        }
 
         $canonicalize = function (mixed $value) use (&$canonicalize): mixed {
             if (! is_array($value)) {
@@ -64,7 +73,7 @@ return new class extends Migration
                 ->chunkById(100, function ($runs): void {
                     foreach ($runs as $run) {
                         $readySnapshots = DB::table('assessment_report_snapshots')
-                            ->where('generation_run_id', $run->id)
+                            ->where('assessment_report_generation_run_id', $run->id)
                             ->whereIn('generation_status', ['ready', 'completed'])
                             ->count();
 
