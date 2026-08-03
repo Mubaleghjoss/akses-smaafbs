@@ -64,6 +64,7 @@ class AssessmentWorkflowTest extends TestCase
         $reportStructureMigration->up();
         $pipelineMigration = require database_path('migrations/2026_07_31_190000_add_assessment_report_generation_runs.php');
         $pipelineMigration->up();
+        (require database_path('migrations/2026_08_03_080000_add_stream_delivery_to_assessment_reports.php'))->up();
         $this->artisan('assessment:install-defaults')->assertSuccessful();
         ReportTemplate::query()->update(['is_active' => false]);
         foreach ([
@@ -332,30 +333,9 @@ class AssessmentWorkflowTest extends TestCase
         $snapshot = ReportSnapshot::query()
             ->where('assessment_period_id', $period->getKey())
             ->firstOrFail();
-        $storage = app(AssessmentReportStorage::class);
-        $studentPdf = "%PDF-1.4\nstudent report\n%%EOF";
-        $studentPath = $storage->individualPath($snapshot);
-        Storage::disk('local')->put($studentPath, $studentPdf);
-        $snapshot->forceFill([
-            'generation_status' => ReportGenerationStatus::COMPLETED,
-            'pdf_path' => $studentPath,
-            'checksum' => hash('sha256', $studentPdf),
-            'generated_at' => now(),
-        ])->save();
-        ClassReportArtifact::query()
-            ->where('assessment_period_id', $period->getKey())
-            ->get()
-            ->each(function (ClassReportArtifact $artifact) use ($storage): void {
-                $classPdf = "%PDF-1.4\nclass report {$artifact->getKey()}\n%%EOF";
-                $classPath = $storage->classPath($artifact);
-                Storage::disk('local')->put($classPath, $classPdf);
-                $artifact->forceFill([
-                    'generation_status' => ReportGenerationStatus::COMPLETED,
-                    'pdf_path' => $classPath,
-                    'checksum' => hash('sha256', $classPdf),
-                    'generated_at' => now(),
-                ])->save();
-            });
+        $this->assertSame(ReportGenerationStatus::READY, $snapshot->generation_status);
+        $this->assertSame('stream', $snapshot->delivery_mode);
+        $this->assertNull($snapshot->pdf_path);
         $snapshot->template->update(['is_active' => false]);
         $snapshot->template->replicate()->fill([
             'code' => 'ASTS-REPLACEMENT',

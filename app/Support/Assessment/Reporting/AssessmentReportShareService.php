@@ -19,7 +19,10 @@ class AssessmentReportShareService
 {
     public const ALLOWED_EXPIRY_DAYS = [1, 3, 7];
 
-    public function __construct(private readonly AssessmentReportStorage $storage) {}
+    public function __construct(
+        private readonly AssessmentReportStorage $storage,
+        private readonly AssessmentSnapshotIntegrity $integrity,
+    ) {}
 
     /**
      * @return array{link:ReportShareLink,token:string}
@@ -220,8 +223,12 @@ class AssessmentReportShareService
         $status = $snapshot->generation_status;
         $status = $status instanceof \BackedEnum ? $status->value : (string) $status;
 
-        if ($status !== 'completed' || ! $this->storage->isValid($snapshot->pdf_path, $snapshot->checksum)) {
-            throw new GoneHttpException('PDF rapor belum tersedia atau tidak valid.');
+        $downloadable = (string) $snapshot->delivery_mode === 'stream'
+            ? $status === 'ready' && $this->integrity->isValid($snapshot)
+            : $status === 'completed' && $this->storage->isValid($snapshot->pdf_path, $snapshot->checksum);
+
+        if (! $downloadable) {
+            throw new GoneHttpException('Rapor belum tersedia atau snapshot tidak valid.');
         }
 
         $periodStatus = $period?->status

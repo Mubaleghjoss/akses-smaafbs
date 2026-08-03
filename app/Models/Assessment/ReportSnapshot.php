@@ -24,7 +24,9 @@ class ReportSnapshot extends Model
         'revision',
         'template_version',
         'snapshot_data',
+        'snapshot_checksum',
         'generation_status',
+        'delivery_mode',
         'pdf_path',
         'checksum',
         'error_message',
@@ -55,6 +57,7 @@ class ReportSnapshot extends Model
                 'revision',
                 'template_version',
                 'snapshot_data',
+                'snapshot_checksum',
                 'generated_by',
             ];
 

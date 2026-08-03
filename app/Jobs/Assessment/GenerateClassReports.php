@@ -143,6 +143,9 @@ class GenerateClassReports implements ShouldQueue
                 'checksum' => $stored['checksum'],
                 'error_message' => null,
                 'generated_at' => Carbon::now(),
+                'cache_expires_at' => Carbon::now()->addHours(
+                    max(1, (int) config('assessment.reports.class_cache_hours', 24)),
+                ),
             ])->save();
 
             AuditLog::query()->create([
@@ -213,6 +216,7 @@ class GenerateClassReports implements ShouldQueue
         $status = $status instanceof \BackedEnum ? $status->value : (string) $status;
 
         return $status === 'completed'
+            && $artifact->cache_expires_at?->isFuture()
             && $storage->isValid($artifact->pdf_path, $artifact->checksum);
     }
 

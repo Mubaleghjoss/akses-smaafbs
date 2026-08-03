@@ -164,7 +164,7 @@
                             <span>Siapkan snapshot terlebih dahulu. Langkah ini belum membuat job PDF.</span>
                         @elseif ($run->status->value === 'prepared')
                             <strong>Revisi {{ $run->revision }} siap · kelas belum dijadwalkan</strong>
-                            <span>Snapshot sudah dibekukan. Pilih kelas untuk mulai membuat PDF secara bertahap.</span>
+                            <span>Snapshot siswa sudah siap diunduh tanpa file permanen. Pilih kelas hanya jika membutuhkan PDF gabungan 24 jam.</span>
                         @elseif ($run->status->value === 'running')
                             <strong>Revisi {{ $run->revision }} sedang diproses</strong>
                             <span>Kelas yang belum masuk antrean masih dapat dipilih dan dijadwalkan pada revisi yang sama.</span>
@@ -202,8 +202,8 @@
                 <div class="assessment-report-card__head">
                     <div>
                         <span class="assessment-report-eyebrow">Progres</span>
-                        <h2>Pembuatan PDF per kelas</h2>
-                        <p>PDF individual dibuat bertahap, kemudian digabung menjadi satu PDF kelas.</p>
+                        <h2>Cache PDF per kelas</h2>
+                        <p>PDF siswa dirender langsung saat diunduh. Bagian ini hanya membuat satu PDF gabungan yang otomatis dihapus setelah 24 jam.</p>
                     </div>
                     @if ($run)
                         <span class="assessment-report-status is-{{ $run->status->value }}">{{ $run->status->label() }} · Revisi {{ $run->revision }}</span>
@@ -212,8 +212,8 @@
 
                 @if ($run)
                     <div class="assessment-report-stat-grid">
-                        <article><strong>{{ $run->completed_students }}/{{ $run->total_students }}</strong><span>PDF siswa selesai</span></article>
-                        <article><strong>{{ $run->completed_classes }}/{{ $run->total_classes }}</strong><span>PDF kelas selesai</span></article>
+                        <article><strong>{{ $run->completed_students }}/{{ $run->total_students }}</strong><span>Snapshot siswa siap</span></article>
+                        <article><strong>{{ $run->completed_classes }}/{{ $run->total_classes }}</strong><span>Cache kelas tersedia</span></article>
                         <article><strong>{{ $run->status->label() }}</strong><span>Status pipeline</span></article>
                     </div>
                 @endif
@@ -226,12 +226,13 @@
                                 <span class="assessment-report-status is-{{ $row['status'] }}">{{ $row['status_label'] }}</span>
                             </div>
                             <div class="assessment-report-progress"><span style="width: {{ $row['student_count'] > 0 ? round($row['completed_students'] / $row['student_count'] * 100) : 0 }}%"></span></div>
-                            <p>{{ $row['completed_students'] }}/{{ $row['student_count'] }} PDF siswa selesai.</p>
+                            <p>{{ $row['completed_students'] }}/{{ $row['student_count'] }} snapshot siswa siap.</p>
+                            @if ($row['cache_expires_at'])<p>Cache berlaku sampai {{ $row['cache_expires_at'] }}.</p>@endif
                             @if ($row['error'])<p class="assessment-report-error">{{ $row['error'] }}</p>@endif
                             <div class="assessment-report-result-actions">
                                 @if ($row['download_url'])<x-filament::button tag="a" href="{{ $row['download_url'] }}" target="_blank" size="sm" color="gray">Download PDF Kelas</x-filament::button>@endif
                                 @if ($this->canGenerateReports())
-                                    @if ($row['status'] === 'failed')<x-filament::button wire:click="retryClass({{ $row['id'] }})" size="sm" color="warning">Coba Lagi</x-filament::button>@endif
+                                    @if (in_array($row['status'], ['failed', 'expired'], true))<x-filament::button wire:click="retryClass({{ $row['id'] }})" size="sm" color="warning">Buat Ulang Cache</x-filament::button>@endif
                                 @endif
                             </div>
                         </article>
@@ -279,14 +280,14 @@
                         <x-filament::button size="sm" color="gray" wire:click="clearShareSelection">Kosongkan</x-filament::button>
                         <x-filament::button size="sm" color="success" wire:click="issueSelectedShareLinks" wire:confirm="Buat tautan sementara untuk seluruh siswa terpilih?" :disabled="count($selectedShareSnapshotIds) === 0 || ! $this->selectedPeriodIsPublished()">Buat {{ count($selectedShareSnapshotIds) }} Tautan</x-filament::button>
                     </div>
-                    @if (! $this->selectedPeriodIsPublished())<div class="assessment-report-inline-note">Periode belum published. Selesaikan seluruh PDF dan terbitkan periode sebelum membuat tautan.</div>@endif
+                    @if (! $this->selectedPeriodIsPublished())<div class="assessment-report-inline-note">Periode belum published. Pastikan seluruh snapshot siap lalu terbitkan periode sebelum membuat tautan.</div>@endif
                 @endif
 
                 <div class="assessment-report-student-list">
                     @forelse ($snapshotRows as $row)
                         <article>
                             @if ($this->canPublishReports())
-                                <input type="checkbox" value="{{ $row['id'] }}" wire:model.live="selectedShareSnapshotIds" @disabled($row['status'] !== 'completed') aria-label="Pilih {{ $row['student'] }}">
+                                <input type="checkbox" value="{{ $row['id'] }}" wire:model.live="selectedShareSnapshotIds" @disabled(! in_array($row['status'], ['ready', 'completed'], true)) aria-label="Pilih {{ $row['student'] }}">
                             @endif
                             <div class="assessment-report-student-copy">
                                 <strong>{{ $row['student'] }}</strong>
@@ -314,7 +315,7 @@
 
         <x-filament::modal id="assessment-stop-reports-modal" width="lg">
             <x-slot name="heading">Hentikan Semua Antrean PDF</x-slot>
-            <x-slot name="description">Hanya queue assessment-reports yang dibersihkan. Queue Literasi dan default tidak disentuh; PDF yang sudah selesai tetap tersimpan.</x-slot>
+            <x-slot name="description">Hanya queue assessment-reports yang dibersihkan. Queue Literasi dan default tidak disentuh; snapshot siswa tetap aman.</x-slot>
             <label class="assessment-report-stop-field"><span>Alasan penghentian</span><textarea wire:model="stopReason" rows="4" maxlength="1000" placeholder="Minimal 10 karakter"></textarea></label>
             <x-slot name="footerActions">
                 <x-filament::button color="gray" x-on:click="$dispatch('close-modal', { id: 'assessment-stop-reports-modal' })">Batal</x-filament::button>

@@ -12,8 +12,10 @@
 - Pembuatan revisi wajib alasan.
 - Snapshot JSON membekukan identitas, hasil mapel, wali kelas, template, tanda tangan, dan formula.
 - Job membaca snapshot, bukan tabel live.
-- PDF siswa dan gabungan kelas disimpan pada disk `local`, di bawah `storage/app/private/assessment-reports`.
-- Penyimpanan atomik menghasilkan checksum SHA-256.
+- Snapshot baru memakai mode `stream`: PDF siswa dirender saat diunduh dan tidak disimpan permanen. Snapshot JSON immutable memiliki checksum SHA-256 sebagai bukti integritas.
+- PDF historis mode `stored` tetap dibaca dari disk privat. PDF gabungan kelas baru menjadi cache privat 24 jam di `storage/app/private/assessment-reports`.
+- `php artisan app:storage-audit` memisahkan ukuran PDF, aset build, impor, temporary upload, backup media, dan file rapor yatim. `app:storage-maintain --apply` hanya menyentuh target allowlist.
+- File PDF rapor yang tidak lagi dirujuk database dipindahkan dahulu ke `storage/app/private/orphan-quarantine`; scheduler baru menghapus isi karantina setelah berumur minimal tujuh hari.
 - Status PDF: `not_scheduled`, `pending`, `processing`, `completed`, `failed`,
   dan `cancelled`.
 - Satu `assessment_report_generation_runs` mengendalikan progres untuk pasangan
@@ -21,8 +23,7 @@
 - Job memakai `WithoutOverlapping`, retry/backoff, dan aman dijalankan ulang.
 - Lock job dibagi antara nama job legacy dan canonical agar payload antrean dari
   deploy sebelumnya tidak dapat menulis PDF yang sama secara paralel.
-- Publish menyimpan pasangan template dan revisi aktif pada settings periode,
-  serta memvalidasi checksum PDF siswa dan PDF gabungan seluruh kelas.
+- Publish menyimpan pasangan template dan revisi aktif pada settings periode serta memvalidasi kelengkapan dan checksum snapshot. Cache PDF gabungan kelas bukan syarat publish.
 - Revisi langsung pada periode published hanya boleh memakai template yang sama,
   memerlukan hak publish, mencabut tautan lama, dan mengembalikan periode ke
   `locked` sampai revisi baru selesai serta dipublish ulang.
@@ -40,16 +41,12 @@ Jangan menjalankan worker assessment permanen/paralel pada shared hosting. Janga
 ## Pipeline PDF per kelas
 
 1. Aksi **Siapkan Revisi** membekukan snapshot seluruh siswa, memberi status
-   awal `not_scheduled`, dan tidak membuat job apa pun.
+   awal `ready`, dan tidak membuat job apa pun.
 2. Admin memilih kelas lalu menjalankan **Jadwalkan Kelas Terpilih**. Sistem mengirim sekitar satu
    `GenerateClassReportPipeline` untuk setiap kelas aktif.
-3. Satu putaran memproses maksimal
-   `ASSESSMENT_REPORT_STUDENTS_PER_JOB` siswa (default 3) atau maksimal
-   `ASSESSMENT_REPORT_PIPELINE_MAX_SECONDS` detik (default 40).
-4. Bila masih ada siswa, job menjadwalkan kelanjutan dirinya. Setelah semua PDF
-   siswa valid, pipeline membuat satu PDF gabungan kelas.
-5. **Lanjutkan Kelas Terpilih** memakai revisi yang sama; tidak membuat snapshot
-   baru dan tidak mengulang PDF yang sudah selesai.
+3. Job memvalidasi seluruh checksum snapshot kelas lalu membuat tepat satu PDF gabungan kelas.
+4. Cache kelas berlaku sesuai `ASSESSMENT_REPORT_CLASS_CACHE_HOURS` (default 24 jam) dan dibersihkan scheduler setiap jam.
+5. **Buat Ulang Cache** memakai revisi yang sama setelah cache gagal atau kedaluwarsa; snapshot siswa tidak dibuat ulang.
 
 Sistem menolak revisi baru selama masih ada run `prepared` atau `running`.
 Gunakan **Mulai Ulang dengan Revisi Baru**, isi alasan, lalu sistem membatalkan
@@ -91,6 +88,7 @@ php artisan assessment:reports-reconcile-queue --apply --actor=1 \
 - Masa berlaku: 1, 3, atau 7 hari (default UI 1 hari/24 jam).
 - Token dapat dicabut, terkena rate limit, dan setiap download diaudit.
 - Reopen/regenerate mencabut link revisi lama.
+- Link merender PDF siswa dari snapshot melalui slot render database dan tidak membuat file permanen.
 - Link hanya dapat dibuat dan dipakai untuk pasangan template-revisi terbaru
   yang tercatat sebagai set published.
 - Token plaintext hanya ditampilkan saat dibuat; tidak bisa dipulihkan dari database.

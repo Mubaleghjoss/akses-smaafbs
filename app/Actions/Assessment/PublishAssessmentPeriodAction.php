@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Support\Assessment\AssessmentAuditLogger;
 use App\Support\Assessment\AssessmentWorkflowGuard;
 use App\Support\Assessment\Reporting\AssessmentReportStorage;
+use App\Support\Assessment\Reporting\AssessmentSnapshotIntegrity;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -23,6 +24,7 @@ final class PublishAssessmentPeriodAction
         private readonly AssessmentWorkflowGuard $guard,
         private readonly AssessmentAuditLogger $audit,
         private readonly AssessmentReportStorage $storage,
+        private readonly AssessmentSnapshotIntegrity $integrity,
     ) {}
 
     public function execute(User $actor, AssessmentPeriod $period): AssessmentPeriod
@@ -74,20 +76,26 @@ final class PublishAssessmentPeriodAction
                 ->where('assessment_report_template_id', $templateId)
                 ->where('revision', $latestRevision)
                 ->whereHas('student', fn ($query) => $query->where('is_active', true))
-                ->where('generation_status', ReportGenerationStatus::COMPLETED->value)
-                ->whereNotNull('pdf_path')
-                ->whereNotNull('checksum')
                 ->get();
             $validSnapshots = $snapshots->filter(
-                fn (ReportSnapshot $snapshot): bool => $this->storage->isValid(
-                    $snapshot->pdf_path,
-                    $snapshot->checksum,
-                ),
+                function (ReportSnapshot $snapshot): bool {
+                    $status = $snapshot->generation_status instanceof \BackedEnum
+                        ? $snapshot->generation_status->value
+                        : (string) $snapshot->generation_status;
+
+                    if ((string) $snapshot->delivery_mode === 'stream') {
+                        return $status === ReportGenerationStatus::READY->value
+                            && $this->integrity->isValid($snapshot);
+                    }
+
+                    return $status === ReportGenerationStatus::COMPLETED->value
+                        && $this->storage->isValid($snapshot->pdf_path, $snapshot->checksum);
+                },
             )->count();
 
             if ($latestRevision <= 0 || $validSnapshots !== $expected) {
                 throw ValidationException::withMessages([
-                    'reports' => "PDF rapor revisi terbaru belum lengkap atau checksum tidak valid ({$validSnapshots} dari {$expected}). Tunggu antrean selesai atau ulangi job yang gagal.",
+                    'reports' => "Snapshot rapor revisi terbaru belum lengkap atau checksum tidak valid ({$validSnapshots} dari {$expected}). Siapkan ulang revisi setelah data diperbaiki.",
                 ]);
             }
 
@@ -105,6 +113,7 @@ final class PublishAssessmentPeriodAction
                 ->where('generation_status', ReportGenerationStatus::COMPLETED->value)
                 ->whereNotNull('pdf_path')
                 ->whereNotNull('checksum')
+                ->where('cache_expires_at', '>', now())
                 ->get();
             $validArtifacts = $artifacts->filter(
                 fn (ClassReportArtifact $artifact): bool => $this->storage->isValid(
@@ -113,12 +122,6 @@ final class PublishAssessmentPeriodAction
                 ),
             )->count();
             $expectedArtifacts = $periodRombelIds->count();
-
-            if ($validArtifacts !== $expectedArtifacts) {
-                throw ValidationException::withMessages([
-                    'reports' => "PDF gabungan kelas belum lengkap atau checksum tidak valid ({$validArtifacts} dari {$expectedArtifacts}).",
-                ]);
-            }
 
             $alreadyPublished = $this->isStatus($locked, AssessmentPeriodStatus::PUBLISHED);
             $publishedSetUnchanged = $alreadyPublished
@@ -134,6 +137,8 @@ final class PublishAssessmentPeriodAction
                 'revision' => $latestRevision,
                 'student_report_count' => $validSnapshots,
                 'class_report_count' => $validArtifacts,
+                'expected_class_report_count' => $expectedArtifacts,
+                'individual_delivery_mode' => 'stream',
                 'published_at' => now()->toIso8601String(),
                 'published_by' => (int) $actor->getKey(),
             ]);

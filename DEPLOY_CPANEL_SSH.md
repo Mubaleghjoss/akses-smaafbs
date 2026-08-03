@@ -205,6 +205,20 @@ npm ci
 npm run build
 ```
 
+Pada update produksi normal, aset `public/build` yang sudah dikomit digunakan
+langsung sehingga server tidak menjalankan npm dan cache hosting tidak terus
+bertambah. Build di server hanya untuk keadaan khusus:
+
+```bash
+BUILD_ASSETS_ON_SERVER=true bash scripts/cpanel-update.sh NAMA_BRANCH
+```
+
+Audit cache hosting selalu dimulai dari dry-run:
+
+```bash
+bash scripts/cpanel-storage-audit.sh --dry-run
+```
+
 Jika `npm` tidak dikenali, aktifkan Node.js dari cPanel. Pilih Node.js 22 jika tersedia.
 
 ### Catatan penting aset dan file upload

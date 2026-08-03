@@ -8,10 +8,13 @@ use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodStudent;
 use App\Models\Assessment\ReportSnapshot;
 use App\Models\Assessment\ReportTemplate;
+use App\Exceptions\AssessmentReportRenderBusy;
 use App\Support\Assessment\Reporting\AssessmentReportRenderer;
+use App\Support\Assessment\Reporting\AssessmentReportRenderGate;
 use App\Support\Assessment\Reporting\AssessmentReportShareService;
 use App\Support\Assessment\Reporting\AssessmentReportStorage;
 use App\Support\Assessment\Reporting\AssessmentReportWatermark;
+use App\Support\Assessment\Reporting\AssessmentSnapshotIntegrity;
 use App\Support\Assessment\Reporting\BuildAssessmentReportPreviewSnapshot;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -26,6 +29,7 @@ class AssessmentReportController extends Controller
         ReportTemplate $reportTemplate,
         AssessmentPeriodStudent $periodStudent,
         AssessmentReportRenderer $renderer,
+        AssessmentReportRenderGate $renderGate,
         BuildAssessmentReportPreviewSnapshot $builder,
     ): Response {
         $this->abortUnlessEnabled();
@@ -43,7 +47,13 @@ class AssessmentReportController extends Controller
 
         $preview = $builder->build($assessmentPeriod, $reportTemplate, $periodStudent);
 
-        return response($renderer->renderStudent($preview), 200, [
+        try {
+            $contents = $renderGate->run(fn (): string => $renderer->renderStudent($preview));
+        } catch (AssessmentReportRenderBusy $exception) {
+            return $this->busyResponse($exception);
+        }
+
+        return response($contents, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="pratinjau-rapor.pdf"',
             'Cache-Control' => 'private, no-store, max-age=0, must-revalidate',
@@ -56,6 +66,7 @@ class AssessmentReportController extends Controller
     public function preview(
         ReportSnapshot $reportSnapshot,
         AssessmentReportRenderer $renderer,
+        AssessmentReportRenderGate $renderGate,
         AssessmentReportWatermark $watermark,
     ): Response {
         $this->abortUnlessEnabled();
@@ -82,7 +93,13 @@ class AssessmentReportController extends Controller
             'snapshot_data' => $snapshotData,
         ]);
 
-        return response($renderer->renderStudent($preview), 200, [
+        try {
+            $contents = $renderGate->run(fn (): string => $renderer->renderStudent($preview));
+        } catch (AssessmentReportRenderBusy $exception) {
+            return $this->busyResponse($exception);
+        }
+
+        return response($contents, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="pratinjau-rapor.pdf"',
             'Cache-Control' => 'private, no-store, max-age=0, must-revalidate',
@@ -95,10 +112,29 @@ class AssessmentReportController extends Controller
     public function downloadSnapshot(
         ReportSnapshot $reportSnapshot,
         AssessmentReportStorage $storage,
-    ): StreamedResponse {
+        AssessmentReportRenderer $renderer,
+        AssessmentReportRenderGate $renderGate,
+        AssessmentSnapshotIntegrity $integrity,
+    ): Response|StreamedResponse {
         $this->abortUnlessEnabled();
         Gate::authorize('view', $reportSnapshot);
-        $this->abortUnlessValid($reportSnapshot, $storage);
+        $this->abortUnlessValid($reportSnapshot, $storage, $integrity);
+
+        if ((string) $reportSnapshot->delivery_mode === 'stream') {
+            try {
+                $contents = $renderGate->run(fn (): string => $renderer->renderStudent($reportSnapshot));
+            } catch (AssessmentReportRenderBusy $exception) {
+                return $this->busyResponse($exception);
+            }
+
+            $this->auditPrivateDownload($reportSnapshot, request());
+
+            return response($contents, 200, $this->downloadHeaders() + [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="'.basename($storage->individualPath($reportSnapshot)).'"',
+            ]);
+        }
+
         $this->auditPrivateDownload($reportSnapshot, request());
 
         return $storage->disk()->download(
@@ -114,7 +150,12 @@ class AssessmentReportController extends Controller
     ): StreamedResponse {
         $this->abortUnlessEnabled();
         Gate::authorize('view', $classReportArtifact);
-        $this->abortUnlessValid($classReportArtifact, $storage);
+        abort_unless(
+            $classReportArtifact->cache_expires_at?->isFuture()
+                && $storage->isValid($classReportArtifact->pdf_path, $classReportArtifact->checksum),
+            410,
+            'Cache PDF kelas sudah kedaluwarsa. Silakan jadwalkan ulang kelas ini.',
+        );
         $this->auditPrivateDownload($classReportArtifact, request());
 
         return $storage->disk()->download(
@@ -129,9 +170,28 @@ class AssessmentReportController extends Controller
         string $token,
         AssessmentReportShareService $shares,
         AssessmentReportStorage $storage,
-    ): StreamedResponse {
+        AssessmentReportRenderer $renderer,
+        AssessmentReportRenderGate $renderGate,
+    ): Response|StreamedResponse {
         $this->abortUnlessEnabled();
         $link = $shares->resolve($token);
+        $snapshot = $link->getRelation('snapshot');
+
+        if ((string) $snapshot->delivery_mode === 'stream') {
+            try {
+                $contents = $renderGate->run(fn (): string => $renderer->renderStudent($snapshot));
+            } catch (AssessmentReportRenderBusy $exception) {
+                return $this->busyResponse($exception);
+            }
+
+            $shares->recordDownload($link, $request->ip(), $request->userAgent());
+
+            return response($contents, 200, $this->downloadHeaders() + [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="'.basename($storage->individualPath($snapshot)).'"',
+            ]);
+        }
+
         $link = $shares->recordDownload($link, $request->ip(), $request->userAgent());
         $snapshot = $link->getRelation('snapshot');
 
@@ -150,15 +210,16 @@ class AssessmentReportController extends Controller
     private function abortUnlessValid(
         ReportSnapshot|ClassReportArtifact $report,
         AssessmentReportStorage $storage,
+        AssessmentSnapshotIntegrity $integrity,
     ): void {
         $status = $report->generation_status;
         $status = $status instanceof \BackedEnum ? $status->value : (string) $status;
 
-        abort_unless(
-            $status === 'completed' && $storage->isValid($report->pdf_path, $report->checksum),
-            404,
-            'PDF rapor belum tersedia atau tidak valid.',
-        );
+        $valid = $report instanceof ReportSnapshot && (string) $report->delivery_mode === 'stream'
+            ? $status === 'ready' && $integrity->isValid($report)
+            : $status === 'completed' && $storage->isValid($report->pdf_path, $report->checksum);
+
+        abort_unless($valid, 404, 'Rapor belum tersedia atau data snapshot tidak valid.');
     }
 
     private function auditPrivateDownload(
@@ -194,5 +255,16 @@ class AssessmentReportController extends Controller
             'X-Content-Type-Options' => 'nosniff',
             'X-Robots-Tag' => 'noindex, nofollow, noarchive',
         ];
+    }
+
+    private function busyResponse(AssessmentReportRenderBusy $exception): Response
+    {
+        return response()->view('assessment.reports.busy', [
+            'retryAfterSeconds' => $exception->retryAfterSeconds,
+        ], 429, [
+            'Retry-After' => (string) $exception->retryAfterSeconds,
+            'Cache-Control' => 'private, no-store, max-age=0, must-revalidate',
+            'X-Robots-Tag' => 'noindex, nofollow, noarchive',
+        ]);
     }
 }

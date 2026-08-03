@@ -19,6 +19,13 @@ return [
         'disk' => env('ASSESSMENT_REPORT_DISK', 'local'),
         'queue' => env('ASSESSMENT_REPORT_QUEUE', 'assessment-reports'),
         'path' => 'assessment-reports',
+        'individual_mode' => env('ASSESSMENT_REPORT_INDIVIDUAL_MODE', 'stream'),
+        'class_cache_hours' => max(1, (int) env('ASSESSMENT_REPORT_CLASS_CACHE_HOURS', 24)),
+        'render' => [
+            'active_slots' => max(1, (int) env('ASSESSMENT_REPORT_RENDER_ACTIVE_SLOTS', 1)),
+            'lock_seconds' => max(30, (int) env('ASSESSMENT_REPORT_RENDER_LOCK_SECONDS', 180)),
+            'retry_after_seconds' => max(5, (int) env('ASSESSMENT_REPORT_RENDER_RETRY_AFTER_SECONDS', 10)),
+        ],
         'worker' => [
             'max_time' => (int) env('ASSESSMENT_REPORT_WORKER_MAX_TIME', 50),
             'timeout' => (int) env('ASSESSMENT_REPORT_WORKER_TIMEOUT', 180),

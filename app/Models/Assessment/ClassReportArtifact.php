@@ -28,6 +28,7 @@ class ClassReportArtifact extends Model
         'queued_at',
         'started_at',
         'generated_at',
+        'cache_expires_at',
         'generated_by',
     ];
 
@@ -39,6 +40,7 @@ class ClassReportArtifact extends Model
             'queued_at' => 'datetime',
             'started_at' => 'datetime',
             'generated_at' => 'datetime',
+            'cache_expires_at' => 'datetime',
             'generated_by' => 'integer',
         ];
     }

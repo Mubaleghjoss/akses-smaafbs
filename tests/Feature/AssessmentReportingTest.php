@@ -35,10 +35,12 @@ use App\Support\Assessment\Reporting\AssessmentReportRenderer;
 use App\Support\Assessment\Reporting\AssessmentReportShareService;
 use App\Support\Assessment\Reporting\AssessmentReportStorage;
 use App\Support\Assessment\Reporting\AssessmentReportWatermark;
+use App\Support\Assessment\Reporting\AssessmentReportCacheCleaner;
 use App\Support\Assessment\Reporting\CreateReportSnapshotsAction;
 use App\Support\Assessment\Reporting\RetryReportGenerationAction;
 use App\Support\Assessment\Reporting\ScheduleReportClassesAction;
 use App\Support\Assessment\Reporting\StopAssessmentReportQueueAction;
+use App\Support\Storage\AssessmentReportOrphanManager;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -73,6 +75,8 @@ class AssessmentReportingTest extends TestCase
         $reportStructureMigration->up();
         $pipelineMigration = require database_path('migrations/2026_07_31_190000_add_assessment_report_generation_runs.php');
         $pipelineMigration->up();
+        $streamDeliveryMigration = require database_path('migrations/2026_08_03_080000_add_stream_delivery_to_assessment_reports.php');
+        $streamDeliveryMigration->up();
         DB::table('users')->insert([
             'id' => 99,
             'name' => 'Kurikulum Test',
@@ -559,7 +563,7 @@ class AssessmentReportingTest extends TestCase
         }
     }
 
-    public function test_publish_rejects_missing_or_corrupt_student_and_class_files(): void
+    public function test_publish_rejects_invalid_student_report_but_does_not_require_class_cache(): void
     {
         Storage::fake('local');
         [$period, $rombel, $students, $template] = $this->reportingFoundation();
@@ -593,15 +597,10 @@ class AssessmentReportingTest extends TestCase
         Storage::disk('local')->put($snapshot->pdf_path, $studentPdf);
         $snapshot->forceFill(['checksum' => hash('sha256', $studentPdf)])->save();
 
-        try {
-            $action->execute($actor, $period->fresh());
-            $this->fail('Publish seharusnya ditolak ketika PDF kelas tidak valid.');
-        } catch (ValidationException $exception) {
-            $this->assertStringContainsString('PDF gabungan kelas', $exception->errors()['reports'][0]);
-        }
+        $action->execute($actor, $period->fresh());
 
-        $this->assertSame(AssessmentPeriodStatus::LOCKED, $period->fresh()->status);
-        $this->assertNull(data_get($period->fresh()->settings, '_reporting.published'));
+        $this->assertSame(AssessmentPeriodStatus::PUBLISHED, $period->fresh()->status);
+        $this->assertSame(0, data_get($period->fresh()->settings, '_reporting.published.class_report_count'));
         $this->assertSame(ReportGenerationStatus::COMPLETED, $artifact->fresh()->generation_status);
     }
 
@@ -660,8 +659,113 @@ class AssessmentReportingTest extends TestCase
         $this->assertDatabaseCount('assessment_report_snapshots', 1);
         $this->assertDatabaseCount('assessment_class_report_artifacts', 1);
         $this->assertDatabaseCount('assessment_report_generation_runs', 1);
-        $this->assertSame('not_scheduled', $stored->generation_status->value);
+        $this->assertSame('ready', $stored->generation_status->value);
+        $this->assertSame('stream', $stored->delivery_mode);
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', (string) $stored->snapshot_checksum);
         Queue::assertNothingPushed();
+    }
+
+    public function test_streamed_student_report_download_creates_no_permanent_pdf_file(): void
+    {
+        Storage::fake('local');
+        config(['cache.default' => 'array']);
+        [$period, , , $template] = $this->reportingFoundation();
+        $snapshot = app(CreateReportSnapshotsAction::class)
+            ->execute($period, $template, generatedBy: 99)
+            ->firstOrFail();
+
+        app(PublishAssessmentPeriodAction::class)->execute(User::query()->findOrFail(99), $period);
+
+        $this->actingAs(User::query()->findOrFail(99))
+            ->get(route('assessment.reports.snapshot.download', $snapshot))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+
+        $this->assertSame('stream', $snapshot->fresh()->delivery_mode);
+        $this->assertNull($snapshot->fresh()->pdf_path);
+        $this->assertSame([], Storage::disk('local')->allFiles('assessment-reports'));
+    }
+
+    public function test_streamed_report_returns_retry_page_when_render_slot_is_busy(): void
+    {
+        Storage::fake('local');
+        config(['cache.default' => 'array']);
+        [$period, , , $template] = $this->reportingFoundation();
+        $snapshot = app(CreateReportSnapshotsAction::class)
+            ->execute($period, $template, generatedBy: 99)
+            ->firstOrFail();
+        $lock = \Illuminate\Support\Facades\Cache::lock('assessment-report-render-slot-1', 60);
+        $this->assertTrue($lock->get());
+
+        try {
+            $this->actingAs(User::query()->findOrFail(99))
+                ->get(route('assessment.reports.snapshot.download', $snapshot))
+                ->assertStatus(429)
+                ->assertHeader('Retry-After', '10')
+                ->assertSee('PDF rapor sedang disiapkan');
+        } finally {
+            $lock->release();
+        }
+    }
+
+    public function test_expired_class_cache_is_reported_then_deleted_safely(): void
+    {
+        Storage::fake('local');
+        [$period, $rombel, , $template] = $this->reportingFoundation();
+        $path = 'assessment-reports/expired-class.pdf';
+        Storage::disk('local')->put($path, "%PDF-1.4\nexpired\n%%EOF");
+        $artifact = ClassReportArtifact::query()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'assessment_report_template_id' => $template->getKey(),
+            'revision' => 1,
+            'generation_status' => 'completed',
+            'pdf_path' => $path,
+            'checksum' => hash('sha256', Storage::disk('local')->get($path)),
+            'generated_at' => now()->subDays(2),
+            'cache_expires_at' => now()->subDay(),
+            'generated_by' => 99,
+        ]);
+
+        $dryRun = app(AssessmentReportCacheCleaner::class)->clean(false);
+        $this->assertSame(1, $dryRun['files']);
+        Storage::disk('local')->assertExists($path);
+
+        app(AssessmentReportCacheCleaner::class)->clean(true);
+        Storage::disk('local')->assertMissing($path);
+        $this->assertSame('expired', $artifact->fresh()->generation_status->value);
+        $this->assertNull($artifact->fresh()->pdf_path);
+    }
+
+    public function test_orphan_report_files_are_quarantined_without_touching_referenced_reports(): void
+    {
+        Storage::fake('local');
+        [$period, $rombel, , $template] = $this->reportingFoundation();
+        $referencedPath = 'assessment-reports/referenced-class.pdf';
+        $orphanPath = 'assessment-reports/legacy/orphan.pdf';
+        Storage::disk('local')->put($referencedPath, "%PDF-1.4\nreferenced\n%%EOF");
+        Storage::disk('local')->put($orphanPath, "%PDF-1.4\norphan\n%%EOF");
+        ClassReportArtifact::query()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'assessment_report_template_id' => $template->getKey(),
+            'revision' => 1,
+            'generation_status' => 'completed',
+            'pdf_path' => $referencedPath,
+            'checksum' => hash('sha256', Storage::disk('local')->get($referencedPath)),
+            'generated_by' => 99,
+        ]);
+
+        $manager = app(AssessmentReportOrphanManager::class);
+        $this->assertSame(1, $manager->inspect()['files']);
+        $this->assertSame(1, $manager->quarantine(false)['files']);
+        Storage::disk('local')->assertExists($orphanPath);
+
+        $manager->quarantine(true);
+
+        Storage::disk('local')->assertExists($referencedPath);
+        Storage::disk('local')->assertMissing($orphanPath);
+        $this->assertCount(1, Storage::disk('local')->allFiles('orphan-quarantine/assessment-reports'));
     }
 
     public function test_promotion_status_snapshot_follows_period_configuration(): void
@@ -726,13 +830,13 @@ class AssessmentReportingTest extends TestCase
         $this->assertSame(1, $run->total_classes);
         $this->assertSame(
             5,
-            ReportSnapshot::query()->where('generation_status', 'pending')->count(),
+            ReportSnapshot::query()->where('generation_status', 'ready')->count(),
         );
         Queue::assertPushed(GenerateClassReportPipeline::class, 1);
         Queue::assertNotPushed(GenerateStudentReportJob::class);
     }
 
-    public function test_class_pipeline_generates_individual_and_combined_pdf_in_one_bounded_run(): void
+    public function test_class_pipeline_keeps_student_snapshots_streamable_and_caches_one_class_pdf(): void
     {
         Storage::fake('local');
         Queue::fake();
@@ -753,11 +857,14 @@ class AssessmentReportingTest extends TestCase
         (new GenerateClassReportPipeline($artifact->getKey()))->handle(
             app(AssessmentReportRenderer::class),
             app(AssessmentReportStorage::class),
+            app(\App\Support\Assessment\Reporting\AssessmentReportRenderGate::class),
         );
 
-        $this->assertSame(2, ReportSnapshot::query()->where('generation_status', 'completed')->count());
+        $this->assertSame(2, ReportSnapshot::query()->where('generation_status', 'ready')->count());
+        $this->assertSame(0, ReportSnapshot::query()->whereNotNull('pdf_path')->count());
         $this->assertSame('completed', $artifact->fresh()->generation_status->value);
         $this->assertSame('completed', $artifact->fresh()->generationRun->status->value);
+        $this->assertTrue($artifact->fresh()->cache_expires_at->isFuture());
         Storage::disk('local')->assertExists($artifact->fresh()->pdf_path);
     }
 
@@ -801,21 +908,13 @@ class AssessmentReportingTest extends TestCase
         $this->assertDatabaseHas('jobs', ['queue' => 'default']);
         $this->assertDatabaseHas('jobs', ['queue' => 'literacy-analysis']);
         $this->assertSame('completed', $completed->fresh()->generation_status->value);
-        $this->assertSame(
-            1,
-            ReportSnapshot::query()->where('generation_status', 'cancelled')->count(),
-        );
+        $this->assertSame(0, ReportSnapshot::query()->where('generation_status', 'cancelled')->count());
 
-        $cancelledSnapshot = ReportSnapshot::query()
-            ->where('generation_status', 'cancelled')
-            ->firstOrFail();
         $cancelledArtifact = ClassReportArtifact::query()->firstOrFail();
-        (new GenerateStudentReportJob($cancelledSnapshot->getKey()))
-            ->failed(new RuntimeException('Worker lama selesai setelah penghentian.'));
         (new GenerateClassReportsJob($cancelledArtifact->getKey()))
             ->failed(new RuntimeException('Worker lama selesai setelah penghentian.'));
 
-        $this->assertSame('cancelled', $cancelledSnapshot->fresh()->generation_status->value);
+        $this->assertSame('ready', ReportSnapshot::query()->where('id', '!=', $completed->getKey())->firstOrFail()->generation_status->value);
         $this->assertSame('cancelled', $cancelledArtifact->fresh()->generation_status->value);
     }
 

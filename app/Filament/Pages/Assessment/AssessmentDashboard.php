@@ -26,6 +26,7 @@ use App\Models\DataSiswa;
 use App\Models\GuruTendik;
 use App\Models\Rombel;
 use App\Models\User;
+use App\Support\Storage\HostingStorageAudit;
 use Filament\Actions\Action;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
@@ -59,6 +60,12 @@ class AssessmentDashboard extends AssessmentPage
     public function getTitle(): string|Htmlable
     {
         return 'Pengaturan Penilaian';
+    }
+
+    /** @return array<string, mixed>|null */
+    public function getHostingStorageStatus(): ?array
+    {
+        return app(HostingStorageAudit::class)->latest();
     }
 
     public function getSubheading(): string|Htmlable|null

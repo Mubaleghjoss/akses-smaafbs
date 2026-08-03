@@ -50,7 +50,7 @@ final class RetryReportGenerationAction
                 ->findOrFail($artifact->getKey());
 
             Gate::forUser($actor)->authorize('generate', $locked);
-            $this->assertFailed($locked);
+            $this->assertRetryableClass($locked);
             $this->assertLatestArtifact($locked);
 
             $oldValues = $this->retryOldValues($locked);
@@ -62,6 +62,7 @@ final class RetryReportGenerationAction
                 'queued_at' => now(),
                 'started_at' => null,
                 'generated_at' => null,
+                'cache_expires_at' => null,
             ])->save();
             $this->auditRetry($actor, $locked, 'class_report_retry_requested', $oldValues);
 
@@ -78,6 +79,17 @@ final class RetryReportGenerationAction
         if ($status !== ReportGenerationStatus::FAILED->value) {
             throw ValidationException::withMessages([
                 'report' => 'Hanya pembuatan PDF yang berstatus gagal yang dapat dijadwalkan ulang.',
+            ]);
+        }
+    }
+
+    private function assertRetryableClass(ClassReportArtifact $artifact): void
+    {
+        $status = $this->statusValue($artifact->generation_status);
+
+        if (! in_array($status, [ReportGenerationStatus::FAILED->value, ReportGenerationStatus::EXPIRED->value], true)) {
+            throw ValidationException::withMessages([
+                'report' => 'Hanya cache PDF kelas yang gagal atau kedaluwarsa yang dapat dibuat ulang.',
             ]);
         }
     }

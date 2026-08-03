@@ -18,7 +18,7 @@ Dokumen ini adalah pintu masuk untuk pengembang dan AI yang mengubah modul Liter
 - Submit dan edit memakai tiket antrean yang idempoten. Jangan memindahkan analisis kemiripan kembali ke request submit.
 - Submit berhasil selalu menuju struk session tanpa soal/jawaban; jangan mengarahkan otomatis ke halaman edit.
 - `is_active` dan `closes_at` mengatur kemunculan daftar. Direct link tetap menerima jawaban setelah `opens_at`; materi masa depan tetap terkunci.
-- Status Sakit/Tes MT disimpan sebagai dispensasi terpisah, bukan respons atau jawaban palsu.
+- Status Izin/Sakit/Tes MT disimpan sebagai dispensasi terpisah, bukan respons atau jawaban palsu. Izin wajib mempunyai keterangan admin.
 - Deteksi kemiripan hanya untuk Esai. Jawaban objektif memang dapat sama dan tidak boleh disebut plagiasi.
 - Setiap perubahan admin harus usable pada HP sesuai `AGENTS.md`.
 

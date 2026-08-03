@@ -28,7 +28,16 @@ class PerpustakaanLiterasiDispensationController extends Controller
                 'required',
                 Rule::in(array_keys(PerpustakaanLiterasiDispensation::reasonOptions())),
             ],
-            'note' => ['nullable', 'string', 'max:1000'],
+            'note' => [
+                Rule::requiredIf($request->input('reason') === PerpustakaanLiterasiDispensation::REASON_PERMISSION),
+                'nullable',
+                'string',
+                'min:5',
+                'max:1000',
+            ],
+        ], [
+            'note.required' => 'Keterangan izin wajib ditulis.',
+            'note.min' => 'Keterangan izin minimal 5 karakter.',
         ]);
 
         DB::transaction(function () use ($request, $material, $student, $validated): void {

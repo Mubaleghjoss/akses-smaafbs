@@ -43,6 +43,7 @@ class AssessmentFoundationTest extends TestCase
             'migrations/2026_07_31_120000_extend_assessment_report_structure.php',
         );
         $reportStructureMigration->up();
+        (require database_path('migrations/2026_08_03_080000_add_stream_delivery_to_assessment_reports.php'))->up();
     }
 
     public function test_assessment_schema_is_additive_and_complete(): void
@@ -106,6 +107,11 @@ class AssessmentFoundationTest extends TestCase
             'social_predicate',
             'social_description',
         ]));
+        $this->assertTrue(Schema::hasColumns('assessment_report_snapshots', [
+            'snapshot_checksum',
+            'delivery_mode',
+        ]));
+        $this->assertTrue(Schema::hasColumn('assessment_class_report_artifacts', 'cache_expires_at'));
     }
 
     public function test_asts_and_asas_are_separate_but_duplicate_type_is_rejected(): void

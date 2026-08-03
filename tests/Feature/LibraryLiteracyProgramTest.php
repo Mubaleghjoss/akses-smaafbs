@@ -2396,6 +2396,7 @@ class LibraryLiteracyProgramTest extends TestCase
                     ],
                     'dispensated_students' => [
                         ['name' => 'Aisyah Sakit', 'reason' => PerpustakaanLiterasiDispensation::REASON_SICK],
+                        ['name' => 'Rahma Izin', 'reason' => PerpustakaanLiterasiDispensation::REASON_PERMISSION, 'note' => 'Mengikuti kegiatan keluarga.'],
                     ],
                 ],
                 [
@@ -2411,11 +2412,61 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertStringNotContainsString('X Selesai', $text);
         $this->assertStringContainsString('*Materi:* Materi Siap Dibagikan', $text);
         $this->assertStringContainsString('*Diperbarui:* 30/07/2026 08:15 WIB', $text);
-        $this->assertStringContainsString('*Ringkasan:* 2 belum mengisi | 2 dispensasi', $text);
-        $this->assertStringContainsString('*Kode:* [SAKIT] 1 siswa | [TES MT] 1 siswa', $text);
-        $this->assertStringContainsString("1. Aisyah Sakit [SAKIT]\n2. Budi Belum Mengisi", $text);
+        $this->assertStringContainsString('*Ringkasan:* 2 belum mengisi | 3 dispensasi', $text);
+        $this->assertStringContainsString('*Kode:* [SAKIT] 1 siswa | [TES MT] 1 siswa | [IZIN] 1 siswa', $text);
+        $this->assertStringContainsString("1. Aisyah Sakit [SAKIT]\n2. Budi Belum Mengisi\n3. Rahma Izin [IZIN: Mengikuti kegiatan keluarga.]", $text);
         $this->assertStringContainsString("1. Yusuf Tes MT [TES MT]\n2. Zahra Belum Mengisi", $text);
         $this->assertStringContainsString('Mohon siswa tanpa kode dispensasi segera mengisi materi.', $text);
+    }
+
+    public function test_permission_dispensation_requires_note_and_hides_note_from_student_receipt(): void
+    {
+        $admin = User::query()->create([
+            'name' => 'Admin Izin Literasi',
+            'username' => 'admin-izin-literasi',
+            'password' => bcrypt('password'),
+        ]);
+        $admin->assignRole('admin');
+        $student = $this->createStudent('Codex Izin Literasi', 'XI Izin');
+        $material = $this->createMaterial('Materi Izin Literasi');
+        $route = route('admin.perpustakaan-literasi.dispensations.store', [$material, $student]);
+
+        $this->actingAs($admin)
+            ->post($route, ['reason' => PerpustakaanLiterasiDispensation::REASON_PERMISSION])
+            ->assertSessionHasErrors('note');
+        $this->actingAs($admin)
+            ->post($route, [
+                'reason' => PerpustakaanLiterasiDispensation::REASON_PERMISSION,
+                'note' => 'abc',
+            ])
+            ->assertSessionHasErrors('note');
+        $this->actingAs($admin)
+            ->post($route, [
+                'reason' => PerpustakaanLiterasiDispensation::REASON_PERMISSION,
+                'note' => 'Mengikuti kegiatan keluarga yang dikonfirmasi wali kelas.',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('perpustakaan_literasi_dispensations', [
+            'material_id' => $material->getKey(),
+            'data_siswa_id' => $student->getKey(),
+            'reason' => 'permission',
+            'note' => 'Mengikuti kegiatan keluarga yang dikonfirmasi wali kelas.',
+            'confirmed_by' => $admin->getKey(),
+        ]);
+        $completion = LiterasiAnalytics::materialCompletion($material);
+        $dispensated = collect($completion['classes'])->firstWhere('class', 'XI Izin')['dispensated_students'][0];
+        $this->assertSame('Izin', $dispensated['reason_label']);
+        $this->assertSame($admin->name, $dispensated['confirmed_by']);
+
+        $receiptStatus = app(\App\Support\Perpustakaan\LiteracyReceiptClassStatus::class)->forReceipt([
+            'material_id' => $material->getKey(),
+            'student_class' => 'XI Izin',
+            'student_id' => 0,
+        ]);
+        $this->assertSame('Izin', $receiptStatus['dispensated_students'][0]['reason_label']);
+        $this->assertArrayNotHasKey('note', $receiptStatus['dispensated_students'][0]);
+        $this->assertDatabaseCount('perpustakaan_literasi_responses', 0);
     }
 
     public function test_admin_can_manage_literacy_dispensations_and_real_submit_revokes_them(): void

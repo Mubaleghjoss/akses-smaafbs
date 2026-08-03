@@ -145,11 +145,33 @@
                                         @if(($canManageDispensations ?? false) && isset($material))
                                             <div class="literasi-completion__actions">
                                                 @foreach(\App\Models\PerpustakaanLiterasiDispensation::reasonOptions() as $reason => $label)
-                                                    <form method="post" action="{{ route('admin.perpustakaan-literasi.dispensations.store', [$material, $student['student_id']]) }}">
-                                                        @csrf
-                                                        <input type="hidden" name="reason" value="{{ $reason }}">
-                                                        <button type="submit" class="literasi-completion__action literasi-completion__action--{{ $reason === 'sick' ? 'sick' : 'mt' }}" onclick="return confirm('Tetapkan status dispensasi ini?')">{{ $label }}</button>
-                                                    </form>
+                                                    @if($reason === \App\Models\PerpustakaanLiterasiDispensation::REASON_PERMISSION)
+                                                        @php($permissionModalId = 'literacy-permission-'.$material->getKey().'-'.$student['student_id'])
+                                                        <button type="button" class="literasi-completion__action literasi-completion__action--permission" x-on:click="$dispatch('open-modal', { id: '{{ $permissionModalId }}' })">Izin</button>
+                                                        <x-filament::modal :id="$permissionModalId" width="md">
+                                                            <x-slot name="heading">Tetapkan Status Izin</x-slot>
+                                                            <x-slot name="description">{{ $student['name'] }} · {{ $student['class'] }}</x-slot>
+                                                            <form method="post" action="{{ route('admin.perpustakaan-literasi.dispensations.store', [$material, $student['student_id']]) }}" class="literasi-permission-form">
+                                                                @csrf
+                                                                <input type="hidden" name="reason" value="permission">
+                                                                <label>
+                                                                    <span>Keterangan izin <strong>*</strong></span>
+                                                                    <textarea name="note" rows="4" minlength="5" maxlength="1000" required placeholder="Contoh: Mengikuti kegiatan keluarga yang telah dikonfirmasi wali kelas."></textarea>
+                                                                    <small>Wajib 5–1.000 karakter. Keterangan hanya tampil untuk admin dan salinan daftar petugas.</small>
+                                                                </label>
+                                                                <div class="literasi-permission-form__actions">
+                                                                    <x-filament::button type="button" color="gray" x-on:click="$dispatch('close-modal', { id: '{{ $permissionModalId }}' })">Batal</x-filament::button>
+                                                                    <x-filament::button type="submit" color="primary">Simpan Izin</x-filament::button>
+                                                                </div>
+                                                            </form>
+                                                        </x-filament::modal>
+                                                    @else
+                                                        <form method="post" action="{{ route('admin.perpustakaan-literasi.dispensations.store', [$material, $student['student_id']]) }}">
+                                                            @csrf
+                                                            <input type="hidden" name="reason" value="{{ $reason }}">
+                                                            <button type="submit" class="literasi-completion__action literasi-completion__action--{{ $reason === 'sick' ? 'sick' : 'mt' }}" onclick="return confirm('Tetapkan status {{ $label }}?')">{{ $label }}</button>
+                                                        </form>
+                                                    @endif
                                                 @endforeach
                                             </div>
                                         @endif
@@ -166,7 +188,10 @@
                                         <div class="literasi-completion__student-row">
                                             <span class="literasi-completion__student">
                                                 {{ $student['name'] }}
-                                                <small>{{ $student['reason_label'] }} - {{ $student['confirmed_at'] ?? '-' }}</small>
+                                                <small>{{ $student['reason_label'] }} · {{ $student['confirmed_at'] ?? '-' }}@if(filled($student['confirmed_by'] ?? null)) · {{ $student['confirmed_by'] }}@endif</small>
+                                                @if(filled($student['note'] ?? null))
+                                                    <small class="literasi-completion__dispensation-note">{{ $student['note'] }}</small>
+                                                @endif
                                             </span>
                                             @if(($canManageDispensations ?? false) && isset($material))
                                                 <form method="post" action="{{ route('admin.perpustakaan-literasi.dispensations.destroy', [$material, $student['student_id']]) }}">

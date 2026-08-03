@@ -37,7 +37,8 @@ final class LiteracyCompletionShareText
 
         if ($dispensationTotal > 0) {
             $lines[] = '*Kode:* [SAKIT] '.((int) ($reasonCounts['sick'] ?? 0))
-                .' siswa | [TES MT] '.((int) ($reasonCounts['mt_test'] ?? 0)).' siswa';
+                .' siswa | [TES MT] '.((int) ($reasonCounts['mt_test'] ?? 0)).' siswa'
+                .' | [IZIN] '.((int) ($reasonCounts['permission'] ?? 0)).' siswa';
         }
 
         $lines[] = '';
@@ -49,7 +50,7 @@ final class LiteracyCompletionShareText
                 $lines[] = '*Kelas '.$class['class'].'*';
 
                 foreach ($class['students'] as $index => $student) {
-                    $code = static::reasonCode($student['reason']);
+                    $code = static::reasonCode($student['reason'], $student['note']);
                     $lines[] = ($index + 1).'. '.$student['name'].($code !== null ? ' '.$code : '');
                 }
 
@@ -63,7 +64,7 @@ final class LiteracyCompletionShareText
     }
 
     /**
-     * @return array{class:string,students:Collection<int, array{name:string,reason:?string}>}
+     * @return array{class:string,students:Collection<int, array{name:string,reason:?string,note:?string}>}
      */
     private static function classRow(array $class): array
     {
@@ -71,11 +72,13 @@ final class LiteracyCompletionShareText
             ->map(fn (array $student): array => [
                 'name' => static::plainText($student['name'] ?? '-'),
                 'reason' => null,
+                'note' => null,
             ]);
         $dispensated = collect($class['dispensated_students'] ?? [])
             ->map(fn (array $student): array => [
                 'name' => static::plainText($student['name'] ?? '-'),
                 'reason' => (string) ($student['reason'] ?? ''),
+                'note' => filled($student['note'] ?? null) ? static::plainText($student['note']) : null,
             ]);
 
         return [
@@ -87,11 +90,12 @@ final class LiteracyCompletionShareText
         ];
     }
 
-    private static function reasonCode(?string $reason): ?string
+    private static function reasonCode(?string $reason, ?string $note = null): ?string
     {
         return match ($reason) {
             'sick' => '[SAKIT]',
             'mt_test' => '[TES MT]',
+            'permission' => filled($note) ? '[IZIN: '.static::plainText($note).']' : '[IZIN]',
             null, '' => null,
             default => '[DISPENSASI]',
         };

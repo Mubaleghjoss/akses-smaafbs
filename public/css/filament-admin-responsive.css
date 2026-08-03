@@ -3221,6 +3221,80 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
     color: #075985;
 }
 
+.literasi-completion__action--permission {
+    border-color: #a78bfa;
+    background: #ede9fe;
+    color: #5b21b6;
+}
+
+.literasi-permission-form {
+    display: grid;
+    gap: 1rem;
+}
+
+.literasi-permission-form label,
+.literasi-permission-form label > span {
+    display: grid;
+    gap: 0.45rem;
+    color: #0f172a;
+    font-size: 0.82rem;
+    font-weight: 800;
+}
+
+.literasi-permission-form textarea {
+    width: 100%;
+    min-height: 7rem;
+    resize: vertical;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.75rem;
+    background: #fff;
+    color: #0f172a;
+    padding: 0.75rem;
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.literasi-permission-form small {
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+.literasi-permission-form__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.6rem;
+}
+
+.literasi-completion__dispensation-note {
+    margin-top: 0.35rem !important;
+    border-left: 3px solid #a78bfa;
+    padding-left: 0.5rem;
+    color: #5b21b6 !important;
+}
+
+.dark .literasi-completion__action--permission {
+    border-color: #7c3aed;
+    background: rgba(91, 33, 182, 0.24);
+    color: #ddd6fe;
+}
+
+.dark .literasi-permission-form label,
+.dark .literasi-permission-form label > span,
+.dark .literasi-permission-form textarea {
+    color: #f8fafc;
+}
+
+.dark .literasi-permission-form textarea {
+    border-color: rgba(148, 163, 184, 0.35);
+    background: #0f172a;
+}
+
+.dark .literasi-completion__dispensation-note {
+    color: #ddd6fe !important;
+}
+
 .literasi-completion__action--cancel {
     border-color: #fda4af;
     background: #fff1f2;
@@ -4056,6 +4130,10 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
     .literasi-completion__student-row > form,
     .literasi-completion__student-row > form .literasi-completion__action {
         width: 100%;
+    }
+
+    .literasi-permission-form__actions > * {
+        flex: 1 1 100%;
     }
 
     .literasi-panel,

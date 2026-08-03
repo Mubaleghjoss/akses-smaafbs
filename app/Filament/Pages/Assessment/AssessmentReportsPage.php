@@ -225,7 +225,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
             $this->selectDefaultClassAndPreview();
             Notification::make()
                 ->title('Revisi rapor sudah disiapkan')
-                ->body($snapshots->count().' snapshot dibekukan tanpa membuat job. Pilih kelas lalu tekan Jadwalkan Kelas Terpilih.')
+                ->body($snapshots->count().' snapshot dibekukan dan PDF siswa siap dirender saat diunduh. PDF kelas dapat dijadwalkan sebagai cache 24 jam.')
                 ->success()
                 ->duration(12000)
                 ->send();
@@ -261,7 +261,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
             );
             Notification::make()
                 ->title('Kelas masuk antrean PDF')
-                ->body(count($this->selectedClassIds)." kelas dijadwalkan pada revisi {$run->revision}.")
+                ->body(count($this->selectedClassIds)." cache PDF kelas dijadwalkan pada revisi {$run->revision} dan berlaku 24 jam.")
                 ->success()
                 ->duration(12000)
                 ->send();
@@ -465,7 +465,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
             $this->dispatch('close-modal', id: 'assessment-stop-reports-modal');
             Notification::make()
                 ->title('Seluruh antrean PDF dihentikan')
-                ->body("{$result['jobs']} job assessment-reports dihapus; {$result['snapshots']} PDF siswa dan {$result['classes']} kelas ditandai dihentikan. Queue Literasi/default tidak disentuh.")
+                ->body("{$result['jobs']} job assessment-reports dihapus; {$result['classes']} cache kelas ditandai dihentikan. Snapshot siswa tetap aman dan queue Literasi/default tidak disentuh.")
                 ->warning()
                 ->duration(15000)
                 ->send();
@@ -518,7 +518,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
     public function selectAllShareableSnapshots(): void
     {
         $this->selectedShareSnapshotIds = collect($this->getSnapshotRows())
-            ->filter(fn (array $row): bool => $row['status'] === 'completed')
+            ->filter(fn (array $row): bool => in_array($row['status'], ['ready', 'completed'], true))
             ->take(50)
             ->pluck('id')
             ->map(fn (mixed $id): int => (int) $id)
@@ -551,7 +551,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
 
         $snapshots = $this->snapshotQuery()
             ->whereIn('id', $ids)
-            ->where('generation_status', 'completed')
+            ->whereIn('generation_status', ['ready', 'completed'])
             ->with('student')
             ->get()
             ->sortBy(fn (ReportSnapshot $snapshot): string => mb_strtolower(
@@ -635,7 +635,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
                     'generated_at' => $snapshot->generated_at?->format('d/m/Y H:i'),
                     'error' => $snapshot->error_message,
                     'active_links' => $activeLinks,
-                    'download_url' => $status === ReportGenerationStatus::COMPLETED
+                    'download_url' => in_array($status, [ReportGenerationStatus::READY, ReportGenerationStatus::COMPLETED], true)
                         ? route('assessment.reports.snapshot.download', $snapshot)
                         : null,
                     'preview_url' => route('assessment.reports.preview', ['reportSnapshot' => $snapshot]),
@@ -664,6 +664,9 @@ abstract class AssessmentReportsPage extends AssessmentPage
                 $status = $artifact->generation_status instanceof ReportGenerationStatus
                     ? $artifact->generation_status
                     : ReportGenerationStatus::from((string) $artifact->generation_status);
+                if ($status === ReportGenerationStatus::COMPLETED && $artifact->cache_expires_at?->isPast()) {
+                    $status = ReportGenerationStatus::EXPIRED;
+                }
 
                 $studentQuery = ReportSnapshot::query()
                     ->where('assessment_period_id', $artifact->assessment_period_id)
@@ -681,8 +684,9 @@ abstract class AssessmentReportsPage extends AssessmentPage
                     'status_label' => $status->label(),
                     'generated_at' => $artifact->generated_at?->format('d/m/Y H:i'),
                     'error' => $artifact->error_message,
-                    'completed_students' => (clone $studentQuery)->where('generation_status', 'completed')->count(),
+                    'completed_students' => (clone $studentQuery)->whereIn('generation_status', ['ready', 'completed'])->count(),
                     'student_count' => $studentQuery->count(),
+                    'cache_expires_at' => $artifact->cache_expires_at?->format('d/m/Y H:i'),
                     'download_url' => $status === ReportGenerationStatus::COMPLETED
                         ? route('assessment.reports.class.download', $artifact)
                         : null,

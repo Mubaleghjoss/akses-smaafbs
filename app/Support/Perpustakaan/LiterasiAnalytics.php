@@ -71,8 +71,9 @@ class LiterasiAnalytics
             ->keyBy('data_siswa_id');
         $dispensations = static::dispensationTableAvailable()
             ? PerpustakaanLiterasiDispensation::query()
+                ->with('confirmedBy:id,name')
                 ->where('material_id', $material->getKey())
-                ->get(['id', 'data_siswa_id', 'reason', 'confirmed_at', 'note'])
+                ->get(['id', 'data_siswa_id', 'reason', 'confirmed_at', 'confirmed_by', 'note'])
                 ->keyBy('data_siswa_id')
             : collect();
 
@@ -98,6 +99,7 @@ class LiterasiAnalytics
                             'reason' => (string) $dispensation->reason,
                             'reason_label' => $dispensation->reasonLabel(),
                             'confirmed_at' => $dispensation->confirmed_at?->format('d/m/Y H:i'),
+                            'confirmed_by' => $dispensation->confirmedBy?->name,
                             'note' => $dispensation->note,
                         ];
                     } elseif (! $response) {

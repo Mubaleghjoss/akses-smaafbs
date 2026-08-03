@@ -8,6 +8,7 @@ use App\Models\Assessment\ReportGenerationRun;
 use App\Models\Assessment\ReportSnapshot;
 use App\Models\Assessment\ReportTemplate;
 use App\Support\Assessment\Reporting\AssessmentReportRenderer;
+use App\Support\Assessment\Reporting\AssessmentReportRenderGate;
 use App\Support\Assessment\Reporting\AssessmentReportStorage;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -45,6 +46,7 @@ class GenerateClassReportPipeline implements ShouldQueue
     public function handle(
         AssessmentReportRenderer $renderer,
         AssessmentReportStorage $storage,
+        AssessmentReportRenderGate $renderGate,
     ): void {
         $artifact = ClassReportArtifact::query()
             ->with(['generationRun', 'periodRombel'])
@@ -59,62 +61,6 @@ class GenerateClassReportPipeline implements ShouldQueue
             'started_at' => $artifact->started_at ?: Carbon::now(),
             'error_message' => null,
         ])->save();
-
-        $started = microtime(true);
-        $limit = max(1, (int) config('assessment.reports.pipeline.students_per_job', 3));
-        $maxSeconds = max(10, (int) config('assessment.reports.pipeline.max_seconds', 40));
-        $processed = 0;
-
-        while ($processed < $limit && (microtime(true) - $started) < $maxSeconds) {
-            if ($this->shouldStop($artifact->refresh())) {
-                return;
-            }
-
-            $snapshot = $this->classSnapshots($artifact)
-                ->whereIn('generation_status', ['pending', 'processing', 'failed'])
-                ->orderBy('assessment_period_student_id')
-                ->first();
-
-            if (! $snapshot) {
-                break;
-            }
-
-            $snapshot->forceFill([
-                'generation_status' => 'processing',
-                'error_message' => null,
-            ])->save();
-
-            $stored = $storage->putAtomically(
-                $storage->individualPath($snapshot),
-                $renderer->renderStudent($snapshot),
-            );
-
-            if ($this->shouldStop($artifact->refresh())) {
-                $storage->disk()->delete($stored['path']);
-
-                return;
-            }
-
-            $snapshot->forceFill([
-                'generation_status' => 'completed',
-                'pdf_path' => $stored['path'],
-                'checksum' => $stored['checksum'],
-                'error_message' => null,
-                'generated_at' => Carbon::now(),
-            ])->save();
-            $processed++;
-        }
-
-        $remaining = $this->classSnapshots($artifact)
-            ->where('generation_status', '!=', 'completed')
-            ->count();
-
-        if ($remaining > 0) {
-            $this->refreshRunProgress($artifact);
-            self::dispatch($artifact->getKey())->delay(now()->addSeconds(5));
-
-            return;
-        }
 
         if ($this->shouldStop($artifact->refresh())) {
             return;
@@ -131,10 +77,18 @@ class GenerateClassReportPipeline implements ShouldQueue
             throw new RuntimeException('Snapshot kelas tidak ditemukan.');
         }
 
-        $stored = $storage->putAtomically(
+        $invalidSnapshot = $snapshots->first(fn (ReportSnapshot $snapshot): bool => ! app(
+            \App\Support\Assessment\Reporting\AssessmentSnapshotIntegrity::class,
+        )->isValid($snapshot));
+
+        if ($invalidSnapshot) {
+            throw new RuntimeException('Checksum snapshot kelas tidak valid. Siapkan revisi baru sebelum membuat PDF.');
+        }
+
+        $stored = $renderGate->run(fn (): array => $storage->putAtomically(
             $storage->classPath($artifact),
             $renderer->renderClass($snapshots, $template),
-        );
+        ));
 
         if ($this->shouldStop($artifact->refresh())) {
             $storage->disk()->delete($stored['path']);
@@ -148,6 +102,9 @@ class GenerateClassReportPipeline implements ShouldQueue
             'checksum' => $stored['checksum'],
             'error_message' => null,
             'generated_at' => Carbon::now(),
+            'cache_expires_at' => Carbon::now()->addHours(
+                max(1, (int) config('assessment.reports.class_cache_hours', 24)),
+            ),
         ])->save();
 
         AuditLog::query()->create([
@@ -161,6 +118,7 @@ class GenerateClassReportPipeline implements ShouldQueue
                 'revision' => $artifact->revision,
                 'student_count' => $snapshots->count(),
                 'checksum' => $artifact->checksum,
+                'cache_expires_at' => $artifact->cache_expires_at?->toIso8601String(),
             ],
             'reason' => null,
             'ip_address' => null,
@@ -214,7 +172,9 @@ class GenerateClassReportPipeline implements ShouldQueue
             return;
         }
 
-        $completedStudents = $run->snapshots()->where('generation_status', 'completed')->count();
+        $completedStudents = $run->snapshots()
+            ->whereIn('generation_status', ['ready', 'completed'])
+            ->count();
         $completedClasses = $run->classArtifacts()->where('generation_status', 'completed')->count();
         $allCompleted = $completedStudents === (int) $run->total_students
             && $completedClasses === (int) $run->total_classes;
@@ -235,6 +195,8 @@ class GenerateClassReportPipeline implements ShouldQueue
             ? $artifact->generation_status->value
             : (string) $artifact->generation_status;
 
-        return $status === 'completed' && $storage->isValid($artifact->pdf_path, $artifact->checksum);
+        return $status === 'completed'
+            && $artifact->cache_expires_at?->isFuture()
+            && $storage->isValid($artifact->pdf_path, $artifact->checksum);
     }
 }

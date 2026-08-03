@@ -58,6 +58,7 @@ class AssessmentTeacherExperienceTest extends TestCase
             'migrations/2026_07_31_120000_extend_assessment_report_structure.php',
         );
         $reportStructureMigration->up();
+        (require database_path('migrations/2026_08_03_080000_add_stream_delivery_to_assessment_reports.php'))->up();
 
         Artisan::call('assessment:install-defaults');
         config(['assessment.enabled' => true]);

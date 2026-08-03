@@ -234,6 +234,21 @@ Schedule::call(function (): void {
     ->name('literacy-operational-log-cleanup')
     ->withoutOverlapping();
 
+Schedule::command('assessment:cleanup-report-cache --apply')
+    ->hourly()
+    ->name('assessment-report-cache-cleanup')
+    ->withoutOverlapping();
+
+Schedule::command('app:storage-maintain --apply')
+    ->dailyAt('02:40')
+    ->name('application-storage-maintenance')
+    ->withoutOverlapping();
+
+Schedule::command('app:storage-audit')
+    ->dailyAt('03:00')
+    ->name('hosting-storage-audit')
+    ->withoutOverlapping();
+
 Artisan::command('app:backfill-module-access-levels {--dry-run : Tampilkan perubahan tanpa menyimpan} {--force : Paksa tulis ulang user yang sudah punya module_access_levels}', function () {
     $panel = Filament::getPanel('admin');
 

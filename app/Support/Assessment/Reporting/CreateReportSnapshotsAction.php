@@ -216,14 +216,7 @@ class CreateReportSnapshotsAction
             foreach ($students as $student) {
                 $homeroom = $homeroomReports->get($student->id);
                 $homeroomAssignment = $homerooms->get($student->assessment_period_rombel_id);
-                $snapshot = ReportSnapshot::query()->create([
-                    'assessment_period_id' => $period->getKey(),
-                    'assessment_period_student_id' => $student->id,
-                    'assessment_report_template_id' => $template->getKey(),
-                    'assessment_report_generation_run_id' => $run->getKey(),
-                    'revision' => $revision,
-                    'template_version' => $template->version,
-                    'snapshot_data' => [
+                $snapshotData = [
                         'meta' => [
                             'revision' => $revision,
                             'snapshotted_at' => Carbon::now()->toIso8601String(),
@@ -306,8 +299,18 @@ class CreateReportSnapshotsAction
                             'view_path' => $template->view_path,
                             'settings' => $templateSettings,
                         ],
-                    ],
-                    'generation_status' => 'not_scheduled',
+                    ];
+                $snapshot = ReportSnapshot::query()->create([
+                    'assessment_period_id' => $period->getKey(),
+                    'assessment_period_student_id' => $student->id,
+                    'assessment_report_template_id' => $template->getKey(),
+                    'assessment_report_generation_run_id' => $run->getKey(),
+                    'revision' => $revision,
+                    'template_version' => $template->version,
+                    'snapshot_data' => $snapshotData,
+                    'snapshot_checksum' => app(AssessmentSnapshotIntegrity::class)->checksum($snapshotData),
+                    'generation_status' => 'ready',
+                    'delivery_mode' => 'stream',
                     'pdf_path' => null,
                     'checksum' => null,
                     'error_message' => null,
@@ -336,6 +339,8 @@ class CreateReportSnapshotsAction
                 ]);
 
             }
+
+            $run->forceFill(['completed_students' => $snapshots->count()])->save();
 
             if ($regenerate) {
                 $oldSnapshotIds = ReportSnapshot::query()
@@ -379,6 +384,7 @@ class CreateReportSnapshotsAction
                     'queued_at' => Carbon::now(),
                     'started_at' => null,
                     'generated_at' => null,
+                    'cache_expires_at' => null,
                     'generated_by' => $generatedBy,
                 ]);
 

@@ -14,6 +14,8 @@ class PerpustakaanLiterasiDispensation extends Model
 
     public const REASON_MT_TEST = 'mt_test';
 
+    public const REASON_PERMISSION = 'permission';
+
     protected $table = 'perpustakaan_literasi_dispensations';
 
     protected $guarded = [];
@@ -31,6 +33,7 @@ class PerpustakaanLiterasiDispensation extends Model
     public static function reasonOptions(): array
     {
         return [
+            self::REASON_PERMISSION => 'Izin',
             self::REASON_SICK => 'Sakit',
             self::REASON_MT_TEST => 'Tes MT',
         ];

@@ -4,6 +4,7 @@
         $settingCards = $this->getSettingCards();
         $setupWorkflow = $this->getSetupWorkflow();
         $reportSetupWorkflow = $this->getReportSetupWorkflow();
+        $storageStatus = $this->getHostingStorageStatus();
     @endphp
 
     <div class="space-y-6">
@@ -30,6 +31,42 @@
                         @endforelse
                     </select>
                 </label>
+            </div>
+        </section>
+
+        <section class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5 dark:border-white/10 dark:bg-gray-900" aria-labelledby="hosting-storage-title">
+            <div class="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex min-w-0 items-start gap-3">
+                    <span @class([
+                        'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl',
+                        'bg-success-100 text-success-700 dark:bg-success-500/15 dark:text-success-300' => ($storageStatus['level'] ?? null) === 'safe',
+                        'bg-warning-100 text-warning-700 dark:bg-warning-500/15 dark:text-warning-300' => in_array(($storageStatus['level'] ?? null), ['warning', 'critical'], true),
+                        'bg-danger-100 text-danger-700 dark:bg-danger-500/15 dark:text-danger-300' => ($storageStatus['level'] ?? null) === 'danger',
+                        'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300' => ! $storageStatus,
+                    ])>
+                        <x-filament::icon icon="heroicon-o-circle-stack" class="h-6 w-6" />
+                    </span>
+                    <div class="min-w-0">
+                        <h2 id="hosting-storage-title" class="font-bold text-gray-950 dark:text-white">Penyimpanan Hosting</h2>
+                        @if ($storageStatus)
+                            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                                {{ number_format(($storageStatus['used_bytes'] ?? 0) / 1073741824, 2, ',', '.') }} GB dari
+                                {{ number_format(($storageStatus['quota_bytes'] ?? 0) / 1073741824, 0, ',', '.') }} GB
+                                ({{ $storageStatus['percent'] }}%).
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">Audit terakhir {{ \Illuminate\Support\Carbon::parse($storageStatus['audited_at'])->timezone(config('app.timezone'))->format('d/m/Y H:i') }}.</p>
+                        @else
+                            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Audit belum dijalankan. Gunakan perintah <code>php artisan app:storage-audit</code>.</p>
+                        @endif
+                    </div>
+                </div>
+                <span @class([
+                    'inline-flex w-fit rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide',
+                    'bg-success-100 text-success-800 dark:bg-success-500/15 dark:text-success-200' => ($storageStatus['level'] ?? null) === 'safe',
+                    'bg-warning-100 text-warning-800 dark:bg-warning-500/15 dark:text-warning-200' => in_array(($storageStatus['level'] ?? null), ['warning', 'critical'], true),
+                    'bg-danger-100 text-danger-800 dark:bg-danger-500/15 dark:text-danger-200' => ($storageStatus['level'] ?? null) === 'danger',
+                    'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300' => ! $storageStatus,
+                ])>{{ match ($storageStatus['level'] ?? null) { 'safe' => 'Aman', 'warning' => 'Waspada', 'critical' => 'Kritis', 'danger' => 'Darurat', default => 'Belum Diaudit' } }}</span>
             </div>
         </section>
 

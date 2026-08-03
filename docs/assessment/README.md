@@ -20,7 +20,7 @@ Dokumen ini adalah pintu masuk wajib bagi pengembang dan AI yang mengubah modul 
 - Total bobot komponen aktif wajib tepat 100%.
 - Hanya hasil ASTS terkunci yang dapat disalin ke komponen ASAS, bersama ID sumber dan snapshot angka.
 - Snapshot rapor immutable. Perubahan setelahnya membuat revisi baru dan tidak menimpa PDF lama.
-- Semua PDF memakai disk `local` privat (`storage/app/private`), tidak memakai disk default publik.
+- PDF siswa baru dirender dari snapshot tanpa file permanen. Cache PDF kelas dan PDF historis tetap memakai disk `local` privat (`storage/app/private`), tidak pernah memakai disk publik.
 - Queue `assessment-reports` hanya berjalan ketika submit dan queue Literasi/default sedang kosong, satu job per putaran.
 - Semua action sensitif diperiksa lagi di Policy/service, bukan mengandalkan menu tersembunyi.
 - Seluruh halaman admin harus tetap usable pada HP sesuai `AGENTS.md`.

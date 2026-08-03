@@ -17,7 +17,10 @@ use Illuminate\Validation\ValidationException;
 
 final class ScheduleReportClassesAction
 {
-    public function __construct(private readonly AssessmentAuditLogger $audit) {}
+    public function __construct(
+        private readonly AssessmentAuditLogger $audit,
+        private readonly AssessmentReportStorage $storage,
+    ) {}
 
     /**
      * @param  array<int, int|string>  $periodRombelIds
@@ -111,26 +114,32 @@ final class ScheduleReportClassesAction
                     ],
                 );
 
+                $status = $artifact->generation_status instanceof \BackedEnum
+                    ? $artifact->generation_status->value
+                    : (string) $artifact->generation_status;
+                $cacheFresh = $status === 'completed'
+                    && $artifact->cache_expires_at?->isFuture()
+                    && $this->storage->isValid($artifact->pdf_path, $artifact->checksum);
+
+                if ($cacheFresh) {
+                    continue;
+                }
+
+                if (filled($artifact->pdf_path)) {
+                    $this->storage->disk()->delete((string) $artifact->pdf_path);
+                }
+
                 $artifact->forceFill([
                     'assessment_report_generation_run_id' => $run->getKey(),
                     'generation_status' => 'pending',
                     'error_message' => null,
                     'queued_at' => Carbon::now(),
                     'started_at' => null,
+                    'generated_at' => null,
+                    'cache_expires_at' => null,
+                    'pdf_path' => null,
+                    'checksum' => null,
                 ])->save();
-
-                ReportSnapshot::query()
-                    ->where('assessment_period_id', $period->getKey())
-                    ->where('assessment_report_template_id', $template->getKey())
-                    ->where('revision', $revision)
-                    ->whereHas('student', fn ($students) => $students
-                        ->where('assessment_period_rombel_id', $classId)
-                        ->where('is_active', true))
-                    ->whereIn('generation_status', ['not_scheduled', 'cancelled', 'failed', 'processing'])
-                    ->update([
-                        'generation_status' => 'pending',
-                        'error_message' => null,
-                    ]);
 
                 GenerateClassReportPipeline::dispatch($artifact->getKey())->afterCommit();
             }
@@ -165,8 +174,11 @@ final class ScheduleReportClassesAction
     private function refreshProgress(ReportGenerationRun $run): void
     {
         $run->forceFill([
-            'completed_students' => $run->snapshots()->where('generation_status', 'completed')->count(),
-            'completed_classes' => $run->classArtifacts()->where('generation_status', 'completed')->count(),
+            'completed_students' => $run->snapshots()->whereIn('generation_status', ['ready', 'completed'])->count(),
+            'completed_classes' => $run->classArtifacts()
+                ->where('generation_status', 'completed')
+                ->where('cache_expires_at', '>', Carbon::now())
+                ->count(),
         ])->save();
     }
 }

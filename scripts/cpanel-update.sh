@@ -27,18 +27,26 @@ else
     php artisan package:discover --ansi
 fi
 
-echo "==> Install/build asset frontend"
-if command -v npm >/dev/null 2>&1; then
-    npm ci
+echo "==> Siapkan asset frontend"
+BUILD_ASSETS_ON_SERVER="${BUILD_ASSETS_ON_SERVER:-false}"
+if [ "${BUILD_ASSETS_ON_SERVER}" = "true" ]; then
+    if ! command -v npm >/dev/null 2>&1; then
+        echo "ERROR: BUILD_ASSETS_ON_SERVER=true tetapi npm tidak tersedia."
+        exit 1
+    fi
+
+    NPM_DEPLOY_CACHE="${HOME}/tmp/akses-app-npm-cache"
+    mkdir -p "${NPM_DEPLOY_CACHE}"
+    npm ci --cache "${NPM_DEPLOY_CACHE}"
     npm run build
-    rm -f public/hot
+    npm cache clean --force --cache "${NPM_DEPLOY_CACHE}" || true
 elif [ -f public/build/manifest.json ]; then
-    echo "INFO: npm tidak tersedia; gunakan aset public/build yang sudah dikomit."
-    rm -f public/hot
+    echo "INFO: gunakan public/build yang sudah dikompilasi dan dikomit dari laptop."
 else
-    echo "ERROR: npm tidak ditemukan dan aset public/build belum tersedia."
+    echo "ERROR: public/build/manifest.json tidak tersedia. Build aset di laptop atau set BUILD_ASSETS_ON_SERVER=true."
     exit 1
 fi
+rm -f public/hot
 
 if [ -d "${PUBLIC_WEB_ROOT}" ] && [ "${PUBLIC_WEB_ROOT}" != "$(pwd)/public" ]; then
     echo "==> Sinkron asset frontend ke document root (${PUBLIC_WEB_ROOT})"
