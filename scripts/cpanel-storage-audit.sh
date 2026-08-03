@@ -37,8 +37,14 @@ for target in "${NPM_HOME_CACHE}" "${NPM_TMP_CACHE}"; do
         *) echo "TARGET DITOLAK: ${resolved_target}"; exit 3 ;;
     esac
 
-    if [ -d "${resolved_target}" ] && command -v npm >/dev/null 2>&1; then
-        npm cache clean --force --cache "${resolved_target}" || true
+    if [ -d "${resolved_target}" ]; then
+        if command -v npm >/dev/null 2>&1; then
+            npm cache clean --force --cache "${resolved_target}" || true
+        fi
+
+        # npm tidak selalu tersedia pada non-interactive SSH cPanel. Target
+        # sudah melalui allowlist absolut di atas, jadi bersihkan hanya isinya.
+        find "${resolved_target}" -mindepth 1 -delete
     fi
 done
 
