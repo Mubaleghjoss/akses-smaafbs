@@ -1,5 +1,12 @@
 # Riwayat Literasi Numerasi
 
+## 2026-08-06 - Salin rekap bulanan WhatsApp
+
+- Menambahkan empat tombol rekap bulanan untuk keseluruhan, SIGAP 29 Karakter, Literasi, dan Numerasi.
+- Menghitung data lengkap hanya saat tombol ditekan dan menampilkan modal pratinjau sebelum disalin.
+- Menambahkan status penilaian per respons, status kemiripan per siswa unik, seluruh ranking tanpa pemotongan, dan kelas dengan nol partisipasi.
+- Menjaga data siswa hanya pada state sesi admin dan clipboard browser tanpa endpoint publik atau cache bersama.
+
 ## 2026-08-06 - Protokol submit async-v2
 
 - Menghentikan pola redirect `POST 302` yang diikuti HTML dan retry jawaban berulang.

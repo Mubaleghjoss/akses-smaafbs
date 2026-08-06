@@ -3414,6 +3414,232 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
     line-height: 1.2;
 }
 
+.literasi-monthly-share {
+    display: grid;
+    gap: 0.9rem;
+    width: 100%;
+    min-width: 0;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border: 1px solid rgba(15, 118, 110, 0.26);
+    border-radius: 0.5rem;
+    background: #f0fdfa;
+    color: #0f172a;
+    box-shadow: 0 18px 45px -34px rgba(15, 23, 42, 0.38);
+}
+
+.literasi-monthly-share__heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    min-width: 0;
+}
+
+.literasi-monthly-share__heading > span {
+    min-width: 0;
+}
+
+.literasi-monthly-share__heading strong,
+.literasi-monthly-share__heading small {
+    display: block;
+}
+
+.literasi-monthly-share__heading strong {
+    font-size: 0.95rem;
+    font-weight: 850;
+    line-height: 1.3;
+    text-wrap: balance;
+}
+
+.literasi-monthly-share__heading small {
+    margin-top: 0.25rem;
+    color: #475569;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    text-wrap: pretty;
+}
+
+.literasi-monthly-share__heading > svg {
+    flex: none;
+    width: 1.5rem;
+    height: 1.5rem;
+    color: #0f766e;
+}
+
+.literasi-monthly-share__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.6rem;
+    min-width: 0;
+}
+
+.literasi-monthly-share__button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-width: 0;
+    min-height: 2.75rem;
+    padding: 0.65rem 0.8rem;
+    border: 1px solid #0f766e;
+    border-radius: 0.5rem;
+    background: #ffffff;
+    color: #115e59;
+    font-size: 0.78rem;
+    font-weight: 800;
+    line-height: 1.3;
+    text-align: center;
+}
+
+.literasi-monthly-share__button:hover,
+.literasi-monthly-share__button:focus-visible {
+    background: #ccfbf1;
+}
+
+.literasi-monthly-share__button:focus-visible {
+    outline: 2px solid #14b8a6;
+    outline-offset: 2px;
+}
+
+.literasi-monthly-share__button:disabled {
+    cursor: wait;
+    opacity: 0.64;
+}
+
+.literasi-monthly-share__button svg {
+    flex: none;
+    width: 1.1rem;
+    height: 1.1rem;
+}
+
+.literasi-monthly-share-preview {
+    display: grid;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.literasi-monthly-share-preview__meta,
+.literasi-monthly-share-preview__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    color: #475569;
+    font-size: 0.78rem;
+}
+
+.literasi-monthly-share-preview__meta strong {
+    color: #0f172a;
+}
+
+.literasi-monthly-share-preview textarea {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-height: 58vh;
+    resize: vertical;
+    padding: 0.85rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.5rem;
+    background: #ffffff;
+    color: #0f172a;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 0.78rem;
+    line-height: 1.55;
+}
+
+.literasi-monthly-share-preview textarea:focus {
+    border-color: #0f766e;
+    outline: 2px solid rgba(20, 184, 166, 0.25);
+    outline-offset: 1px;
+}
+
+.literasi-monthly-share-preview__footer > div {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.literasi-monthly-share-preview__status {
+    min-height: 1.25rem;
+    color: #047857;
+    font-weight: 700;
+}
+
+.dark .literasi-monthly-share,
+.fi-theme-dark .literasi-monthly-share {
+    border-color: rgba(45, 212, 191, 0.28);
+    background: rgba(19, 78, 74, 0.25);
+    color: #f8fafc;
+}
+
+.dark .literasi-monthly-share__heading small,
+.dark .literasi-monthly-share-preview__meta,
+.dark .literasi-monthly-share-preview__footer,
+.fi-theme-dark .literasi-monthly-share__heading small,
+.fi-theme-dark .literasi-monthly-share-preview__meta,
+.fi-theme-dark .literasi-monthly-share-preview__footer {
+    color: #cbd5e1;
+}
+
+.dark .literasi-monthly-share__heading > svg,
+.fi-theme-dark .literasi-monthly-share__heading > svg {
+    color: #5eead4;
+}
+
+.dark .literasi-monthly-share__button,
+.fi-theme-dark .literasi-monthly-share__button {
+    border-color: #2dd4bf;
+    background: #18181b;
+    color: #ccfbf1;
+}
+
+.dark .literasi-monthly-share__button:hover,
+.dark .literasi-monthly-share__button:focus-visible,
+.fi-theme-dark .literasi-monthly-share__button:hover,
+.fi-theme-dark .literasi-monthly-share__button:focus-visible {
+    background: #134e4a;
+}
+
+.dark .literasi-monthly-share-preview__meta strong,
+.fi-theme-dark .literasi-monthly-share-preview__meta strong {
+    color: #f8fafc;
+}
+
+.dark .literasi-monthly-share-preview textarea,
+.fi-theme-dark .literasi-monthly-share-preview textarea {
+    border-color: #52525b;
+    background: #18181b;
+    color: #f8fafc;
+}
+
+@media (min-width: 640px) {
+    .literasi-monthly-share__actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 1024px) {
+    .literasi-monthly-share__actions {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 639px) {
+    .literasi-monthly-share-preview__meta,
+    .literasi-monthly-share-preview__footer {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .literasi-monthly-share-preview__footer > div,
+    .literasi-monthly-share-preview__footer .fi-btn {
+        width: 100%;
+    }
+}
+
 .literasi-student-history-page {
     display: grid;
     gap: 1rem;

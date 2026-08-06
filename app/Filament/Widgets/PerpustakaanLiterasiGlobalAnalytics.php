@@ -5,9 +5,11 @@ namespace App\Filament\Widgets;
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource;
 use App\Models\PerpustakaanLiterasiMaterial;
 use App\Support\Perpustakaan\LiterasiAnalytics;
+use App\Support\Perpustakaan\LiteracyMonthlyShareText;
 use App\Support\Perpustakaan\LiteracyOperationalHealth;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class PerpustakaanLiterasiGlobalAnalytics extends Widget
 {
@@ -20,6 +22,10 @@ class PerpustakaanLiterasiGlobalAnalytics extends Widget
     protected ?string $pollingInterval = null;
 
     public string $activeAnalyticsTab = 'all';
+
+    public ?string $monthlyShareText = null;
+
+    public ?string $monthlyShareTitle = null;
 
     public static function canView(): bool
     {
@@ -50,6 +56,7 @@ class PerpustakaanLiterasiGlobalAnalytics extends Widget
                 ? 'Rekap semua materi Literasi Numerasi pada bulan berjalan.'
                 : 'Rekap bulan berjalan khusus kategori '.$tabs[$activeTab].'.',
             'operationalHealth' => app(LiteracyOperationalHealth::class)->snapshot(),
+            'monthlyShareScopes' => LiteracyMonthlyShareText::scopeOptions(),
         ];
     }
 
@@ -58,6 +65,21 @@ class PerpustakaanLiterasiGlobalAnalytics extends Widget
         if (array_key_exists($tab, $this->analyticsTabs())) {
             $this->activeAnalyticsTab = $tab;
         }
+    }
+
+    public function prepareMonthlyShare(string $scope): void
+    {
+        abort_unless(static::canView(), 403);
+
+        if (! LiteracyMonthlyShareText::validScope($scope)) {
+            throw ValidationException::withMessages([
+                'monthlyShareScope' => 'Lingkup rekap bulanan tidak valid.',
+            ]);
+        }
+
+        $this->monthlyShareTitle = LiteracyMonthlyShareText::title($scope);
+        $this->monthlyShareText = LiteracyMonthlyShareText::make($scope);
+        $this->dispatch('open-modal', id: 'literacy-monthly-share-preview');
     }
 
     protected function analyticsTabs(): array

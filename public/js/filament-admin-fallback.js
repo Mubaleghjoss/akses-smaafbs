@@ -539,7 +539,7 @@
     });
 
     document.addEventListener('click', async (event) => {
-        const button = event.target?.closest?.('.js-literacy-completion-copy');
+        const button = event.target?.closest?.('.js-literacy-completion-copy, .js-literacy-copy');
 
         if (!button) {
             return;
@@ -551,10 +551,13 @@
         const text = source?.value?.trim();
         const label = button.querySelector('span');
         const defaultLabel = button.dataset.defaultLabel || 'Salin daftar untuk WhatsApp';
+        const emptyMessage = button.dataset.emptyMessage || 'Daftar belum tersedia.';
+        const successMessage = button.dataset.successMessage || 'Daftar berhasil disalin. Buka WhatsApp lalu pilih Tempel.';
+        const fallbackMessage = button.dataset.fallbackMessage || 'Clipboard otomatis tidak tersedia. Salin teks dari kotak yang muncul.';
 
         if (!text) {
             if (status) {
-                status.textContent = 'Daftar belum tersedia.';
+                status.textContent = emptyMessage;
             }
 
             return;
@@ -570,13 +573,13 @@
             }
 
             if (status) {
-                status.textContent = 'Daftar berhasil disalin. Buka WhatsApp lalu pilih Tempel.';
+                status.textContent = successMessage;
             }
         } catch (error) {
             window.prompt('Salin manual teks berikut:', text);
 
             if (status) {
-                status.textContent = 'Clipboard otomatis tidak tersedia. Salin teks dari kotak yang muncul.';
+                status.textContent = fallbackMessage;
             }
         } finally {
             window.setTimeout(() => {

@@ -27,6 +27,7 @@ use App\Models\PerpustakaanLiterasiSubmissionTicket;
 use App\Models\User;
 use App\Support\Admin\AdminModuleAccess;
 use App\Support\Perpustakaan\LiteracyCompletionShareText;
+use App\Support\Perpustakaan\LiteracyMonthlyShareText;
 use App\Support\Perpustakaan\LiteracyOperationalHealth;
 use App\Support\Perpustakaan\LiteracyReceiptClassStatus;
 use App\Support\Perpustakaan\LiteracySubmissionQueue;
@@ -2981,6 +2982,216 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertSame(2, (int) $analytics['grading_summary']['correct_answers']);
     }
 
+    public function test_monthly_whatsapp_share_uses_response_statuses_categories_and_unique_similarity_students(): void
+    {
+        $literacy = $this->createMaterial('Materi Rekap Literasi');
+        $questionOne = $literacy->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Pertanyaan pertama rekap bulanan.',
+            'max_characters' => 500,
+        ]);
+        $questionTwo = $literacy->questions()->create([
+            'sort_order' => 2,
+            'prompt' => 'Pertanyaan kedua rekap bulanan.',
+            'max_characters' => 500,
+        ]);
+
+        $fullyGradedStudent = $this->createStudent('Alya Rekap Lengkap', 'X 1');
+        $partiallyGradedStudent = $this->createStudent('Bima Rekap Sebagian', 'X 1');
+        $suspectedStudent = $this->createStudent('Citra Rekap Indikasi', 'X 2');
+        $clearedStudent = $this->createStudent('Dina Rekap Aman', 'X 2');
+        $dispensatedStudent = $this->createStudent('Eka Rekap Sakit', 'XI 1');
+        $this->createStudent('Fina Belum Mengisi', 'XI 2');
+
+        $fullyGraded = $this->createResponseWithAnswer($literacy, $fullyGradedStudent, $questionOne, 'Jawaban Alya pertama.', now()->subMinutes(4));
+        $fullyGradedAnswerOne = $fullyGraded->answers()->firstOrFail();
+        $fullyGradedAnswerOne->forceFill(['is_correct' => true, 'graded_at' => now()])->save();
+        $fullyGradedAnswerTwo = PerpustakaanLiterasiAnswer::query()->create([
+            'response_id' => $fullyGraded->getKey(),
+            'question_id' => $questionTwo->getKey(),
+            'answer_text' => 'Jawaban Alya kedua.',
+            'character_count' => 20,
+            'is_correct' => true,
+            'graded_at' => now(),
+        ]);
+
+        $partiallyGraded = $this->createResponseWithAnswer($literacy, $partiallyGradedStudent, $questionOne, 'Jawaban Bima pertama.', now()->subMinutes(3));
+        $partiallyGradedAnswerOne = $partiallyGraded->answers()->firstOrFail();
+        $partiallyGradedAnswerOne->forceFill(['is_correct' => true, 'graded_at' => now()])->save();
+        $partiallyGradedAnswerTwo = PerpustakaanLiterasiAnswer::query()->create([
+            'response_id' => $partiallyGraded->getKey(),
+            'question_id' => $questionTwo->getKey(),
+            'answer_text' => 'Jawaban Bima kedua belum dinilai.',
+            'character_count' => 33,
+        ]);
+
+        $suspected = $this->createResponseWithAnswer($literacy, $suspectedStudent, $questionOne, 'Jawaban Citra terindikasi.', now()->subMinutes(2));
+        $suspectedAnswer = $suspected->answers()->firstOrFail();
+        $suspectedAnswer->forceFill(['is_correct' => false, 'graded_at' => now()])->save();
+        $cleared = $this->createResponseWithAnswer($literacy, $clearedStudent, $questionOne, 'Jawaban Dina sudah aman.', now()->subMinute());
+        $clearedAnswer = $cleared->answers()->firstOrFail();
+        $clearedAnswer->forceFill(['is_correct' => true, 'graded_at' => now()])->save();
+
+        PerpustakaanLiterasiDispensation::query()->create([
+            'material_id' => $literacy->getKey(),
+            'data_siswa_id' => $dispensatedStudent->getKey(),
+            'reason' => PerpustakaanLiterasiDispensation::REASON_SICK,
+            'student_name_snapshot' => $dispensatedStudent->nama,
+            'student_class_snapshot' => $dispensatedStudent->rombel_saat_ini,
+            'confirmed_at' => now(),
+        ]);
+
+        foreach ([
+            [$partiallyGraded, $partiallyGradedAnswerOne, PerpustakaanLiterasiSimilarityMatch::REVIEW_SUSPECTED, 91.0],
+            [$partiallyGraded, $partiallyGradedAnswerTwo, PerpustakaanLiterasiSimilarityMatch::REVIEW_CONFIRMED, 96.0],
+            [$suspected, $suspectedAnswer, PerpustakaanLiterasiSimilarityMatch::REVIEW_SUSPECTED, 88.0],
+            [$cleared, $clearedAnswer, PerpustakaanLiterasiSimilarityMatch::REVIEW_CLEARED, 85.0],
+        ] as [$laterResponse, $laterAnswer, $status, $score]) {
+            PerpustakaanLiterasiSimilarityMatch::query()->create([
+                'material_id' => $literacy->getKey(),
+                'question_id' => $laterAnswer->question_id,
+                'later_response_id' => $laterResponse->getKey(),
+                'matched_response_id' => $fullyGraded->getKey(),
+                'later_answer_id' => $laterAnswer->getKey(),
+                'matched_answer_id' => $laterAnswer->question_id === $questionTwo->getKey()
+                    ? $fullyGradedAnswerTwo->getKey()
+                    : $fullyGradedAnswerOne->getKey(),
+                'student_class_snapshot' => $laterResponse->student_class_snapshot,
+                'similarity_score' => $score,
+                'review_status' => $status,
+                'later_submitted_at' => $laterResponse->submitted_at,
+                'matched_submitted_at' => $fullyGraded->submitted_at,
+            ]);
+        }
+
+        $legacy = $this->createMaterial('Materi Lama Tanpa Kategori');
+        DB::table('perpustakaan_literasi_materials')->where('id', $legacy->getKey())->update(['program_category' => null]);
+        $legacyQuestion = $legacy->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Pertanyaan materi lama.',
+            'max_characters' => 500,
+        ]);
+        $legacyStudent = $this->createStudent('Gina Materi Lama', 'XII 1');
+        $legacyResponse = $this->createResponseWithAnswer($legacy, $legacyStudent, $legacyQuestion, 'Jawaban materi lama.');
+        $legacyResponse->answers()->firstOrFail()->forceFill(['is_correct' => true, 'graded_at' => now()])->save();
+
+        $literacyAnalytics = LiterasiAnalytics::monthlyShare(PerpustakaanLiterasiMaterial::CATEGORY_LITERACY_HABITUATION);
+        $allAnalytics = LiterasiAnalytics::monthlyShare();
+        $summary = $literacyAnalytics['grading_summary'];
+
+        $this->assertSame(5, $summary['responses']);
+        $this->assertSame(4, $summary['response_records']);
+        $this->assertSame(1, $summary['dispensations']);
+        $this->assertSame(5, $summary['unique_students']);
+        $this->assertSame(3, $summary['fully_graded_responses']);
+        $this->assertSame(1, $summary['pending_grading_responses']);
+        $this->assertSame(1, $summary['confirmed_plagiarism_students']);
+        $this->assertSame(1, $summary['pending_similarity_students']);
+        $this->assertSame(5, $allAnalytics['grading_summary']['response_records']);
+        $this->assertSame('XI 2', collect($literacyAnalytics['class_participation'])->firstWhere('total', 0)['class']);
+
+        $activeSimilarityStudents = collect($literacyAnalytics['plagiarism_student_ranking'])->pluck('name');
+        $this->assertTrue($activeSimilarityStudents->contains('Bima Rekap Sebagian'));
+        $this->assertTrue($activeSimilarityStudents->contains('Citra Rekap Indikasi'));
+        $this->assertFalse($activeSimilarityStudents->contains('Dina Rekap Aman'));
+
+        $text = LiteracyMonthlyShareText::make(
+            PerpustakaanLiterasiMaterial::CATEGORY_LITERACY_HABITUATION,
+            CarbonImmutable::create(2026, 8, 6, 12, 0, 0, 'Asia/Jakarta'),
+        );
+        $this->assertStringContainsString('*Lingkup:* Literasi', $text);
+        $this->assertStringContainsString('*Dibuat:* 06/08/2026 12:00 WIB', $text);
+        $this->assertStringContainsString('- Total responden: 5 partisipasi dari 5 siswa unik', $text);
+        $this->assertStringContainsString('- Sudah dinilai lengkap: 3 respons', $text);
+        $this->assertStringContainsString('- Belum dinilai/masih sebagian: 1 respons', $text);
+        $this->assertStringContainsString('*Kelas XI 2*', $text);
+        $this->assertStringContainsString('Fina Belum Mengisi', $text);
+        $this->assertStringContainsString('Bima Rekap Sebagian', $text);
+        $this->assertStringNotContainsString('Dina Rekap Aman — X 2 — 1 indikasi', $text);
+    }
+
+    public function test_monthly_whatsapp_share_does_not_truncate_student_lists(): void
+    {
+        $material = $this->createMaterial('Materi Rekap Tanpa Batas');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Pertanyaan rekap tanpa batas.',
+            'max_characters' => 500,
+        ]);
+
+        for ($index = 1; $index <= 6; $index++) {
+            $student = $this->createStudent(sprintf('Siswa Dinilai %02d', $index), 'X Rekap');
+            $response = $this->createResponseWithAnswer($material, $student, $question, 'Jawaban siswa '.$index.'.');
+            $response->answers()->firstOrFail()->forceFill(['is_correct' => true, 'graded_at' => now()])->save();
+        }
+
+        for ($index = 1; $index <= 31; $index++) {
+            $this->createStudent(sprintf('Siswa Belum %02d', $index), 'XI Rekap');
+        }
+
+        $text = LiteracyMonthlyShareText::make(PerpustakaanLiterasiMaterial::CATEGORY_LITERACY_HABITUATION);
+
+        $this->assertStringContainsString('Siswa Dinilai 06', $text);
+        $this->assertStringContainsString('Siswa Belum 31', $text);
+    }
+
+    public function test_monthly_whatsapp_share_isolates_all_four_scopes_and_total_includes_legacy_materials(): void
+    {
+        $scopes = [
+            PerpustakaanLiterasiMaterial::CATEGORY_LITERACY_HABITUATION => 'Siswa Scope Literasi',
+            PerpustakaanLiterasiMaterial::CATEGORY_NUMERACY_EXCELLENCE => 'Siswa Scope Numerasi',
+            PerpustakaanLiterasiMaterial::CATEGORY_SIGAP_29_KARAKTER => 'Siswa Scope SIGAP',
+            '__legacy' => 'Siswa Scope Lama',
+        ];
+
+        foreach ($scopes as $category => $studentName) {
+            $material = $this->createMaterial('Materi '.$studentName, $category === '__legacy' ? [] : [
+                'program_category' => $category,
+            ]);
+
+            if ($category === '__legacy') {
+                DB::table('perpustakaan_literasi_materials')
+                    ->where('id', $material->getKey())
+                    ->update(['program_category' => null]);
+            }
+
+            $question = $material->questions()->create([
+                'sort_order' => 1,
+                'prompt' => 'Pertanyaan '.$studentName,
+                'max_characters' => 500,
+            ]);
+            $response = $this->createResponseWithAnswer(
+                $material,
+                $this->createStudent($studentName, 'X Scope'),
+                $question,
+                'Jawaban '.$studentName,
+            );
+            $response->answers()->firstOrFail()->forceFill(['is_correct' => true, 'graded_at' => now()])->save();
+        }
+
+        $this->assertSame(4, LiterasiAnalytics::monthlyShare()['grading_summary']['response_records']);
+        $this->assertSame(1, LiterasiAnalytics::monthlyShare(
+            PerpustakaanLiterasiMaterial::CATEGORY_LITERACY_HABITUATION,
+        )['grading_summary']['response_records']);
+        $this->assertSame(1, LiterasiAnalytics::monthlyShare(
+            PerpustakaanLiterasiMaterial::CATEGORY_NUMERACY_EXCELLENCE,
+        )['grading_summary']['response_records']);
+        $this->assertSame(1, LiterasiAnalytics::monthlyShare(
+            PerpustakaanLiterasiMaterial::CATEGORY_SIGAP_29_KARAKTER,
+        )['grading_summary']['response_records']);
+
+        $this->assertStringContainsString('*Lingkup:* Keseluruhan', LiteracyMonthlyShareText::make('all'));
+        $this->assertStringContainsString('*Lingkup:* Literasi', LiteracyMonthlyShareText::make(
+            PerpustakaanLiterasiMaterial::CATEGORY_LITERACY_HABITUATION,
+        ));
+        $this->assertStringContainsString('*Lingkup:* Numerasi', LiteracyMonthlyShareText::make(
+            PerpustakaanLiterasiMaterial::CATEGORY_NUMERACY_EXCELLENCE,
+        ));
+        $this->assertStringContainsString('*Lingkup:* SIGAP 29 Karakter', LiteracyMonthlyShareText::make(
+            PerpustakaanLiterasiMaterial::CATEGORY_SIGAP_29_KARAKTER,
+        ));
+    }
+
     public function test_material_completion_separates_missing_students_from_trashed_responses(): void
     {
         $completedStudent = $this->createStudent('Codex Sudah Mengisi', 'X Status');
@@ -3280,6 +3491,11 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('Kategori analisa literasi', false)
             ->assertSee('Belum Berkategori')
             ->assertSee('History Pengerjaan Siswa')
+            ->assertSee('Salin Rekap Bulanan ke WhatsApp')
+            ->assertSee('Rekap Bulanan Total')
+            ->assertSee('Rekap SIGAP 29 Karakter')
+            ->assertSee('Rekap Literasi')
+            ->assertSee('Rekap Numerasi')
             ->assertSee('Hitung Ulang Plagiasi')
             ->assertSee('Setting Tatib')
             ->assertSee('Pilih Kategori')
@@ -3299,12 +3515,37 @@ class LibraryLiteracyProgramTest extends TestCase
             PerpustakaanLiterasiMaterial::CATEGORY_SIGAP_29_KARAKTER,
         ], array_keys($materialList->instance()->getTabs()));
 
-        Livewire::actingAs($admin)
+        $analyticsWidget = Livewire::actingAs($admin)
             ->test(PerpustakaanLiterasiGlobalAnalytics::class)
             ->assertSet('activeAnalyticsTab', 'all')
             ->call('selectAnalyticsTab', PerpustakaanLiterasiMaterial::CATEGORY_NUMERACY_EXCELLENCE)
             ->assertSet('activeAnalyticsTab', PerpustakaanLiterasiMaterial::CATEGORY_NUMERACY_EXCELLENCE)
             ->assertSee('Numeracy Excellence Selama 1 Bulan');
+
+        $analyticsWidget
+            ->call('prepareMonthlyShare', LiteracyMonthlyShareText::SCOPE_ALL)
+            ->assertSet('monthlyShareTitle', 'Rekap Bulanan Keseluruhan')
+            ->assertDispatched('open-modal', id: 'literacy-monthly-share-preview');
+
+        $this->assertStringContainsString(
+            '*REKAP BULANAN LITERASI NUMERASI*',
+            (string) $analyticsWidget->get('monthlyShareText'),
+        );
+
+        Livewire::actingAs($admin)
+            ->test(PerpustakaanLiterasiGlobalAnalytics::class)
+            ->call('prepareMonthlyShare', 'scope-tidak-valid')
+            ->assertHasErrors(['monthlyShareScope']);
+
+        $unauthorized = User::query()->create([
+            'name' => 'Pengguna Tanpa Akses Rekap Literasi',
+            'username' => 'tanpa-akses-rekap-literasi',
+            'password' => bcrypt('password'),
+        ]);
+        Livewire::actingAs($unauthorized)
+            ->test(PerpustakaanLiterasiGlobalAnalytics::class)
+            ->call('prepareMonthlyShare', LiteracyMonthlyShareText::SCOPE_ALL)
+            ->assertForbidden();
 
         $this->assertStringContainsString(
             $material->closes_at->format('d/m/Y H:i'),

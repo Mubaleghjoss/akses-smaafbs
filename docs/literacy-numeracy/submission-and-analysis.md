@@ -123,6 +123,17 @@ php artisan literacy:similarity-reconcile --material=43 --apply --batch=25
 
 Perintah dry-run tidak menulis data. Apply hanya menyusun ulang baris indikasi dan menyesuaikan batas karakter pertanyaan berkunci; respons, isi jawaban, nilai, dan kode edit tidak diubah.
 
+## Salinan rekap bulanan WhatsApp
+
+- Ringkasan Literasi menyediakan empat lingkup: keseluruhan, SIGAP 29 Karakter, Literasi, dan Numerasi.
+- Analitik lengkap baru dihitung ketika admin menekan tombol lingkup; membuka halaman tidak menghitung keempat rekap sekaligus.
+- Lingkup keseluruhan turut memasukkan materi lama yang belum mempunyai `program_category`.
+- Periode selalu bulan berjalan pada zona waktu aplikasi. Partisipasi adalah respons nyata ditambah dispensasi, sedangkan siswa unik tidak dihitung rangkap.
+- Status **sudah dinilai lengkap** berlaku per respons hanya jika seluruh jawabannya telah dinilai. Respons dengan satu jawaban yang masih kosong tetap masuk **belum dinilai/masih sebagian**.
+- Status kemiripan dihitung per siswa unik. `confirmed` lebih kuat daripada `suspected`; status `cleared` tidak disebut plagiasi dan tidak masuk ranking indikasi aktif.
+- Semua daftar pada salinan tidak dipotong pagination atau batas tampilan admin. Hanya ranking kelas jawaban benar yang sengaja dibatasi tiga kelas.
+- Teks disimpan sementara hanya pada state Livewire milik sesi admin, ditampilkan dalam modal pratinjau, lalu disalin di browser. Nama siswa tidak dicatat ke log, cache bersama, atau endpoint publik.
+
 ## Aturan perubahan
 
 - Jangan menambah `sleep()` pada request publik.

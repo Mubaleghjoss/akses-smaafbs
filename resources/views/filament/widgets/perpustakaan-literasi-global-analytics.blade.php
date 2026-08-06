@@ -80,6 +80,32 @@
                 <span class="literasi-history-link-card__action">Buka History</span>
             </a>
 
+            <section class="literasi-monthly-share" aria-labelledby="literasi-monthly-share-title">
+                <div class="literasi-monthly-share__heading">
+                    <span>
+                        <strong id="literasi-monthly-share-title">Salin Rekap Bulanan ke WhatsApp</strong>
+                        <small>Pilih lingkup laporan. Data lengkap baru dihitung saat tombol ditekan, lalu ditampilkan untuk diperiksa sebelum disalin.</small>
+                    </span>
+                    <x-filament::icon icon="heroicon-o-clipboard-document-list" />
+                </div>
+
+                <div class="literasi-monthly-share__actions">
+                    @foreach($monthlyShareScopes as $scope => $scopeData)
+                        <button
+                            type="button"
+                            wire:click="prepareMonthlyShare('{{ $scope }}')"
+                            wire:loading.attr="disabled"
+                            wire:target="prepareMonthlyShare"
+                            class="literasi-monthly-share__button"
+                        >
+                            <x-filament::icon icon="heroicon-o-clipboard-document-check" />
+                            <span wire:loading.remove wire:target="prepareMonthlyShare('{{ $scope }}')">{{ $scopeData['button'] }}</span>
+                            <span wire:loading wire:target="prepareMonthlyShare('{{ $scope }}')">Menyiapkan...</span>
+                        </button>
+                    @endforeach
+                </div>
+            </section>
+
             <div class="literasi-analytics-tabs" role="tablist" aria-label="Kategori analisa literasi">
                 @foreach($analyticsTabs as $key => $label)
                     <button
@@ -106,6 +132,44 @@
                     'description' => $analyticsDescription,
                 ])
             </div>
+
+            <x-filament::modal id="literacy-monthly-share-preview" width="5xl">
+                <x-slot name="heading">{{ $monthlyShareTitle ?: 'Pratinjau Rekap Bulanan' }}</x-slot>
+                <x-slot name="description">Periksa teks berikut sebelum menyalinnya ke grup WhatsApp.</x-slot>
+
+                <div class="literasi-monthly-share-preview" wire:key="literacy-monthly-share-{{ md5($monthlyShareText ?? '') }}">
+                    <div class="literasi-monthly-share-preview__meta">
+                        <span>Seluruh data sesuai lingkup terpilih</span>
+                        <strong class="tabular-nums">{{ number_format(mb_strlen($monthlyShareText ?? ''), 0, ',', '.') }} karakter</strong>
+                    </div>
+                    <textarea id="literacy-monthly-share-text" rows="20" readonly>{{ $monthlyShareText }}</textarea>
+                    <div class="literasi-monthly-share-preview__footer">
+                        <span id="literacy-monthly-share-text-status" class="literasi-monthly-share-preview__status" aria-live="polite"></span>
+                        <div>
+                            <x-filament::button
+                                type="button"
+                                color="gray"
+                                x-on:click="$dispatch('close-modal', { id: 'literacy-monthly-share-preview' })"
+                            >
+                                Tutup
+                            </x-filament::button>
+                            <x-filament::button
+                                type="button"
+                                icon="heroicon-o-clipboard-document-check"
+                                class="js-literacy-copy"
+                                data-copy-target="literacy-monthly-share-text"
+                                data-default-label="Salin Teks Lengkap"
+                                data-empty-message="Rekap belum tersedia."
+                                data-success-message="Rekap berhasil disalin. Buka WhatsApp lalu pilih Tempel."
+                                data-fallback-message="Clipboard otomatis tidak tersedia. Salin teks dari kotak yang muncul."
+                                :disabled="blank($monthlyShareText)"
+                            >
+                                <span>Salin Teks Lengkap</span>
+                            </x-filament::button>
+                        </div>
+                    </div>
+                </div>
+            </x-filament::modal>
         </div>
     </details>
 </x-filament-widgets::widget>
