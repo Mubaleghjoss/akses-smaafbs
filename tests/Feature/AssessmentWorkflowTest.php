@@ -29,6 +29,7 @@ use App\Models\Assessment\ReportTemplate;
 use App\Models\Assessment\Semester;
 use App\Models\Assessment\StudentSubjectResult;
 use App\Models\Assessment\Subject;
+use App\Models\Assessment\SubjectCategory;
 use App\Models\Assessment\TeachingAssignment;
 use App\Models\DataSiswa;
 use App\Models\GuruTendik;
@@ -62,6 +63,7 @@ class AssessmentWorkflowTest extends TestCase
         $migration->up();
         $reportStructureMigration = require database_path('migrations/2026_07_31_120000_extend_assessment_report_structure.php');
         $reportStructureMigration->up();
+        (require database_path('migrations/2026_08_06_150000_add_assessment_subject_categories.php'))->up();
         $pipelineMigration = require database_path('migrations/2026_07_31_190000_add_assessment_report_generation_runs.php');
         $pipelineMigration->up();
         (require database_path('migrations/2026_08_03_080000_add_stream_delivery_to_assessment_reports.php'))->up();
@@ -93,6 +95,8 @@ class AssessmentWorkflowTest extends TestCase
         $asas = $this->createOpenedPeriod($context, AssessmentType::ASAS);
         $astsAssignment = $asts->assignments()->firstOrFail();
         $asasAssignment = $asas->assignments()->firstOrFail();
+        $this->assertSame('WAJIB', $astsAssignment->subject_group_code_snapshot);
+        $this->assertSame('Mapel Wajib', $astsAssignment->subject_group_name_snapshot);
         $astsStudent = $asts->students()->firstOrFail();
         $asasStudent = $asas->students()->firstOrFail();
         $astsComponent = $asts->schemes()->firstOrFail()->components()->firstOrFail();
@@ -703,6 +707,7 @@ class AssessmentWorkflowTest extends TestCase
         TeachingAssignment::query()->create([
             'assessment_semester_id' => $semester->getKey(),
             'assessment_subject_id' => $subject->getKey(),
+            'assessment_subject_category_id' => SubjectCategory::query()->where('code', 'WAJIB')->value('id'),
             'teacher_id' => $teacher->getKey(),
             'rombel_id' => $rombel->getKey(),
             'teacher_name_snapshot' => $teacher->nama,
@@ -801,6 +806,7 @@ class AssessmentWorkflowTest extends TestCase
         TeachingAssignment::query()->create([
             'assessment_semester_id' => $context['semester']->getKey(),
             'assessment_subject_id' => $secondSubject->getKey(),
+            'assessment_subject_category_id' => SubjectCategory::query()->where('code', 'WAJIB')->value('id'),
             'teacher_id' => $context['teacher']->getKey(),
             'rombel_id' => $context['rombel']->getKey(),
             'teacher_name_snapshot' => $context['teacher']->nama,

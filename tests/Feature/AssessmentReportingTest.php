@@ -75,6 +75,7 @@ class AssessmentReportingTest extends TestCase
         $migration->up();
         $reportStructureMigration = require database_path('migrations/2026_07_31_120000_extend_assessment_report_structure.php');
         $reportStructureMigration->up();
+        (require database_path('migrations/2026_08_06_150000_add_assessment_subject_categories.php'))->up();
         $pipelineMigration = require database_path('migrations/2026_07_31_190000_add_assessment_report_generation_runs.php');
         $pipelineMigration->up();
         $streamDeliveryMigration = require database_path('migrations/2026_08_03_080000_add_stream_delivery_to_assessment_reports.php');

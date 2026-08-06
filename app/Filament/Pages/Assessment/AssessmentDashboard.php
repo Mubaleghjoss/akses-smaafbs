@@ -9,6 +9,7 @@ use App\Filament\Resources\AssessmentAuditLogResource;
 use App\Filament\Resources\AssessmentPeriodResource;
 use App\Filament\Resources\AssessmentReportTemplateResource;
 use App\Filament\Resources\AssessmentSchemeResource;
+use App\Filament\Resources\AssessmentSubjectCategoryResource;
 use App\Filament\Resources\AssessmentSubjectResource;
 use App\Filament\Resources\DataSiswaResource;
 use App\Filament\Resources\GuruTendikResource;
@@ -21,6 +22,7 @@ use App\Models\Assessment\HomeroomAssignment;
 use App\Models\Assessment\ReportTemplate;
 use App\Models\Assessment\Semester;
 use App\Models\Assessment\Subject;
+use App\Models\Assessment\SubjectCategory;
 use App\Models\Assessment\TeachingAssignment;
 use App\Models\DataSiswa;
 use App\Models\GuruTendik;
@@ -93,19 +95,34 @@ class AssessmentDashboard extends AssessmentPage
     {
         return [
             [
+                'title' => 'Kategori Mapel',
+                'points' => [
+                    'Atur Mapel Wajib dan Mapel Pilihan yang tampil sebagai kelompok rapor.',
+                    'Kategori dapat berbeda pada setiap kelas.',
+                ],
+                'action' => 'Kelola Kategori',
+                'icon' => 'heroicon-o-tag',
+                'tone' => 'warning',
+                'value' => AssessmentSubjectCategoryResource::canViewAny()
+                    ? SubjectCategory::query()->where('is_active', true)->count()
+                    : '—',
+                'caption' => 'kategori aktif',
+                'url' => AssessmentSubjectCategoryResource::canViewAny() ? AssessmentSubjectCategoryResource::getUrl() : null,
+            ],
+            [
                 'title' => 'Guru Mapel & Kelas',
                 'points' => [
                     'Hubungkan guru dengan mapel dan kelas per semester.',
                     'Menentukan penugasan nilai yang tampil pada akun guru.',
                 ],
-                'action' => 'Atur Guru Mapel',
+                'action' => 'Buka Mapel Penilaian',
                 'icon' => 'heroicon-o-book-open',
                 'tone' => 'success',
                 'value' => GuruTendikResource::canViewAny()
                     ? TeachingAssignment::query()->where('is_active', true)->count()
                     : '—',
                 'caption' => 'penugasan mapel aktif',
-                'url' => GuruTendikResource::canViewAny() ? GuruTendikResource::getUrl() : null,
+                'url' => AssessmentSubjectResource::canViewAny() ? AssessmentSubjectResource::getUrl() : null,
             ],
             [
                 'title' => 'Wali Kelas',

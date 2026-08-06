@@ -4,6 +4,7 @@ namespace Database\Factories\Assessment;
 
 use App\Models\Assessment\Semester;
 use App\Models\Assessment\Subject;
+use App\Models\Assessment\SubjectCategory;
 use App\Models\Assessment\TeachingAssignment;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -17,6 +18,7 @@ class TeachingAssignmentFactory extends Factory
         return [
             'assessment_semester_id' => Semester::factory(),
             'assessment_subject_id' => Subject::factory(),
+            'assessment_subject_category_id' => SubjectCategory::factory(),
             'teacher_id' => fake()->numberBetween(1, 100000),
             'rombel_id' => fake()->numberBetween(1, 100000),
             'teacher_name_snapshot' => fake()->name(),

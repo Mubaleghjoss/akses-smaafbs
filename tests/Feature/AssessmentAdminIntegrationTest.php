@@ -69,6 +69,7 @@ class AssessmentAdminIntegrationTest extends TestCase
             'migrations/2026_07_31_120000_extend_assessment_report_structure.php',
         );
         $reportStructureMigration->up();
+        (require database_path('migrations/2026_08_06_150000_add_assessment_subject_categories.php'))->up();
         $pipelineMigration = require database_path(
             'migrations/2026_07_31_190000_add_assessment_report_generation_runs.php',
         );
@@ -186,6 +187,10 @@ class AssessmentAdminIntegrationTest extends TestCase
             ['KODE_MAPEL', 'NAMA_MAPEL', 'DESKRIPSI', 'KELOMPOK_KODE', 'KELOMPOK_NAMA', 'URUTAN_KELOMPOK', 'URUTAN_MAPEL', 'AKTIF'],
             ['MAT', 'Matematika', 'Numerasi', 'A', 'Kelompok A', 10, 20, 'YA'],
         ], null, 'A1');
+        $spreadsheet->getSheetByName('PENUGASAN_GURU')->fromArray([
+            ['SEMESTER_KODE', 'MAPEL_KODE', 'NAMA_GURU', 'ID_GURU_SISTEM', 'NAMA_ROMBEL', 'ID_ROMBEL_SISTEM', 'AKTIF', 'KATEGORI_KODE'],
+            ['2026-2027-GANJIL', 'MAT', 'Guru Penguji', $teacher->getKey(), 'XI 1', $rombel->getKey(), 'YA', 'WAJIB'],
+        ], null, 'A1');
         (new Xlsx($spreadsheet))->save($newPath);
         $spreadsheet->disconnectWorksheets();
 
@@ -196,6 +201,7 @@ class AssessmentAdminIntegrationTest extends TestCase
         $this->assertSame('Kelompok A', $preview['payload']['subjects'][0]['report_group_name']);
         $this->assertSame(10, $preview['payload']['subjects'][0]['report_group_sort_order']);
         $this->assertSame(20, $preview['payload']['subjects'][0]['sort_order']);
+        $this->assertSame('WAJIB', $preview['payload']['teaching_assignments'][0]['category_code']);
 
         app(AssessmentMasterWorkbookImporter::class)->apply($preview, null);
         $this->assertDatabaseHas('assessment_subjects', [
@@ -204,6 +210,9 @@ class AssessmentAdminIntegrationTest extends TestCase
             'report_group_name' => 'Kelompok A',
             'report_group_sort_order' => 10,
             'sort_order' => 20,
+        ]);
+        $this->assertDatabaseHas('assessment_teaching_assignments', [
+            'assessment_subject_category_id' => \App\Models\Assessment\SubjectCategory::query()->where('code', 'WAJIB')->value('id'),
         ]);
     }
 
@@ -478,27 +487,24 @@ class AssessmentAdminIntegrationTest extends TestCase
 
         Livewire::actingAs($admin)
             ->test(AssessmentDashboard::class)
-            ->assertSeeHtml('assessment-dashboard-hero')
-            ->assertSeeHtml('assessment-settings-card')
-            ->assertSee('Alur Menyiapkan ASTS dan ASAS')
-            ->assertSee('Guru dan Akun Login')
-            ->assertSee('Rombel dan Siswa Aktif')
-            ->assertSee('Mapel dan Penugasan Resmi')
+            ->assertDontSeeHtml('assessment-dashboard-hero')
+            ->assertDontSee('Alur Menyiapkan ASTS dan ASAS')
+            ->assertSee('Pusat Penilaian ASTS–ASAS')
+            ->assertSee('Kategori Mapel')
+            ->assertSee('Kelola Kategori')
             ->assertSee('Guru Mapel & Kelas')
             ->assertSee('Hubungkan guru dengan mapel dan kelas per semester.')
-            ->assertSee('Atur Guru Mapel')
+            ->assertSee('Buka Mapel Penilaian')
             ->assertSee('Wali Kelas')
-            ->assertSee('Atur di Guru & Tendik')
-            ->assertSee('Preflight dan Buka Periode')
-            ->assertSee('Penilaian ASTS–ASAS')
+            ->assertSee('Atur Wali Kelas')
             ->assertSee('Menu Pengaturan')
             ->assertSee('Periode Penilaian')
             ->assertSee('Komponen dan Bobot')
             ->assertSee('Template Rapor')
             ->assertSee('Buka Log Perubahan')
-            ->assertSeeHtml('assessment-readiness-grid')
-            ->assertSeeHtml('assessment-audit-shell')
-            ->assertSeeHtml('assessment-audit-empty');
+            ->assertSee('Kesiapan Fondasi')
+            ->assertSee('Aktivitas Terbaru')
+            ->assertSee('Belum ada aktivitas pada periode ini.');
 
         Livewire::actingAs($admin)
             ->test(AstsHub::class)
@@ -646,6 +652,7 @@ class AssessmentAdminIntegrationTest extends TestCase
             ->callTableAction('create', data: [
                 'assessment_semester_id' => $semester->getKey(),
                 'assessment_subject_id' => $subject->getKey(),
+                'assessment_subject_category_id' => \App\Models\Assessment\SubjectCategory::query()->where('code', 'WAJIB')->value('id'),
                 'rombel_id' => $rombel->getKey(),
                 'is_active' => true,
             ])

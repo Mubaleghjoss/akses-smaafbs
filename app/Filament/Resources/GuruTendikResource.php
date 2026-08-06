@@ -237,6 +237,12 @@ class GuruTendikResource extends Resource
                     fn (Builder $teachers): Builder => $teachers->withCount([
                         'assessmentTeachingAssignments as active_assessment_teaching_assignments_count' => fn (Builder $assignments): Builder => $assignments->where('is_active', true),
                         'assessmentHomeroomAssignments as active_assessment_homeroom_assignments_count' => fn (Builder $assignments): Builder => $assignments->where('is_active', true),
+                    ])->with([
+                        'assessmentTeachingAssignments' => fn ($assignments) => $assignments
+                            ->where('is_active', true)
+                            ->with(['subject:id,name', 'rombel:id,nama'])
+                            ->orderBy('subject_name_snapshot')
+                            ->orderBy('rombel_name_snapshot'),
                     ]),
                 ))
             ->columns([
@@ -310,11 +316,23 @@ class GuruTendikResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('assessment_assignment_summary')
                     ->label('Penugasan Penilaian')
-                    ->state(fn (GuruTendik $record): string => sprintf(
-                        '%d mapel/kelas · %d wali kelas',
-                        (int) ($record->active_assessment_teaching_assignments_count ?? 0),
-                        (int) ($record->active_assessment_homeroom_assignments_count ?? 0),
-                    ))
+                    ->state(function (GuruTendik $record): string {
+                        $subjects = $record->assessmentTeachingAssignments
+                            ->groupBy(fn ($assignment): string => $assignment->subject?->name ?? $assignment->subject_name_snapshot)
+                            ->map(function ($assignments, string $subject): string {
+                                $classes = $assignments
+                                    ->map(fn ($assignment): string => $assignment->rombel?->nama ?? $assignment->rombel_name_snapshot)
+                                    ->unique()
+                                    ->implode(', ');
+
+                                return $subject.': '.$classes;
+                            })
+                            ->values();
+
+                        return $subjects->isEmpty()
+                            ? sprintf('%d wali kelas', (int) ($record->active_assessment_homeroom_assignments_count ?? 0))
+                            : $subjects->implode("\n");
+                    })
                     ->badge()
                     ->color(fn (GuruTendik $record): string => (
                         (int) ($record->active_assessment_teaching_assignments_count ?? 0)

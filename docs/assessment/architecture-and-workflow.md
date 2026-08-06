@@ -4,7 +4,7 @@
 
 | Kelompok | Tabel |
 |---|---|
-| Master terisolasi | `assessment_academic_years`, `assessment_semesters`, `assessment_subjects`, `assessment_teaching_assignments`, `assessment_homeroom_assignments` |
+| Master terisolasi | `assessment_academic_years`, `assessment_semesters`, `assessment_subject_categories`, `assessment_subjects`, `assessment_teaching_assignments`, `assessment_homeroom_assignments` |
 | Snapshot periode | `assessment_periods`, `assessment_period_rombels`, `assessment_period_students`, `assessment_period_assignments`, `assessment_period_homerooms` |
 | Nilai | `assessment_schemes`, `assessment_components`, `assessment_scores`, `assessment_student_subject_results` |
 | Wali kelas | `assessment_homeroom_reports` |
@@ -14,8 +14,9 @@ Referensi ke `data_siswa`, `guru_tendik`, dan `rombels` tidak memakai cascade. F
 
 ## Alur penyiapan dari admin
 
-Halaman **Pengaturan Penilaian** menampilkan enam kartu bernomor yang harus
-diikuti berurutan:
+Halaman **Pengaturan Penilaian** menampilkan kartu teks ringkas untuk periode,
+menu konfigurasi, kesiapan fondasi, status pengumpulan, dan aktivitas terbaru.
+Urutan kerja operasionalnya:
 
 1. Periksa identitas guru dan tautan akun login pada **Guru & Tendik**.
 2. Periksa rombel aktif dan siswa aktif per kelas.
@@ -32,10 +33,14 @@ sumber transaksi. Pengaturan baru pada tab **Penilaian ASTS–ASAS** di halaman
 Guru & Tendik menulis langsung ke `assessment_teaching_assignments` dan
 `assessment_homeroom_assignments`, sama dengan target data Impor Master.
 Penugasan transaksi selalu berasal dari pasangan terstruktur semester, guru,
-mata pelajaran, dan rombel.
+mata pelajaran, rombel, dan kategori rapor pada assignment. Kategori memiliki
+kode, nama tampilan, jenis, dan urutan sendiri karena mapel yang sama dapat
+wajib di satu kelas dan pilihan di kelas lain. `UMUM-A-LEGACY` hanya menjaga
+kompatibilitas historis dan tidak aktif untuk plotting baru.
 
-Perubahan master melalui Guru & Tendik hanya memengaruhi periode yang dibuka
-setelah perubahan. Snapshot periode yang sudah dibuka tetap immutable.
+Perubahan master melalui halaman Mapel atau Guru & Tendik otomatis dipakai pada
+periode berikutnya. Penerapan ke periode berjalan harus eksplisit dan hanya
+untuk periode Terbuka. Snapshot rapor yang sudah dibuat tetap immutable.
 
 Saat periode dibuka, siswa diambil dari `data_siswa` yang berstatus aktif dan
 `rombel_saat_ini`-nya sama dengan nama rombel aktif yang dipilih. Guru pengampu

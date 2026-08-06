@@ -5,6 +5,7 @@ namespace App\Exports;
 use App\Exports\Sheets\AssessmentArraySheetExport;
 use App\Models\GuruTendik;
 use App\Models\Rombel;
+use App\Models\Assessment\SubjectCategory;
 use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 
 class AssessmentMasterTemplateExport implements WithMultipleSheets
@@ -33,8 +34,8 @@ class AssessmentMasterTemplateExport implements WithMultipleSheets
                 ['BIN', 'Bahasa Indonesia', '', 'A', 'Kelompok A (Umum)', 10, 10, 'YA'],
             ], 'MAPEL'),
             new AssessmentArraySheetExport([
-                ['SEMESTER_KODE', 'MAPEL_KODE', 'NAMA_GURU', 'ID_GURU_SISTEM', 'NAMA_ROMBEL', 'ID_ROMBEL_SISTEM', 'AKTIF'],
-                ['2026-2027-GANJIL', 'BIN', '', '', '', '', 'YA'],
+                ['SEMESTER_KODE', 'MAPEL_KODE', 'NAMA_GURU', 'ID_GURU_SISTEM', 'NAMA_ROMBEL', 'ID_ROMBEL_SISTEM', 'AKTIF', 'KATEGORI_KODE'],
+                ['2026-2027-GANJIL', 'BIN', '', '', '', '', 'YA', 'WAJIB'],
             ], 'PENUGASAN_GURU', ['D', 'F']),
             new AssessmentArraySheetExport([
                 ['SEMESTER_KODE', 'NAMA_GURU', 'ID_GURU_SISTEM', 'NAMA_ROMBEL', 'ID_ROMBEL_SISTEM', 'AKTIF'],
@@ -57,6 +58,19 @@ class AssessmentMasterTemplateExport implements WithMultipleSheets
                     (string) ($rombel->angkatan ?? ''),
                 ])->all(),
             ], 'REF_ROMBEL', ['B']),
+            new AssessmentArraySheetExport([
+                ['KATEGORI_KODE', 'NAMA_DI_RAPOR', 'JENIS', 'URUTAN'],
+                ...SubjectCategory::query()
+                    ->where('is_active', true)
+                    ->orderBy('sort_order')
+                    ->get()
+                    ->map(fn (SubjectCategory $category): array => [
+                        $category->code,
+                        $category->name,
+                        $category->type,
+                        $category->sort_order,
+                    ])->all(),
+            ], 'REF_KATEGORI'),
         ];
     }
 
@@ -72,9 +86,9 @@ class AssessmentMasterTemplateExport implements WithMultipleSheets
             ['3', 'Satu guru tanpa akun boleh dipreview, tetapi harus dibuatkan akun sebelum periode dibuka.'],
             ['4', 'Impor selalu masuk tahap pratinjau. Database baru berubah setelah tombol Terapkan Impor ditekan.'],
             ['5', 'Baris yang tidak ada di workbook tidak dihapus dan tidak otomatis dinonaktifkan.'],
-            ['6', 'Pada MAPEL, isi kelompok dan urutan agar rapor dapat dikelompokkan dengan benar.'],
+            ['6', 'Pada PENUGASAN_GURU, isi KATEGORI_KODE sesuai REF_KATEGORI karena kategori rapor dapat berbeda pada setiap kelas.'],
             ['7', 'Nilai AKTIF menerima YA/TIDAK. Tanggal memakai format YYYY-MM-DD.'],
-            ['8', 'Jangan mengganti nama sheet atau judul kolom. Simpan sebagai .xlsx.'],
+            ['8', 'Workbook lama tanpa KATEGORI_KODE tetap diterima dengan fallback kelompok mapel lama. Simpan sebagai .xlsx.'],
         ];
     }
 }

@@ -11,6 +11,7 @@ Download dari halaman **Penilaian → Pengaturan Penilaian → Impor Master Resm
 - `WALI_KELAS`
 - `REF_GURU`
 - `REF_ROMBEL`
+- `REF_KATEGORI`
 
 Kolom ID sistem pada sheet penugasan/referensi disembunyikan untuk mencegah perubahan tidak sengaja. Importer tetap dapat menyelesaikan referensi melalui nama yang unik. Jika nama guru ganda, ID sistem wajib tersedia.
 
@@ -40,8 +41,13 @@ serta preflight rapor. Admin dapat memperbaikinya langsung melalui kartu
 
 ```text
 SEMESTER_KODE, MAPEL_KODE, NAMA_GURU, ID_GURU_SISTEM,
-NAMA_ROMBEL, ID_ROMBEL_SISTEM, AKTIF
+NAMA_ROMBEL, ID_ROMBEL_SISTEM, AKTIF, KATEGORI_KODE
 ```
+
+`KATEGORI_KODE` menentukan kelompok rapor per assignment, sehingga satu mapel
+dapat berstatus wajib pada satu kelas dan pilihan pada kelas lain. Workbook
+lama tanpa kolom tersebut tetap diterima; importer memakai fallback kelompok
+mapel lama ke `WAJIB`, `PILIHAN`, atau `UMUM-A-LEGACY`.
 
 `WALI_KELAS`:
 
@@ -77,9 +83,10 @@ surat penugasan resmi sebelum membuka periode.
 Untuk perubahan satu atau beberapa guru, admin tidak wajib mengunggah ulang
 workbook:
 
-1. Buka **Guru & Tendik**.
-2. Pilih **Atur Mapel & Walas** pada guru.
-3. Pada tab **Penilaian ASTS–ASAS**, tambah pasangan semester, mapel, dan kelas.
+1. Buka **Mapel Penilaian**, pilih semester, lalu gunakan **Atur Guru & Kelas**.
+2. Pilih guru, beberapa kelas, dan kategori rapor per kelompok kelas.
+3. Koreksi per guru tetap tersedia pada tab **Penilaian ASTS–ASAS** di **Guru
+   & Tendik** dan membaca sumber assignment yang sama.
 4. Jika guru menjadi wali kelas, tambah semester dan rombel pada kartu Wali
    Kelas.
 
@@ -88,18 +95,10 @@ index tetap mencegah penugasan ganda, snapshot nama diperbarui saat baris
 disimpan, dan perubahan tercatat pada log Penilaian. Pengaturan langsung tidak
 mengubah snapshot periode yang sudah dibuka.
 
-## Wizard kelengkapan rapor
+## Dashboard ringkas
 
-Dashboard Pengaturan Penilaian menyediakan tujuh pintasan yang membaca kondisi
-database, bukan checklist manual:
-
-1. identitas sekolah dan penanda tangan;
-2. tahun pelajaran dan semester;
-3. mapel, kelompok, dan urutan rapor;
-4. guru-mapel-kelas;
-5. wali kelas;
-6. siswa, nilai, data wali kelas, dan periode;
-7. layout, watermark, serta preflight.
+Dashboard Pengaturan Penilaian menampilkan kartu teks untuk pemilih periode,
+menu konfigurasi, kesiapan fondasi, status pengumpulan, dan aktivitas terbaru.
 
 Gunakan workbook untuk pembaruan massal. Gunakan halaman Mapel Penilaian dan
 tab Penilaian pada Guru & Tendik untuk koreksi harian yang kecil.
@@ -108,3 +107,33 @@ Jika periode sudah dibuka sebelum kolom kelompok tersedia, pilih mapel yang
 sudah diperbaiki lalu jalankan bulk **Terapkan Kelompok ke Periode Berjalan**.
 Aksi eksplisit ini hanya menyentuh assignment periode yang belum
 `locked/published`, tidak mengubah nilai, dan tidak menyentuh snapshot/PDF lama.
+
+## Plotting versi kategori assignment
+
+Halaman **Mapel Penilaian** menyediakan filter semester dan aksi **Atur Guru &
+Kelas**. Satu guru dapat memegang banyak mapel/kelas, tetapi satu kombinasi
+semester-mapel-kelas hanya boleh mempunyai satu guru aktif. Setiap kelompok
+kelas memilih kategori rapor sendiri. Guru yang akunnya belum tertaut atau
+belum mempunyai akses Input/Kirim Nilai ditandai belum siap dan tidak dapat
+disimpan.
+
+Aksi eksplisit **Terapkan ke Periode Terbuka** memindahkan plotting hanya pada
+periode `open`. Perpindahan guru mempertahankan nilai dan menaikkan
+`lock_version`; penghapusan hanya berlaku pada assignment Draf yang benar-benar
+kosong. Assignment yang sudah dikirim, diverifikasi, dikunci, atau tidak aman
+membatalkan seluruh transaksi. Snapshot dan PDF lama tidak berubah.
+
+Dashboard Pengaturan Penilaian kini memakai kartu teks ringkas: pemilih periode,
+menu konfigurasi termasuk Kategori Mapel, kesiapan fondasi, status pengumpulan,
+dan aktivitas terbaru. Wizard lama yang menduplikasi resource tidak lagi
+ditampilkan.
+
+## Data awal matriks 2026/2027
+
+`php artisan assessment:teaching-plan-2026` menjalankan preview tanpa menulis
+database. Setelah seluruh nama guru, kelas, mapel, dan kategori cocok, jalankan
+dengan `--apply`. Apply bersifat idempoten, memakai satu transaksi, mencatat
+audit, dan menonaktifkan plotting lama yang bertentangan tanpa menghapusnya.
+Nama guru dinormalisasi, tetapi hasil pencocokan wajib tepat satu Guru & Tendik
+dengan akun tertaut. Command tidak menyentuh period assignment, nilai, snapshot,
+atau PDF.

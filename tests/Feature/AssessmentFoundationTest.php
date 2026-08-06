@@ -43,6 +43,7 @@ class AssessmentFoundationTest extends TestCase
             'migrations/2026_07_31_120000_extend_assessment_report_structure.php',
         );
         $reportStructureMigration->up();
+        (require database_path('migrations/2026_08_06_150000_add_assessment_subject_categories.php'))->up();
         (require database_path('migrations/2026_08_03_080000_add_stream_delivery_to_assessment_reports.php'))->up();
     }
 
@@ -52,6 +53,7 @@ class AssessmentFoundationTest extends TestCase
             'assessment_academic_years',
             'assessment_semesters',
             'assessment_subjects',
+            'assessment_subject_categories',
             'assessment_teaching_assignments',
             'assessment_homeroom_assignments',
             'assessment_periods',
@@ -95,6 +97,10 @@ class AssessmentFoundationTest extends TestCase
             'report_group_sort_order',
             'sort_order',
         ]));
+        $this->assertTrue(Schema::hasColumn('assessment_teaching_assignments', 'assessment_subject_category_id'));
+        $this->assertDatabaseHas('assessment_subject_categories', ['code' => 'WAJIB', 'is_active' => true]);
+        $this->assertDatabaseHas('assessment_subject_categories', ['code' => 'PILIHAN', 'is_active' => true]);
+        $this->assertDatabaseHas('assessment_subject_categories', ['code' => 'UMUM-A-LEGACY', 'is_active' => false]);
         $this->assertTrue(Schema::hasColumns('assessment_period_assignments', [
             'subject_group_code_snapshot',
             'subject_group_name_snapshot',

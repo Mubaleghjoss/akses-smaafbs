@@ -27,7 +27,7 @@ Dokumen ini adalah pintu masuk wajib bagi pengembang dan AI yang mengubah modul 
 
 ## Peta kode
 
-- Schema: `database/migrations/2026_07_31_080000_create_assessment_foundation_tables.php`
+- Schema: `database/migrations/2026_07_31_080000_create_assessment_foundation_tables.php` dan kategori assignment pada `2026_08_06_150000_add_assessment_subject_categories.php`
 - Ekstensi rapor tiga halaman: `database/migrations/2026_07_31_120000_extend_assessment_report_structure.php`
 - Enum: `app/Enums/Assessment`
 - Model: `app/Models/Assessment`
@@ -35,6 +35,7 @@ Dokumen ini adalah pintu masuk wajib bagi pengembang dan AI yang mengubah modul 
 - Workflow: `app/Actions/Assessment`
 - Kalkulator: `app/Support/Assessment/AssessmentCalculator.php`
 - Impor: `app/Support/AssessmentMaster` dan `app/Exports/AssessmentMasterTemplateExport.php`
+- Data awal plotting 2026/2027: `php artisan assessment:teaching-plan-2026` untuk preview, lalu `--apply` setelah seluruh guru dan kelas cocok.
 - Admin: `app/Filament/Pages/Assessment` dan resource `Assessment*Resource`
 - Reporting: `app/Support/Assessment/Reporting`, `app/Jobs/Assessment`, dan `AssessmentReportController`
 - PDF: `resources/views/assessment/reports`

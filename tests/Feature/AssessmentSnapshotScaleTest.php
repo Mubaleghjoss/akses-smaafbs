@@ -13,6 +13,7 @@ use App\Models\Assessment\AssessmentScheme;
 use App\Models\Assessment\HomeroomAssignment;
 use App\Models\Assessment\Semester;
 use App\Models\Assessment\Subject;
+use App\Models\Assessment\SubjectCategory;
 use App\Models\Assessment\TeachingAssignment;
 use App\Models\DataSiswa;
 use App\Models\GuruTendik;
@@ -39,6 +40,7 @@ class AssessmentSnapshotScaleTest extends TestCase
         $migration->up();
         $reportStructureMigration = require database_path('migrations/2026_07_31_120000_extend_assessment_report_structure.php');
         $reportStructureMigration->up();
+        (require database_path('migrations/2026_08_06_150000_add_assessment_subject_categories.php'))->up();
         (require database_path('migrations/2026_08_03_080000_add_stream_delivery_to_assessment_reports.php'))->up();
         $this->artisan('assessment:install-defaults')->assertSuccessful();
         app(PermissionRegistrar::class)->forgetCachedPermissions();
@@ -120,6 +122,7 @@ class AssessmentSnapshotScaleTest extends TestCase
                 TeachingAssignment::query()->create([
                     'assessment_semester_id' => $semester->getKey(),
                     'assessment_subject_id' => $subject->getKey(),
+                    'assessment_subject_category_id' => SubjectCategory::query()->where('code', 'WAJIB')->value('id'),
                     'teacher_id' => $teacher->getKey(),
                     'rombel_id' => $rombel->getKey(),
                     'teacher_name_snapshot' => $teacher->nama,

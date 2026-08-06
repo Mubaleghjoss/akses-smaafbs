@@ -6,6 +6,7 @@ use App\Models\Assessment\AcademicYear;
 use App\Models\Assessment\HomeroomAssignment;
 use App\Models\Assessment\Semester;
 use App\Models\Assessment\Subject;
+use App\Models\Assessment\SubjectCategory;
 use App\Models\Assessment\TeachingAssignment;
 use App\Models\GuruTendik;
 use App\Models\Rombel;
@@ -55,6 +56,7 @@ class AssessmentMasterWorkbookImporter
             'NAMA_ROMBEL',
             'ID_ROMBEL_SISTEM',
             'AKTIF',
+            'KATEGORI_KODE',
         ],
         'WALI_KELAS' => [
             'SEMESTER_KODE',
@@ -71,6 +73,16 @@ class AssessmentMasterWorkbookImporter
         'NAMA_MAPEL',
         'DESKRIPSI',
         'URUTAN',
+        'AKTIF',
+    ];
+
+    public const LEGACY_TEACHING_ASSIGNMENT_HEADERS = [
+        'SEMESTER_KODE',
+        'MAPEL_KODE',
+        'NAMA_GURU',
+        'ID_GURU_SISTEM',
+        'NAMA_ROMBEL',
+        'ID_ROMBEL_SISTEM',
         'AKTIF',
     ];
 
@@ -94,8 +106,11 @@ class AssessmentMasterWorkbookImporter
                 $actualHeaders = $this->headings($spreadsheet->getSheetByName($sheetName));
 
                 $isLegacyMapel = $sheetName === 'MAPEL' && $actualHeaders === self::LEGACY_MAPEL_HEADERS;
+                $isLegacyTeaching = $sheetName === 'PENUGASAN_GURU' && $actualHeaders === self::LEGACY_TEACHING_ASSIGNMENT_HEADERS;
                 if ($isLegacyMapel) {
                     $warnings[] = 'Workbook memakai format MAPEL lama. Data tetap dapat diimpor, tetapi mapel akan ditandai Belum Dikelompokkan sampai kelompok rapor dilengkapi.';
+                } elseif ($isLegacyTeaching) {
+                    $warnings[] = 'Workbook memakai format PENUGASAN_GURU lama. Kategori assignment memakai fallback kelompok mapel lama.';
                 } elseif ($actualHeaders !== $expectedHeaders) {
                     $errors[] = "Header sheet {$sheetName} harus persis dan berurutan: "
                         .implode(', ', $expectedHeaders).'. Jangan mengganti, menghapus, atau memindahkan judul kolom.';
@@ -255,6 +270,7 @@ class AssessmentMasterWorkbookImporter
             ->merge(Subject::query()->pluck('code'))
             ->unique()
             ->all();
+        $subjectPayloadByCode = collect($payload['subjects'])->keyBy('code');
         $seenTeaching = [];
 
         foreach ($this->rows($spreadsheet->getSheetByName('PENUGASAN_GURU')) as $rowNumber => $row) {
@@ -264,6 +280,18 @@ class AssessmentMasterWorkbookImporter
 
             $semesterCode = $this->text($row['SEMESTER_KODE'] ?? null);
             $subjectCode = $this->text($row['MAPEL_KODE'] ?? null);
+            $categoryCode = $this->text($row['KATEGORI_KODE'] ?? null);
+            if ($categoryCode === '') {
+                $subjectPayload = $subjectPayloadByCode->get($subjectCode);
+                $legacyGroupCode = (string) ($subjectPayload['report_group_code']
+                    ?? Subject::query()->where('code', $subjectCode)->value('report_group_code')
+                    ?? '');
+                $categoryCode = $this->legacyCategoryCode($legacyGroupCode);
+            }
+            $category = SubjectCategory::query()->where('code', $categoryCode)->first();
+            if (! $category) {
+                $errors[] = "PENUGASAN_GURU baris {$rowNumber}: kategori {$categoryCode} tidak ditemukan.";
+            }
             $semesterReference = $this->resolveSemesterReference(
                 $semesterCode,
                 $incomingSemesterYears,
@@ -277,7 +305,7 @@ class AssessmentMasterWorkbookImporter
             if (! in_array($subjectCode, $subjectCodes, true)) {
                 $errors[] = "PENUGASAN_GURU baris {$rowNumber}: mapel {$subjectCode} tidak ditemukan.";
             }
-            if (! $teacher || ! $rombel || ! $semesterReference || ! in_array($subjectCode, $subjectCodes, true)) {
+            if (! $teacher || ! $rombel || ! $semesterReference || ! $category || ! in_array($subjectCode, $subjectCodes, true)) {
                 continue;
             }
 
@@ -288,7 +316,7 @@ class AssessmentMasterWorkbookImporter
                 $warnings[] = "PENUGASAN_GURU baris {$rowNumber}: rombel {$rombel->nama} sedang tidak aktif.";
             }
 
-            $key = implode('|', [$semesterCode, $subjectCode, $teacher->getKey(), $rombel->getKey()]);
+            $key = implode('|', [$semesterCode, $subjectCode, $rombel->getKey()]);
             if (isset($seenTeaching[$key])) {
                 $errors[] = "PENUGASAN_GURU baris {$rowNumber}: penugasan duplikat.";
                 continue;
@@ -299,6 +327,7 @@ class AssessmentMasterWorkbookImporter
                 'semester_code' => $semesterCode,
                 'semester_academic_year_code' => $semesterReference['academic_year_code'],
                 'subject_code' => $subjectCode,
+                'category_code' => $category->code,
                 'teacher_id' => (int) $teacher->getKey(),
                 'teacher_name' => (string) $teacher->nama,
                 'rombel_id' => (int) $rombel->getKey(),
@@ -408,9 +437,11 @@ class AssessmentMasterWorkbookImporter
             foreach ($payload['teaching_assignments'] ?? [] as $row) {
                 $semester = $this->semesterForRow($row);
                 $subject = Subject::query()->where('code', $row['subject_code'])->firstOrFail();
+                $category = SubjectCategory::query()->where('code', $row['category_code'])->firstOrFail();
                 $values = [
                     'assessment_semester_id' => $semester->getKey(),
                     'assessment_subject_id' => $subject->getKey(),
+                    'assessment_subject_category_id' => $category->getKey(),
                     'teacher_id' => $row['teacher_id'],
                     'rombel_id' => $row['rombel_id'],
                     'teacher_name_snapshot' => $row['teacher_name'],
@@ -481,11 +512,13 @@ class AssessmentMasterWorkbookImporter
                     'rombel_id' => $row['rombel_id'],
                 ])->first()
                 : null;
+            $categoryId = SubjectCategory::query()->where('code', $row['category_code'] ?? '')->value('id');
             $expectedSubjectName = (string) ($subjectNames[$row['subject_code']] ?? $row['subject_code']);
             $row['action'] = ! $record
                 ? 'create'
                 : (
                     $record->is_active === $row['is_active']
+                    && (int) $record->assessment_subject_category_id === (int) $categoryId
                     && (string) $record->teacher_name_snapshot === (string) $row['teacher_name']
                     && (string) $record->subject_name_snapshot === $expectedSubjectName
                     && (string) $record->rombel_name_snapshot === (string) $row['rombel_name']
@@ -712,6 +745,15 @@ class AssessmentMasterWorkbookImporter
     protected function boolean(mixed $value): bool
     {
         return in_array(mb_strtoupper($this->text($value)), ['1', 'YA', 'Y', 'TRUE', 'AKTIF'], true);
+    }
+
+    protected function legacyCategoryCode(string $groupCode): string
+    {
+        return match (mb_strtoupper(trim($groupCode))) {
+            'WAJIB', 'B' => 'WAJIB',
+            'PILIHAN', 'C' => 'PILIHAN',
+            default => 'UMUM-A-LEGACY',
+        };
     }
 
     protected function text(mixed $value): string

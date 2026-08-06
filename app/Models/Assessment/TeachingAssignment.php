@@ -18,6 +18,7 @@ class TeachingAssignment extends Model
     protected $fillable = [
         'assessment_semester_id',
         'assessment_subject_id',
+        'assessment_subject_category_id',
         'teacher_id',
         'rombel_id',
         'teacher_name_snapshot',
@@ -29,6 +30,9 @@ class TeachingAssignment extends Model
     protected function casts(): array
     {
         return [
+            'assessment_semester_id' => 'integer',
+            'assessment_subject_id' => 'integer',
+            'assessment_subject_category_id' => 'integer',
             'teacher_id' => 'integer',
             'rombel_id' => 'integer',
             'is_active' => 'boolean',
@@ -43,6 +47,11 @@ class TeachingAssignment extends Model
     public function subject(): BelongsTo
     {
         return $this->belongsTo(Subject::class, 'assessment_subject_id');
+    }
+
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(SubjectCategory::class, 'assessment_subject_category_id');
     }
 
     public function teacher(): BelongsTo

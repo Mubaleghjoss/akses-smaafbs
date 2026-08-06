@@ -98,7 +98,7 @@ final class CreateAssessmentPeriodSnapshotAction
                 ->get()
                 ->groupBy('rombel_saat_ini');
             $teachingByRombel = TeachingAssignment::query()
-                ->with('subject')
+                ->with(['subject', 'category'])
                 ->where('assessment_semester_id', $locked->assessment_semester_id)
                 ->where('is_active', true)
                 ->whereIn('rombel_id', $rombelIds)
@@ -132,6 +132,22 @@ final class CreateAssessmentPeriodSnapshotAction
                 if ($teachingAssignments->isEmpty()) {
                     throw ValidationException::withMessages([
                         'teaching_assignments' => "Kelas {$rombel->nama} belum memiliki penugasan guru dan mata pelajaran.",
+                    ]);
+                }
+
+                $duplicateSubject = $teachingAssignments
+                    ->groupBy('assessment_subject_id')
+                    ->first(fn ($rows): bool => $rows->count() > 1);
+                if ($duplicateSubject) {
+                    throw ValidationException::withMessages([
+                        'teaching_assignments' => "Kelas {$rombel->nama} memiliki lebih dari satu guru aktif untuk mapel yang sama.",
+                    ]);
+                }
+
+                $uncategorized = $teachingAssignments->first(fn (TeachingAssignment $assignment): bool => ! $assignment->category);
+                if ($uncategorized) {
+                    throw ValidationException::withMessages([
+                        'teaching_assignments' => "Plotting {$uncategorized->subject_name_snapshot} di kelas {$rombel->nama} belum memiliki kategori rapor.",
                     ]);
                 }
 
@@ -199,9 +215,9 @@ final class CreateAssessmentPeriodSnapshotAction
                             'source_teaching_assignment_id' => $teaching->getKey(),
                             'teacher_name_snapshot' => $teaching->teacher_name_snapshot,
                             'subject_name_snapshot' => $teaching->subject_name_snapshot,
-                            'subject_group_code_snapshot' => $teaching->subject?->report_group_code ?: 'BELUM',
-                            'subject_group_name_snapshot' => $teaching->subject?->report_group_name ?: 'Belum Dikelompokkan',
-                            'subject_group_sort_order_snapshot' => (int) ($teaching->subject?->report_group_sort_order ?? 999),
+                            'subject_group_code_snapshot' => $teaching->category?->code ?: ($teaching->subject?->report_group_code ?: 'BELUM'),
+                            'subject_group_name_snapshot' => $teaching->category?->name ?: ($teaching->subject?->report_group_name ?: 'Belum Dikelompokkan'),
+                            'subject_group_sort_order_snapshot' => (int) ($teaching->category?->sort_order ?? $teaching->subject?->report_group_sort_order ?? 999),
                             'subject_sort_order_snapshot' => (int) ($teaching->subject?->sort_order ?? 0),
                             'rombel_name_snapshot' => $rombel->nama,
                             'status' => AssignmentStatus::DRAFT,

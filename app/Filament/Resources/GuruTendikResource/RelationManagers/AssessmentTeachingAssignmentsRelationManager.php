@@ -4,6 +4,7 @@ namespace App\Filament\Resources\GuruTendikResource\RelationManagers;
 
 use App\Models\Assessment\Semester;
 use App\Models\Assessment\Subject;
+use App\Models\Assessment\SubjectCategory;
 use App\Models\Assessment\TeachingAssignment;
 use App\Models\Rombel;
 use App\Support\Assessment\AssessmentAuditLogger;
@@ -61,6 +62,13 @@ class AssessmentTeachingAssignmentsRelationManager extends RelationManager
                         ->native(false)
                         ->live()
                         ->required(),
+                    Forms\Components\Select::make('assessment_subject_category_id')
+                        ->label('Kategori Rapor')
+                        ->options(static::categoryOptions())
+                        ->searchable()
+                        ->preload()
+                        ->native(false)
+                        ->required(),
                     Forms\Components\Select::make('rombel_id')
                         ->label('Kelas / Rombel')
                         ->options(static::rombelOptions())
@@ -72,7 +80,7 @@ class AssessmentTeachingAssignmentsRelationManager extends RelationManager
                                 ->where(fn ($query) => $query
                                     ->where('assessment_semester_id', $get('assessment_semester_id'))
                                     ->where('assessment_subject_id', $get('assessment_subject_id'))
-                                    ->where('teacher_id', $this->getOwnerRecord()->getKey()))
+                                    ->where('is_active', true))
                                 ->ignore($record),
                         ])
                         ->required(),
@@ -101,6 +109,12 @@ class AssessmentTeachingAssignmentsRelationManager extends RelationManager
                     ->label('Kelas')
                     ->badge()
                     ->searchable(),
+                Tables\Columns\TextColumn::make('category.name')
+                    ->label('Kategori Rapor')
+                    ->badge()
+                    ->color(fn (TeachingAssignment $record): string => $record->category?->type === SubjectCategory::TYPE_WAJIB ? 'warning' : 'info')
+                    ->placeholder('Belum dipilih')
+                    ->wrap(),
                 Tables\Columns\TextColumn::make('semester.academicYear.name')
                     ->label('Tahun Pelajaran')
                     ->placeholder('-')
@@ -179,6 +193,17 @@ class AssessmentTeachingAssignmentsRelationManager extends RelationManager
             ->all();
     }
 
+    /** @return array<int, string> */
+    private static function categoryOptions(): array
+    {
+        return SubjectCategory::query()
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->all();
+    }
+
     /**
      * @return array<int, string>
      */
@@ -219,6 +244,7 @@ class AssessmentTeachingAssignmentsRelationManager extends RelationManager
             newValues: $record->only([
                 'assessment_semester_id',
                 'assessment_subject_id',
+                'assessment_subject_category_id',
                 'teacher_id',
                 'rombel_id',
                 'teacher_name_snapshot',
