@@ -11,6 +11,7 @@ use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodAssignment;
 use App\Models\Assessment\AssessmentPeriodHomeroom;
 use App\Models\User;
+use App\Support\Assessment\AssessmentActionFailureNotification;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
@@ -120,7 +121,11 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
             Notification::make()->title("{$count} penugasan terverifikasi")->success()->send();
         } catch (Throwable $exception) {
             report($exception);
-            Notification::make()->title('Verifikasi massal dibatalkan')->body($exception->getMessage())->danger()->send();
+            AssessmentActionFailureNotification::send(
+                $exception,
+                'Verifikasi Penugasan Terpilih',
+                AssessmentPeriod::query()->find($this->periodId),
+            );
         }
     }
 
@@ -186,7 +191,11 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
             Notification::make()->title("{$count} penugasan dikembalikan untuk revisi")->success()->send();
         } catch (Throwable $exception) {
             report($exception);
-            Notification::make()->title('Pengembalian massal dibatalkan')->body($exception->getMessage())->danger()->send();
+            AssessmentActionFailureNotification::send(
+                $exception,
+                'Kembalikan Penugasan Terpilih',
+                AssessmentPeriod::query()->find($this->periodId),
+            );
         }
     }
 
@@ -260,7 +269,11 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
             Notification::make()->title('Penugasan terverifikasi')->success()->send();
         } catch (Throwable $exception) {
             report($exception);
-            Notification::make()->title('Verifikasi gagal')->body($exception->getMessage())->danger()->send();
+            AssessmentActionFailureNotification::send(
+                $exception,
+                'Verifikasi Penugasan',
+                AssessmentPeriod::query()->find($this->periodId),
+            );
         }
     }
 
@@ -274,7 +287,11 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
             Notification::make()->title('Penugasan dikembalikan')->success()->send();
         } catch (Throwable $exception) {
             report($exception);
-            Notification::make()->title('Pengembalian gagal')->body($exception->getMessage())->danger()->send();
+            AssessmentActionFailureNotification::send(
+                $exception,
+                'Kembalikan Penugasan',
+                AssessmentPeriod::query()->find($this->periodId),
+            );
         }
     }
 

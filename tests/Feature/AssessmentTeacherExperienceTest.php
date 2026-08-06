@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssignmentStatus;
 use App\Filament\Pages\Assessment\AsasHomeroomRecap;
+use App\Filament\Pages\Assessment\AsasSubmissionStatus;
 use App\Filament\Pages\Assessment\AstsHomeroomRecap;
 use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\Assessment\AstsInputScores;
@@ -16,14 +17,17 @@ use App\Models\Assessment\AssessmentPeriodHomeroom;
 use App\Models\Assessment\AssessmentPeriodRombel;
 use App\Models\Assessment\AssessmentPeriodStudent;
 use App\Models\Assessment\AssessmentScheme;
+use App\Models\Assessment\AssessmentScore;
 use App\Models\Assessment\HomeroomReport;
 use App\Models\Assessment\Subject;
 use App\Models\User;
+use App\Support\Assessment\AssessmentActionFailureNotification;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 use Tests\Feature\Concerns\BootstrapsUserAndPermissionTables;
@@ -121,6 +125,27 @@ class AssessmentTeacherExperienceTest extends TestCase
             'teacher_name_snapshot' => 'Putra Kamulyan',
             'rombel_name_snapshot' => 'X 1',
         ]);
+        AssessmentScore::factory()->create([
+            'assessment_period_assignment_id' => $assignment->getKey(),
+            'assessment_period_student_id' => $students->first()->getKey(),
+            'assessment_component_id' => $component->getKey(),
+            'score' => '88.0000',
+        ]);
+        AssessmentScore::factory()->create([
+            'assessment_period_assignment_id' => $assignment->getKey(),
+            'assessment_period_student_id' => $students->last()->getKey(),
+            'assessment_component_id' => $component->getKey(),
+            'score' => '88.2560',
+        ]);
+
+        Livewire::actingAs($teacher)
+            ->test(AstsInputScores::class)
+            ->set('periodId', $period->getKey())
+            ->set('assignmentId', $assignment->getKey())
+            ->call('loadAssignment')
+            ->assertSet("scoreRows.{$students->first()->getKey()}.scores.{$component->getKey()}", '88')
+            ->assertSet("scoreRows.{$students->last()->getKey()}.scores.{$component->getKey()}", '88.26')
+            ->assertSee('normalizeDraftValue');
 
         $this->actingAs($teacher)
             ->get(AstsSubmissionStatus::getUrl(['period' => $period->getKey()]))
@@ -344,8 +369,8 @@ class AssessmentTeacherExperienceTest extends TestCase
             'spiritual_description',
             'social_predicate',
             'social_description',
-            'extracurricular',
-            'achievement',
+            'extracurricular_items',
+            'achievement_items',
             'homeroom_note',
         ];
 
@@ -382,8 +407,6 @@ class AssessmentTeacherExperienceTest extends TestCase
             'spiritual_description' => ['Membiasakan ibadah dengan tertib.', 'Membiasakan ibadah dengan tertib.'],
             'social_predicate' => ['Sangat Baik', 'Sangat Baik'],
             'social_description' => ['Santun dan peduli terhadap teman.', 'Santun dan peduli terhadap teman.'],
-            'extracurricular' => ["Pramuka\nBasket", "Pramuka\nBasket"],
-            'achievement' => ['Juara 1 Olimpiade Sains', 'Juara 1 Olimpiade Sains'],
             'homeroom_note' => ['Pertahankan semangat belajar.', 'Pertahankan semangat belajar.'],
         ];
 
@@ -418,6 +441,42 @@ class AssessmentTeacherExperienceTest extends TestCase
             ->call('applyBulkValue')
             ->assertSet("reportRows.{$selectedStudentId}.homeroom_note", 'Catatan hasil timpa.');
 
+        $astsComponent
+            ->set('bulkField', 'extracurricular_items')
+            ->assertSet('bulkStructuredItem.name', '')
+            ->set('bulkStructuredItem.name', 'Pramuka')
+            ->set('bulkStructuredItem.description', 'Sangat Baik')
+            ->call('applyBulkValue')
+            ->assertSet("reportRows.{$selectedStudentId}.extracurricular_items", [[
+                'name' => 'Pramuka',
+                'description' => 'Sangat Baik',
+            ]])
+            ->set('bulkStructuredItem.name', 'Pramuka')
+            ->set('bulkStructuredItem.description', 'Sangat Baik')
+            ->call('applyBulkValue')
+            ->assertSet("reportRows.{$selectedStudentId}.extracurricular_items", [[
+                'name' => 'Pramuka',
+                'description' => 'Sangat Baik',
+            ]])
+            ->set('bulkStructuredMode', 'replace')
+            ->set('bulkStructuredItem.name', 'Basket')
+            ->set('bulkStructuredItem.description', 'Baik')
+            ->call('applyBulkValue')
+            ->assertSet("reportRows.{$selectedStudentId}.extracurricular_items", [[
+                'name' => 'Basket',
+                'description' => 'Baik',
+            ]])
+            ->set('bulkField', 'achievement_items')
+            ->set('bulkStructuredItem.name', 'Juara 1 Olimpiade Sains')
+            ->set('bulkStructuredItem.description', 'Tingkat Kota')
+            ->call('applyBulkValue')
+            ->assertSet("reportRows.{$selectedStudentId}.achievement_items", [[
+                'name' => 'Juara 1 Olimpiade Sains',
+                'description' => 'Tingkat Kota',
+            ]])
+            ->assertSet("reportRows.{$unselectedStudentId}.extracurricular_items", [])
+            ->assertSet("reportRows.{$unselectedStudentId}.achievement_items", []);
+
         $this->assertDatabaseMissing('assessment_homeroom_reports', [
             'assessment_period_id' => $astsPeriod->getKey(),
             'assessment_period_student_id' => $selectedStudentId,
@@ -437,11 +496,11 @@ class AssessmentTeacherExperienceTest extends TestCase
         $this->assertSame('Sangat Baik', $savedReport->social_predicate);
         $this->assertSame('Santun dan peduli terhadap teman.', $savedReport->social_description);
         $this->assertSame(
-            [['description' => 'Pramuka'], ['description' => 'Basket']],
+            [['name' => 'Basket', 'description' => 'Baik']],
             $savedReport->extracurricular_data,
         );
         $this->assertSame(
-            [['description' => 'Juara 1 Olimpiade Sains']],
+            [['name' => 'Juara 1 Olimpiade Sains', 'description' => 'Tingkat Kota']],
             $savedReport->achievement_data,
         );
         $this->assertSame('Catatan hasil timpa.', $savedReport->homeroom_note);
@@ -453,6 +512,121 @@ class AssessmentTeacherExperienceTest extends TestCase
         $this->assertSame(0, $unselectedReport->sick_days);
         $this->assertNull($unselectedReport->homeroom_note);
         $this->assertSame('Catatan ASAS tetap.', $asasReport->refresh()->homeroom_note);
+    }
+
+    public function test_curriculum_can_complete_legacy_structured_homeroom_items_while_other_teacher_is_denied(): void
+    {
+        Role::findOrCreate('kurikulum', 'web');
+        $curriculum = User::query()->create([
+            'name' => 'Kurikulum Assessment',
+            'username' => 'curriculum-homeroom-items',
+            'password' => 'test-password',
+        ]);
+        $curriculum->assignRole('kurikulum');
+        $otherTeacher = $this->teacher(999);
+
+        $period = AssessmentPeriod::factory()->asts()->create([
+            'status' => AssessmentPeriodStatus::OPEN,
+        ]);
+        $rombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'rombel_name_snapshot' => 'X 3',
+        ]);
+        $student = AssessmentPeriodStudent::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'rombel_name_snapshot' => 'X 3',
+        ]);
+        $homeroom = AssessmentPeriodHomeroom::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'teacher_id' => 348,
+            'teacher_name_snapshot' => 'Putra Kamulyan',
+            'rombel_name_snapshot' => 'X 3',
+        ]);
+        $report = HomeroomReport::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_student_id' => $student->getKey(),
+            'extracurricular_data' => [['description' => 'Keterangan lama tetap ada']],
+            'achievement_data' => [['name' => 'Juara Kelas', 'description' => 'Semester Ganjil']],
+        ]);
+
+        $this->assertTrue(Gate::forUser($curriculum)->allows('update', $report));
+        $this->assertFalse(Gate::forUser($otherTeacher)->allows('update', $report));
+
+        Livewire::actingAs($curriculum)
+            ->test(AstsHomeroomRecap::class)
+            ->set('periodId', $period->getKey())
+            ->set('homeroomId', $homeroom->getKey())
+            ->call('loadReports')
+            ->assertSet('homeroomMeta.editable', true)
+            ->assertSet("reportRows.{$student->getKey()}.extracurricular_items.0.name", '')
+            ->assertSet(
+                "reportRows.{$student->getKey()}.extracurricular_items.0.description",
+                'Keterangan lama tetap ada',
+            )
+            ->call('addStructuredItem', $student->getKey(), 'achievement_items')
+            ->assertSet("reportRows.{$student->getKey()}.achievement_items.1.name", '')
+            ->call('removeStructuredItem', $student->getKey(), 'achievement_items', 1)
+            ->assertSet("reportRows.{$student->getKey()}.achievement_items", [[
+                'name' => 'Juara Kelas',
+                'description' => 'Semester Ganjil',
+            ]])
+            ->call('saveReports')
+            ->assertHasErrors(["rows.{$student->getKey()}.extracurricular_items.0.name"])
+            ->set("reportRows.{$student->getKey()}.extracurricular_items.0.name", 'Pramuka')
+            ->call('saveReports');
+
+        $this->assertSame(
+            [['name' => 'Pramuka', 'description' => 'Keterangan lama tetap ada']],
+            $report->fresh()->extracurricular_data,
+        );
+        $this->assertSame(
+            [['name' => 'Juara Kelas', 'description' => 'Semester Ganjil']],
+            $report->fresh()->achievement_data,
+        );
+    }
+
+    public function test_assessment_failure_notification_is_persistent_and_links_to_period_aware_repair_page(): void
+    {
+        $teacher = $this->teacher(348);
+        $period = AssessmentPeriod::factory()->asts()->create([
+            'status' => AssessmentPeriodStatus::OPEN,
+        ]);
+
+        $this->actingAs($teacher);
+        $notification = AssessmentActionFailureNotification::make(
+            ValidationException::withMessages([
+                'assignments' => '1 penugasan belum dikirim. Input belum dapat ditutup.',
+            ]),
+            'Tutup Input',
+            $period,
+        )->toArray();
+
+        $this->assertSame('persistent', $notification['duration']);
+        $this->assertSame('danger', $notification['status']);
+        $this->assertStringContainsString('Aksi ditolak: Tutup Input', (string) $notification['title']);
+        $this->assertStringContainsString('Kendala', (string) $notification['body']);
+        $this->assertStringContainsString('Solusi', (string) $notification['body']);
+        $this->assertSame('Buka Status Pengumpulan', $notification['actions'][0]['label']);
+        $this->assertSame(
+            AstsSubmissionStatus::getUrl(['period' => $period->getKey()]),
+            $notification['actions'][0]['url'],
+        );
+
+        $asasPeriod = AssessmentPeriod::factory()->asas()->create([
+            'status' => AssessmentPeriodStatus::OPEN,
+        ]);
+        $asasNotification = AssessmentActionFailureNotification::make(
+            ValidationException::withMessages(['assignments' => 'Penugasan ASAS belum lengkap.']),
+            'Tutup Input',
+            $asasPeriod,
+        )->toArray();
+
+        $this->assertSame(
+            AsasSubmissionStatus::getUrl(['period' => $asasPeriod->getKey()]),
+            $asasNotification['actions'][0]['url'],
+        );
     }
 
     private function teacher(int $teacherId): User

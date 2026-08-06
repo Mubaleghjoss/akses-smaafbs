@@ -29,6 +29,7 @@ class HomeroomReportPolicy extends AssessmentPolicy
 
         return (
             $this->isFullAdmin($user)
+            || $this->canVerify($user)
             || $this->ownsTeacherId($user, (int) $homeroom->teacher_id)
         ) && in_array($periodStatus, [
             AssessmentPeriodStatus::OPEN,
@@ -40,6 +41,7 @@ class HomeroomReportPolicy extends AssessmentPolicy
     public function update(User $user, HomeroomReport $report): bool
     {
         return ($this->isFullAdmin($user)
+                || $this->canVerify($user)
                 || $this->ownsPeriodRombel($user, $report->student->periodRombel))
             && in_array($report->period->status, [
                 AssessmentPeriodStatus::OPEN,

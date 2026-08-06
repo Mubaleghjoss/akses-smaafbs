@@ -17,6 +17,7 @@ use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodAssignment;
 use App\Models\Assessment\Semester;
 use App\Models\Rombel;
+use App\Support\Assessment\AssessmentActionFailureNotification;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -299,6 +300,8 @@ class AssessmentPeriodResource extends Resource
                             $data['reason'],
                         ),
                         'Penugasan terpilih dibuka untuk koreksi.',
+                        $record,
+                        'Buka Koreksi',
                     )),
                 DeleteAction::make()
                     ->visible(fn (AssessmentPeriod $record): bool => static::canDelete($record)
@@ -339,10 +342,17 @@ class AssessmentPeriodResource extends Resource
             ->action(fn (AssessmentPeriod $record) => static::runTransition(
                 fn () => app($actionClass)->execute(auth()->user(), $record),
                 "{$label} berhasil.",
+                $record,
+                $label,
             ));
     }
 
-    protected static function runTransition(callable $callback, string $successMessage): mixed
+    protected static function runTransition(
+        callable $callback,
+        string $successMessage,
+        AssessmentPeriod $period,
+        string $actionTitle,
+    ): mixed
     {
         try {
             $result = $callback();
@@ -351,12 +361,7 @@ class AssessmentPeriodResource extends Resource
             return $result;
         } catch (Throwable $exception) {
             report($exception);
-            Notification::make()
-                ->title('Aksi tidak dapat dijalankan')
-                ->body($exception->getMessage())
-                ->danger()
-                ->duration(15000)
-                ->send();
+            AssessmentActionFailureNotification::send($exception, $actionTitle, $period);
 
             return null;
         }

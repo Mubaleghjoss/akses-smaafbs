@@ -17,6 +17,7 @@ use App\Models\Assessment\ReportShareLink;
 use App\Models\Assessment\ReportSnapshot;
 use App\Models\Assessment\ReportTemplate;
 use App\Models\User;
+use App\Support\Assessment\AssessmentActionFailureNotification;
 use App\Support\Assessment\Reporting\AssessmentReportShareService;
 use App\Support\Assessment\Reporting\CreateReportSnapshotsAction;
 use App\Support\Assessment\Reporting\AssessmentReportPreflight;
@@ -231,7 +232,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
                 ->send();
         } catch (Throwable $exception) {
             report($exception);
-            Notification::make()->title('Revisi belum dapat disiapkan')->body($exception->getMessage())->danger()->duration(15000)->send();
+            AssessmentActionFailureNotification::send($exception, 'Siapkan Revisi', $period);
         }
     }
 
@@ -267,7 +268,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
                 ->send();
         } catch (Throwable $exception) {
             report($exception);
-            Notification::make()->title('Kelas belum dapat dijadwalkan')->body($exception->getMessage())->danger()->duration(15000)->send();
+            AssessmentActionFailureNotification::send($exception, 'Jadwalkan Kelas Terpilih', $period);
         }
     }
 
@@ -308,7 +309,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
                 ->send();
         } catch (Throwable $exception) {
             report($exception);
-            Notification::make()->title('Revisi baru belum dapat disiapkan')->body($exception->getMessage())->danger()->duration(15000)->send();
+            AssessmentActionFailureNotification::send($exception, 'Mulai Ulang dengan Revisi Baru', $period);
         }
     }
 
@@ -471,7 +472,11 @@ abstract class AssessmentReportsPage extends AssessmentPage
                 ->send();
         } catch (Throwable $exception) {
             report($exception);
-            Notification::make()->title('Antrean belum dihentikan')->body($exception->getMessage())->danger()->send();
+            AssessmentActionFailureNotification::send(
+                $exception,
+                'Hentikan Semua Antrean PDF',
+                $this->selectedPeriod(),
+            );
         }
     }
 
@@ -511,7 +516,11 @@ abstract class AssessmentReportsPage extends AssessmentPage
                 ->send();
         } catch (Throwable $exception) {
             report($exception);
-            Notification::make()->title('Tautan tidak dapat dibuat')->body($exception->getMessage())->danger()->send();
+            AssessmentActionFailureNotification::send(
+                $exception,
+                'Buat Tautan Rapor',
+                $this->selectedPeriod(),
+            );
         }
     }
 
@@ -586,7 +595,11 @@ abstract class AssessmentReportsPage extends AssessmentPage
             Notification::make()->title(count($links).' tautan sementara dibuat')->success()->duration(12000)->send();
         } catch (Throwable $exception) {
             report($exception);
-            Notification::make()->title('Tautan belum dapat dibuat')->body($exception->getMessage())->danger()->send();
+            AssessmentActionFailureNotification::send(
+                $exception,
+                'Buat Tautan Rapor Massal',
+                $this->selectedPeriod(),
+            );
         }
     }
 

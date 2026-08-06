@@ -9,7 +9,9 @@ use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodHomeroom;
 use App\Models\Assessment\AuditLog;
 use App\Models\Assessment\HomeroomReport;
+use App\Models\Assessment\ReportSnapshot;
 use App\Models\User;
+use App\Support\Assessment\AssessmentActionFailureNotification;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
@@ -71,16 +73,16 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
             'input' => 'text',
             'max' => 2000,
         ],
-        'extracurricular' => [
+        'extracurricular_items' => [
             'header' => 'Ekstrakurikuler',
             'bulk_label' => 'Ekstrakurikuler',
-            'input' => 'text',
+            'input' => 'items',
             'max' => 4000,
         ],
-        'achievement' => [
+        'achievement_items' => [
             'header' => 'Prestasi',
             'bulk_label' => 'Prestasi',
-            'input' => 'text',
+            'input' => 'items',
             'max' => 4000,
         ],
         'homeroom_note' => [
@@ -126,6 +128,14 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
     public string $bulkValue = '';
 
     public bool $bulkFillEmptyOnly = true;
+
+    /** @var array{name:string,description:string} */
+    public array $bulkStructuredItem = [
+        'name' => '',
+        'description' => '',
+    ];
+
+    public string $bulkStructuredMode = 'append';
 
     public static function canAccess(): bool
     {
@@ -200,6 +210,8 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
     public function updatedBulkField(): void
     {
         $this->bulkValue = '';
+        $this->bulkStructuredItem = ['name' => '', 'description' => ''];
+        $this->bulkStructuredMode = 'append';
     }
 
     public function loadReports(): void
@@ -235,8 +247,8 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
                 'spiritual_description' => $report?->spiritual_description,
                 'social_predicate' => $report?->social_predicate,
                 'social_description' => $report?->social_description,
-                'extracurricular' => $this->listToText($report?->extracurricular_data),
-                'achievement' => $this->listToText($report?->achievement_data),
+                'extracurricular_items' => $this->normalizeStructuredItems($report?->extracurricular_data),
+                'achievement_items' => $this->normalizeStructuredItems($report?->achievement_data),
                 'homeroom_note' => $report?->homeroom_note,
                 'promotion_status' => $report?->promotion_status,
             ];
@@ -315,6 +327,39 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
         ];
     }
 
+    public function isStructuredBulkField(): bool
+    {
+        return data_get($this->getBulkFieldDefinition(), 'input') === 'items';
+    }
+
+    public function addStructuredItem(int $studentId, string $field): void
+    {
+        if (! data_get($this->homeroomMeta, 'editable')
+            || ! $this->isStructuredField($field)
+            || ! array_key_exists($studentId, $this->reportRows)) {
+            return;
+        }
+
+        $this->reportRows[$studentId][$field] = [
+            ...$this->normalizeStructuredItems($this->reportRows[$studentId][$field] ?? []),
+            ['name' => '', 'description' => ''],
+        ];
+    }
+
+    public function removeStructuredItem(int $studentId, string $field, int $index): void
+    {
+        if (! data_get($this->homeroomMeta, 'editable')
+            || ! $this->isStructuredField($field)
+            || ! array_key_exists($studentId, $this->reportRows)) {
+            return;
+        }
+
+        $items = $this->normalizeStructuredItems($this->reportRows[$studentId][$field] ?? []);
+        unset($items[$index]);
+        $this->reportRows[$studentId][$field] = array_values($items);
+        $this->resetErrorBag("rows.{$studentId}.{$field}.{$index}");
+    }
+
     public function selectAllStudents(): void
     {
         $this->selectedStudentIds = array_map('intval', array_keys($this->reportRows));
@@ -355,6 +400,12 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
         $fieldDefinition = $this->getBulkFieldDefinition();
         if ($fieldDefinition === null) {
             Notification::make()->title('Kolom bulk tidak valid')->danger()->send();
+
+            return;
+        }
+
+        if ($fieldDefinition['input'] === 'items') {
+            $this->applyBulkStructuredItem($studentIds->all(), $fieldDefinition);
 
             return;
         }
@@ -428,6 +479,95 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
             ->send();
     }
 
+    /**
+     * @param array<int, int> $studentIds
+     * @param array{header:string,bulk_label:string,input:string,max:int} $fieldDefinition
+     */
+    protected function applyBulkStructuredItem(array $studentIds, array $fieldDefinition): void
+    {
+        $name = trim((string) ($this->bulkStructuredItem['name'] ?? ''));
+        $description = trim((string) ($this->bulkStructuredItem['description'] ?? ''));
+
+        if ($name === '') {
+            Notification::make()
+                ->title('Nama poin belum diisi')
+                ->body("Isi nama {$fieldDefinition['bulk_label']} sebelum menerapkan ke siswa.")
+                ->danger()
+                ->persistent()
+                ->send();
+
+            return;
+        }
+
+        if (mb_strlen($name) > 255 || mb_strlen($description) > 2000) {
+            Notification::make()
+                ->title('Poin terlalu panjang')
+                ->body('Nama maksimal 255 karakter dan keterangan maksimal 2.000 karakter.')
+                ->danger()
+                ->persistent()
+                ->send();
+
+            return;
+        }
+
+        if (! in_array($this->bulkStructuredMode, ['append', 'replace'], true)) {
+            $this->bulkStructuredMode = 'append';
+        }
+
+        $item = ['name' => $name, 'description' => $description];
+        $updates = [];
+
+        foreach ($studentIds as $studentId) {
+            $current = $this->normalizeStructuredItems(
+                $this->reportRows[$studentId][$this->bulkField] ?? [],
+                true,
+            );
+
+            if ($this->bulkStructuredMode === 'replace') {
+                $next = [$item];
+            } else {
+                $duplicate = collect($current)->contains(
+                    fn (array $existing): bool => $existing['name'] === $item['name']
+                        && $existing['description'] === $item['description'],
+                );
+                if ($duplicate) {
+                    continue;
+                }
+
+                $next = [...$current, $item];
+            }
+
+            if ($this->structuredItemsLength($next) > $fieldDefinition['max']) {
+                Notification::make()
+                    ->title('Daftar terlalu panjang')
+                    ->body("Total {$fieldDefinition['bulk_label']} maksimal {$fieldDefinition['max']} karakter per siswa.")
+                    ->danger()
+                    ->persistent()
+                    ->send();
+
+                return;
+            }
+
+            $updates[$studentId] = $next;
+        }
+
+        foreach ($updates as $studentId => $items) {
+            $this->reportRows[$studentId][$this->bulkField] = $items;
+        }
+
+        $changed = count($updates);
+        $modeLabel = $this->bulkStructuredMode === 'replace' ? 'mengganti daftar' : 'menambahkan poin';
+        $this->bulkStructuredItem = ['name' => '', 'description' => ''];
+        $this->bulkStructuredMode = 'append';
+
+        Notification::make()
+            ->title("Diterapkan ke {$changed} siswa")
+            ->body("Form diperbarui dengan {$modeLabel}. Tekan Simpan Rekap Wali Kelas agar tersimpan ke server.")
+            ->success()
+            ->duration(12000)
+            ->send();
+    }
+
     public function saveReports(): void
     {
         $homeroom = $this->homeroomId ? $this->homeroomQuery()->with('period')->findOrFail($this->homeroomId) : null;
@@ -439,15 +579,42 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
         }
 
         try {
-            $validatedRows = Validator::make(
-                ['rows' => $this->reportRows],
+            $this->resetErrorBag();
+            $validator = Validator::make(
+                ['rows' => $this->rowsForValidation()],
                 $this->getReportValidationRules(),
                 [
                     'rows.*.sick_days.max' => 'Jumlah hari sakit maksimal 366.',
                     'rows.*.permission_days.max' => 'Jumlah hari izin maksimal 366.',
                     'rows.*.absent_days.max' => 'Jumlah hari alpa maksimal 366.',
+                    'rows.*.extracurricular_items.*.name.required' => 'Nama ekstrakurikuler wajib diisi.',
+                    'rows.*.achievement_items.*.name.required' => 'Jenis prestasi wajib diisi.',
+                    'rows.*.extracurricular_items.*.name.max' => 'Nama ekstrakurikuler maksimal 255 karakter.',
+                    'rows.*.achievement_items.*.name.max' => 'Jenis prestasi maksimal 255 karakter.',
+                    'rows.*.extracurricular_items.*.description.max' => 'Keterangan ekstrakurikuler maksimal 2.000 karakter.',
+                    'rows.*.achievement_items.*.description.max' => 'Keterangan prestasi maksimal 2.000 karakter.',
                 ],
-            )->validate()['rows'];
+            );
+            $validator->after(function ($validator): void {
+                foreach ($this->rowsForValidation() as $studentId => $row) {
+                    foreach (['extracurricular_items', 'achievement_items'] as $field) {
+                        $maximum = self::RECAP_FIELD_DEFINITIONS[$field]['max'];
+                        if ($this->structuredItemsLength($row[$field] ?? []) > $maximum) {
+                            $validator->errors()->add(
+                                "rows.{$studentId}.{$field}",
+                                "Total teks maksimal {$maximum} karakter.",
+                            );
+                        }
+                    }
+                }
+            });
+
+            if ($validator->fails()) {
+                $this->setErrorBag($validator->errors());
+                throw new ValidationException($validator);
+            }
+
+            $validatedRows = $validator->validated()['rows'];
 
             DB::transaction(function () use ($homeroom, $validatedRows): void {
                 $period = AssessmentPeriod::query()
@@ -517,8 +684,8 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
                         'social_description' => filled($row['social_description'] ?? null)
                             ? trim((string) $row['social_description'])
                             : null,
-                        'extracurricular_data' => $this->textToList($row['extracurricular'] ?? null),
-                        'achievement_data' => $this->textToList($row['achievement'] ?? null),
+                        'extracurricular_data' => $this->normalizeStructuredItems($row['extracurricular_items'] ?? [], true),
+                        'achievement_data' => $this->normalizeStructuredItems($row['achievement_items'] ?? [], true),
                         'homeroom_note' => filled($row['homeroom_note'] ?? null) ? trim($row['homeroom_note']) : null,
                         'promotion_status' => $collectPromotionStatus && filled($row['promotion_status'] ?? null)
                             ? trim($row['promotion_status'])
@@ -539,11 +706,26 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
                 ]);
             });
 
-            Notification::make()->title('Rekap wali kelas tersimpan')->success()->send();
+            $hasFrozenReports = ReportSnapshot::query()
+                ->where('assessment_period_id', $homeroom->assessment_period_id)
+                ->exists();
+            $notification = Notification::make()->title('Rekap wali kelas tersimpan')->success();
+            if ($hasFrozenReports) {
+                $notification
+                    ->body('Snapshot rapor lama tetap utuh. Gunakan Mulai Ulang dengan Revisi Baru agar perubahan ini masuk ke PDF berikutnya.')
+                    ->duration(15000);
+            }
+            $notification->send();
             $this->loadReports();
         } catch (Throwable $exception) {
-            report($exception);
-            Notification::make()->title('Rekap belum tersimpan')->body($exception->getMessage())->danger()->send();
+            if (! $exception instanceof ValidationException) {
+                report($exception);
+            }
+            AssessmentActionFailureNotification::send(
+                $exception,
+                'Simpan Rekap Wali Kelas',
+                $homeroom?->period,
+            );
         }
     }
 
@@ -588,7 +770,9 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
             return false;
         }
 
-        if ($user->hasFullAdminAccess()) {
+        if ($user->hasFullAdminAccess()
+            || $user->hasRole('kurikulum')
+            || $user->can('penilaian.verify')) {
             return true;
         }
 
@@ -619,6 +803,14 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
         $rules = ['rows' => ['array']];
 
         foreach ($this->getRecapFieldDefinitions() as $field => $definition) {
+            if ($definition['input'] === 'items') {
+                $rules["rows.*.{$field}"] = ['nullable', 'array'];
+                $rules["rows.*.{$field}.*.name"] = ['required', 'string', 'max:255'];
+                $rules["rows.*.{$field}.*.description"] = ['nullable', 'string', 'max:2000'];
+
+                continue;
+            }
+
             $rules["rows.*.{$field}"] = $definition['input'] === 'number'
                 ? ['required', 'integer', 'min:0', "max:{$definition['max']}"]
                 : ['nullable', 'string', "max:{$definition['max']}"];
@@ -633,23 +825,62 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
         return $rules;
     }
 
-    protected function textToList(mixed $value): array
+    /** @return array<int, array<string, mixed>> */
+    protected function rowsForValidation(): array
     {
-        return collect(preg_split('/\r\n|\r|\n/', (string) $value))
-            ->map(fn (string $line): string => trim($line))
-            ->filter()
-            ->map(fn (string $line): array => ['description' => $line])
+        return collect($this->reportRows)
+            ->map(function (array $row): array {
+                $row['extracurricular_items'] = $this->normalizeStructuredItems(
+                    $row['extracurricular_items'] ?? [],
+                    true,
+                );
+                $row['achievement_items'] = $this->normalizeStructuredItems(
+                    $row['achievement_items'] ?? [],
+                    true,
+                );
+
+                return $row;
+            })
+            ->all();
+    }
+
+    protected function isStructuredField(string $field): bool
+    {
+        return data_get(self::RECAP_FIELD_DEFINITIONS, "{$field}.input") === 'items';
+    }
+
+    /**
+     * @return array<int, array{name:string,description:string}>
+     */
+    protected function normalizeStructuredItems(mixed $value, bool $removeBlank = false): array
+    {
+        return collect(is_array($value) ? $value : [])
+            ->map(function (mixed $item): array {
+                if (! is_array($item)) {
+                    return ['name' => '', 'description' => trim((string) $item)];
+                }
+
+                return [
+                    'name' => trim((string) ($item['name'] ?? '')),
+                    'description' => trim((string) ($item['description'] ?? $item['grade'] ?? $item['level'] ?? '')),
+                ];
+            })
+            ->when(
+                $removeBlank,
+                fn ($items) => $items->filter(
+                    fn (array $item): bool => $item['name'] !== '' || $item['description'] !== '',
+                ),
+            )
             ->values()
             ->all();
     }
 
-    protected function listToText(mixed $value): string
+    /** @param array<int, array{name:string,description:string}> $items */
+    protected function structuredItemsLength(array $items): int
     {
-        return collect(is_array($value) ? $value : [])
-            ->map(fn (mixed $item): string => is_array($item)
-                ? (string) ($item['description'] ?? $item['name'] ?? '')
-                : (string) $item)
-            ->filter()
-            ->implode("\n");
+        return collect($items)->sum(
+            fn (array $item): int => mb_strlen((string) ($item['name'] ?? ''))
+                + mb_strlen((string) ($item['description'] ?? '')),
+        );
     }
 }

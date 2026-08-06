@@ -21,6 +21,7 @@ use App\Models\Assessment\AssessmentPeriodAssignment;
 use App\Models\Assessment\AssessmentPeriodRombel;
 use App\Models\Assessment\AssessmentPeriodStudent;
 use App\Models\Assessment\ClassReportArtifact;
+use App\Models\Assessment\HomeroomReport;
 use App\Models\Assessment\ReportGenerationRun;
 use App\Models\Assessment\ReportSnapshot;
 use App\Models\Assessment\ReportTemplate;
@@ -51,6 +52,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Livewire\Livewire;
 use LogicException;
 use RuntimeException;
 use Spatie\Permission\Models\Permission;
@@ -637,9 +639,29 @@ class AssessmentReportingTest extends TestCase
             'formula_version' => 'v1',
             'calculated_at' => now(),
         ]);
+        $homeroomReport = HomeroomReport::query()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_student_id' => $students[0]->getKey(),
+            'sick_days' => 0,
+            'permission_days' => 0,
+            'absent_days' => 0,
+            'extracurricular_data' => [[
+                'name' => 'Pramuka',
+                'description' => 'Sangat Baik',
+            ]],
+            'achievement_data' => [[
+                'name' => 'Juara Olimpiade',
+                'description' => 'Tingkat Kota',
+            ]],
+            'updated_by' => 99,
+        ]);
         $action = app(CreateReportSnapshotsAction::class);
 
         $first = $action->execute($period, $template, generatedBy: 99);
+        $homeroomReport->forceFill([
+            'extracurricular_data' => [['name' => 'Basket', 'description' => 'Baik']],
+            'achievement_data' => [['name' => 'Juara Kelas', 'description' => 'Semester Ganjil']],
+        ])->save();
         $second = $action->execute($period, $template, generatedBy: 99);
         $students[0]->forceFill(['student_name_snapshot' => 'Nama Setelah Snapshot'])->save();
         $template->forceFill([
@@ -653,6 +675,14 @@ class AssessmentReportingTest extends TestCase
         $this->assertSame('88.50', data_get($stored->snapshot_data, 'subjects.0.final_score'));
         $this->assertSame('Matematika', data_get($stored->snapshot_data, 'subjects.0.name'));
         $this->assertSame(
+            [['name' => 'Pramuka', 'description' => 'Sangat Baik']],
+            data_get($stored->snapshot_data, 'homeroom.extracurricular_data'),
+        );
+        $this->assertSame(
+            [['name' => 'Juara Olimpiade', 'description' => 'Tingkat Kota']],
+            data_get($stored->snapshot_data, 'homeroom.achievement_data'),
+        );
+        $this->assertSame(
             'Kepala Sekolah',
             data_get($stored->snapshot_data, 'template.settings.principal_name'),
         );
@@ -663,6 +693,72 @@ class AssessmentReportingTest extends TestCase
         $this->assertSame('stream', $stored->delivery_mode);
         $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', (string) $stored->snapshot_checksum);
         Queue::assertNothingPushed();
+    }
+
+    public function test_report_progress_polls_only_while_generation_run_is_running(): void
+    {
+        [$period, , , $template] = $this->reportingFoundation();
+        $run = ReportGenerationRun::query()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_report_template_id' => $template->getKey(),
+            'revision' => 1,
+            'status' => 'running',
+            'total_students' => 1,
+            'completed_students' => 0,
+            'total_classes' => 1,
+            'completed_classes' => 0,
+            'requested_by' => 99,
+            'started_at' => now(),
+        ]);
+
+        $component = Livewire::actingAs(User::query()->findOrFail(99))
+            ->test(AstsReports::class)
+            ->set('periodId', $period->getKey())
+            ->set('templateId', $template->getKey());
+
+        $this->assertStringContainsString('wire:poll.5s.visible', $component->html());
+
+        $run->forceFill(['status' => 'completed', 'completed_at' => now()])->save();
+        $component->call('$refresh');
+
+        $this->assertStringNotContainsString('wire:poll.5s.visible', $component->html());
+    }
+
+    public function test_attendance_values_render_as_non_breaking_text_in_legacy_and_flexible_reports(): void
+    {
+        $snapshot = [
+            'school' => ['name' => 'SMA AFBS'],
+            'period' => ['type' => 'ASTS'],
+            'student' => ['name' => 'Siswa Uji'],
+            'homeroom' => [
+                'sick_days' => 0,
+                'permission_days' => 2,
+                'absent_days' => 0,
+            ],
+            'subjects' => [],
+            'signatures' => [],
+        ];
+        $legacy = view('assessment.reports.asts', [
+            'snapshot' => $snapshot,
+            'templateSettings' => [],
+            'pdfMode' => false,
+        ])->render();
+        $flexible = view('assessment.reports.asts', [
+            'snapshot' => $snapshot,
+            'templateSettings' => [
+                'layout' => [
+                    'version' => AssessmentReportLayout::VERSION,
+                    'sections' => AssessmentReportLayout::threePageDefaults(),
+                ],
+            ],
+            'pdfMode' => false,
+        ])->render();
+
+        foreach ([$legacy, $flexible] as $html) {
+            $this->assertStringContainsString('summary-table summary-table--attendance', $html);
+            $this->assertStringContainsString('attendance-value', $html);
+            $this->assertStringContainsString('0&nbsp;hari', $html);
+        }
     }
 
     public function test_streamed_student_report_download_creates_no_permanent_pdf_file(): void

@@ -124,6 +124,13 @@
                     restored: false,
                     stale: false,
                     staleSavedAt: null,
+                    normalizeDraftValue(path, value) {
+                        if (!path.includes('.scores.')) return value;
+                        if (value === null || String(value).trim() === '') return '';
+                        const numeric = Number(value);
+                        if (!Number.isFinite(numeric)) return value;
+                        return String(Math.round((numeric + Number.EPSILON) * 100) / 100);
+                    },
                     saveLocal(event) {
                         const path = event.target?.dataset?.assessmentPath;
                         if (!path) return;
@@ -134,7 +141,7 @@
                             this.stale = false;
                         }
                         draft.values = draft.values || {};
-                        draft.values[path] = event.target.value;
+                        draft.values[path] = this.normalizeDraftValue(path, event.target.value);
                         draft.savedAt = new Date().toISOString();
                         draft.lockVersion = this.serverVersion;
                         localStorage.setItem(this.draftKey, JSON.stringify(draft));
@@ -154,8 +161,9 @@
                             return;
                         }
                         Object.entries(draft.values).forEach(([path, value]) => {
-                            this.$root.querySelectorAll(`[data-assessment-path='${path}']`).forEach((field) => field.value = value);
-                            $wire.set(path, value, false);
+                            const normalized = this.normalizeDraftValue(path, value);
+                            this.$root.querySelectorAll(`[data-assessment-path='${path}']`).forEach((field) => field.value = normalized);
+                            $wire.set(path, normalized, false);
                         });
                         this.stale = false;
                         this.restored = true;

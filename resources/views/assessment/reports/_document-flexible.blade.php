@@ -179,8 +179,8 @@
 
                 @case('attendance')
                     <p class="section-title">{{ $sectionTitle }}</p>
-                    <table class="summary-table">
-                        <tr><th>Sakit</th><td>{{ (int) data_get($homeroom, 'sick_days', 0) }} hari</td><th>Izin</th><td>{{ (int) data_get($homeroom, 'permission_days', 0) }} hari</td><th>Tanpa Keterangan</th><td>{{ (int) data_get($homeroom, 'absent_days', 0) }} hari</td></tr>
+                    <table class="summary-table summary-table--attendance">
+                        <tr><th>Sakit</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'sick_days', 0) }}&nbsp;hari</span></td><th>Izin</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'permission_days', 0) }}&nbsp;hari</span></td><th>Tanpa Keterangan</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'absent_days', 0) }}&nbsp;hari</span></td></tr>
                     </table>
                     @break
 

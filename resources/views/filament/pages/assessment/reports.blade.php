@@ -196,7 +196,10 @@
         @endif
 
         @php($classRows = $this->getClassRows())
-        <section class="assessment-report-card is-step">
+        <section
+            class="assessment-report-card is-step"
+            @if ($run && $run->status->value === 'running') wire:poll.5s.visible @endif
+        >
             <span class="assessment-report-step">3</span>
             <div class="assessment-report-card__body">
                 <div class="assessment-report-card__head">

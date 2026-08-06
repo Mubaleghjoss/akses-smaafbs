@@ -6317,9 +6317,11 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .assessment-status-filter-card label,
 .assessment-homeroom-filter-card label,
 .assessment-homeroom-bulk-grid label,
+.assessment-homeroom-bulk-structured label,
 .assessment-homeroom-absence-grid label,
 .assessment-homeroom-text-grid label,
-.assessment-homeroom-attitude-grid label {
+.assessment-homeroom-attitude-grid label,
+.assessment-homeroom-item label {
     display: grid;
     min-width: 0;
     gap: 0.4rem;
@@ -6333,6 +6335,9 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .assessment-homeroom-bulk-grid select,
 .assessment-homeroom-bulk-grid input,
 .assessment-homeroom-bulk-grid textarea,
+.assessment-homeroom-bulk-structured select,
+.assessment-homeroom-bulk-structured input,
+.assessment-homeroom-bulk-structured textarea,
 .assessment-homeroom-table input,
 .assessment-homeroom-table select,
 .assessment-homeroom-table textarea,
@@ -6340,7 +6345,9 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .assessment-homeroom-text-grid input,
 .assessment-homeroom-text-grid textarea,
 .assessment-homeroom-attitude-grid select,
-.assessment-homeroom-attitude-grid textarea {
+.assessment-homeroom-attitude-grid textarea,
+.assessment-homeroom-item input,
+.assessment-homeroom-item textarea {
     width: 100%;
     min-width: 0;
     border: 1px solid #cbd5e1;
@@ -6357,11 +6364,18 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
     min-height: 2.65rem;
 }
 
+.assessment-homeroom-bulk-structured select {
+    min-height: 2.65rem;
+}
+
 .assessment-status-filter-card select:focus,
 .assessment-homeroom-filter-card select:focus,
 .assessment-homeroom-bulk-grid select:focus,
 .assessment-homeroom-bulk-grid input:focus,
 .assessment-homeroom-bulk-grid textarea:focus,
+.assessment-homeroom-bulk-structured select:focus,
+.assessment-homeroom-bulk-structured input:focus,
+.assessment-homeroom-bulk-structured textarea:focus,
 .assessment-homeroom-table input:focus,
 .assessment-homeroom-table select:focus,
 .assessment-homeroom-table textarea:focus,
@@ -6369,7 +6383,9 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .assessment-homeroom-text-grid input:focus,
 .assessment-homeroom-text-grid textarea:focus,
 .assessment-homeroom-attitude-grid select:focus,
-.assessment-homeroom-attitude-grid textarea:focus {
+.assessment-homeroom-attitude-grid textarea:focus,
+.assessment-homeroom-item input:focus,
+.assessment-homeroom-item textarea:focus {
     outline: 2px solid rgba(13, 148, 136, 0.22);
     border-color: #0d9488;
 }
@@ -6608,6 +6624,26 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
     gap: 0.8rem;
 }
 
+.assessment-homeroom-bulk-structured {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+}
+
+.assessment-homeroom-bulk-structured label:last-child {
+    grid-column: 1 / -1;
+}
+
+.assessment-homeroom-bulk-note {
+    border-radius: 0.7rem;
+    background: rgba(204, 251, 241, 0.7);
+    padding: 0.65rem 0.75rem;
+    color: #115e59;
+    font-size: 0.75rem;
+    line-height: 1.5;
+}
+
 .assessment-homeroom-bulk-check,
 .assessment-homeroom-student {
     display: flex;
@@ -6685,6 +6721,10 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
     min-width: 88px;
 }
 
+.assessment-homeroom-table td:has(.assessment-homeroom-items) {
+    min-width: 300px;
+}
+
 .assessment-homeroom-table .is-number {
     width: 4.8rem;
 }
@@ -6724,6 +6764,92 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .assessment-homeroom-text-grid {
     display: grid;
     gap: 0.75rem;
+}
+
+.assessment-homeroom-structured-section {
+    display: grid;
+    min-width: 0;
+    gap: 0.6rem;
+    border: 1px solid #dbe4ee;
+    border-radius: 0.85rem;
+    background: #f8fafc;
+    padding: 0.8rem;
+}
+
+.assessment-homeroom-structured-section > strong {
+    color: #334155;
+    font-size: 0.8rem;
+}
+
+.assessment-homeroom-items {
+    display: grid;
+    min-width: 0;
+    gap: 0.6rem;
+}
+
+.assessment-homeroom-item {
+    display: grid;
+    min-width: 0;
+    gap: 0.55rem;
+    border: 1px solid #dbe4ee;
+    border-radius: 0.75rem;
+    background: #fff;
+    padding: 0.65rem;
+}
+
+.assessment-homeroom-item__add,
+.assessment-homeroom-item__remove {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border-radius: 0.65rem;
+    padding: 0.55rem 0.7rem;
+    font-size: 0.73rem;
+    font-weight: 800;
+    transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.assessment-homeroom-item__add {
+    border: 1px dashed #14b8a6;
+    background: #f0fdfa;
+    color: #0f766e;
+}
+
+.assessment-homeroom-item__remove {
+    border: 1px solid #fecaca;
+    background: #fff7f7;
+    color: #b91c1c;
+}
+
+.assessment-homeroom-item__add:hover {
+    background: #ccfbf1;
+}
+
+.assessment-homeroom-item__remove:hover {
+    background: #fee2e2;
+}
+
+.assessment-homeroom-item__add svg,
+.assessment-homeroom-item__remove svg {
+    width: 1rem;
+    height: 1rem;
+}
+
+.assessment-homeroom-items__empty {
+    border-radius: 0.65rem;
+    background: #f1f5f9;
+    padding: 0.65rem;
+    color: #64748b;
+    font-size: 0.73rem;
+    text-align: center;
+}
+
+.assessment-homeroom-field-error {
+    color: #b91c1c;
+    font-size: 0.7rem;
+    font-weight: 700;
 }
 
 .assessment-homeroom-attitude-grid {
@@ -6815,13 +6941,17 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .dark .assessment-status-filter-card label,
 .dark .assessment-homeroom-filter-card label,
 .dark .assessment-homeroom-bulk-grid label,
+.dark .assessment-homeroom-bulk-structured label,
 .dark .assessment-homeroom-absence-grid label,
 .dark .assessment-homeroom-text-grid label,
+.dark .assessment-homeroom-item label,
 .fi-theme-dark .assessment-status-filter-card label,
 .fi-theme-dark .assessment-homeroom-filter-card label,
 .fi-theme-dark .assessment-homeroom-bulk-grid label,
+.fi-theme-dark .assessment-homeroom-bulk-structured label,
 .fi-theme-dark .assessment-homeroom-absence-grid label,
-.fi-theme-dark .assessment-homeroom-text-grid label {
+.fi-theme-dark .assessment-homeroom-text-grid label,
+.fi-theme-dark .assessment-homeroom-item label {
     color: #e2e8f0;
 }
 
@@ -6830,6 +6960,9 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .dark .assessment-homeroom-bulk-grid select,
 .dark .assessment-homeroom-bulk-grid input,
 .dark .assessment-homeroom-bulk-grid textarea,
+.dark .assessment-homeroom-bulk-structured select,
+.dark .assessment-homeroom-bulk-structured input,
+.dark .assessment-homeroom-bulk-structured textarea,
 .dark .assessment-homeroom-table input,
 .dark .assessment-homeroom-table select,
 .dark .assessment-homeroom-table textarea,
@@ -6838,11 +6971,16 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .dark .assessment-homeroom-text-grid textarea,
 .dark .assessment-homeroom-attitude-grid select,
 .dark .assessment-homeroom-attitude-grid textarea,
+.dark .assessment-homeroom-item input,
+.dark .assessment-homeroom-item textarea,
 .fi-theme-dark .assessment-status-filter-card select,
 .fi-theme-dark .assessment-homeroom-filter-card select,
 .fi-theme-dark .assessment-homeroom-bulk-grid select,
 .fi-theme-dark .assessment-homeroom-bulk-grid input,
 .fi-theme-dark .assessment-homeroom-bulk-grid textarea,
+.fi-theme-dark .assessment-homeroom-bulk-structured select,
+.fi-theme-dark .assessment-homeroom-bulk-structured input,
+.fi-theme-dark .assessment-homeroom-bulk-structured textarea,
 .fi-theme-dark .assessment-homeroom-table input,
 .fi-theme-dark .assessment-homeroom-table select,
 .fi-theme-dark .assessment-homeroom-table textarea,
@@ -6850,7 +6988,9 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .fi-theme-dark .assessment-homeroom-text-grid input,
 .fi-theme-dark .assessment-homeroom-text-grid textarea,
 .fi-theme-dark .assessment-homeroom-attitude-grid select,
-.fi-theme-dark .assessment-homeroom-attitude-grid textarea {
+.fi-theme-dark .assessment-homeroom-attitude-grid textarea,
+.fi-theme-dark .assessment-homeroom-item input,
+.fi-theme-dark .assessment-homeroom-item textarea {
     border-color: rgba(148, 163, 184, 0.28);
     background: #0f172a;
     color: #f8fafc;
@@ -6881,7 +7021,11 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 }
 
 .dark .assessment-homeroom-attitude-grid > section,
-.fi-theme-dark .assessment-homeroom-attitude-grid > section {
+.dark .assessment-homeroom-structured-section,
+.dark .assessment-homeroom-item,
+.fi-theme-dark .assessment-homeroom-attitude-grid > section,
+.fi-theme-dark .assessment-homeroom-structured-section,
+.fi-theme-dark .assessment-homeroom-item {
     border-color: rgba(45, 212, 191, 0.22);
     background: rgba(13, 148, 136, 0.1);
 }
@@ -6952,6 +7096,18 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
     background: rgba(13, 148, 136, 0.09);
 }
 
+.dark .assessment-homeroom-bulk-note,
+.fi-theme-dark .assessment-homeroom-bulk-note {
+    background: rgba(13, 148, 136, 0.14);
+    color: #99f6e4;
+}
+
+.dark .assessment-homeroom-items__empty,
+.fi-theme-dark .assessment-homeroom-items__empty {
+    background: #0f172a;
+    color: #94a3b8;
+}
+
 .dark .assessment-homeroom-empty,
 .fi-theme-dark .assessment-homeroom-empty {
     border-color: rgba(148, 163, 184, 0.24);
@@ -6961,8 +7117,13 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 @media (max-width: 767px) {
     .assessment-status-filter-card,
     .assessment-homeroom-filter-card,
-    .assessment-homeroom-bulk-grid {
+    .assessment-homeroom-bulk-grid,
+    .assessment-homeroom-bulk-structured {
         grid-template-columns: minmax(0, 1fr);
+    }
+
+    .assessment-homeroom-bulk-structured label:last-child {
+        grid-column: auto;
     }
 
     .assessment-status-desktop,

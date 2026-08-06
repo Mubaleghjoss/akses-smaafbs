@@ -71,6 +71,9 @@
     .summary-table { width: 100%; border-collapse: collapse; }
     .summary-table th, .summary-table td { padding: 4px 5px; border: 1px solid #6b7280; }
     .summary-table th { width: 32%; background: #f3f4f6; text-align: left; }
+    .summary-table--attendance th { width: 22%; }
+    .summary-table--attendance td { width: 11.333%; text-align: center; white-space: nowrap; }
+    .attendance-value { display: inline-block; white-space: nowrap; }
     .report-writing-space { min-height: 34px; height: 34px; vertical-align: top; }
     .report-writing-space--parent { height: 58px; }
     .report-competencies td { page-break-inside: avoid; }

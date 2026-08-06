@@ -6,6 +6,13 @@
   pilihan isi massal, jenis input, dan batas validasinya selalu konsisten.
 - Mengosongkan nilai isi massal ketika pengguna mengganti kolom untuk mencegah
   angka, predikat, atau teks lama diterapkan ke jenis kolom yang berbeda.
+- Menambahkan nama dan keterangan terstruktur untuk ekstrakurikuler/prestasi,
+  editor per siswa, bulk tambah/ganti yang aman, serta hak edit kurikulum.
+- Menjadikan kegagalan aksi ASTS/ASAS persisten dengan kendala, solusi, dan
+  tombol perbaikan period-aware.
+- Menormalkan nilai pada form/draft browser, menambahkan polling progres PDF
+  saat run berjalan, dan menjaga teks ketidakhadiran seperti `0 hari` tetap
+  berada dalam satu baris pada PDF.
 
 ## 2026-07-31
 

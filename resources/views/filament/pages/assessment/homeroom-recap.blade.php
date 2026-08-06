@@ -51,8 +51,27 @@
                                 @endforeach
                             </select>
                         </label>
-                        <label>
-                            <span>Nilai / Teks</span>
+                        @if ($this->isStructuredBulkField())
+                            <div class="assessment-homeroom-bulk-structured">
+                                <label>
+                                    <span>{{ $bulkField === 'achievement_items' ? 'Jenis Prestasi' : 'Nama Ekstrakurikuler' }}</span>
+                                    <input wire:model="bulkStructuredItem.name" type="text" maxlength="255" placeholder="Contoh: Pramuka">
+                                </label>
+                                <label>
+                                    <span>Keterangan</span>
+                                    <textarea wire:model="bulkStructuredItem.description" rows="2" maxlength="2000" placeholder="Contoh: Sangat Baik"></textarea>
+                                </label>
+                                <label>
+                                    <span>Cara Menerapkan</span>
+                                    <select wire:model="bulkStructuredMode">
+                                        <option value="append">Tambah ke daftar yang ada</option>
+                                        <option value="replace">Ganti seluruh daftar</option>
+                                    </select>
+                                </label>
+                            </div>
+                        @else
+                            <label>
+                                <span>Nilai / Teks</span>
                             @if (data_get($this->getBulkFieldDefinition(), 'input') === 'number')
                                 <input wire:model="bulkValue" type="number" min="0" max="{{ data_get($this->getBulkFieldDefinition(), 'max') }}" placeholder="Contoh: 2">
                             @elseif (data_get($this->getBulkFieldDefinition(), 'input') === 'predicate')
@@ -65,20 +84,33 @@
                             @else
                                 <textarea wire:model="bulkValue" rows="2" placeholder="Tulis isian yang akan diterapkan"></textarea>
                             @endif
-                        </label>
+                            </label>
+                        @endif
                     </div>
 
-                    <label class="assessment-homeroom-bulk-check">
-                        <input type="checkbox" wire:model="bulkFillEmptyOnly">
-                        <span><strong>Hanya isi data yang masih kosong</strong><small>Untuk Sakit, Izin, dan Alpa, angka 0 dianggap masih kosong.</small></span>
-                    </label>
+                    @if ($this->isStructuredBulkField())
+                        <p class="assessment-homeroom-bulk-note">
+                            Mode tambah tidak menghapus poin lama dan melewati duplikat persis. Mode ganti memerlukan konfirmasi sebelum diterapkan ke formulir.
+                        </p>
+                    @else
+                        <label class="assessment-homeroom-bulk-check">
+                            <input type="checkbox" wire:model="bulkFillEmptyOnly">
+                            <span><strong>Hanya isi data yang masih kosong</strong><small>Untuk Sakit, Izin, dan Alpa, angka 0 dianggap masih kosong.</small></span>
+                        </label>
+                    @endif
 
                     <div class="assessment-homeroom-bulk-actions">
                         <x-filament::button type="button" size="sm" color="gray" wire:click="selectAllStudents">Pilih Semua</x-filament::button>
                         <x-filament::button type="button" size="sm" color="gray" wire:click="clearStudentSelection">Kosongkan</x-filament::button>
-                        <x-filament::button type="button" size="sm" wire:click="applyBulkValue" wire:loading.attr="disabled" icon="heroicon-o-bolt">
-                            Terapkan ke Form
-                        </x-filament::button>
+                        @if ($this->isStructuredBulkField() && $bulkStructuredMode === 'replace')
+                            <x-filament::button type="button" size="sm" color="warning" wire:click="applyBulkValue" wire:confirm="Ganti seluruh daftar pada siswa terpilih? Perubahan masih berada di formulir sampai tombol Simpan ditekan." wire:loading.attr="disabled" icon="heroicon-o-arrow-path">
+                                Ganti Daftar di Form
+                            </x-filament::button>
+                        @else
+                            <x-filament::button type="button" size="sm" wire:click="applyBulkValue" wire:loading.attr="disabled" icon="heroicon-o-bolt">
+                                Terapkan ke Form
+                            </x-filament::button>
+                        @endif
                     </div>
                 </section>
             @endif
@@ -110,7 +142,16 @@
                                     </td>
                                     @foreach ($this->getRecapFieldDefinitions() as $field => $definition)
                                         <td>
-                                            @if ($definition['input'] === 'number')
+                                            @if ($definition['input'] === 'items')
+                                                @include('filament.pages.assessment.partials.structured-homeroom-items', [
+                                                    'surface' => 'desktop',
+                                                    'studentId' => $studentId,
+                                                    'studentName' => $row['student_name'],
+                                                    'field' => $field,
+                                                    'items' => $row[$field] ?? [],
+                                                    'editable' => $homeroomMeta['editable'],
+                                                ])
+                                            @elseif ($definition['input'] === 'number')
                                                 <input type="number" min="0" max="{{ $definition['max'] }}" class="is-number" wire:model.blur="reportRows.{{ $studentId }}.{{ $field }}" @disabled(! $homeroomMeta['editable'])>
                                             @elseif ($definition['input'] === 'predicate')
                                                 <select wire:model.blur="reportRows.{{ $studentId }}.{{ $field }}" @disabled(! $homeroomMeta['editable'])>
@@ -180,8 +221,28 @@
                         </div>
 
                         <div class="assessment-homeroom-text-grid">
-                            <label><span>Ekstrakurikuler</span><textarea rows="2" wire:model.blur="reportRows.{{ $studentId }}.extracurricular" @disabled(! $homeroomMeta['editable'])></textarea></label>
-                            <label><span>Prestasi</span><textarea rows="2" wire:model.blur="reportRows.{{ $studentId }}.achievement" @disabled(! $homeroomMeta['editable'])></textarea></label>
+                            <section class="assessment-homeroom-structured-section">
+                                <strong>Ekstrakurikuler</strong>
+                                @include('filament.pages.assessment.partials.structured-homeroom-items', [
+                                    'surface' => 'mobile',
+                                    'studentId' => $studentId,
+                                    'studentName' => $row['student_name'],
+                                    'field' => 'extracurricular_items',
+                                    'items' => $row['extracurricular_items'] ?? [],
+                                    'editable' => $homeroomMeta['editable'],
+                                ])
+                            </section>
+                            <section class="assessment-homeroom-structured-section">
+                                <strong>Prestasi</strong>
+                                @include('filament.pages.assessment.partials.structured-homeroom-items', [
+                                    'surface' => 'mobile',
+                                    'studentId' => $studentId,
+                                    'studentName' => $row['student_name'],
+                                    'field' => 'achievement_items',
+                                    'items' => $row['achievement_items'] ?? [],
+                                    'editable' => $homeroomMeta['editable'],
+                                ])
+                            </section>
                             <label><span>Catatan Wali Kelas</span><textarea rows="3" wire:model.blur="reportRows.{{ $studentId }}.homeroom_note" @disabled(! $homeroomMeta['editable'])></textarea></label>
                             @if ($homeroomMeta['collect_promotion_status'])
                                 <label><span>Status Semester</span><input type="text" maxlength="50" wire:model.blur="reportRows.{{ $studentId }}.promotion_status" @disabled(! $homeroomMeta['editable'])></label>

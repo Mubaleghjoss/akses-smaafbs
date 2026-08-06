@@ -48,6 +48,10 @@ Jangan menjalankan worker assessment permanen/paralel pada shared hosting. Janga
 4. Cache kelas berlaku sesuai `ASSESSMENT_REPORT_CLASS_CACHE_HOURS` (default 24 jam) dan dibersihkan scheduler setiap jam.
 5. **Buat Ulang Cache** memakai revisi yang sama setelah cache gagal atau kedaluwarsa; snapshot siswa tidak dibuat ulang.
 
+Panel **Progres / Cache PDF per kelas** melakukan polling setiap lima detik hanya
+ketika revisi berstatus `running` dan panel terlihat. Polling berhenti otomatis
+pada status terminal agar tidak menambah beban shared hosting.
+
 Sistem menolak revisi baru selama masih ada run `prepared` atau `running`.
 Gunakan **Mulai Ulang dengan Revisi Baru**, isi alasan, lalu sistem membatalkan
 run lama secara audit-safe dan menyiapkan revisi berikutnya tanpa job.
@@ -148,6 +152,35 @@ diizinkan.
 Nilai yang tampil pada Input Nilai, preview, rekap, dan PDF dibatasi maksimal
 dua desimal dan nol berlebih dibuang. Nilai database `decimal:4`, formula, serta
 detail perhitungan tidak diubah.
+
+## Rekap wali kelas
+
+- Tabel memiliki kolom Siswa serta sepuluh kolom rekap wajib: Sakit, Izin,
+  Alpa, Predikat/Deskripsi Spiritual, Predikat/Deskripsi Sosial,
+  Ekstrakurikuler, Prestasi, dan Catatan Wali. Status Semester tetap
+  kondisional untuk ASAS.
+- Isi massal hanya mengubah state formulir siswa yang dicentang. Database baru
+  berubah setelah **Simpan Rekap Wali Kelas**. Mode isi-kosong aktif secara
+  bawaan dan angka absensi `0` dianggap kosong.
+- Ekstrakurikuler dan prestasi disimpan pada JSON yang sudah ada sebagai daftar
+  `{name, description}`. Nama wajib, keterangan opsional. Pengisian massal
+  menambahkan poin tanpa duplikat secara bawaan; penggantian seluruh daftar
+  memerlukan pilihan dan konfirmasi eksplisit.
+- Admin, kurikulum/pemegang `penilaian.verify`, dan wali kelas pemilik rombel
+  dapat mengubah rekap pada status yang diizinkan. Guru lain tetap hanya
+  memperoleh cakupan sesuai policy.
+- Data JSON lama yang hanya mempunyai `description` tetap dipertahankan dan
+  ditampilkan dengan nama kosong untuk dilengkapi. Snapshot lama tidak diubah;
+  setelah memperbaiki rekap, buat revisi baru agar PDF berikutnya memakai data
+  terbaru.
+
+## Notifikasi kegagalan aksi
+
+Kegagalan aksi ASTS/ASAS memakai notifikasi persisten berisi **Kendala**,
+**Solusi**, dan tombol menuju halaman perbaikan yang membawa periode aktif.
+Notifikasi hanya hilang setelah tombol tutup dipilih atau halaman dimuat ulang.
+Tombol tidak diberikan ke halaman yang tidak dapat diakses pengguna; fallback
+mengarah ke pusat/pengaturan penilaian yang berwenang.
 
 ## Rekonsiliasi template produksi
 

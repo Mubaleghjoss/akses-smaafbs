@@ -13,6 +13,8 @@ use App\Models\Assessment\AssessmentPeriodHomeroom;
 use App\Models\Assessment\AssessmentScore;
 use App\Models\Assessment\StudentSubjectResult;
 use App\Models\User;
+use App\Support\Assessment\AssessmentActionFailureNotification;
+use App\Support\Assessment\AssessmentNumberFormatter;
 use App\Support\Assessment\AssessmentSchemeResolver;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\Support\Htmlable;
@@ -273,7 +275,11 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
         foreach ($students as $student) {
             $rowScores = [];
             foreach ($this->components as $component) {
-                $rowScores[$component['id']] = $scores->get($student->getKey().'|'.$component['id'])?->score;
+                $rowScores[$component['id']] = AssessmentNumberFormatter::score(
+                    $scores->get($student->getKey().'|'.$component['id'])?->score,
+                    2,
+                    '',
+                );
             }
 
             $this->scoreRows[(int) $student->getKey()] = [
@@ -339,12 +345,11 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             return true;
         } catch (Throwable $exception) {
             report($exception);
-            Notification::make()
-                ->title('Draf belum tersimpan')
-                ->body($exception->getMessage())
-                ->danger()
-                ->duration(15000)
-                ->send();
+            AssessmentActionFailureNotification::send(
+                $exception,
+                'Simpan Draf Nilai',
+                $assignment->period,
+            );
 
             return false;
         }
@@ -374,12 +379,11 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
                 ->send();
         } catch (Throwable $exception) {
             report($exception);
-            Notification::make()
-                ->title('Nilai belum dapat dikirim')
-                ->body($exception->getMessage())
-                ->danger()
-                ->duration(15000)
-                ->send();
+            AssessmentActionFailureNotification::send(
+                $exception,
+                'Kirim Nilai',
+                $assignment->period,
+            );
         }
     }
 

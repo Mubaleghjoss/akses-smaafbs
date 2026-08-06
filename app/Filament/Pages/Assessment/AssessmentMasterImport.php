@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages\Assessment;
 
+use App\Support\Assessment\AssessmentActionFailureNotification;
 use App\Support\AssessmentMaster\AssessmentMasterWorkbookImporter;
 use Filament\Forms;
 use Filament\Forms\Concerns\InteractsWithForms;
@@ -99,11 +100,7 @@ class AssessmentMasterImport extends AssessmentPage implements HasForms
         } catch (Throwable $exception) {
             report($exception);
             $this->preview = null;
-            Notification::make()
-                ->title('Workbook gagal dibaca')
-                ->body($exception->getMessage())
-                ->danger()
-                ->send();
+            AssessmentActionFailureNotification::send($exception, 'Baca Workbook Master');
             return;
         }
 
@@ -129,11 +126,7 @@ class AssessmentMasterImport extends AssessmentPage implements HasForms
             );
         } catch (Throwable $exception) {
             report($exception);
-            Notification::make()
-                ->title('Impor tidak dapat diterapkan')
-                ->body($exception->getMessage())
-                ->danger()
-                ->send();
+            AssessmentActionFailureNotification::send($exception, 'Terapkan Impor Master');
             return;
         }
 
