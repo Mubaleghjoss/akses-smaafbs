@@ -49,8 +49,10 @@ untuk periode Terbuka. Snapshot rapor yang sudah dibuat tetap immutable.
   validasi atomik yang sama.
 - Sinkronisasi bersifat aditif: assignment baru dibuat, metadata assignment
   `draft`/`returned` dapat diperbarui, sedangkan assignment lama tidak dihapus.
-  Perubahan metadata assignment yang sudah dikirim, diverifikasi, atau dikunci
-  membatalkan seluruh batch sebelum ada data parsial.
+  Jika satu mapel mempunyai metadata lama yang berbeda pada assignment yang
+  sudah dikirim, diverifikasi, atau dikunci, seluruh assignment lama mapel itu
+  diproteksi dan dipertahankan utuh; bulk tetap boleh menambahkan mapel lain.
+  Jumlah assignment yang diproteksi ditampilkan pada pratinjau dan notifikasi.
 - Guru ganda, akun guru yang belum tertaut/siap Input dan Kirim Nilai, kategori
   kosong, kelas di luar periode, dan duplikat assignment juga membatalkan batch.
 - Jika belum tersedia fallback, sistem menyalin skema aktif yang dipilih menjadi

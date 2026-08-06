@@ -58,6 +58,7 @@ final class SyncOpenPeriodSubjectsAction
                 'created' => 0,
                 'updated' => 0,
                 'unchanged' => 0,
+                'protected' => 0,
                 'retained' => $plan['retained'],
                 'default_scheme_id' => (int) $defaultScheme->getKey(),
                 'default_scheme_created' => $plan['default_scheme_created'],
@@ -80,6 +81,13 @@ final class SyncOpenPeriodSubjectsAction
                 $values = $this->assignmentValues($master, $subject, $periodRombel);
 
                 if ($assignment) {
+                    if ($plan['protected_subject_ids']->contains((int) $master->assessment_subject_id)) {
+                        $summary['unchanged']++;
+                        $summary['protected']++;
+
+                        continue;
+                    }
+
                     $old = $assignment->only(array_keys($values));
                     if ($old === $values) {
                         $summary['unchanged']++;
@@ -241,10 +249,41 @@ final class SyncOpenPeriodSubjectsAction
         $created = 0;
         $updated = 0;
         $unchanged = 0;
+        $protected = 0;
+        $protectedSubjectIds = collect();
+        foreach ($desiredKeys as $key => $master) {
+            $assignment = $existingByKey->get($key)?->first();
+            if (! $assignment) {
+                continue;
+            }
+
+            $subject = $subjects->get((int) $master->assessment_subject_id);
+            $periodRombel = $periodRombels->get((int) $master->rombel_id);
+            $values = $this->assignmentValues($master, $subject, $periodRombel);
+            if ($assignment->only(array_keys($values)) === $values) {
+                continue;
+            }
+
+            $status = $assignment->status instanceof AssignmentStatus
+                ? $assignment->status
+                : AssignmentStatus::from((string) $assignment->status);
+            if (! $status->isEditable()) {
+                $protectedSubjectIds->push((int) $master->assessment_subject_id);
+            }
+        }
+        $protectedSubjectIds = $protectedSubjectIds->unique()->values();
+
         foreach ($desiredKeys as $key => $master) {
             $assignment = $existingByKey->get($key)?->first();
             if (! $assignment) {
                 $created++;
+
+                continue;
+            }
+
+            if ($protectedSubjectIds->contains((int) $master->assessment_subject_id)) {
+                $unchanged++;
+                $protected++;
 
                 continue;
             }
@@ -258,14 +297,6 @@ final class SyncOpenPeriodSubjectsAction
                 continue;
             }
 
-            $status = $assignment->status instanceof AssignmentStatus
-                ? $assignment->status
-                : AssignmentStatus::from((string) $assignment->status);
-            if (! $status->isEditable()) {
-                throw ValidationException::withMessages([
-                    'assignments' => "Assignment {$assignment->subject_name_snapshot} · {$assignment->rombel_name_snapshot} berstatus {$status->label()} dan tidak dapat diperbarui. Kembalikan ke guru terlebih dahulu.",
-                ]);
-            }
             $updated++;
         }
 
@@ -280,6 +311,8 @@ final class SyncOpenPeriodSubjectsAction
             'created' => $created,
             'updated' => $updated,
             'unchanged' => $unchanged,
+            'protected' => $protected,
+            'protected_subject_ids' => $protectedSubjectIds,
             'retained' => $existing->count() - $existing->filter(fn (AssessmentPeriodAssignment $row): bool => $desiredKeys->has($this->assignmentKey(
                 (int) $row->assessment_subject_id,
                 (int) $row->periodRombel?->source_rombel_id,

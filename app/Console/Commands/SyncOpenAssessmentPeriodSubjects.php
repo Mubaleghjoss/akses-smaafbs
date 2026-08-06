@@ -109,7 +109,7 @@ class SyncOpenAssessmentPeriodSubjects extends Command
     /** @param array<string, mixed> $summary */
     private function renderSummary(array $summary, string $mode): void
     {
-        $this->table(['Mode', 'Periode', 'Mapel', 'Kelas', 'Plotting', 'Dibuat', 'Diperbarui', 'Tetap', 'Lama dipertahankan', 'Skema default'], [[
+        $this->table(['Mode', 'Periode', 'Mapel', 'Kelas', 'Plotting', 'Dibuat', 'Diperbarui', 'Tetap', 'Diproteksi', 'Lama dipertahankan', 'Skema default'], [[
             $mode,
             $summary['period_name'],
             $summary['subject_count'],
@@ -118,6 +118,7 @@ class SyncOpenAssessmentPeriodSubjects extends Command
             $summary['created'],
             $summary['updated'],
             $summary['unchanged'],
+            $summary['protected'] ?? 0,
             $summary['retained'],
             ($summary['default_scheme_created'] ?? false) ? 'akan dibuat/dibuat' : 'sudah tersedia',
         ]]);

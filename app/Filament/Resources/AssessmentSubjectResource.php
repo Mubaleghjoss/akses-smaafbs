@@ -515,6 +515,7 @@ class AssessmentSubjectResource extends Resource
                 '<p><strong>'.e($summary['period_name']).'</strong></p>'
                 .'<p>'.e("{$summary['subject_count']} mapel · {$summary['class_count']} kelas · {$summary['plotting_count']} plotting").'</p>'
                 .'<p>'.e("{$summary['created']} assignment dibuat · {$summary['updated']} diperbarui · {$summary['unchanged']} tetap").'</p>'
+                .((int) ($summary['protected'] ?? 0) > 0 ? '<p>'.e("{$summary['protected']} assignment lama diproteksi karena mapelnya memiliki data noneditable; metadata lama tidak diubah.").'</p>' : '')
                 .'<p>'.e($scheme).' Tidak ada assignment lama yang dihapus.</p>',
             );
         } catch (Throwable $exception) {
@@ -556,7 +557,7 @@ class AssessmentSubjectResource extends Resource
 
         Notification::make()
             ->title('Mapel berhasil dimasukkan ke periode')
-            ->body("{$summary['created']} dibuat, {$summary['updated']} diperbarui, {$summary['unchanged']} tetap. Nilai dan rapor lama tidak berubah; mapel baru masuk rapor resmi setelah nilai lengkap dan periode dikunci kembali.")
+            ->body("{$summary['created']} dibuat, {$summary['updated']} diperbarui, {$summary['unchanged']} tetap".((int) ($summary['protected'] ?? 0) > 0 ? ", termasuk {$summary['protected']} assignment lama yang diproteksi" : '').'. Nilai dan rapor lama tidak berubah; mapel baru masuk rapor resmi setelah nilai lengkap dan periode dikunci kembali.')
             ->success()
             ->actions($actions)
             ->send();

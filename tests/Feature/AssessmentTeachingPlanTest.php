@@ -271,24 +271,29 @@ class AssessmentTeachingPlanTest extends TestCase
             ->where('assessment_subject_id', $bin->getKey())
             ->where('is_active', true)
             ->get();
+        $legacyTeacher = GuruTendik::query()->create([
+            'nama' => 'Putra Kamulyan, S.Kom.',
+            'jenis_ptk' => 'Guru',
+            'status' => 'aktif',
+        ]);
         $originalAssignmentIds = [];
-        foreach ($binMasters as $master) {
+        foreach ($binMasters->values() as $index => $master) {
             $periodRombel = $periodRombels->get($master->rombel_id);
             $assignment = AssessmentPeriodAssignment::query()->create([
                 'assessment_period_id' => $period->getKey(),
-                'source_teaching_assignment_id' => $master->getKey(),
+                'source_teaching_assignment_id' => null,
                 'assessment_period_rombel_id' => $periodRombel->getKey(),
                 'assessment_subject_id' => $bin->getKey(),
-                'teacher_id' => $master->teacher_id,
-                'teacher_name_snapshot' => $master->teacher_name_snapshot,
+                'teacher_id' => $legacyTeacher->getKey(),
+                'teacher_name_snapshot' => $legacyTeacher->nama,
                 'subject_name_snapshot' => $bin->name,
-                'subject_group_code_snapshot' => $master->category->code,
-                'subject_group_name_snapshot' => $master->category->name,
-                'subject_group_sort_order_snapshot' => $master->category->sort_order,
+                'subject_group_code_snapshot' => 'A',
+                'subject_group_name_snapshot' => 'Kelompok A (Umum)',
+                'subject_group_sort_order_snapshot' => 10,
                 'subject_sort_order_snapshot' => $bin->sort_order,
                 'rombel_name_snapshot' => $periodRombel->rombel_name_snapshot,
-                'status' => AssignmentStatus::DRAFT,
-                'lock_version' => 1,
+                'status' => $index === 0 ? AssignmentStatus::RETURNED : AssignmentStatus::LOCKED,
+                'lock_version' => 10,
             ]);
             $originalAssignmentIds[] = (int) $assignment->getKey();
         }
@@ -334,6 +339,7 @@ class AssessmentTeachingPlanTest extends TestCase
         $this->assertSame(99, $preview['plotting_count']);
         $this->assertSame(92, $preview['created']);
         $this->assertSame(7, $preview['unchanged']);
+        $this->assertSame(7, $preview['protected']);
         $this->assertTrue($preview['default_scheme_created']);
         $this->assertSame(7, AssessmentPeriodAssignment::query()->where('assessment_period_id', $period->getKey())->count());
         $this->assertSame(1, AssessmentScheme::query()->where('assessment_period_id', $period->getKey())->count());
@@ -361,8 +367,10 @@ class AssessmentTeachingPlanTest extends TestCase
         $this->assertSame(92, $summary['created']);
         $this->assertSame(0, $summary['updated']);
         $this->assertSame(7, $summary['unchanged']);
+        $this->assertSame(7, $summary['protected']);
         $this->assertSame(99, AssessmentPeriodAssignment::query()->where('assessment_period_id', $period->getKey())->count());
         $this->assertEqualsCanonicalizing($originalAssignmentIds, AssessmentPeriodAssignment::query()->whereIn('id', $originalAssignmentIds)->pluck('id')->map(fn ($id): int => (int) $id)->all());
+        $this->assertSame(7, AssessmentPeriodAssignment::query()->whereIn('id', $originalAssignmentIds)->where('teacher_id', $legacyTeacher->getKey())->count());
 
         $default = AssessmentScheme::query()
             ->where('assessment_period_id', $period->getKey())
@@ -390,6 +398,7 @@ class AssessmentTeachingPlanTest extends TestCase
         $this->assertSame(0, $second['created']);
         $this->assertSame(0, $second['updated']);
         $this->assertSame(99, $second['unchanged']);
+        $this->assertSame(7, $second['protected']);
         $this->assertSame(2, AssessmentScheme::query()->where('assessment_period_id', $period->getKey())->count());
     }
 }
