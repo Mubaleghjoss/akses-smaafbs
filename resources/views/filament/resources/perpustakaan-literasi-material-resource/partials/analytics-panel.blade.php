@@ -71,7 +71,7 @@
                             <strong>{{ $formatNumber((int) $row['total']) }}</strong>
                         </div>
                     @empty
-                        <div class="text-xs opacity-80">Belum ada siswa plagiasi pada periode ini.</div>
+                        <div class="text-xs opacity-80">Belum ada siswa dengan indikasi kemiripan pada periode ini.</div>
                     @endforelse
                 </div>
             </details>
@@ -456,7 +456,7 @@
 
     <div class="literasi-analytics__grid">
         <article class="literasi-panel literasi-panel--danger">
-            <h3 class="literasi-panel__title">{{ $compact ? 'Daftar Plagiat Per Kelas' : 'Kelas Tersering Plagiasi' }}</h3>
+            <h3 class="literasi-panel__title">{{ $compact ? 'Indikasi Kemiripan Per Kelas' : 'Kelas dengan Indikasi Kemiripan' }}</h3>
             <div class="literasi-table-wrap">
                 <table class="literasi-table">
                     <thead>
@@ -475,7 +475,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td class="literasi-table__empty" colspan="3">Belum ada indikasi plagiasi bulan ini.</td>
+                                <td class="literasi-table__empty" colspan="3">Belum ada indikasi kemiripan bulan ini.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -484,7 +484,7 @@
         </article>
 
         <article class="literasi-panel literasi-panel--danger">
-            <h3 class="literasi-panel__title">{{ $compact ? 'Daftar Plagiat Per Siswa' : 'Siswa Tersering Plagiasi' }}</h3>
+            <h3 class="literasi-panel__title">{{ $compact ? 'Indikasi Kemiripan Per Siswa' : 'Siswa dengan Indikasi Kemiripan' }}</h3>
             <div class="literasi-table-wrap">
                 <table class="literasi-table">
                     <thead>
@@ -505,7 +505,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td class="literasi-table__empty" colspan="4">Belum ada ranking siswa plagiasi bulan ini.</td>
+                                <td class="literasi-table__empty" colspan="4">Belum ada siswa dengan indikasi kemiripan bulan ini.</td>
                             </tr>
                         @endforelse
                     </tbody>

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exceptions\LiteracySubmissionQueueBusy;
 use App\Jobs\AnalyzeLiteracyResponseSimilarity;
+use App\Jobs\QueueLiteracySimilarityReanalysis;
 use App\Models\DataSiswa;
 use App\Models\PerpustakaanLiterasiAnswer;
 use App\Models\PerpustakaanLiterasiMaterial;
@@ -380,6 +381,10 @@ class PerpustakaanLiteracyProgramController extends Controller
             $ticketCompleted = true;
             $submissionQueue->afterCompletion($ticket?->refresh());
             AnalyzeLiteracyResponseSimilarity::queueFor($response);
+            QueueLiteracySimilarityReanalysis::dispatch(
+                $response->material_id,
+                $response->getKey(),
+            )->afterCommit();
 
             return $this->successfulSubmissionRedirect($response, 'Jawaban berhasil diperbarui.');
         } catch (ValidationException $exception) {
@@ -780,8 +785,8 @@ class PerpustakaanLiteracyProgramController extends Controller
                 continue;
             }
 
-            $max = max(1, (int) ($question->max_characters ?: 1000));
-            $min = min($max, max(0, (int) ($question->min_characters ?: 0)));
+            $max = $question->maximumCharacters();
+            $min = $question->minimumCharacters();
 
             $rules['answers.'.$question->getKey()] = array_merge($base, ['string', 'min:'.$min, 'max:'.$max]);
         }
@@ -822,8 +827,8 @@ class PerpustakaanLiteracyProgramController extends Controller
                 continue;
             }
 
-            $max = max(1, (int) ($question->max_characters ?: 1000));
-            $min = min($max, max(0, (int) ($question->min_characters ?: 0)));
+            $max = $question->maximumCharacters();
+            $min = $question->minimumCharacters();
             $length = mb_strlen((string) $request->input($field, ''));
 
             $messages[$field.'.required'] = "Jawaban pertanyaan {$position} wajib diisi.";

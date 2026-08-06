@@ -47,6 +47,14 @@ class PerpustakaanLiterasiQuestion extends Model
                 $question->speech_input_enabled = false;
                 $question->plagiarism_detection_enabled = false;
                 $question->answer_key = null;
+            } else {
+                $limits = static::adjustedCharacterLimits(
+                    $question->answer_key,
+                    $question->min_characters,
+                    $question->max_characters,
+                );
+                $question->min_characters = $limits['min'];
+                $question->max_characters = $limits['max'];
             }
 
             if ($question->exists && $question->isDirty('max_characters')) {
@@ -170,6 +178,51 @@ class PerpustakaanLiterasiQuestion extends Model
         $answerKey = trim((string) ($this->answer_key ?? ''));
 
         return $answerKey !== '' ? $answerKey : null;
+    }
+
+    public function minimumCharacters(): int
+    {
+        return static::adjustedCharacterLimits(
+            $this->answer_key,
+            $this->min_characters,
+            $this->max_characters,
+        )['min'];
+    }
+
+    public function maximumCharacters(): int
+    {
+        return static::adjustedCharacterLimits(
+            $this->answer_key,
+            $this->min_characters,
+            $this->max_characters,
+        )['max'];
+    }
+
+    /**
+     * @return array{min:int,max:int,key_length:int,adjusted:bool}
+     */
+    public static function adjustedCharacterLimits(mixed $answerKey, mixed $minimum, mixed $maximum): array
+    {
+        $minimum = max(0, (int) ($minimum ?? 0));
+        $maximum = max(1, (int) ($maximum ?: 1000));
+        $key = trim((string) ($answerKey ?? ''));
+        $keyLength = $key === '' ? 0 : mb_strlen($key);
+        $originalMinimum = $minimum;
+        $originalMaximum = $maximum;
+
+        if ($keyLength > 0) {
+            $minimum = min($minimum, $keyLength);
+            $maximum = max($maximum, $keyLength);
+        }
+
+        $minimum = min($minimum, $maximum);
+
+        return [
+            'min' => $minimum,
+            'max' => $maximum,
+            'key_length' => $keyLength,
+            'adjusted' => $minimum !== $originalMinimum || $maximum !== $originalMaximum,
+        ];
     }
 
     public static function normalizeAnswerForComparison(string $value): string

@@ -74,6 +74,8 @@ Jawaban wajib harus lengkap. Pertanyaan opsional boleh kosong seluruhnya, tetapi
 
 Deteksi plagiasi, kunci teks, batas karakter, dan dikte hanya berlaku untuk Esai.
 
+Jika Kunci Jawaban Esai diisi, batas minimal efektif tidak boleh melebihi panjang kunci. Contoh batas minimal 20 dengan kunci `40 hari` menjadi 7 karakter. Batas yang sudah lebih kecil tetap dipertahankan, sedangkan batas maksimal dinaikkan bila lebih pendek daripada kunci. Jawaban yang sama dengan kunci dinilai benar otomatis dan tidak dimasukkan ke indikasi kemiripan.
+
 ## Dikte
 
 Dikte memakai `SpeechRecognition`/`webkitSpeechRecognition`, bahasa `id-ID`, maksimal 45 detik per sesi. Hanya transkrip final yang dimasukkan ke textarea. Aplikasi tidak memiliki endpoint upload audio dan tidak menyimpan rekaman. Jika browser tidak mendukung, izin ditolak, atau layanan suara gagal, textarea tetap berfungsi.

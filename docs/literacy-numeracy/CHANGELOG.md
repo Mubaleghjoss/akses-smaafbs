@@ -71,3 +71,9 @@
 ## 2026-07-21
 
 - Menambahkan antrean submit idempoten dan memindahkan analisis kemiripan ke background.
+# 2026-08-06
+
+- Ambang indikasi kemiripan dinaikkan menjadi 80% dan setiap jawaban hanya menyimpan satu pembanding terdahulu terkuat.
+- Jawaban yang sama dengan Kunci Jawaban resmi dikecualikan dari indikasi kemiripan.
+- Batas minimal dan maksimal karakter menyesuaikan Kunci Jawaban secara aman.
+- Ditambahkan dry-run/apply `literacy:similarity-reconcile` serta kartu ringkasan indikasi pada admin.

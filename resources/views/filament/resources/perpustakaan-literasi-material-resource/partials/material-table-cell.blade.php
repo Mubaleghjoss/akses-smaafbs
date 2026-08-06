@@ -19,7 +19,7 @@
         <span class="literasi-material-cell__pill">{{ number_format($questions, 0, ',', '.') }} soal</span>
         <span class="literasi-material-cell__pill">{{ number_format($responses, 0, ',', '.') }} responden</span>
         <span class="literasi-material-cell__pill">{{ number_format($gradedResponses, 0, ',', '.') }}/{{ number_format($responses, 0, ',', '.') }} dinilai</span>
-        <span class="literasi-material-cell__pill {{ $indications > 0 ? 'is-danger' : '' }}">{{ number_format($indications, 0, ',', '.') }} indikasi</span>
+        <span class="literasi-material-cell__pill {{ $indications > 0 ? 'is-danger' : '' }}">{{ number_format($indications, 0, ',', '.') }} jawaban mirip</span>
         <span class="literasi-material-cell__pill {{ $confirmed > 0 ? 'is-danger' : '' }}">{{ number_format($confirmed, 0, ',', '.') }} konfirm</span>
     </div>
 </div>

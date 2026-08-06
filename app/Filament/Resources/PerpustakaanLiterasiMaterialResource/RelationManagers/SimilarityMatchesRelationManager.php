@@ -14,15 +14,21 @@ class SimilarityMatchesRelationManager extends RelationManager
 {
     protected static string $relationship = 'similarityMatches';
 
-    protected static ?string $title = 'Daftar Plagiat Per Kelas';
+    protected static ?string $title = 'Indikasi Kemiripan Jawaban';
 
     public function table(Table $table): Table
     {
         return $table
             ->recordTitleAttribute('student_class_snapshot')
-            ->emptyStateHeading('Tidak ada indikasi plagiasi')
-            ->emptyStateDescription('Jawaban yang muncul di sini hanya dari soal dengan deteksi plagiasi aktif. Soal yang deteksinya dinonaktifkan tidak dianalisa plagiasi dan dianggap tidak plagiasi karena pengaturan soal.')
+            ->description(fn () => view(
+                'filament.resources.perpustakaan-literasi-material-resource.partials.similarity-summary',
+                ['summary' => $this->similaritySummary()],
+            ))
+            ->emptyStateHeading('Tidak ada indikasi kemiripan')
+            ->emptyStateDescription('Tidak ditemukan jawaban dengan kemiripan minimal 80% terhadap satu jawaban terdahulu. Hasil otomatis merupakan bahan tinjauan, bukan vonis plagiasi.')
             ->defaultSort('similarity_score', 'desc')
+            ->defaultPaginationPageOption(25)
+            ->paginated([25, 50])
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
                 'question',
                 'laterResponse',
@@ -36,10 +42,16 @@ class SimilarityMatchesRelationManager extends RelationManager
                     ->label('Kelas')
                     ->badge()
                     ->placeholder('Tanpa kelas')
-                    ->searchable(),
+                    ->searchable()
+                    ->visibleFrom('md'),
                 Tables\Columns\TextColumn::make('laterResponse.student_name_snapshot')
                     ->label('Pengirim Belakangan')
-                    ->description(fn (PerpustakaanLiterasiSimilarityMatch $record): string => 'Pembanding: '.$record->matchedResponse?->student_name_snapshot)
+                    ->description(function (PerpustakaanLiterasiSimilarityMatch $record): string {
+                        $class = trim((string) $record->student_class_snapshot);
+                        $prefix = $class !== '' ? $class.' · ' : '';
+
+                        return $prefix.'Pembanding terkuat: '.($record->matchedResponse?->student_name_snapshot ?: '-');
+                    })
                     ->searchable()
                     ->wrap(),
                 Tables\Columns\TextColumn::make('similarity_score')
@@ -112,7 +124,7 @@ class SimilarityMatchesRelationManager extends RelationManager
                 Action::make('lihatDetail')
                     ->label('Detail')
                     ->icon('heroicon-o-eye')
-                    ->modalHeading(fn (PerpustakaanLiterasiSimilarityMatch $record): string => 'Detail Plagiat '.$record->student_class_snapshot)
+                    ->modalHeading(fn (PerpustakaanLiterasiSimilarityMatch $record): string => 'Detail Indikasi Kemiripan '.$record->student_class_snapshot)
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Tutup')
                     ->modalWidth('5xl')
@@ -122,6 +134,30 @@ class SimilarityMatchesRelationManager extends RelationManager
                     )),
             ])
             ->bulkActions([]);
+    }
+
+    /**
+     * @return array{students:int,answers:int,suspected:int,cleared:int,confirmed:int,threshold:float}
+     */
+    protected function similaritySummary(): array
+    {
+        $row = $this->getOwnerRecord()
+            ->similarityMatches()
+            ->selectRaw('COUNT(*) as answers')
+            ->selectRaw('COUNT(DISTINCT later_response_id) as students')
+            ->selectRaw('SUM(CASE WHEN review_status = ? THEN 1 ELSE 0 END) as suspected', [PerpustakaanLiterasiSimilarityMatch::REVIEW_SUSPECTED])
+            ->selectRaw('SUM(CASE WHEN review_status = ? THEN 1 ELSE 0 END) as cleared', [PerpustakaanLiterasiSimilarityMatch::REVIEW_CLEARED])
+            ->selectRaw('SUM(CASE WHEN review_status = ? THEN 1 ELSE 0 END) as confirmed', [PerpustakaanLiterasiSimilarityMatch::REVIEW_CONFIRMED])
+            ->first();
+
+        return [
+            'students' => (int) ($row?->students ?? 0),
+            'answers' => (int) ($row?->answers ?? 0),
+            'suspected' => (int) ($row?->suspected ?? 0),
+            'cleared' => (int) ($row?->cleared ?? 0),
+            'confirmed' => (int) ($row?->confirmed ?? 0),
+            'threshold' => (float) config('literacy.similarity_threshold', 80),
+        ];
     }
 
     protected function disabledPlagiarismQuestions()

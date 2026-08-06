@@ -6963,3 +6963,126 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
         text-align: center;
     }
 }
+.literasi-similarity-summary {
+    display: grid;
+    gap: 0.875rem;
+    width: 100%;
+    color: rgb(30 41 59);
+}
+
+.literasi-similarity-summary__intro {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.875rem 1rem;
+    border: 1px solid rgb(186 230 253);
+    border-radius: 0.75rem;
+    background: rgb(240 249 255);
+}
+
+.literasi-similarity-summary__intro strong {
+    color: rgb(12 74 110);
+    font-size: 0.875rem;
+}
+
+.literasi-similarity-summary__intro p {
+    margin: 0;
+    color: rgb(51 65 85);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+}
+
+.literasi-similarity-summary__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+    gap: 0.625rem;
+    margin: 0;
+}
+
+.literasi-similarity-summary__grid > div {
+    min-width: 0;
+    padding: 0.75rem;
+    border: 1px solid rgb(226 232 240);
+    border-radius: 0.75rem;
+    background: rgb(255 255 255);
+}
+
+.literasi-similarity-summary__grid dt {
+    color: rgb(71 85 105);
+    font-size: 0.75rem;
+    line-height: 1.35;
+}
+
+.literasi-similarity-summary__grid dd {
+    margin: 0.25rem 0 0;
+    color: rgb(15 23 42);
+    font-size: 1.25rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.literasi-similarity-summary__grid .is-warning {
+    border-color: rgb(253 230 138);
+    background: rgb(255 251 235);
+}
+
+.literasi-similarity-summary__grid .is-success {
+    border-color: rgb(167 243 208);
+    background: rgb(236 253 245);
+}
+
+.literasi-similarity-summary__grid .is-danger {
+    border-color: rgb(254 202 202);
+    background: rgb(254 242 242);
+}
+
+.dark .literasi-similarity-summary,
+.fi-theme-dark .literasi-similarity-summary {
+    color: rgb(226 232 240);
+}
+
+.dark .literasi-similarity-summary__intro,
+.fi-theme-dark .literasi-similarity-summary__intro {
+    border-color: rgb(14 116 144);
+    background: rgb(8 47 73);
+}
+
+.dark .literasi-similarity-summary__intro strong,
+.fi-theme-dark .literasi-similarity-summary__intro strong,
+.dark .literasi-similarity-summary__intro p,
+.fi-theme-dark .literasi-similarity-summary__intro p {
+    color: rgb(224 242 254);
+}
+
+.dark .literasi-similarity-summary__grid > div,
+.fi-theme-dark .literasi-similarity-summary__grid > div {
+    border-color: rgb(51 65 85);
+    background: rgb(15 23 42);
+}
+
+.dark .literasi-similarity-summary__grid dt,
+.fi-theme-dark .literasi-similarity-summary__grid dt {
+    color: rgb(148 163 184);
+}
+
+.dark .literasi-similarity-summary__grid dd,
+.fi-theme-dark .literasi-similarity-summary__grid dd {
+    color: rgb(248 250 252);
+}
+
+.dark .literasi-similarity-summary__grid .is-warning,
+.fi-theme-dark .literasi-similarity-summary__grid .is-warning {
+    border-color: rgb(146 64 14);
+    background: rgb(69 26 3);
+}
+
+.dark .literasi-similarity-summary__grid .is-success,
+.fi-theme-dark .literasi-similarity-summary__grid .is-success {
+    border-color: rgb(6 95 70);
+    background: rgb(2 44 34);
+}
+
+.dark .literasi-similarity-summary__grid .is-danger,
+.fi-theme-dark .literasi-similarity-summary__grid .is-danger {
+    border-color: rgb(153 27 27);
+    background: rgb(69 10 10);
+}

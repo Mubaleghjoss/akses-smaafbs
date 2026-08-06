@@ -105,8 +105,23 @@ Retry memakai request ID dan tiket yang sama agar koneksi putus tidak membuat re
 - Queue: `literacy-analysis`.
 - Hanya jawaban Esai dengan deteksi aktif yang dibandingkan.
 - Benar/Salah dan Menjodohkan dilewati seluruhnya.
+- Jawaban hanya dibandingkan dengan respons aktif yang dikirim lebih dahulu pada materi dan pertanyaan yang sama.
+- Ambang bawaan adalah 80% dan dapat diatur melalui `LITERACY_SIMILARITY_THRESHOLD`.
+- Setiap jawaban menyimpan maksimal satu pembanding terdahulu dengan skor tertinggi; jika seri, respons paling awal dipilih.
+- Jawaban yang sama dengan Kunci Jawaban resmi, termasuk calon pembandingnya, tidak dibuatkan indikasi kemiripan karena kesamaan tersebut memang diharapkan.
+- Hasil otomatis adalah indikasi untuk ditinjau guru, bukan vonis plagiasi.
 - Aksi admin analisa ulang hanya menjadwalkan job.
 - Versi analisis mencegah hasil edit lama menimpa jawaban terbaru.
+- Edit jawaban menjadwalkan ulang respons sesudahnya agar pembanding terkuat tidak memakai isi lama.
+
+Rekonsiliasi data lama:
+
+```bash
+php artisan literacy:similarity-reconcile --material=43 --dry-run
+php artisan literacy:similarity-reconcile --material=43 --apply --batch=25
+```
+
+Perintah dry-run tidak menulis data. Apply hanya menyusun ulang baris indikasi dan menyesuaikan batas karakter pertanyaan berkunci; respons, isi jawaban, nilai, dan kode edit tidak diubah.
 
 ## Aturan perubahan
 

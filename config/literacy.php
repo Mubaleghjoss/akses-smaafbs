@@ -26,6 +26,7 @@ return [
     ],
 
     'similarity_queue' => env('LITERACY_SIMILARITY_QUEUE', 'literacy-analysis'),
+    'similarity_threshold' => min(100, max(0, (float) env('LITERACY_SIMILARITY_THRESHOLD', 80))),
 
     'school_monitor' => [
         'token' => env('LITERACY_SCHOOL_MONITOR_TOKEN'),

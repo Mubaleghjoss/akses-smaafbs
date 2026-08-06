@@ -8,8 +8,10 @@ use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\Pages\ListPerpus
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\Pages\StudentHistoryPerpustakaanLiterasi;
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\Pages\ViewPerpustakaanLiterasiMaterial;
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\RelationManagers\ResponsesRelationManager;
+use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\RelationManagers\SimilarityMatchesRelationManager;
 use App\Filament\Widgets\PerpustakaanLiterasiGlobalAnalytics;
 use App\Jobs\AnalyzeLiteracyResponseSimilarity;
+use App\Jobs\QueueLiteracySimilarityReanalysis;
 use App\Models\DataSiswa;
 use App\Models\Pengaturan;
 use App\Models\PerpustakaanLiterasiAnswer;
@@ -417,6 +419,8 @@ class LibraryLiteracyProgramTest extends TestCase
 
     public function test_student_can_submit_and_edit_literacy_answers_with_unique_code(): void
     {
+        config()->set('literacy.submission_queue.enabled', false);
+
         $student = $this->createStudent('Codex Literasi Siswa A', 'XII IPA');
         $material = $this->createMaterial('Materi Jawaban Literasi');
         $question = $material->questions()->create([
@@ -1035,6 +1039,42 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertSame(1, $response->similarity_analysis_version);
         $this->assertDatabaseCount('perpustakaan_literasi_similarity_matches', 0);
         Queue::assertPushedOn('literacy-analysis', AnalyzeLiteracyResponseSimilarity::class);
+    }
+
+    public function test_edit_queues_later_responses_for_similarity_refresh(): void
+    {
+        config()->set('literacy.submission_queue.enabled', false);
+        Queue::fake();
+
+        $material = $this->createMaterial('Materi Antrean Analisa Setelah Edit');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Jelaskan perubahan jawaban.',
+            'min_characters' => 1,
+            'max_characters' => 500,
+        ]);
+        $response = $this->createResponseWithAnswer(
+            $material,
+            $this->createStudent('Codex Edit Analisa', 'XI 3'),
+            $question,
+            'Jawaban awal yang akan diperbarui oleh siswa.',
+            now()->subMinute(),
+        );
+
+        $this->post(route('library.literacy.update', $response->shortEditCode()), [
+            'submission_request_id' => (string) Str::uuid(),
+            'answers' => [
+                $question->getKey() => 'Jawaban baru yang membutuhkan analisa ulang respons setelahnya.',
+            ],
+        ])->assertRedirect();
+
+        Queue::assertPushedOn('literacy-analysis', AnalyzeLiteracyResponseSimilarity::class);
+        Queue::assertPushedOn(
+            'literacy-analysis',
+            QueueLiteracySimilarityReanalysis::class,
+            fn (QueueLiteracySimilarityReanalysis $job): bool => $job->materialId === $material->getKey()
+                && $job->afterResponseId === $response->getKey(),
+        );
     }
 
     public function test_one_hundred_sixty_student_sessions_on_same_school_ip_are_not_throttled(): void
@@ -1840,7 +1880,7 @@ class LibraryLiteracyProgramTest extends TestCase
         ]);
     }
 
-    public function test_exact_short_answers_are_flagged_when_plagiarism_detection_is_enabled(): void
+    public function test_answers_equal_to_answer_key_are_not_flagged_as_similarity(): void
     {
         $studentA = $this->createStudent('Codex Plagiasi Pendek A', 'X Pendek');
         $studentB = $this->createStudent('Codex Plagiasi Pendek B', 'X Pendek');
@@ -1879,12 +1919,299 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertTrue($answerA->is_correct);
         $this->assertTrue($answerB->is_correct);
 
-        $this->assertDatabaseHas('perpustakaan_literasi_similarity_matches', [
-            'material_id' => $material->getKey(),
-            'question_id' => $question->getKey(),
+        $this->assertDatabaseMissing('perpustakaan_literasi_similarity_matches', [
             'later_response_id' => $responseB->getKey(),
+        ]);
+    }
+
+    public function test_similarity_keeps_one_strongest_earlier_match_per_answer(): void
+    {
+        $material = $this->createMaterial('Materi Satu Pembanding Terkuat');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Jelaskan isi materi.',
+            'min_characters' => 1,
+            'max_characters' => 1000,
+            'plagiarism_detection_enabled' => true,
+        ]);
+        $answerText = 'Renovasi gedung diselesaikan secara bertahap dengan perencanaan waktu tenaga dan bahan yang tertib.';
+        $responseA = $this->createResponseWithAnswer(
+            $material,
+            $this->createStudent('Codex Pembanding Pertama', 'XI 1'),
+            $question,
+            $answerText,
+            now()->subMinutes(3),
+        );
+        $responseB = $this->createResponseWithAnswer(
+            $material,
+            $this->createStudent('Codex Pembanding Kedua', 'XI 1'),
+            $question,
+            $answerText,
+            now()->subMinutes(2),
+        );
+        $responseC = $this->createResponseWithAnswer(
+            $material,
+            $this->createStudent('Codex Pembanding Ketiga', 'XI 1'),
+            $question,
+            $answerText,
+            now()->subMinute(),
+        );
+        $analyzer = app(LiterasiSimilarityAnalyzer::class);
+
+        // Urutan job sengaja dibalik untuk memastikan hasil tidak bergantung urutan worker.
+        $analyzer->analyzeResponse($responseC);
+        $analyzer->analyzeResponse($responseB);
+        $analyzer->analyzeResponse($responseA);
+        $analyzer->analyzeResponse($responseC);
+
+        $this->assertDatabaseCount('perpustakaan_literasi_similarity_matches', 2);
+        $this->assertDatabaseHas('perpustakaan_literasi_similarity_matches', [
+            'later_response_id' => $responseB->getKey(),
+            'matched_response_id' => $responseA->getKey(),
             'similarity_score' => 100.00,
         ]);
+        $this->assertDatabaseHas('perpustakaan_literasi_similarity_matches', [
+            'later_response_id' => $responseC->getKey(),
+            'matched_response_id' => $responseA->getKey(),
+            'similarity_score' => 100.00,
+        ]);
+    }
+
+    public function test_similarity_threshold_is_inclusive_at_eighty_percent(): void
+    {
+        $material = $this->createMaterial('Materi Ambang Kemiripan');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Jelaskan hasil perhitungan.',
+            'min_characters' => 1,
+            'max_characters' => 1000,
+            'plagiarism_detection_enabled' => true,
+        ]);
+        $responseA = $this->createResponseWithAnswer(
+            $material,
+            $this->createStudent('Codex Ambang A', 'XI 2'),
+            $question,
+            'Jawaban pertama memiliki susunan kata yang cukup panjang untuk dibandingkan oleh sistem secara aman.',
+            now()->subMinute(),
+        );
+        $responseB = $this->createResponseWithAnswer(
+            $material,
+            $this->createStudent('Codex Ambang B', 'XI 2'),
+            $question,
+            'Jawaban kedua memiliki susunan kata yang cukup panjang untuk dibandingkan oleh sistem secara aman.',
+            now(),
+        );
+        $answerB = $responseB->answers()->firstOrFail();
+        $analyzer = new class extends LiterasiSimilarityAnalyzer
+        {
+            public float $forcedScore = 79.99;
+
+            protected function similarityScore(string $left, string $right): float
+            {
+                return $this->forcedScore;
+            }
+        };
+
+        $analyzer->analyzeResponse($responseB, 80);
+        $this->assertDatabaseMissing('perpustakaan_literasi_similarity_matches', [
+            'later_answer_id' => $answerB->getKey(),
+        ]);
+
+        $analyzer->forcedScore = 80.0;
+        $analyzer->analyzeResponse($responseB, 80);
+        $this->assertDatabaseHas('perpustakaan_literasi_similarity_matches', [
+            'later_answer_id' => $answerB->getKey(),
+            'matched_response_id' => $responseA->getKey(),
+            'similarity_score' => 80.00,
+        ]);
+    }
+
+    public function test_similarity_prefers_the_highest_score_over_the_oldest_candidate(): void
+    {
+        $material = $this->createMaterial('Materi Pembanding Paling Kuat');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Jelaskan kesimpulan.',
+            'min_characters' => 1,
+            'max_characters' => 1000,
+        ]);
+        $responseA = $this->createResponseWithAnswer(
+            $material,
+            $this->createStudent('Codex Pembanding Lama', 'XI 4'),
+            $question,
+            'Pembanding lama berisi penjelasan panjang biasa untuk kebutuhan pengujian sistem kemiripan jawaban.',
+            now()->subMinutes(3),
+        );
+        $responseB = $this->createResponseWithAnswer(
+            $material,
+            $this->createStudent('Codex Pembanding Kuat', 'XI 4'),
+            $question,
+            'Pembanding kuat berisi penjelasan panjang khusus untuk kebutuhan pengujian sistem kemiripan jawaban.',
+            now()->subMinutes(2),
+        );
+        $responseC = $this->createResponseWithAnswer(
+            $material,
+            $this->createStudent('Codex Jawaban Terakhir', 'XI 4'),
+            $question,
+            'Jawaban terakhir berisi penjelasan panjang untuk kebutuhan pengujian sistem kemiripan jawaban.',
+            now()->subMinute(),
+        );
+        $analyzer = new class extends LiterasiSimilarityAnalyzer
+        {
+            protected function similarityScore(string $left, string $right): float
+            {
+                return str_contains($right, 'pembanding kuat') ? 95.0 : 85.0;
+            }
+        };
+
+        $analyzer->analyzeResponse($responseC, 80);
+
+        $this->assertDatabaseHas('perpustakaan_literasi_similarity_matches', [
+            'later_response_id' => $responseC->getKey(),
+            'matched_response_id' => $responseB->getKey(),
+            'similarity_score' => 95.00,
+        ]);
+        $this->assertDatabaseMissing('perpustakaan_literasi_similarity_matches', [
+            'later_response_id' => $responseC->getKey(),
+            'matched_response_id' => $responseA->getKey(),
+        ]);
+    }
+
+    public function test_similarity_review_is_preserved_only_while_both_answers_are_unchanged(): void
+    {
+        $material = $this->createMaterial('Materi Review Kemiripan');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Tuliskan refleksi.',
+            'min_characters' => 1,
+            'max_characters' => 1000,
+        ]);
+        $answerText = 'Refleksi panjang yang sama dipakai untuk memastikan hasil review kemiripan tetap konsisten setelah analisa ulang.';
+        $responseA = $this->createResponseWithAnswer($material, $this->createStudent('Codex Review A', 'X 2'), $question, $answerText, now()->subMinute());
+        $responseB = $this->createResponseWithAnswer($material, $this->createStudent('Codex Review B', 'X 2'), $question, $answerText, now());
+        $analyzer = app(LiterasiSimilarityAnalyzer::class);
+        $analyzer->analyzeResponse($responseB);
+
+        $reviewedAt = now()->addMinute();
+        $match = PerpustakaanLiterasiSimilarityMatch::query()->sole();
+        $match->forceFill([
+            'review_status' => PerpustakaanLiterasiSimilarityMatch::REVIEW_CLEARED,
+            'reviewed_at' => $reviewedAt,
+        ])->save();
+
+        $analyzer->analyzeResponse($responseB->fresh(['answers.question']));
+        $this->assertSame(
+            PerpustakaanLiterasiSimilarityMatch::REVIEW_CLEARED,
+            PerpustakaanLiterasiSimilarityMatch::query()->sole()->review_status,
+        );
+
+        $answerB = $responseB->answers()->firstOrFail();
+        $answerB->forceFill(['updated_at' => $reviewedAt->copy()->addMinute()])->saveQuietly();
+        $analyzer->analyzeResponse($responseB->fresh(['answers.question']));
+
+        $this->assertSame(
+            PerpustakaanLiterasiSimilarityMatch::REVIEW_SUSPECTED,
+            PerpustakaanLiterasiSimilarityMatch::query()->sole()->review_status,
+        );
+    }
+
+    public function test_answer_key_clamps_minimum_and_expands_maximum_character_limits(): void
+    {
+        $material = $this->createMaterial('Materi Batas Kunci Jawaban');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Berapa lama proyek selesai?',
+            'answer_key' => '40 hari',
+            'min_characters' => 20,
+            'max_characters' => 5,
+        ]);
+
+        $this->assertSame(7, $question->fresh()->min_characters);
+        $this->assertSame(7, $question->fresh()->max_characters);
+        $this->assertSame(7, $question->minimumCharacters());
+        $this->assertSame(7, $question->maximumCharacters());
+
+        $this->get(route('library.literacy.show', $material->slug))
+            ->assertOk()
+            ->assertSee('Min. 7 karakter')
+            ->assertSee('Maks. 7 karakter');
+    }
+
+    public function test_reconcile_command_dry_run_does_not_write_and_apply_reduces_matches(): void
+    {
+        $material = $this->createMaterial('Materi Rekonsiliasi Kemiripan');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Tuliskan penjelasan.',
+            'min_characters' => 1,
+            'max_characters' => 1000,
+            'plagiarism_detection_enabled' => true,
+        ]);
+        $answerText = 'Penjelasan renovasi gedung dibuat teratur agar waktu pekerjaan tetap sesuai dengan rencana bersama.';
+        $responseA = $this->createResponseWithAnswer($material, $this->createStudent('Codex Rekonsiliasi A', 'X 1'), $question, $answerText, now()->subMinutes(3));
+        $responseB = $this->createResponseWithAnswer($material, $this->createStudent('Codex Rekonsiliasi B', 'X 1'), $question, $answerText, now()->subMinutes(2));
+        $responseC = $this->createResponseWithAnswer($material, $this->createStudent('Codex Rekonsiliasi C', 'X 1'), $question, $answerText, now()->subMinute());
+        $answerA = $responseA->answers()->firstOrFail();
+        $answerB = $responseB->answers()->firstOrFail();
+        $answerC = $responseC->answers()->firstOrFail();
+
+        foreach ([[$responseC, $answerC, $responseA, $answerA], [$responseC, $answerC, $responseB, $answerB]] as [$laterResponse, $laterAnswer, $matchedResponse, $matchedAnswer]) {
+            PerpustakaanLiterasiSimilarityMatch::query()->create([
+                'material_id' => $material->getKey(),
+                'question_id' => $question->getKey(),
+                'later_response_id' => $laterResponse->getKey(),
+                'matched_response_id' => $matchedResponse->getKey(),
+                'later_answer_id' => $laterAnswer->getKey(),
+                'matched_answer_id' => $matchedAnswer->getKey(),
+                'student_class_snapshot' => 'X 1',
+                'similarity_score' => 100,
+                'later_submitted_at' => $laterResponse->submitted_at,
+                'matched_submitted_at' => $matchedResponse->submitted_at,
+            ]);
+        }
+
+        $this->artisan('literacy:similarity-reconcile', [
+            '--material' => $material->getKey(),
+            '--dry-run' => true,
+        ])->assertSuccessful();
+        $this->assertDatabaseCount('perpustakaan_literasi_similarity_matches', 2);
+
+        $this->artisan('literacy:similarity-reconcile', [
+            '--material' => $material->getKey(),
+            '--apply' => true,
+            '--batch' => 2,
+        ])->assertSuccessful();
+        $this->assertDatabaseCount('perpustakaan_literasi_similarity_matches', 2);
+        $this->assertDatabaseHas('perpustakaan_literasi_similarity_matches', [
+            'later_response_id' => $responseB->getKey(),
+            'matched_response_id' => $responseA->getKey(),
+        ]);
+        $this->assertDatabaseHas('perpustakaan_literasi_similarity_matches', [
+            'later_response_id' => $responseC->getKey(),
+            'matched_response_id' => $responseA->getKey(),
+        ]);
+    }
+
+    public function test_similarity_relation_manager_renders_compact_summary_cards(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $admin = User::query()->create([
+            'name' => 'Admin Ringkasan Kemiripan',
+            'username' => 'admin-ringkasan-kemiripan',
+            'password' => bcrypt('password'),
+        ]);
+        $admin->assignRole('admin');
+        $material = $this->createMaterial('Materi Ringkasan Kemiripan');
+
+        Livewire::actingAs($admin)
+            ->test(SimilarityMatchesRelationManager::class, [
+                'ownerRecord' => $material,
+                'pageClass' => ViewPerpustakaanLiterasiMaterial::class,
+            ])
+            ->assertSee('Ringkasan pemeriksaan kemiripan')
+            ->assertSee('Siswa terindikasi')
+            ->assertSee('Jawaban terindikasi')
+            ->assertSee('bukan vonis plagiasi');
     }
 
     public function test_answer_key_auto_grades_when_plagiarism_detection_is_disabled(): void
@@ -1986,8 +2313,8 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('Arahan / Tatib Pengerjaan')
             ->assertSee('Jika kosong, halaman publik memakai arahan default anti menyontek.')
             ->assertSee('Aktifkan deteksi plagiasi')
-            ->assertSee('Jawaban sama persis selalu muncul sebagai 100%')
-            ->assertSee('Mode deteksi aktif: jawaban yang sama dengan kunci otomatis Benar')
+            ->assertSee('Sistem menyimpan satu pembanding terkuat mulai 80%')
+            ->assertSee('Jawaban yang sama dengan kunci otomatis Benar dan dikecualikan dari indikasi kemiripan')
             ->assertSee('Kunci Jawaban')
             ->assertDontSee('Template Rumus Cepat')
             ->assertSee('tex-chtml.js', false);
@@ -2108,7 +2435,7 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertStringContainsString('1x', $detailHtml);
         $this->assertStringNotContainsString('Percobaan Keluar', $detailHtml);
         $this->assertStringNotContainsString('Pindah Tab', $detailHtml);
-        $this->assertStringContainsString('Terindikasi plagiasi', $detailHtml);
+        $this->assertStringContainsString('Terindikasi kemiripan', $detailHtml);
         $this->assertStringContainsString('94,25% mirip', $detailHtml);
         $this->assertStringContainsString('Codex Pembanding Nilai', $detailHtml);
         $this->assertStringContainsString('Belum ditinjau', $detailHtml);
@@ -2918,8 +3245,8 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('Judul soal panel analisa literasi')
             ->assertSee('Kunci Jawaban')
             ->assertSee('Kunci jawaban panel analisa literasi')
-            ->assertSee('Daftar Plagiat Per Kelas')
-            ->assertSee('Daftar Plagiat Per Siswa')
+            ->assertSee('Indikasi Kemiripan Per Kelas')
+            ->assertSee('Indikasi Kemiripan Per Siswa')
             ->assertDontSee('Analisa Per Kelas')
             ->assertDontSee('Ringkasan Plagiat Per Kelas')
             ->assertDontSee('Ranking Kelas Terbanyak Mengisi')

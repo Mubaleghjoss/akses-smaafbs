@@ -1,8 +1,8 @@
 @php
     $fieldName = 'answers.'.$question->getKey();
     $savedPayload = $savedAnswer?->answer_payload ?? [];
-    $maxCharacters = max(1, (int) ($question->max_characters ?: 1000));
-    $minCharacters = min($maxCharacters, max(0, (int) ($question->min_characters ?: 0)));
+    $maxCharacters = $question->maximumCharacters();
+    $minCharacters = $question->minimumCharacters();
 @endphp
 
 <section

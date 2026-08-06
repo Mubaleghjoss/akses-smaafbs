@@ -78,7 +78,7 @@ class LiteracyResponseGrading
                             ->label('Status Plagiasi')
                             ->content(new HtmlString(
                                 '<div class="literasi-grading-info literasi-grading-info--success">'.
-                                '<strong>Tidak dianalisis plagiasi.</strong> Soal objektif atau soal dengan deteksi plagiasi nonaktif tidak masuk Daftar Plagiat Per Kelas.'.
+                                '<strong>Tidak dianalisis kemiripan.</strong> Soal objektif atau soal dengan deteksi nonaktif tidak masuk Indikasi Kemiripan Jawaban.'.
                                 '</div>'
                             ))
                             ->columnSpanFull();

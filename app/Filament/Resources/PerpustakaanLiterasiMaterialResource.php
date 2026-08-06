@@ -316,17 +316,17 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                                     ->default(true)
                                     ->live()
                                     ->visible(fn (Get $get): bool => ($get('question_type') ?: PerpustakaanLiterasiQuestion::TYPE_ESSAY) === PerpustakaanLiterasiQuestion::TYPE_ESSAY)
-                                    ->helperText('Aktif: jawaban soal ini dibandingkan dengan jawaban siswa lain pada materi yang sama. Jawaban sama persis selalu muncul sebagai 100%; jawaban mirip muncul mulai 50%.'),
+                                    ->helperText('Aktif: jawaban dibandingkan hanya dengan respons terdahulu. Sistem menyimpan satu pembanding terkuat mulai 80%.'),
                                 Forms\Components\Placeholder::make('plagiarism_detection_help')
                                     ->label('Cara kerja deteksi dan kunci jawaban')
                                     ->content(fn (Get $get): HtmlString => new HtmlString((bool) $get('plagiarism_detection_enabled')
                                         ? '<div class="text-sm leading-6 text-gray-600 dark:text-gray-300">'.
-                                            '<strong>Deteksi aktif:</strong> sistem membuat indikasi plagiasi untuk jawaban yang sama persis atau mirip minimal 50%. '.
-                                            'Jika kunci jawaban diisi, jawaban yang sama dengan kunci otomatis Benar, tetapi tetap masuk daftar plagiasi bila mirip/sama dengan jawaban siswa lain.'.
+                                            '<strong>Deteksi aktif:</strong> sistem menyimpan satu indikasi dari jawaban terdahulu yang paling mirip dengan nilai minimal 80%. '.
+                                            'Jawaban yang sama dengan kunci otomatis Benar dan tidak dimasukkan sebagai indikasi kemiripan.'.
                                         '</div>'
                                         : '<div class="text-sm leading-6 text-gray-600 dark:text-gray-300">'.
                                             '<strong>Deteksi tidak aktif:</strong> sistem tidak membuat indikasi plagiasi untuk soal ini. '.
-                                            'Jika kunci jawaban diisi, jawaban yang sama dengan kunci otomatis dinilai Benar dan tidak masuk Daftar Plagiat Per Kelas; jawaban berbeda tetap Belum dinilai untuk diperiksa guru.'.
+                                            'Jika kunci jawaban diisi, jawaban yang sama dengan kunci otomatis dinilai Benar dan tidak masuk Indikasi Kemiripan Jawaban; jawaban berbeda tetap Belum dinilai untuk diperiksa guru.'.
                                         '</div>'))
                                     ->visible(fn (Get $get): bool => ($get('question_type') ?: PerpustakaanLiterasiQuestion::TYPE_ESSAY) === PerpustakaanLiterasiQuestion::TYPE_ESSAY)
                                     ->columnSpanFull(),
@@ -334,9 +334,20 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                                     ->label('Kunci Jawaban')
                                     ->rows(3)
                                     ->maxLength(4000)
+                                    ->live(onBlur: true)
+                                    ->afterStateUpdated(function (mixed $state, Get $get, Set $set): void {
+                                        $limits = PerpustakaanLiterasiQuestion::adjustedCharacterLimits(
+                                            $state,
+                                            $get('min_characters'),
+                                            $get('max_characters'),
+                                        );
+
+                                        $set('min_characters', $limits['min']);
+                                        $set('max_characters', $limits['max']);
+                                    })
                                     ->helperText(fn (Get $get): string => (bool) $get('plagiarism_detection_enabled')
-                                        ? 'Mode deteksi aktif: jawaban yang sama dengan kunci otomatis Benar, dan tetap dicek plagiasi terhadap jawaban siswa lain.'
-                                        : 'Mode deteksi tidak aktif: jawaban yang sama dengan kunci otomatis Benar dan tidak masuk Daftar Plagiat Per Kelas; jawaban berbeda tetap Belum dinilai.')
+                                        ? 'Jawaban yang sama dengan kunci otomatis Benar dan dikecualikan dari indikasi kemiripan. Batas karakter menyesuaikan setelah kolom selesai diketik.'
+                                        : 'Mode deteksi tidak aktif: jawaban yang sama dengan kunci otomatis Benar dan tidak masuk Indikasi Kemiripan Jawaban; jawaban berbeda tetap Belum dinilai.')
                                     ->visible(fn (Get $get): bool => ($get('question_type') ?: PerpustakaanLiterasiQuestion::TYPE_ESSAY) === PerpustakaanLiterasiQuestion::TYPE_ESSAY)
                                     ->columnSpanFull(),
                                 Forms\Components\Toggle::make('speech_input_enabled')
@@ -377,6 +388,17 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                                     ->minValue(0)
                                     ->maxValue(8000)
                                     ->default(20)
+                                    ->helperText(function (Get $get): string {
+                                        $limits = PerpustakaanLiterasiQuestion::adjustedCharacterLimits(
+                                            $get('answer_key'),
+                                            $get('min_characters'),
+                                            $get('max_characters'),
+                                        );
+
+                                        return $limits['key_length'] > 0
+                                            ? 'Disesuaikan dengan Kunci Jawaban sepanjang '.number_format($limits['key_length'], 0, ',', '.').' karakter.'
+                                            : 'Batas minimal jawaban murid sebelum dapat dikirim.';
+                                    })
                                     ->visible(fn (Get $get): bool => ($get('question_type') ?: PerpustakaanLiterasiQuestion::TYPE_ESSAY) === PerpustakaanLiterasiQuestion::TYPE_ESSAY),
                                 Forms\Components\TextInput::make('max_characters')
                                     ->label('Maksimal Karakter Jawaban')
@@ -479,6 +501,13 @@ class PerpustakaanLiterasiMaterialResource extends Resource
         }
 
         $data['configuration'] = null;
+        $limits = PerpustakaanLiterasiQuestion::adjustedCharacterLimits(
+            $data['answer_key'] ?? null,
+            $data['min_characters'] ?? 0,
+            $data['max_characters'] ?? 1000,
+        );
+        $data['min_characters'] = $limits['min'];
+        $data['max_characters'] = $limits['max'];
 
         return $data;
     }
@@ -543,6 +572,13 @@ class PerpustakaanLiterasiMaterialResource extends Resource
         }
 
         $data['configuration'] = null;
+        $limits = PerpustakaanLiterasiQuestion::adjustedCharacterLimits(
+            $data['answer_key'] ?? null,
+            $data['min_characters'] ?? 0,
+            $data['max_characters'] ?? 1000,
+        );
+        $data['min_characters'] = $limits['min'];
+        $data['max_characters'] = $limits['max'];
 
         return $data;
     }
@@ -651,12 +687,12 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                             ->send();
                     }),
                 Action::make('reanalyzeSimilarity')
-                    ->label('Analisa Ulang')
+                    ->label('Analisa Ulang Kemiripan')
                     ->icon('heroicon-o-arrow-path')
                     ->color('gray')
                     ->requiresConfirmation()
-                    ->modalHeading('Analisa ulang plagiasi materi?')
-                    ->modalDescription('Sistem akan menghitung ulang indikasi plagiasi untuk semua jawaban pada materi ini sesuai pengaturan soal terbaru.')
+                    ->modalHeading('Analisa ulang kemiripan jawaban?')
+                    ->modalDescription('Sistem akan menghitung ulang satu pembanding terdahulu terkuat untuk setiap jawaban sesuai pengaturan soal terbaru.')
                     ->modalSubmitActionLabel('Analisa Ulang')
                     ->visible(fn (PerpustakaanLiterasiMaterial $record): bool => static::canEdit($record) && $record->hasResponses())
                     ->action(function (PerpustakaanLiterasiMaterial $record): void {
@@ -667,7 +703,7 @@ class PerpustakaanLiterasiMaterialResource extends Resource
                         QueueLiteracySimilarityReanalysis::dispatch($record->getKey());
 
                         Notification::make()
-                            ->title('Analisa plagiasi masuk antrean')
+                            ->title('Analisa kemiripan masuk antrean')
                             ->body(number_format($total, 0, ',', '.').' responden akan dianalisa bertahap di background.')
                             ->success()
                             ->send();

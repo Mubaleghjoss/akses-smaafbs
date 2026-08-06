@@ -26,13 +26,13 @@
             'danger',
         ],
         $suspectedMatches->isNotEmpty() => [
-            'Terindikasi plagiasi',
+            'Terindikasi kemiripan',
             $suspectedMatches->count().' kecocokan menunggu peninjauan guru atau admin.',
             'warning',
         ],
         $similarityMatches->isNotEmpty() => [
             'Aman setelah ditinjau',
-            $clearedMatches->count().' kecocokan telah dinyatakan bukan plagiasi.',
+            $clearedMatches->count().' kecocokan telah dinyatakan aman oleh guru.',
             'success',
         ],
         $checkedQuestionCount === 0 => [
@@ -108,7 +108,7 @@
         <div class="literasi-response-detail__section-head">
             <div>
                 <span class="literasi-response-detail__eyebrow">Pemeriksaan kemiripan</span>
-                <h4>Status plagiasi</h4>
+                <h4>Status kemiripan jawaban</h4>
             </div>
             <span class="literasi-response-detail__status literasi-response-detail__status--{{ $plagiarismTone }}">
                 {{ $plagiarismLabel }}
@@ -174,10 +174,10 @@
                     @if(! $question->plagiarismDetectionEnabled())
                         <span class="literasi-response-detail__status literasi-response-detail__status--neutral">Plagiasi tidak diperiksa</span>
                     @elseif($answerMatches->isEmpty())
-                        <span class="literasi-response-detail__status literasi-response-detail__status--success">Tidak ada indikasi plagiasi</span>
+                        <span class="literasi-response-detail__status literasi-response-detail__status--success">Tidak ada indikasi kemiripan</span>
                     @else
                         <span class="literasi-response-detail__status literasi-response-detail__status--warning">
-                            {{ $answerMatches->count() }} kecocokan plagiasi
+                            {{ $answerMatches->count() }} indikasi kemiripan
                         </span>
                     @endif
                 </div>
