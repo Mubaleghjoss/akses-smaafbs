@@ -488,6 +488,13 @@ class AssessmentAdminIntegrationTest extends TestCase
         Livewire::actingAs($admin)
             ->test(AssessmentDashboard::class)
             ->assertDontSeeHtml('assessment-dashboard-hero')
+            ->assertSeeHtml('assessment-dashboard-page')
+            ->assertSeeHtml('assessment-dashboard-panel')
+            ->assertSeeHtml('assessment-dashboard-card-grid')
+            ->assertSeeHtml('assessment-dashboard-card--menu')
+            ->assertSeeHtml('assessment-dashboard-readiness-grid')
+            ->assertSeeHtml('assessment-dashboard-status')
+            ->assertSeeHtml('assessment-dashboard-activity')
             ->assertDontSee('Alur Menyiapkan ASTS dan ASAS')
             ->assertSee('Pusat Penilaian ASTS–ASAS')
             ->assertSee('Kategori Mapel')
@@ -505,6 +512,15 @@ class AssessmentAdminIntegrationTest extends TestCase
             ->assertSee('Kesiapan Fondasi')
             ->assertSee('Aktivitas Terbaru')
             ->assertSee('Belum ada aktivitas pada periode ini.');
+
+        $responsiveCss = file_get_contents(public_path('css/filament-admin-responsive.css'));
+
+        $this->assertIsString($responsiveCss);
+        $this->assertStringContainsString('.assessment-dashboard-page', $responsiveCss);
+        $this->assertStringContainsString('.assessment-dashboard-card-grid', $responsiveCss);
+        $this->assertStringContainsString('.assessment-dashboard-card__action', $responsiveCss);
+        $this->assertStringContainsString('.assessment-dashboard-readiness-grid', $responsiveCss);
+        $this->assertStringContainsString('.assessment-dashboard-status-grid', $responsiveCss);
 
         Livewire::actingAs($admin)
             ->test(AstsHub::class)

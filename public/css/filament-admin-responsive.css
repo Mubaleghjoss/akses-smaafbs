@@ -7473,3 +7473,544 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
     border-color: rgb(153 27 27);
     background: rgb(69 10 10);
 }
+
+/* Assessment dashboard uses explicit semantic classes because the Filament
+   panel does not load the public Tailwind/Vite bundle as its theme. */
+.assessment-dashboard-page {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    gap: 1.5rem;
+}
+
+.assessment-dashboard-panel,
+.assessment-dashboard-card,
+.assessment-dashboard-status-card,
+.assessment-audit-card,
+.assessment-audit-empty {
+    min-width: 0;
+    max-width: 100%;
+    border: 1px solid rgb(226 232 240);
+    background: rgb(255 255 255);
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 8px 24px -20px rgb(15 23 42 / 0.38);
+}
+
+.assessment-dashboard-panel {
+    border-radius: 0.9rem;
+    padding: 1rem;
+}
+
+.assessment-dashboard-overview__layout {
+    display: grid;
+    min-width: 0;
+    gap: 1rem;
+}
+
+.assessment-dashboard-title,
+.assessment-dashboard-group__head h2,
+.assessment-dashboard-panel__head h2,
+.assessment-dashboard-card h3 {
+    margin: 0;
+    color: rgb(15 23 42);
+    font-weight: 750;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.assessment-dashboard-title {
+    font-size: 1.1rem;
+}
+
+.assessment-dashboard-group__head h2,
+.assessment-dashboard-panel__head h2 {
+    font-size: 1rem;
+}
+
+.assessment-dashboard-copy,
+.assessment-dashboard-group__head p,
+.assessment-dashboard-panel__head p,
+.assessment-dashboard-card__caption,
+.assessment-dashboard-card__points,
+.assessment-audit-card__meta,
+.assessment-audit-card__points {
+    color: rgb(71 85 105);
+    overflow-wrap: anywhere;
+}
+
+.assessment-dashboard-copy,
+.assessment-dashboard-group__head p,
+.assessment-dashboard-panel__head p {
+    margin: 0.35rem 0 0;
+    font-size: 0.875rem;
+    line-height: 1.55;
+}
+
+.assessment-dashboard-period {
+    display: block;
+    min-width: 0;
+}
+
+.assessment-dashboard-label {
+    display: block;
+    margin-bottom: 0.45rem;
+    color: rgb(51 65 85);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.assessment-dashboard-select {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    min-height: 2.75rem;
+    border: 1px solid rgb(203 213 225);
+    border-radius: 0.7rem;
+    background: rgb(255 255 255);
+    padding: 0.55rem 2.5rem 0.55rem 0.75rem;
+    color: rgb(15 23 42);
+    font-size: 0.875rem;
+}
+
+.assessment-dashboard-select:focus {
+    border-color: rgb(100 116 139);
+    outline: 3px solid rgb(148 163 184 / 0.28);
+    outline-offset: 1px;
+}
+
+.assessment-dashboard-group,
+.assessment-dashboard-group__head {
+    min-width: 0;
+}
+
+.assessment-dashboard-group__head {
+    margin-bottom: 0.75rem;
+}
+
+.assessment-dashboard-card-grid,
+.assessment-dashboard-readiness-grid,
+.assessment-dashboard-status-grid,
+.assessment-audit-card-grid {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+}
+
+.assessment-dashboard-card {
+    border-radius: 0.85rem;
+    padding: 1rem;
+}
+
+.assessment-dashboard-card--menu {
+    display: flex;
+    flex-direction: column;
+}
+
+.assessment-dashboard-card__head,
+.assessment-dashboard-panel__head,
+.assessment-audit-card__head {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.assessment-dashboard-card h3 {
+    min-width: 0;
+    font-size: 0.9rem;
+}
+
+.assessment-dashboard-card__badge,
+.assessment-dashboard-status__badge {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: rgb(241 245 249);
+    padding: 0.25rem 0.65rem;
+    color: rgb(51 65 85);
+    font-size: 0.75rem;
+    font-weight: 750;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.35;
+}
+
+.assessment-dashboard-card__caption {
+    margin: 0.35rem 0 0;
+    font-size: 0.75rem;
+    font-weight: 650;
+    line-height: 1.45;
+}
+
+.assessment-dashboard-card__points {
+    flex: 1 1 auto;
+    margin-top: 0.8rem;
+    font-size: 0.82rem;
+    line-height: 1.5;
+}
+
+.assessment-dashboard-card__points p {
+    margin: 0;
+}
+
+.assessment-dashboard-card__points p + p {
+    margin-top: 0.3rem;
+}
+
+.assessment-dashboard-card__action,
+.assessment-dashboard-secondary-action {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.7rem;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.82rem;
+    font-weight: 750;
+    line-height: 1.35;
+    text-align: center;
+    text-decoration: none;
+    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.assessment-dashboard-card__action {
+    width: 100%;
+    margin-top: 1rem;
+    border: 1px solid rgb(51 65 85);
+    background: rgb(51 65 85);
+    color: rgb(255 255 255);
+}
+
+.assessment-dashboard-card__action:hover,
+.assessment-dashboard-card__action:focus-visible {
+    border-color: rgb(15 23 42);
+    background: rgb(15 23 42);
+    color: rgb(255 255 255);
+}
+
+.assessment-dashboard-card__action.is-disabled {
+    border-color: rgb(226 232 240);
+    background: rgb(241 245 249);
+    color: rgb(100 116 139);
+    cursor: not-allowed;
+}
+
+.assessment-dashboard-card__action:focus-visible,
+.assessment-dashboard-secondary-action:focus-visible,
+.assessment-dashboard-status-card:focus-visible {
+    outline: 3px solid rgb(148 163 184 / 0.32);
+    outline-offset: 2px;
+}
+
+.assessment-dashboard-readiness-card {
+    box-shadow: none;
+}
+
+.assessment-dashboard-readiness-card.is-ready {
+    border-color: rgb(187 247 208);
+    background: rgb(240 253 244);
+}
+
+.assessment-dashboard-readiness-card.is-warning {
+    border-color: rgb(253 230 138);
+    background: rgb(255 251 235);
+}
+
+.assessment-dashboard-readiness-card__count {
+    flex: 0 0 auto;
+    color: rgb(15 23 42);
+    font-size: 1.25rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+}
+
+.assessment-dashboard-readiness-card__status {
+    margin: 0.65rem 0 0;
+    font-size: 0.75rem;
+    font-weight: 750;
+}
+
+.assessment-dashboard-readiness-card.is-ready .assessment-dashboard-readiness-card__status {
+    color: rgb(21 128 61);
+}
+
+.assessment-dashboard-readiness-card.is-warning .assessment-dashboard-readiness-card__status {
+    color: rgb(180 83 9);
+}
+
+.assessment-dashboard-status-grid,
+.assessment-audit-card-grid {
+    margin-top: 1rem;
+}
+
+.assessment-dashboard-status-card {
+    display: block;
+    min-height: 2.75rem;
+    border-radius: 0.75rem;
+    padding: 0.8rem;
+    color: rgb(51 65 85);
+    text-decoration: none;
+    transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.assessment-dashboard-status-card span,
+.assessment-dashboard-status-card strong {
+    display: block;
+}
+
+.assessment-dashboard-status-card span {
+    font-size: 0.8rem;
+    font-weight: 650;
+}
+
+.assessment-dashboard-status-card strong {
+    margin-top: 0.25rem;
+    color: rgb(15 23 42);
+    font-size: 1.2rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.assessment-dashboard-status-card:hover,
+.assessment-dashboard-status-card:focus-visible {
+    border-color: rgb(148 163 184);
+    background: rgb(248 250 252);
+}
+
+.assessment-dashboard-secondary-action {
+    flex: 0 0 auto;
+    border: 1px solid rgb(203 213 225);
+    background: rgb(255 255 255);
+    color: rgb(51 65 85);
+}
+
+.assessment-dashboard-secondary-action:hover,
+.assessment-dashboard-secondary-action:focus-visible {
+    border-color: rgb(148 163 184);
+    background: rgb(248 250 252);
+    color: rgb(15 23 42);
+}
+
+.assessment-audit-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border-radius: 0.8rem;
+    background: rgb(248 250 252);
+    padding: 0.9rem;
+    box-shadow: none;
+}
+
+.assessment-audit-card__head h3 {
+    min-width: 0;
+    margin: 0;
+    color: rgb(15 23 42);
+    font-size: 0.85rem;
+    font-weight: 750;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.assessment-audit-card__head time {
+    flex: 0 0 auto;
+    margin: 0;
+    color: rgb(100 116 139);
+    font-size: 0.7rem;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.assessment-audit-card__meta,
+.assessment-audit-card__points {
+    display: block;
+    margin: 0.65rem 0 0;
+    padding: 0;
+    font-size: 0.75rem;
+    line-height: 1.5;
+}
+
+.assessment-audit-card__points {
+    flex: 1 1 auto;
+    margin-top: 0.35rem;
+}
+
+.assessment-audit-card .assessment-dashboard-secondary-action {
+    width: 100%;
+    margin-top: 0.8rem;
+}
+
+.assessment-audit-empty {
+    min-height: 6rem;
+    align-items: center;
+    justify-content: center;
+    border-style: dashed;
+    border-radius: 0.8rem;
+    padding: 1rem;
+    color: rgb(100 116 139);
+    font-size: 0.82rem;
+    text-align: center;
+    box-shadow: none;
+}
+
+.dark .assessment-dashboard-panel,
+.fi-theme-dark .assessment-dashboard-panel,
+.dark .assessment-dashboard-card,
+.fi-theme-dark .assessment-dashboard-card,
+.dark .assessment-dashboard-status-card,
+.fi-theme-dark .assessment-dashboard-status-card,
+.dark .assessment-audit-card,
+.fi-theme-dark .assessment-audit-card,
+.dark .assessment-audit-empty,
+.fi-theme-dark .assessment-audit-empty {
+    border-color: rgb(63 63 70);
+    background: rgb(24 24 27);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
+}
+
+.dark .assessment-dashboard-title,
+.fi-theme-dark .assessment-dashboard-title,
+.dark .assessment-dashboard-group__head h2,
+.fi-theme-dark .assessment-dashboard-group__head h2,
+.dark .assessment-dashboard-panel__head h2,
+.fi-theme-dark .assessment-dashboard-panel__head h2,
+.dark .assessment-dashboard-card h3,
+.fi-theme-dark .assessment-dashboard-card h3,
+.dark .assessment-dashboard-readiness-card__count,
+.fi-theme-dark .assessment-dashboard-readiness-card__count,
+.dark .assessment-dashboard-status-card strong,
+.fi-theme-dark .assessment-dashboard-status-card strong,
+.dark .assessment-audit-card__head h3,
+.fi-theme-dark .assessment-audit-card__head h3 {
+    color: rgb(250 250 250);
+}
+
+.dark .assessment-dashboard-copy,
+.fi-theme-dark .assessment-dashboard-copy,
+.dark .assessment-dashboard-group__head p,
+.fi-theme-dark .assessment-dashboard-group__head p,
+.dark .assessment-dashboard-panel__head p,
+.fi-theme-dark .assessment-dashboard-panel__head p,
+.dark .assessment-dashboard-card__caption,
+.fi-theme-dark .assessment-dashboard-card__caption,
+.dark .assessment-dashboard-card__points,
+.fi-theme-dark .assessment-dashboard-card__points,
+.dark .assessment-audit-card__meta,
+.fi-theme-dark .assessment-audit-card__meta,
+.dark .assessment-audit-card__points,
+.fi-theme-dark .assessment-audit-card__points,
+.dark .assessment-audit-empty,
+.fi-theme-dark .assessment-audit-empty {
+    color: rgb(203 213 225);
+}
+
+.dark .assessment-dashboard-status-card span,
+.fi-theme-dark .assessment-dashboard-status-card span,
+.dark .assessment-audit-card__head time,
+.fi-theme-dark .assessment-audit-card__head time {
+    color: rgb(148 163 184);
+}
+
+.dark .assessment-dashboard-label,
+.fi-theme-dark .assessment-dashboard-label {
+    color: rgb(226 232 240);
+}
+
+.dark .assessment-dashboard-select,
+.fi-theme-dark .assessment-dashboard-select,
+.dark .assessment-dashboard-secondary-action,
+.fi-theme-dark .assessment-dashboard-secondary-action {
+    border-color: rgb(63 63 70);
+    background: rgb(9 9 11);
+    color: rgb(226 232 240);
+}
+
+.dark .assessment-dashboard-card__badge,
+.fi-theme-dark .assessment-dashboard-card__badge,
+.dark .assessment-dashboard-status__badge,
+.fi-theme-dark .assessment-dashboard-status__badge {
+    background: rgb(39 39 42);
+    color: rgb(226 232 240);
+}
+
+.dark .assessment-dashboard-readiness-card.is-ready,
+.fi-theme-dark .assessment-dashboard-readiness-card.is-ready {
+    border-color: rgb(22 101 52);
+    background: rgb(20 83 45 / 0.3);
+}
+
+.dark .assessment-dashboard-readiness-card.is-warning,
+.fi-theme-dark .assessment-dashboard-readiness-card.is-warning {
+    border-color: rgb(146 64 14);
+    background: rgb(120 53 15 / 0.25);
+}
+
+.dark .assessment-dashboard-status-card:hover,
+.fi-theme-dark .assessment-dashboard-status-card:hover,
+.dark .assessment-dashboard-status-card:focus-visible,
+.fi-theme-dark .assessment-dashboard-status-card:focus-visible,
+.dark .assessment-dashboard-secondary-action:hover,
+.fi-theme-dark .assessment-dashboard-secondary-action:hover,
+.dark .assessment-dashboard-secondary-action:focus-visible,
+.fi-theme-dark .assessment-dashboard-secondary-action:focus-visible {
+    border-color: rgb(100 116 139);
+    background: rgb(39 39 42);
+    color: rgb(250 250 250);
+}
+
+@media (min-width: 640px) {
+    .assessment-dashboard-card-grid,
+    .assessment-dashboard-readiness-grid,
+    .assessment-dashboard-status-grid,
+    .assessment-audit-card-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .assessment-dashboard-panel__head {
+        flex-direction: row;
+        align-items: flex-start;
+    }
+
+    .assessment-dashboard-secondary-action {
+        width: auto;
+    }
+}
+
+@media (min-width: 768px) {
+    .assessment-dashboard-panel {
+        padding: 1.25rem;
+    }
+
+    .assessment-dashboard-overview__layout {
+        grid-template-columns: minmax(0, 1fr) minmax(16rem, 24rem);
+        align-items: end;
+    }
+}
+
+@media (min-width: 1280px) {
+    .assessment-dashboard-card-grid,
+    .assessment-dashboard-readiness-grid,
+    .assessment-dashboard-status-grid,
+    .assessment-audit-card-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 639px) {
+    .assessment-dashboard-panel__head {
+        flex-direction: column;
+    }
+
+    .assessment-dashboard-secondary-action {
+        width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .assessment-dashboard-card__action,
+    .assessment-dashboard-secondary-action,
+    .assessment-dashboard-status-card {
+        transition-duration: 1ms;
+    }
+}
