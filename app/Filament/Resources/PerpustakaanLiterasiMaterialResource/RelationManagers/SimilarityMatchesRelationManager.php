@@ -143,6 +143,7 @@ class SimilarityMatchesRelationManager extends RelationManager
     {
         $row = $this->getOwnerRecord()
             ->similarityMatches()
+            ->reorder()
             ->selectRaw('COUNT(*) as answers')
             ->selectRaw('COUNT(DISTINCT later_response_id) as students')
             ->selectRaw('SUM(CASE WHEN review_status = ? THEN 1 ELSE 0 END) as suspected', [PerpustakaanLiterasiSimilarityMatch::REVIEW_SUSPECTED])

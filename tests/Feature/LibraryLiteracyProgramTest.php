@@ -2202,6 +2202,13 @@ class LibraryLiteracyProgramTest extends TestCase
         ]);
         $admin->assignRole('admin');
         $material = $this->createMaterial('Materi Ringkasan Kemiripan');
+        $summaryQueries = [];
+
+        DB::listen(function ($query) use (&$summaryQueries): void {
+            if (str_contains($query->sql, 'COUNT(DISTINCT later_response_id)')) {
+                $summaryQueries[] = $query->sql;
+            }
+        });
 
         Livewire::actingAs($admin)
             ->test(SimilarityMatchesRelationManager::class, [
@@ -2212,6 +2219,80 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('Siswa terindikasi')
             ->assertSee('Jawaban terindikasi')
             ->assertSee('bukan vonis plagiasi');
+
+        $this->assertNotEmpty($summaryQueries);
+        $this->assertStringNotContainsString('order by', strtolower($summaryQueries[0]));
+    }
+
+    public function test_similarity_relation_manager_summary_counts_mixed_review_statuses(): void
+    {
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $admin = User::query()->create([
+            'name' => 'Admin Status Kemiripan',
+            'username' => 'admin-status-kemiripan',
+            'password' => bcrypt('password'),
+        ]);
+        $admin->assignRole('admin');
+        $material = $this->createMaterial('Materi Status Kemiripan');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Jelaskan isi bacaan.',
+            'min_characters' => 1,
+            'max_characters' => 1000,
+            'plagiarism_detection_enabled' => true,
+        ]);
+        $matchedResponse = $this->createResponseWithAnswer(
+            $material,
+            $this->createStudent('Codex Pembanding Ringkasan', 'X 1'),
+            $question,
+            'Jawaban pembanding untuk ringkasan.',
+            now()->subMinutes(4),
+        );
+        $matchedAnswer = $matchedResponse->answers->first();
+
+        foreach ([
+            PerpustakaanLiterasiSimilarityMatch::REVIEW_SUSPECTED,
+            PerpustakaanLiterasiSimilarityMatch::REVIEW_CLEARED,
+            PerpustakaanLiterasiSimilarityMatch::REVIEW_CONFIRMED,
+        ] as $index => $status) {
+            $laterResponse = $this->createResponseWithAnswer(
+                $material,
+                $this->createStudent('Codex Terindikasi '.($index + 1), 'X 1'),
+                $question,
+                'Jawaban terindikasi untuk ringkasan '.($index + 1).'.',
+                now()->subMinutes(3 - $index),
+            );
+            $laterAnswer = $laterResponse->answers->first();
+
+            PerpustakaanLiterasiSimilarityMatch::query()->create([
+                'material_id' => $material->getKey(),
+                'question_id' => $question->getKey(),
+                'later_response_id' => $laterResponse->getKey(),
+                'matched_response_id' => $matchedResponse->getKey(),
+                'later_answer_id' => $laterAnswer->getKey(),
+                'matched_answer_id' => $matchedAnswer->getKey(),
+                'student_class_snapshot' => 'X 1',
+                'similarity_score' => 90 + $index,
+                'later_submitted_at' => $laterResponse->submitted_at,
+                'matched_submitted_at' => $matchedResponse->submitted_at,
+                'review_status' => $status,
+                'reviewed_by' => $status === PerpustakaanLiterasiSimilarityMatch::REVIEW_SUSPECTED ? null : $admin->getKey(),
+                'reviewed_at' => $status === PerpustakaanLiterasiSimilarityMatch::REVIEW_SUSPECTED ? null : now(),
+            ]);
+        }
+
+        $component = Livewire::actingAs($admin)->test(SimilarityMatchesRelationManager::class, [
+            'ownerRecord' => $material,
+            'pageClass' => ViewPerpustakaanLiterasiMaterial::class,
+        ]);
+        $summaryMethod = new \ReflectionMethod($component->instance(), 'similaritySummary');
+        $summary = $summaryMethod->invoke($component->instance());
+
+        $this->assertSame(3, $summary['students']);
+        $this->assertSame(3, $summary['answers']);
+        $this->assertSame(1, $summary['suspected']);
+        $this->assertSame(1, $summary['cleared']);
+        $this->assertSame(1, $summary['confirmed']);
     }
 
     public function test_answer_key_auto_grades_when_plagiarism_detection_is_disabled(): void
