@@ -472,6 +472,10 @@ Route::get('/perpustakaan/program-literasi-numerasi/submission-queue/{token}', [
     ->middleware('throttle:literacy_queue_status')
     ->where('token', '[A-Za-z0-9]{64}')
     ->name('library.literacy.queue.status');
+Route::post('/perpustakaan/program-literasi-numerasi/submission-queue/{token}/receipt', [PerpustakaanLiteracyProgramController::class, 'recoverSubmissionReceipt'])
+    ->middleware('throttle:literacy_queue_status')
+    ->where('token', '[A-Za-z0-9]{64}')
+    ->name('library.literacy.queue.receipt');
 Route::delete('/perpustakaan/program-literasi-numerasi/submission-queue/{token}', [PerpustakaanLiteracyProgramController::class, 'cancelSubmissionTicket'])
     ->middleware('throttle:literacy_queue_status')
     ->where('token', '[A-Za-z0-9]{64}')

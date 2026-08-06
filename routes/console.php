@@ -234,17 +234,17 @@ Schedule::call(function (): void {
     ->name('literacy-operational-log-cleanup')
     ->withoutOverlapping();
 
-Schedule::command('assessment:cleanup-report-cache --apply')
+Schedule::call(fn (): int => Artisan::call('assessment:cleanup-report-cache', ['--apply' => true]))
     ->hourly()
     ->name('assessment-report-cache-cleanup')
     ->withoutOverlapping();
 
-Schedule::command('app:storage-maintain --apply')
+Schedule::call(fn (): int => Artisan::call('app:storage-maintain', ['--apply' => true]))
     ->dailyAt('02:40')
     ->name('application-storage-maintenance')
     ->withoutOverlapping();
 
-Schedule::command('app:storage-audit')
+Schedule::call(fn (): int => Artisan::call('app:storage-audit'))
     ->dailyAt('03:00')
     ->name('hosting-storage-audit')
     ->withoutOverlapping();

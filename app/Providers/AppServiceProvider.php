@@ -7,6 +7,7 @@ use App\Contracts\Auth\WebAuthnCredentialDomain;
 use App\Contracts\SiteSettingsAccessor;
 use App\Support\Auth\WebAuthn\DatabaseWebAuthnChallengeFlow;
 use App\Support\Auth\WebAuthn\DatabaseWebAuthnCredentialDomain;
+use App\Support\Perpustakaan\LiteracySubmissionEventRecorder;
 use App\Support\Security\EndpointProtectionPolicy;
 use App\Support\SiteSettings\PengaturanSiteSettingsAccessor;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -18,6 +19,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
 use Illuminate\View\View as BladeView;
 
 class AppServiceProvider extends ServiceProvider
@@ -129,18 +131,19 @@ class AppServiceProvider extends ServiceProvider
     protected function registerLiteracyRateLimiters(): void
     {
         RateLimiter::for('literacy_queue_ticket', fn (Request $request): array => [
-            Limit::perMinute(12)->by('literacy-ticket-session|'.$this->literacySessionKey($request)),
-            Limit::perMinute(600)->by('literacy-ticket-ip|'.$request->ip()),
+            $this->literacyLimit(30, 'ticket_session', 'literacy-ticket-session|'.$this->literacySessionKey($request)),
+            $this->literacyLimit(1200, 'ticket_ip', 'literacy-ticket-ip|'.$request->ip()),
         ]);
 
         RateLimiter::for('literacy_queue_status', fn (Request $request): array => [
-            Limit::perMinute(30)->by('literacy-status-session|'.$this->literacySessionKey($request)),
-            Limit::perMinute(1200)->by('literacy-status-ip|'.$request->ip()),
+            $this->literacyLimit(120, 'status_session', 'literacy-status-session|'.$this->literacySessionKey($request)),
+            $this->literacyLimit(3000, 'status_ip', 'literacy-status-ip|'.$request->ip()),
         ]);
 
         RateLimiter::for('literacy_submit', fn (Request $request): array => [
-            Limit::perMinute(10)->by('literacy-submit-session|'.$this->literacySessionKey($request)),
-            Limit::perMinute(600)->by('literacy-submit-ip|'.$request->ip()),
+            $this->literacyLimit(4, 'submit_request', 'literacy-submit-request|'.$this->literacySubmissionKey($request)),
+            $this->literacyLimit(30, 'submit_session', 'literacy-submit-session|'.$this->literacySessionKey($request)),
+            $this->literacyLimit(1200, 'submit_ip', 'literacy-submit-ip|'.$request->ip()),
         ]);
 
         RateLimiter::for('literacy_integrity', fn (Request $request): array => [
@@ -163,6 +166,52 @@ class AppServiceProvider extends ServiceProvider
         return $request->hasSession() && $request->session()->getId() !== ''
             ? $request->session()->getId()
             : (string) $request->ip();
+    }
+
+    protected function literacySubmissionKey(Request $request): string
+    {
+        $value = $request->string('submission_ticket')->toString()
+            ?: $request->string('submission_request_id')->toString()
+            ?: $this->literacySessionKey($request);
+
+        return hash('sha256', $value);
+    }
+
+    protected function literacyLimit(int $attempts, string $scope, string $key): Limit
+    {
+        return Limit::perMinute($attempts)
+            ->by($key)
+            ->response(fn (Request $request, array $headers) => $this->literacyThrottleResponse($request, $headers, $scope));
+    }
+
+    protected function literacyThrottleResponse(Request $request, array $headers, string $scope)
+    {
+        $traceId = $request->string('submission_request_id')->toString();
+
+        if (! Str::isUuid($traceId)) {
+            $traceId = (string) Str::uuid();
+        }
+
+        app(LiteracySubmissionEventRecorder::class)->record('throttled', [
+            'http_status' => 429,
+            'context' => [
+                'operation' => str_contains($scope, 'submit') ? 'submit' : 'queue',
+                'reason' => 'application_rate_limit',
+                'limiter_scope' => $scope,
+                'trace_id' => $traceId,
+            ],
+        ]);
+
+        return response()->json([
+            'status' => 'throttled',
+            'message' => 'Permintaan sedang dijeda singkat oleh aplikasi. Jawaban tidak perlu dikirim berulang.',
+            'retry_after_seconds' => (int) ($headers['Retry-After'] ?? 5),
+        ], 429, $headers + [
+            'Cache-Control' => 'no-store',
+            'X-Literacy-Protocol' => '2',
+            'X-Literacy-Trace-Id' => $traceId,
+            'X-Literacy-Throttle' => $scope,
+        ]);
     }
 
     protected function registerSlowAdminQueryLogger(): void

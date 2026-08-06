@@ -20,13 +20,14 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Throwable;
 
 class PerpustakaanLiteracyProgramController extends Controller
 {
@@ -110,9 +111,15 @@ class PerpustakaanLiteracyProgramController extends Controller
         $questions = $material->questions()->get();
 
         if ($questions->isEmpty()) {
-            return back()
-                ->withErrors(['answers' => 'Materi ini belum memiliki pertanyaan.'])
-                ->withInput();
+            return $this->submissionProblemResponse(
+                $request,
+                'material_not_ready',
+                'answers',
+                'Materi ini belum memiliki pertanyaan.',
+                409,
+                null,
+                $material,
+            );
         }
 
         $requestId = $this->submissionRequestId($request);
@@ -162,16 +169,30 @@ class PerpustakaanLiteracyProgramController extends Controller
                 ->first();
 
             if (! $student) {
-                return back()
-                    ->withErrors(['student_id' => 'Pilih siswa aktif dari data master.'])
-                    ->withInput();
+                return $this->submissionProblemResponse(
+                    $request,
+                    'student_not_active',
+                    'student_id',
+                    'Pilih siswa aktif dari data master.',
+                    422,
+                    $ticket,
+                    $material,
+                    $studentId,
+                );
             }
 
             if (($material->student_verification_enabled ?? true)
                 && ! $this->studentVerificationMatches($student, (string) ($validated['student_verification'] ?? ''))) {
-                return back()
-                    ->withErrors(['student_verification' => $this->studentVerificationErrorMessage($student, (string) ($validated['student_verification'] ?? ''))])
-                    ->withInput();
+                return $this->submissionProblemResponse(
+                    $request,
+                    'verification_mismatch',
+                    'student_verification',
+                    $this->studentVerificationErrorMessage($student, (string) ($validated['student_verification'] ?? '')),
+                    422,
+                    $ticket,
+                    $material,
+                    $student->getKey(),
+                );
             }
 
             $existingResponse = PerpustakaanLiterasiResponse::withTrashed()
@@ -181,17 +202,32 @@ class PerpustakaanLiteracyProgramController extends Controller
 
             if ($existingResponse) {
                 if ($existingResponse->trashed()) {
-                    return back()
-                        ->withErrors(['student_id' => 'Jawaban siswa ini berada di Sampah. Hubungi Guru / Tim Literasi Numerasi untuk merestore jawaban lama atau menghapusnya permanen sebelum mengerjakan ulang.'])
-                        ->withInput();
+                    return $this->submissionProblemResponse(
+                        $request,
+                        'response_in_trash',
+                        'student_id',
+                        'Jawaban siswa ini berada di Sampah. Hubungi Guru / Tim Literasi Numerasi untuk merestore jawaban lama atau menghapusnya permanen sebelum mengerjakan ulang.',
+                        409,
+                        $ticket,
+                        $material,
+                        $student->getKey(),
+                    );
                 }
 
-                return back()
-                    ->withErrors(['student_id' => 'Siswa ini sudah mengirim jawaban. Gunakan kode unik untuk mengedit jawaban. Jika nama sudah mengisi dan lupa kode editnya, hubungi Guru / Tim Literasi Numerasi agar kode edit dicek.'])
-                    ->withInput();
+                return $this->submissionProblemResponse(
+                    $request,
+                    'already_submitted',
+                    'student_id',
+                    'Siswa ini sudah mengirim jawaban. Gunakan kode unik untuk mengedit jawaban. Jika nama sudah mengisi dan lupa kode editnya, hubungi Guru / Tim Literasi Numerasi agar kode edit dicek.',
+                    409,
+                    $ticket,
+                    $material,
+                    $student->getKey(),
+                    $existingResponse,
+                );
             }
 
-            $response = DB::transaction(function () use ($request, $material, $questions, $student, $validated): PerpustakaanLiterasiResponse {
+            $response = DB::transaction(function () use ($request, $material, $questions, $student, $validated, $ticket, $submissionQueue): PerpustakaanLiterasiResponse {
                 $response = PerpustakaanLiterasiResponse::query()->create([
                     'material_id' => $material->getKey(),
                     'data_siswa_id' => $student->getKey(),
@@ -204,14 +240,15 @@ class PerpustakaanLiteracyProgramController extends Controller
 
                 $this->syncAnswers($response, $questions, $validated['answers'] ?? []);
                 $response->addIntegrityCounts($this->integrityCountsFromValidated($validated));
+                $this->recordSubmissionDelivery($response, $ticket, $request);
+                $submissionQueue->completeWithinTransaction($ticket, $response);
 
                 return $response;
-            });
+            }, 3);
 
-            AnalyzeLiteracyResponseSimilarity::queueFor($response);
-            $this->recordSubmissionDelivery($response, $ticket, $request);
-            $submissionQueue->complete($ticket, $response);
             $ticketCompleted = true;
+            $submissionQueue->afterCompletion($ticket?->refresh());
+            AnalyzeLiteracyResponseSimilarity::queueFor($response);
 
             return $this->successfulSubmissionRedirect($response, 'Jawaban berhasil dikirim. Simpan kode unik untuk mengedit jawaban.');
         } catch (ValidationException $exception) {
@@ -223,6 +260,27 @@ class PerpustakaanLiteracyProgramController extends Controller
                 'context' => [
                     'operation' => 'create',
                     'fields' => array_keys($exception->errors()),
+                ],
+            ]);
+
+            if ($this->isAsyncLiteracyRequest($request)) {
+                return $this->literacyJson([
+                    'status' => 'validation_failed',
+                    'message' => collect($exception->errors())->flatten()->first() ?: 'Jawaban perlu diperbaiki.',
+                    'errors' => $exception->errors(),
+                ], 422, $request);
+            }
+
+            throw $exception;
+        } catch (Throwable $exception) {
+            app(LiteracySubmissionEventRecorder::class)->record('server_error', [
+                'material_id' => $material->getKey(),
+                'data_siswa_id' => $studentId,
+                'ticket_id' => $ticket?->getKey(),
+                'http_status' => 500,
+                'context' => [
+                    'operation' => 'create',
+                    'exception' => $exception::class,
                 ],
             ]);
 
@@ -309,17 +367,19 @@ class PerpustakaanLiteracyProgramController extends Controller
                 $this->answerValidationAttributes($questions),
             );
 
-            DB::transaction(function () use ($response, $questions, $validated): void {
+            DB::transaction(function () use ($request, $response, $questions, $validated, $ticket, $submissionQueue): void {
                 $this->syncAnswers($response, $questions, $validated['answers'] ?? []);
                 $response->addIntegrityCounts($this->integrityCountsFromValidated($validated));
                 $response->forceFill([
                     'last_edited_at' => now(),
                 ])->save();
-            });
+                $this->recordSubmissionDelivery($response, $ticket, $request);
+                $submissionQueue->completeWithinTransaction($ticket, $response);
+            }, 3);
 
-            AnalyzeLiteracyResponseSimilarity::queueFor($response);
-            $submissionQueue->complete($ticket, $response);
             $ticketCompleted = true;
+            $submissionQueue->afterCompletion($ticket?->refresh());
+            AnalyzeLiteracyResponseSimilarity::queueFor($response);
 
             return $this->successfulSubmissionRedirect($response, 'Jawaban berhasil diperbarui.');
         } catch (ValidationException $exception) {
@@ -332,6 +392,28 @@ class PerpustakaanLiteracyProgramController extends Controller
                 'context' => [
                     'operation' => 'update',
                     'fields' => array_keys($exception->errors()),
+                ],
+            ]);
+
+            if ($this->isAsyncLiteracyRequest($request)) {
+                return $this->literacyJson([
+                    'status' => 'validation_failed',
+                    'message' => collect($exception->errors())->flatten()->first() ?: 'Jawaban perlu diperbaiki.',
+                    'errors' => $exception->errors(),
+                ], 422, $request);
+            }
+
+            throw $exception;
+        } catch (Throwable $exception) {
+            app(LiteracySubmissionEventRecorder::class)->record('server_error', [
+                'material_id' => $response->material_id,
+                'response_id' => $response->getKey(),
+                'data_siswa_id' => $response->data_siswa_id,
+                'ticket_id' => $ticket?->getKey(),
+                'http_status' => 500,
+                'context' => [
+                    'operation' => 'update',
+                    'exception' => $exception::class,
                 ],
             ]);
 
@@ -438,6 +520,64 @@ class PerpustakaanLiteracyProgramController extends Controller
         return $this->ticketResponse($submissionQueue->status($request, $token));
     }
 
+    public function recoverSubmissionReceipt(
+        Request $request,
+        string $token,
+        LiteracySubmissionQueue $submissionQueue,
+    ): JsonResponse {
+        $validated = $request->validate([
+            'submission_request_id' => ['required', 'uuid'],
+        ]);
+        $ticket = $submissionQueue->ownedTicketForRequest(
+            $request,
+            $token,
+            (string) $validated['submission_request_id'],
+        );
+
+        if ($ticket->status === PerpustakaanLiterasiSubmissionTicket::STATUS_COMPLETED
+            && $ticket->result_response_id) {
+            $response = PerpustakaanLiterasiResponse::query()->find($ticket->result_response_id);
+
+            if ($response) {
+                app(LiteracySubmissionEventRecorder::class)->record('receipt_recovered', [
+                    'material_id' => $ticket->material_id,
+                    'response_id' => $response->getKey(),
+                    'data_siswa_id' => $ticket->data_siswa_id,
+                    'ticket_id' => $ticket->getKey(),
+                    'context' => [
+                        'operation' => $ticket->operation,
+                        'queue_status' => $ticket->status,
+                    ],
+                ]);
+
+                return $this->successfulSubmissionRedirect(
+                    $response,
+                    'Jawaban sudah tersimpan. Struk berhasil dipulihkan.',
+                    true,
+                );
+            }
+        }
+
+        if (in_array($ticket->status, [
+            PerpustakaanLiterasiSubmissionTicket::STATUS_WAITING,
+            PerpustakaanLiterasiSubmissionTicket::STATUS_ADMITTED,
+            PerpustakaanLiterasiSubmissionTicket::STATUS_PROCESSING,
+        ], true)) {
+            return $this->literacyJson(
+                $submissionQueue->status($request, $token) + [
+                    'message' => 'Status penyimpanan masih diperiksa. Jangan mengirim jawaban berulang.',
+                ],
+                202,
+                $request,
+            );
+        }
+
+        return $this->literacyJson([
+            'status' => $ticket->status,
+            'message' => 'Jawaban belum dikonfirmasi tersimpan. Periksa verifikasi dan jawaban, lalu kirim satu kali.',
+        ], 409, $request);
+    }
+
     public function cancelSubmissionTicket(
         Request $request,
         string $token,
@@ -454,7 +594,7 @@ class PerpustakaanLiteracyProgramController extends Controller
         $material = $this->resolveDirectLinkMaterial($slug);
         $this->ensureMaterialHasOpened($material);
         $validated = $request->validate([
-            'event_code' => ['required', 'in:client_retry_exhausted,unexpected_success_payload'],
+            'event_code' => ['required', 'in:client_retry_exhausted,unexpected_success_payload,hosting_throttled'],
             'submission_ticket' => ['nullable', 'string', 'max:64'],
             'submission_request_id' => ['nullable', 'uuid'],
             'retry_statuses' => ['nullable', 'string', 'max:120'],
@@ -483,9 +623,11 @@ class PerpustakaanLiteracyProgramController extends Controller
             'retry_statuses' => $validated['retry_statuses'] ?? null,
             'context' => [
                 'operation' => $ticket?->operation ?? 'unknown',
-                'reason' => $eventCode === 'unexpected_success_payload'
-                    ? 'success_payload_missing_receipt_redirect'
-                    : 'retry_window_exhausted',
+                'reason' => match ($eventCode) {
+                    'unexpected_success_payload' => 'success_payload_missing_receipt_redirect',
+                    'hosting_throttled' => 'http_429_without_application_header',
+                    default => 'retry_window_exhausted',
+                },
                 'request_kind' => 'final_submission',
                 'content_type' => $validated['content_type'] ?? null,
                 'payload_status' => $validated['payload_status'] ?? null,
@@ -1051,8 +1193,7 @@ class PerpustakaanLiteracyProgramController extends Controller
     {
         $status = ($payload['status'] ?? null) === 'waiting' ? 202 : 201;
 
-        return response()
-            ->json($payload, $status)
+        return $this->literacyJson($payload, $status, request())
             ->header('Retry-After', (string) ($payload['retry_after_seconds'] ?? 5));
     }
 
@@ -1062,12 +1203,15 @@ class PerpustakaanLiteracyProgramController extends Controller
         $position = max(1, (int) ($payload['position'] ?? 1));
         $seconds = max(1, (int) ($payload['estimated_wait_seconds'] ?? 5));
 
-        if (request()->expectsJson()) {
-            return response()
-                ->json($payload + [
+        if ($this->isAsyncLiteracyRequest(request())) {
+            return $this->literacyJson(
+                $payload + [
                     'message' => 'Server sedang melayani pengiriman lain. Posisi antrean Anda '.$position
                         .', perkiraan tunggu '.$seconds.' detik.',
-                ], 425)
+                ],
+                425,
+                request(),
+            )
                 ->header('Retry-After', (string) ($payload['retry_after_seconds'] ?? 5));
         }
 
@@ -1088,6 +1232,7 @@ class PerpustakaanLiteracyProgramController extends Controller
     protected function successfulSubmissionRedirect(
         PerpustakaanLiterasiResponse $response,
         string $message,
+        bool $forceJson = false,
     ): RedirectResponse|JsonResponse {
         $response->loadMissing('material');
         $redirectUrl = route('library.literacy.completed');
@@ -1111,16 +1256,72 @@ class PerpustakaanLiteracyProgramController extends Controller
         request()->session()->flash('literacy_submission_receipt', $receipt);
         request()->session()->flash('success', $message);
 
-        if (request()->expectsJson()) {
-            return response()->json([
+        if ($forceJson || $this->isAsyncLiteracyRequest(request())) {
+            return $this->literacyJson([
                 'status' => 'completed',
                 'message' => $message,
                 'redirect_url' => $redirectUrl,
                 'edit_code' => $response->edit_code,
-            ]);
+            ], 200, request());
         }
 
         return redirect()->to($redirectUrl, 303);
+    }
+
+    protected function submissionProblemResponse(
+        Request $request,
+        string $status,
+        string $field,
+        string $message,
+        int $httpStatus,
+        ?PerpustakaanLiterasiSubmissionTicket $ticket = null,
+        ?PerpustakaanLiterasiMaterial $material = null,
+        ?int $studentId = null,
+        ?PerpustakaanLiterasiResponse $response = null,
+    ): RedirectResponse|JsonResponse {
+        app(LiteracySubmissionEventRecorder::class)->record('submission_rejected', [
+            'material_id' => $material?->getKey(),
+            'response_id' => $response?->getKey(),
+            'data_siswa_id' => $studentId,
+            'ticket_id' => $ticket?->getKey(),
+            'http_status' => $httpStatus,
+            'context' => [
+                'operation' => 'create',
+                'reason' => $status,
+                'fields' => [$field],
+            ],
+        ]);
+
+        if ($this->isAsyncLiteracyRequest($request)) {
+            return $this->literacyJson([
+                'status' => $status,
+                'message' => $message,
+                'errors' => [$field => [$message]],
+            ], $httpStatus, $request);
+        }
+
+        return redirect()->back(303)->withErrors([$field => $message])->withInput();
+    }
+
+    protected function isAsyncLiteracyRequest(Request $request): bool
+    {
+        return $request->header('X-Literacy-Client') === 'async-v2'
+            || $request->expectsJson();
+    }
+
+    protected function literacyJson(array $payload, int $status, Request $request): JsonResponse
+    {
+        $traceId = $request->string('submission_request_id')->toString();
+
+        if (! Str::isUuid($traceId)) {
+            $traceId = (string) Str::uuid();
+        }
+
+        return response()->json($payload, $status, [
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+            'X-Literacy-Protocol' => '2',
+            'X-Literacy-Trace-Id' => $traceId,
+        ]);
     }
 
     /**

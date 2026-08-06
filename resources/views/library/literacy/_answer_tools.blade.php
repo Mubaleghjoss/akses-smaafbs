@@ -181,6 +181,7 @@
                 let lastValidationField = '';
                 let clientFailureReported = false;
                 let unexpectedPayloadReported = false;
+                let hostingThrottleReported = false;
 
                 const wait = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
                 const csrfToken = () => form.querySelector('input[name="_token"]')?.value || '';
@@ -427,6 +428,17 @@
                         payloadStatus: error?.payloadStatus || '',
                     });
                 };
+                const reportHostingThrottle = () => {
+                    if (hostingThrottleReported) {
+                        return;
+                    }
+
+                    hostingThrottleReported = true;
+                    reportSubmissionEvent('hosting_throttled', {
+                        retryStatuses: currentRetryStatuses(),
+                        httpStatus: 429,
+                    });
+                };
 
                 const stopQueue = () => {
                     queueRunning = false;
@@ -581,13 +593,30 @@
                             headers: {
                                 Accept: 'application/json',
                                 'X-CSRF-TOKEN': csrfToken(),
+                                'X-Literacy-Client': 'async-v2',
                                 ...optionHeaders,
                             },
                         });
                         const contentType = response.headers.get('Content-Type') || '';
                         const payload = await response.json().catch(() => ({}));
 
+                        if (response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400)) {
+                            const redirectError = new Error('Server meminta browser kembali ke formulir. Status tiket akan diperiksa tanpa mengirim berulang.');
+                            redirectError.status = response.status || 302;
+                            redirectError.httpStatus = response.status || 302;
+                            redirectError.contentType = contentType;
+                            redirectError.retryAfter = 5;
+                            redirectError.retryable = true;
+                            redirectError.unexpectedPayload = true;
+                            reportUnexpectedPayload(redirectError);
+                            throw redirectError;
+                        }
+
                         if (!response.ok) {
+                            if (response.status === 429 && !response.headers.get('X-Literacy-Throttle')) {
+                                reportHostingThrottle();
+                            }
+
                             const validationEntry = Object.entries(payload.errors || {})[0];
                             const validationMessage = Array.isArray(validationEntry?.[1])
                                 ? validationEntry[1][0]
@@ -605,6 +634,8 @@
                             validatePayload(payload, {
                                 httpStatus: response.status,
                                 contentType,
+                                redirected: response.redirected,
+                                responseUrl: response.url,
                             });
                         }
 
@@ -656,7 +687,7 @@
                             const presentation = error?.unexpectedPayload
                                 ? {
                                     heading: 'Struk belum berhasil dibuka',
-                                    detail: 'Server sudah menerima proses pengiriman, tetapi respons konfirmasi belum lengkap. Sistem sedang memeriksa ulang secara otomatis.',
+                                    detail: 'Status penyimpanan belum dapat dipastikan karena respons server tidak lengkap. Sistem sedang memeriksa tiket tanpa mengirim jawaban berulang.',
                                 }
                                 : retryPresentation(error.status);
 
@@ -735,6 +766,150 @@
                     });
                 };
 
+                const validateCompletedPayload = (candidate, responseMeta) => {
+                    const contentType = String(responseMeta?.contentType || '').toLowerCase();
+                    const validPayload = contentType.includes('application/json')
+                        && candidate?.status === 'completed'
+                        && Boolean(candidate?.redirect_url)
+                        && responseMeta?.redirected !== true;
+
+                    if (validPayload) {
+                        return;
+                    }
+
+                    const unexpectedError = new Error('Server mengembalikan halaman yang tidak sesuai dengan protokol pengiriman.');
+                    unexpectedError.status = Number(responseMeta?.httpStatus || 0);
+                    unexpectedError.httpStatus = Number(responseMeta?.httpStatus || 0);
+                    unexpectedError.contentType = contentType;
+                    unexpectedError.payloadStatus = String(candidate?.status || '');
+                    unexpectedError.retryAfter = 5;
+                    unexpectedError.retryable = true;
+                    unexpectedError.unexpectedPayload = true;
+                    reportUnexpectedPayload(unexpectedError);
+                    throw unexpectedError;
+                };
+
+                const sendFinalOnce = () => requestJson(form.action, {
+                    method: (form.method || 'POST').toUpperCase(),
+                    body: new FormData(form),
+                    redirect: 'manual',
+                    validatePayload: validateCompletedPayload,
+                });
+
+                const recoverReceipt = async (payload) => {
+                    const recoveryUrl = payload?.receipt_recovery_url || queueSnapshot?.receipt_recovery_url;
+
+                    if (!recoveryUrl) {
+                        const error = new Error('Tiket selesai, tetapi alamat pemulihan Struk belum tersedia.');
+                        error.retryable = true;
+                        error.unexpectedPayload = true;
+                        throw error;
+                    }
+
+                    const body = new FormData();
+                    body.append('_token', csrfToken());
+                    body.append('submission_request_id', requestIdInput?.value || '');
+
+                    return requestJson(recoveryUrl, {
+                        method: 'POST',
+                        body,
+                        redirect: 'manual',
+                        validatePayload: validateCompletedPayload,
+                    });
+                };
+
+                const waitForAdmittedReplayTicket = async () => {
+                    let payload = await createTicket();
+                    let admitted = renderQueuePayload(payload);
+
+                    while (!cancelled && admitted === false) {
+                        const seconds = Math.max(2, Number.parseInt(payload.retry_after_seconds || '5', 10));
+                        await countdownWait(seconds, (remaining) => {
+                            showQueue(
+                                `Menunggu giliran pengiriman ulang - urutan ke-${Math.max(1, payload.position || 1)}`,
+                                `Status diperiksa lagi dalam ${remaining} detik. ${draftSafetyText()} ${receiptSafetyText()}`
+                            );
+                        });
+                        payload = await requestJson(payload.status_url || statusUrl, { method: 'GET' });
+                        admitted = renderQueuePayload(payload);
+                    }
+
+                    return payload;
+                };
+
+                const recoverUncertainSubmission = async (initialError) => {
+                    const deadline = Date.now() + Math.min(retryWindowMs, 120000);
+                    let replayUsed = false;
+                    let lastError = initialError;
+
+                    recordRetryStatus(initialError?.status || initialError?.httpStatus || 0);
+
+                    while (!cancelled && Date.now() < deadline) {
+                        showQueue(
+                            'Status penyimpanan sedang diperiksa',
+                            `Sistem memeriksa tiket tanpa mengirim jawaban berulang. ${draftSafetyText()} ${receiptSafetyText()}`
+                        );
+
+                        let payload;
+
+                        try {
+                            payload = await requestJson(statusUrl, { method: 'GET' });
+                            queueSnapshot = { ...queueSnapshot, ...payload };
+                            persistDraft();
+                        } catch (statusError) {
+                            lastError = statusError;
+                            recordRetryStatus(statusError?.status || 0);
+                            await countdownWait(Math.max(5, statusError?.retryAfter || 5));
+                            continue;
+                        }
+
+                        if (payload.status === 'completed') {
+                            return recoverReceipt(payload);
+                        }
+
+                        if (payload.status === 'processing' || payload.status === 'waiting') {
+                            renderQueuePayload(payload);
+                            await countdownWait(Math.max(3, Number.parseInt(payload.retry_after_seconds || '5', 10)));
+                            continue;
+                        }
+
+                        if (payload.status === 'admitted' && !replayUsed) {
+                            replayUsed = true;
+                            await countdownWait(Math.max(3, initialError?.retryAfter || 5));
+
+                            try {
+                                return await sendFinalOnce();
+                            } catch (replayError) {
+                                lastError = replayError;
+                                recordRetryStatus(replayError?.status || replayError?.httpStatus || 0);
+                                continue;
+                            }
+                        }
+
+                        if (['cancelled', 'expired'].includes(payload.status) && !replayUsed) {
+                            replayUsed = true;
+                            clearTicketState();
+                            await waitForAdmittedReplayTicket();
+
+                            try {
+                                return await sendFinalOnce();
+                            } catch (replayError) {
+                                lastError = replayError;
+                                recordRetryStatus(replayError?.status || replayError?.httpStatus || 0);
+                                continue;
+                            }
+                        }
+
+                        break;
+                    }
+
+                    const exhaustedError = new Error('Status jawaban belum dapat dikonfirmasi. Jawaban masih aman sebagai draf; periksa isian lalu kirim satu kali setelah koneksi stabil.');
+                    exhaustedError.exhausted = true;
+                    exhaustedError.unexpectedPayload = Boolean(lastError?.unexpectedPayload);
+                    exhaustedError.status = lastError?.status || 0;
+                    throw exhaustedError;
+                };
+
                 const submitFinal = async () => {
                     if (finalSubmissionRunning) {
                         return;
@@ -755,62 +930,40 @@
                     form.dispatchEvent(new CustomEvent('literacy:final-submit-start'));
 
                     try {
-                        const payload = await requestWithRetry(form.action, {
-                            method: (form.method || 'POST').toUpperCase(),
-                            body: new FormData(form),
-                            headers: {
-                                Accept: 'application/json',
-                            },
-                            validatePayload: (candidate, responseMeta) => {
-                                const contentType = String(responseMeta?.contentType || '').toLowerCase();
-                                const validPayload = contentType.includes('application/json')
-                                    && candidate?.status === 'completed'
-                                    && Boolean(candidate?.redirect_url);
+                        let payload;
 
-                                if (validPayload) {
-                                    return;
-                                }
+                        try {
+                            payload = await sendFinalOnce();
+                        } catch (firstError) {
+                            if (!firstError?.retryable && !firstError?.unexpectedPayload) {
+                                throw firstError;
+                            }
 
-                                const unexpectedError = new Error('Respons konfirmasi server belum lengkap.');
-                                unexpectedError.status = Number(responseMeta?.httpStatus || 0);
-                                unexpectedError.httpStatus = Number(responseMeta?.httpStatus || 0);
-                                unexpectedError.contentType = contentType;
-                                unexpectedError.payloadStatus = String(candidate?.status || '');
-                                unexpectedError.retryAfter = 2;
-                                unexpectedError.retryable = true;
-                                unexpectedError.unexpectedPayload = true;
-                                reportUnexpectedPayload(unexpectedError);
-                                throw unexpectedError;
-                            },
-                        }, {
-                            windowMs: Math.min(retryWindowMs, 45000),
-                        });
+                            payload = await recoverUncertainSubmission(firstError);
+                        }
 
                         removeDraft();
                         showQueue('Jawaban berhasil disimpan', 'Server sudah mengonfirmasi penyimpanan. Struk Pengiriman sedang dibuka...');
                         window.location.replace(payload.redirect_url);
                     } catch (error) {
-                        const needsReceiptRecovery = Boolean(error?.unexpectedPayload);
+                        const needsReceiptRecovery = Boolean(error?.unexpectedPayload || error?.exhausted);
                         showQueue(
                             needsReceiptRecovery
-                                ? 'Struk belum berhasil dibuka'
-                                : (error?.exhausted ? 'Belum ada konfirmasi penyimpanan dari server' : 'Jawaban belum dapat disimpan'),
+                                ? 'Status penyimpanan sedang diperiksa'
+                                : 'Jawaban belum dapat disimpan',
                             needsReceiptRecovery
-                                ? `Server sudah menerima proses pengiriman, tetapi Struk belum berhasil dibuka. Sistem telah berhenti sejenak agar status tiket dapat diperiksa. Jangan menekan Kirim berulang dan jangan menutup tab. ${draftSafetyText()}`
-                                : (error?.exhausted
-                                ? `Percobaan otomatis dihentikan sementara. ${draftSafetyText()} Jangan tutup tab. Periksa koneksi, lalu tekan Kirim satu kali untuk melanjutkan. ${receiptSafetyText()}`
+                                ? `Belum dapat dipastikan apakah jawaban sudah tersimpan. Sistem berhenti mengirim ulang dan hanya akan memeriksa tiket. Jangan menekan Kirim berulang atau menutup tab. ${draftSafetyText()} ${receiptSafetyText()}`
                                 : (error?.message || `Silakan periksa jawaban lalu coba lagi. ${draftSafetyText()} ${receiptSafetyText()}`)
-                                )
                         );
-                        const isValidationError = error?.status === 422;
+                        const isValidationError = [409, 422].includes(error?.status);
 
-                        if (needsReceiptRecovery) {
-                            setQueueAction('recover');
-                        } else if (isValidationError) {
+                        if (isValidationError) {
                             lastValidationField = error?.validationField || '';
                             renderValidationErrors(error?.validationErrors || {});
                             clearTicketState();
                             setQueueAction('repair');
+                        } else if (needsReceiptRecovery) {
+                            setQueueAction('recover');
                         } else {
                             setQueueAction('dismiss');
                         }
@@ -998,9 +1151,29 @@
 
                 cancelButton?.addEventListener('click', async () => {
                     if (queueAction === 'recover') {
-                        setQueueAction('cancel');
-                        stopQueue();
-                        runQueue({ resume: Boolean(statusUrl && ticketInput?.value) });
+                        cancelButton.disabled = true;
+                        setQueueSubmitLocked(true);
+
+                        try {
+                            const payload = await recoverUncertainSubmission({
+                                status: 0,
+                                retryAfter: 5,
+                                retryable: true,
+                                unexpectedPayload: true,
+                            });
+                            removeDraft();
+                            showQueue('Jawaban berhasil disimpan', 'Struk Pengiriman sedang dibuka...');
+                            window.location.replace(payload.redirect_url);
+                        } catch (error) {
+                            showQueue(
+                                'Status belum dapat dipastikan',
+                                `${error?.message || 'Server belum memberi konfirmasi.'} ${draftSafetyText()}`
+                            );
+                            setQueueAction('recover');
+                        } finally {
+                            cancelButton.disabled = false;
+                            setQueueSubmitLocked(false);
+                        }
 
                         return;
                     }

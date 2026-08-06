@@ -6,8 +6,8 @@
 2. Browser meminta tiket antrean.
 3. Tiket `admitted` memberi izin submit akhir.
 4. Controller memvalidasi ulang seluruh payload terhadap pertanyaan di database.
-5. Respons dan jawaban disimpan dalam transaksi.
-6. Tiket ditandai selesai dan slot dilepas dalam `finally`.
+5. Respons, jawaban, dan perubahan tiket menjadi `completed` disimpan dalam satu transaksi.
+6. Slot gagal selalu dilepas melalui `finally`; tiket yang sudah `completed` tidak dapat dibatalkan kembali.
 7. Job kemiripan dijadwalkan; halaman sukses tidak menunggu analisis.
 8. Browser berpindah dengan `location.replace()` ke struk session tanpa soal dan jawaban.
 
@@ -20,7 +20,18 @@ Textarea, radio Benar/Salah, dan dropdown Menjodohkan ikut draf. FormData tetap 
 - `R-429`, `R-503`, `R-RETRY`: browser melakukan retry sebelum berhasil.
 - `LEGACY`: respons dibuat sebelum pencatatan status.
 
-Retry memakai request ID dan tiket yang sama agar koneksi putus tidak membuat respons ganda.
+Retry memakai request ID dan tiket yang sama agar koneksi putus tidak membuat respons ganda. JavaScript memakai protokol `async-v2`; seluruh hasil final berupa JSON dan redirect HTTP tidak pernah diikuti sebagai bukti sukses.
+
+### Kontrak async-v2
+
+- Browser mengirim `X-Literacy-Client: async-v2` dan server membalas `X-Literacy-Protocol: 2` serta trace ID.
+- `200 completed` hanya dikirim setelah transaksi respons dan tiket berhasil commit.
+- `422 validation_failed` atau `verification_mismatch` menghentikan retry dan membuka field yang perlu diperbaiki.
+- `409 already_submitted` dan `response_in_trash` menampilkan tindakan yang tepat tanpa mengirim ulang.
+- `425 waiting/processing` berarti tiket belum dapat menjalankan submit final.
+- Satu klik Kirim hanya boleh membuat satu POST final dan maksimal satu replay idempoten setelah status tiket diperiksa.
+- Endpoint `POST submission-queue/{ticket}/receipt` memulihkan flash session Struk dari `result_response_id`; endpoint status tidak pernah membocorkan kode edit.
+- Tiket baru mempunyai `request_key_hash` unik. Tiket gagal tanpa hasil didaur ulang untuk request ID yang sama.
 
 ### Pesan status untuk murid
 
@@ -28,7 +39,7 @@ Retry memakai request ID dan tiket yang sama agar koneksi putus tidak membuat re
 - Hanya status tiket `waiting` yang memakai kalimat **sudah masuk antrean** dan menampilkan posisi. Gangguan koneksi tidak boleh disebut antrean penuh.
 - Selama retry, isian tetap berada di form dan disalin ke `sessionStorage`; murid tidak perlu menekan Kirim berulang dan harus mempertahankan tab tetap terbuka.
 - Draf bukan bukti respons sudah tersimpan di server. Bukti konfirmasi yang mudah dipahami murid adalah halaman **Struk Pengiriman** beserta kode edit.
-- Jika retry otomatis habis, murid diminta memeriksa koneksi lalu menekan Kirim satu kali. Request ID yang sama menjaga retry tetap idempoten.
+- Jika status tetap tidak dapat dipastikan, browser berhenti melakukan POST dan hanya memeriksa tiket. Murid diminta tidak menekan Kirim berulang. Request ID yang sama menjaga satu replay pemulihan tetap idempoten.
 - Respons sukses yang tidak lengkap, misalnya HTTP 2xx berisi HTML, JSON kosong,
   atau JSON tanpa `redirect_url`, tidak langsung dianggap gagal. Browser memakai
   tiket dan `submission_request_id` yang sama untuk memeriksa status dan
@@ -39,6 +50,18 @@ Retry memakai request ID dan tiket yang sama agar koneksi putus tidak membuat re
 - Event `unexpected_success_payload` hanya mencatat status HTTP, content type,
   status tiket, dan waktu. Isi jawaban, token, serta payload mentah tidak boleh
   masuk log diagnostik.
+- Kalimat **Jawaban tersimpan** hanya boleh tampil setelah tiket `completed`. Draf lokal dan status pemeriksaan bukan bukti penyimpanan server.
+
+## Konkurensi dan limiter
+
+- Batas produksi tetap 10 submit aktif agar request halaman dan admin memiliki ruang.
+- Promosi FIFO memakai cache lock database nonblocking. Request yang tidak memperoleh lock tidak menunggu proses PHP.
+- Status tiket normal hanya membaca tiket; pembersihan/promosi dijalankan ketika tiket menunggu atau telah kedaluwarsa.
+- Transaksi penting mencoba ulang deadlock maksimal tiga kali dan tidak memakai baris singleton sebagai global `lockForUpdate`.
+- Limiter final: 4 per tiket/request ID, 30 per sesi, dan 1.200 per IP per menit.
+- Limiter tiket: 30 per sesi dan 1.200 per IP. Status/pemulihan: 120 per sesi dan 3.000 per IP.
+- Semua throttle Literasi mengembalikan JSON 429 dengan `Retry-After`; satu IP publik sekolah tidak boleh menjadi limiter utama siswa.
+- Respons 429 dengan header `X-Literacy-Throttle` dihitung sebagai limiter aplikasi. Browser mencatat 429 tanpa header tersebut sebagai indikasi hosting/jaringan agar dua sumber gangguan tampil terpisah di panel admin.
 
 ## Struk aman dan cache
 

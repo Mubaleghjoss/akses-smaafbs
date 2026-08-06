@@ -16,6 +16,11 @@ class LiteracySubmissionEventRecorder
         'expired',
         'client_retry_exhausted',
         'unexpected_success_payload',
+        'submission_rejected',
+        'receipt_recovered',
+        'throttled',
+        'queue_deadlock_retry',
+        'hosting_throttled',
     ];
 
     public function record(string $eventCode, array $attributes = []): void
@@ -81,6 +86,8 @@ class LiteracySubmissionEventRecorder
                 'exception',
                 'content_type',
                 'payload_status',
+                'limiter_scope',
+                'trace_id',
             ])
             ->map(function (mixed $value): mixed {
                 if (is_array($value)) {

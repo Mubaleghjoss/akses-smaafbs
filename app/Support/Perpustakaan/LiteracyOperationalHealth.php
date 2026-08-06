@@ -27,6 +27,7 @@ class LiteracyOperationalHealth
         $since = now()->subDay();
         $ticketCounts = collect();
         $eventCounts = collect();
+        $rejectionCounts = collect();
         $deliveryCounts = collect();
         $state = null;
         $network = null;
@@ -44,6 +45,12 @@ class LiteracyOperationalHealth
                 ->selectRaw('event_code, count(*) as aggregate')
                 ->groupBy('event_code')
                 ->pluck('aggregate', 'event_code');
+
+            $rejectionCounts = PerpustakaanLiterasiSubmissionEvent::query()
+                ->where('occurred_at', '>=', $since)
+                ->where('event_code', 'submission_rejected')
+                ->get(['context'])
+                ->countBy(fn (PerpustakaanLiterasiSubmissionEvent $event): string => (string) data_get($event->context, 'reason', 'unknown'));
         }
 
         if (Schema::hasTable('perpustakaan_literasi_responses')
@@ -93,6 +100,15 @@ class LiteracyOperationalHealth
             'retry_429_24h' => (int) ($deliveryCounts[PerpustakaanLiterasiResponse::SUBMISSION_DELIVERY_RETRY_429] ?? 0),
             'retry_503_24h' => (int) ($deliveryCounts[PerpustakaanLiterasiResponse::SUBMISSION_DELIVERY_RETRY_503] ?? 0),
             'validation_failed_24h' => (int) ($eventCounts['validation_failed'] ?? 0),
+            'verification_mismatch_24h' => (int) ($rejectionCounts['verification_mismatch'] ?? 0),
+            'already_submitted_24h' => (int) ($rejectionCounts['already_submitted'] ?? 0),
+            'response_in_trash_24h' => (int) ($rejectionCounts['response_in_trash'] ?? 0),
+            'receipt_recovered_24h' => (int) ($eventCounts['receipt_recovered'] ?? 0),
+            'unexpected_payload_24h' => (int) ($eventCounts['unexpected_success_payload'] ?? 0),
+            'app_throttled_24h' => (int) ($eventCounts['throttled'] ?? 0),
+            'hosting_throttled_24h' => (int) ($eventCounts['hosting_throttled'] ?? 0),
+            'server_error_24h' => (int) ($eventCounts['server_error'] ?? 0),
+            'queue_deadlock_24h' => (int) ($eventCounts['queue_deadlock_retry'] ?? 0),
             'retry_exhausted_24h' => (int) ($eventCounts['client_retry_exhausted'] ?? 0),
             'cancelled_24h' => (int) ($eventCounts['cancelled'] ?? 0),
             'expired_24h' => (int) ($eventCounts['expired'] ?? 0),

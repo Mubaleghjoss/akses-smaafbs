@@ -11,6 +11,7 @@ use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\RelationManagers
 use App\Filament\Widgets\PerpustakaanLiterasiGlobalAnalytics;
 use App\Jobs\AnalyzeLiteracyResponseSimilarity;
 use App\Models\DataSiswa;
+use App\Models\Pengaturan;
 use App\Models\PerpustakaanLiterasiAnswer;
 use App\Models\PerpustakaanLiterasiDispensation;
 use App\Models\PerpustakaanLiterasiMaterial;
@@ -21,10 +22,11 @@ use App\Models\PerpustakaanLiterasiSimilarityMatch;
 use App\Models\PerpustakaanLiterasiSubmissionEvent;
 use App\Models\PerpustakaanLiterasiSubmissionQueueState;
 use App\Models\PerpustakaanLiterasiSubmissionTicket;
-use App\Models\Pengaturan;
 use App\Models\User;
 use App\Support\Admin\AdminModuleAccess;
 use App\Support\Perpustakaan\LiteracyCompletionShareText;
+use App\Support\Perpustakaan\LiteracyOperationalHealth;
+use App\Support\Perpustakaan\LiteracyReceiptClassStatus;
 use App\Support\Perpustakaan\LiteracySubmissionQueue;
 use App\Support\Perpustakaan\LiterasiAnalytics;
 use App\Support\Perpustakaan\LiterasiSimilarityAnalyzer;
@@ -66,6 +68,7 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->runLiteracyInstructionsMigration();
         $this->runLiteracyStudentVerificationSettingMigration();
         $this->runLiteracySubmissionQueueMigration();
+        $this->runLiteracySubmissionRequestKeyMigration();
         $this->runLiteracySubmissionDeliveryMigration();
         $this->runLiteracyOperationalMonitoringMigration();
         $this->runLiteracyObjectiveQuestionMigration();
@@ -187,8 +190,12 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('unexpected_success_payload')
             ->assertSee('Periksa Status Lagi')
             ->assertSee('Kembali Perbaiki Jawaban')
-            ->assertSee('Server sudah menerima proses pengiriman, tetapi Struk belum berhasil dibuka')
+            ->assertSee('Belum dapat dipastikan apakah jawaban sudah tersimpan')
+            ->assertSee("'X-Literacy-Client': 'async-v2'", false)
+            ->assertSee("redirect: 'manual'", false)
+            ->assertSee('let replayUsed = false;', false)
             ->assertDontSee('Server tidak mengirim tujuan halaman hasil.')
+            ->assertDontSee('Server sudah menerima proses pengiriman, tetapi Struk belum berhasil dibuka')
             ->assertSee("window.addEventListener('pageshow'", false)
             ->assertSee('if (!event.persisted)', false);
     }
@@ -317,7 +324,7 @@ class LibraryLiteracyProgramTest extends TestCase
     public function test_public_literacy_images_normalize_legacy_filename_only_paths(): void
     {
         Storage::fake('public');
-        Storage::disk('public')->put('literasi/materials/legacy-material.png', $this->testPng(900, 600));
+        Storage::disk('public')->put('literasi/materials/legacy-material.png', $this->makeTestPng(900, 600));
 
         $this->createStudent('Codex Literasi Siswa Gambar', 'X IPA');
         $material = $this->createMaterial('Materi Gambar Legacy', [
@@ -360,7 +367,7 @@ class LibraryLiteracyProgramTest extends TestCase
     public function test_public_literacy_material_without_image_uses_school_logo_for_social_thumbnail(): void
     {
         Storage::fake('public');
-        Storage::disk('public')->put('site-branding/logo/logo-sma-afbs.png', $this->testPng(400, 400));
+        Storage::disk('public')->put('site-branding/logo/logo-sma-afbs.png', $this->makeTestPng(400, 400));
 
         Pengaturan::query()->updateOrCreate(
             ['nama_pengaturan' => SiteSettingKeys::LOGO_PATH],
@@ -643,6 +650,45 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertSame(25, $queue->payloadFor($tickets[4])['retry_after_seconds']);
     }
 
+    public function test_one_hundred_sixty_queue_requests_keep_ten_active_slots_and_fifo_order(): void
+    {
+        config(['literacy.submission_queue.active_slots' => 10]);
+
+        $material = $this->createMaterial('Materi Simulasi 160 Tiket');
+        $queue = app(LiteracySubmissionQueue::class);
+        $tickets = collect(range(1, 160))->mapWithKeys(function (int $index) use ($queue, $material): array {
+            $ticket = $queue->requestNewTicket(
+                $this->literacyQueueRequest('mass-browser-'.$index),
+                $material,
+                $index,
+                (string) Str::uuid(),
+            );
+
+            return [$index => $ticket];
+        });
+
+        $this->assertSame(10, PerpustakaanLiterasiSubmissionTicket::query()->where('status', 'admitted')->count());
+        $this->assertSame(150, PerpustakaanLiterasiSubmissionTicket::query()->where('status', 'waiting')->count());
+        $this->assertSame(
+            $tickets->slice(10)->pluck('id')->take(10)->values()->all(),
+            PerpustakaanLiterasiSubmissionTicket::query()
+                ->where('status', 'waiting')
+                ->orderBy('requested_at')
+                ->orderBy('id')
+                ->limit(10)
+                ->pluck('id')
+                ->all(),
+        );
+
+        $tickets->take(10)->each(fn (PerpustakaanLiterasiSubmissionTicket $ticket) => $queue->complete($ticket));
+
+        $this->assertSame(10, PerpustakaanLiterasiSubmissionTicket::query()->where('status', 'admitted')->count());
+        $this->assertSame(
+            $tickets->slice(10)->pluck('id')->take(10)->values()->all(),
+            PerpustakaanLiterasiSubmissionTicket::query()->where('status', 'admitted')->orderBy('id')->pluck('id')->all(),
+        );
+    }
+
     public function test_similarity_worker_waits_until_submission_activity_is_idle(): void
     {
         config(['literacy.submission_queue.analysis_idle_seconds' => 180]);
@@ -754,6 +800,174 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertSame($ticket->getKey(), $retried->getKey());
         $this->assertSame('completed', $retried->status);
         $this->assertSame(1, PerpustakaanLiterasiSubmissionTicket::query()->count());
+    }
+
+    public function test_async_verification_failure_returns_one_actionable_json_response(): void
+    {
+        $student = $this->createStudent('Codex Verifikasi Async', 'XI Async', [
+            'nisn' => '1234509876',
+            'tanggal_lahir' => '2010-04-17',
+        ]);
+        $material = $this->createMaterial('Materi Verifikasi Async');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Tuliskan komitmen belajar.',
+            'min_characters' => 10,
+            'max_characters' => 500,
+        ]);
+        $requestId = (string) Str::uuid();
+
+        $this->withSession(['literacy_test_browser' => 'verification-async'])
+            ->get(route('library.literacy.show', $material->slug))->assertOk();
+        $ticket = $this->withHeaders(['X-Literacy-Client' => 'async-v2'])
+            ->postJson(route('library.literacy.queue.store', $material->slug), [
+                'student_id' => $student->getKey(),
+                'submission_request_id' => $requestId,
+            ])->assertCreated()->json('ticket');
+
+        $this->withHeaders(['X-Literacy-Client' => 'async-v2'])
+            ->post(route('library.literacy.store', $material->slug), [
+                'student_id' => $student->getKey(),
+                'student_verification' => '0000000000',
+                'submission_request_id' => $requestId,
+                'submission_ticket' => $ticket,
+                'answers' => [
+                    $question->getKey() => 'Saya akan mengerjakan soal dengan teliti.',
+                ],
+            ], ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertHeader('X-Literacy-Protocol', '2')
+            ->assertJsonPath('status', 'verification_mismatch')
+            ->assertJsonStructure(['errors' => ['student_verification']]);
+
+        $this->assertDatabaseCount('perpustakaan_literasi_responses', 0);
+        $this->assertDatabaseHas('perpustakaan_literasi_submission_tickets', [
+            'public_token' => $ticket,
+            'status' => PerpustakaanLiterasiSubmissionTicket::STATUS_CANCELLED,
+        ]);
+        $this->assertDatabaseHas('perpustakaan_literasi_submission_events', [
+            'event_code' => 'submission_rejected',
+            'data_siswa_id' => $student->getKey(),
+            'http_status' => 422,
+        ]);
+    }
+
+    public function test_async_existing_and_trashed_responses_return_specific_conflicts(): void
+    {
+        $student = $this->createStudent('Codex Konflik Async', 'XI Konflik');
+        $material = $this->createMaterial('Materi Konflik Async', [
+            'student_verification_enabled' => false,
+        ]);
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Jelaskan pelajaran hari ini.',
+            'min_characters' => 10,
+            'max_characters' => 500,
+        ]);
+        $response = $this->createResponseWithAnswer(
+            $material,
+            $student,
+            $question,
+            'Jawaban yang telah disimpan sebelumnya.',
+        );
+
+        $this->withSession(['literacy_test_browser' => 'response-conflicts'])
+            ->get(route('library.literacy.show', $material->slug))->assertOk();
+
+        foreach (['already_submitted', 'response_in_trash'] as $expectedStatus) {
+            $requestId = (string) Str::uuid();
+            $ticket = $this->withHeaders(['X-Literacy-Client' => 'async-v2'])
+                ->postJson(route('library.literacy.queue.store', $material->slug), [
+                    'student_id' => $student->getKey(),
+                    'submission_request_id' => $requestId,
+                ])->assertCreated()->json('ticket');
+
+            $this->withHeaders(['X-Literacy-Client' => 'async-v2'])
+                ->postJson(route('library.literacy.store', $material->slug), [
+                    'student_id' => $student->getKey(),
+                    'submission_request_id' => $requestId,
+                    'submission_ticket' => $ticket,
+                    'answers' => [
+                        $question->getKey() => 'Jawaban kedua tidak boleh membuat respons ganda.',
+                    ],
+                ])
+                ->assertStatus(409)
+                ->assertJsonPath('status', $expectedStatus);
+
+            if ($expectedStatus === 'already_submitted') {
+                $response->delete();
+            }
+        }
+
+        $this->assertSame(1, PerpustakaanLiterasiResponse::withTrashed()->count());
+    }
+
+    public function test_completed_ticket_recovers_receipt_without_reposting_answers(): void
+    {
+        Queue::fake();
+
+        $student = $this->createStudent('Codex Pulih Struk', 'XI Pulih');
+        $material = $this->createMaterial('Materi Pulih Struk', [
+            'student_verification_enabled' => false,
+        ]);
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Jelaskan manfaat pemulihan struk.',
+            'min_characters' => 10,
+            'max_characters' => 500,
+        ]);
+        $requestId = (string) Str::uuid();
+
+        $this->withSession(['literacy_test_browser' => 'receipt-recovery'])
+            ->get(route('library.literacy.show', $material->slug))->assertOk();
+        $ticket = $this->withHeaders(['X-Literacy-Client' => 'async-v2'])
+            ->postJson(route('library.literacy.queue.store', $material->slug), [
+                'student_id' => $student->getKey(),
+                'submission_request_id' => $requestId,
+            ])->assertCreated()->json('ticket');
+
+        $this->withHeaders(['X-Literacy-Client' => 'async-v2'])
+            ->postJson(route('library.literacy.store', $material->slug), [
+                'student_id' => $student->getKey(),
+                'submission_request_id' => $requestId,
+                'submission_ticket' => $ticket,
+                'answers' => [
+                    $question->getKey() => 'Pemulihan struk memastikan jawaban tidak perlu dikirim ulang.',
+                ],
+            ])->assertOk();
+
+        $this->post(route('library.literacy.queue.receipt', $ticket), [
+            'submission_request_id' => $requestId,
+        ])
+            ->assertOk()
+            ->assertJsonPath('status', 'completed')
+            ->assertJsonStructure(['redirect_url']);
+
+        $this->assertSame(1, PerpustakaanLiterasiResponse::query()->count());
+        $this->assertDatabaseHas('perpustakaan_literasi_submission_events', [
+            'event_code' => 'receipt_recovered',
+            'data_siswa_id' => $student->getKey(),
+        ]);
+    }
+
+    public function test_cancelled_ticket_is_recycled_for_the_same_request_id(): void
+    {
+        $material = $this->createMaterial('Materi Tiket Daur Ulang');
+        $queue = app(LiteracySubmissionQueue::class);
+        $request = $this->literacyQueueRequest('recycled-browser');
+        $requestId = (string) Str::uuid();
+        $ticket = $queue->requestNewTicket($request, $material, 321, $requestId);
+
+        $queue->release($ticket);
+        $recycled = $queue->requestNewTicket($request, $material, 321, $requestId);
+
+        $this->assertSame($ticket->getKey(), $recycled->getKey());
+        $this->assertSame(1, PerpustakaanLiterasiSubmissionTicket::query()->count());
+        $this->assertNotNull($recycled->request_key_hash);
+        $this->assertContains($recycled->status, [
+            PerpustakaanLiterasiSubmissionTicket::STATUS_ADMITTED,
+            PerpustakaanLiterasiSubmissionTicket::STATUS_WAITING,
+        ]);
     }
 
     public function test_completed_queue_tickets_backfill_existing_response_delivery_status(): void
@@ -1491,6 +1705,23 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertDatabaseHas('data_siswa', ['id' => $student->getKey()]);
     }
 
+    public function test_browser_can_report_hosting_429_separately_from_application_throttle(): void
+    {
+        $material = $this->createMaterial('Materi Diagnostik Hosting 429');
+
+        $this->postJson(route('library.literacy.submission-event', $material->slug), [
+            'event_code' => 'hosting_throttled',
+            'submission_request_id' => (string) Str::uuid(),
+            'retry_statuses' => '429',
+            'http_status' => 429,
+        ])->assertNoContent();
+
+        $event = PerpustakaanLiterasiSubmissionEvent::query()->sole();
+        $this->assertSame('hosting_throttled', $event->event_code);
+        $this->assertSame(429, $event->http_status);
+        $this->assertSame('http_429_without_application_header', $event->context['reason']);
+    }
+
     public function test_question_limit_cannot_be_lowered_below_saved_answer(): void
     {
         $student = $this->createStudent('Codex Batas Tersimpan', 'XI 3');
@@ -1540,7 +1771,7 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertSame(200, $check->http_status);
         $this->assertFalse(data_get($check->context, 'monitor_enabled'));
 
-        $health = app(\App\Support\Perpustakaan\LiteracyOperationalHealth::class)->snapshot();
+        $health = app(LiteracyOperationalHealth::class)->snapshot();
         $this->assertSame('disabled', $health['network_monitor_state']);
     }
 
@@ -2459,7 +2690,7 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertSame('Izin', $dispensated['reason_label']);
         $this->assertSame($admin->name, $dispensated['confirmed_by']);
 
-        $receiptStatus = app(\App\Support\Perpustakaan\LiteracyReceiptClassStatus::class)->forReceipt([
+        $receiptStatus = app(LiteracyReceiptClassStatus::class)->forReceipt([
             'material_id' => $material->getKey(),
             'student_class' => 'XI Izin',
             'student_id' => 0,
@@ -3103,6 +3334,16 @@ class LibraryLiteracyProgramTest extends TestCase
         $migration->up();
     }
 
+    protected function runLiteracySubmissionRequestKeyMigration(): void
+    {
+        if (Schema::hasColumn('perpustakaan_literasi_submission_tickets', 'request_key_hash')) {
+            return;
+        }
+
+        $migration = require database_path('migrations/2026_08_06_100000_add_request_key_hash_to_literacy_submission_tickets.php');
+        $migration->up();
+    }
+
     protected function runLiteracyOperationalMonitoringMigration(): void
     {
         if (Schema::hasTable('perpustakaan_literasi_submission_events')
@@ -3136,7 +3377,7 @@ class LibraryLiteracyProgramTest extends TestCase
         $migration->up();
     }
 
-    protected function testPng(int $width, int $height): string
+    protected function makeTestPng(int $width, int $height): string
     {
         $image = imagecreatetruecolor($width, $height);
         $background = imagecolorallocate($image, 22, 163, 74);

@@ -1,5 +1,17 @@
 # Riwayat Literasi Numerasi
 
+## 2026-08-06 - Protokol submit async-v2
+
+- Menghentikan pola redirect `POST 302` yang diikuti HTML dan retry jawaban berulang.
+- Menambahkan JSON khusus untuk validasi, verifikasi siswa, respons lama, dan respons di Sampah.
+- Membatasi satu klik menjadi satu POST final dan maksimal satu replay setelah status tiket diperiksa.
+- Menambahkan pemulihan Struk langsung dari tiket `completed` tanpa mengirim jawaban kembali.
+- Menyatukan commit respons, jawaban, dan tiket selesai dalam satu transaksi dengan retry deadlock.
+- Mengganti penguncian baris antrean global dengan cache lock nonblocking dan request key unik.
+- Melonggarkan pagar IP sekolah, mempertahankan limiter per sesi/request, dan menambahkan trace ID.
+- Mengganti scheduler command yang memerlukan `proc_open` dengan callback `Artisan::call()`.
+- Menambahkan metrik penolakan, pemulihan Struk, throttle aplikasi, respons tak terduga, dan deadlock antrean.
+
 ## 2026-07-31 - Form nilai bersama
 
 - Menyatukan form Detail/Nilai pada daftar responden materi dan History

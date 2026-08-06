@@ -31,12 +31,17 @@
                     <article @class(['literasi-health-card', 'is-warning' => $operationalHealth['retry_429_24h'] + $operationalHealth['retry_503_24h'] > 0])>
                         <span>Retry 24 Jam</span>
                         <strong>429: {{ $operationalHealth['retry_429_24h'] }} · 503: {{ $operationalHealth['retry_503_24h'] }}</strong>
-                        <small>Gagal setelah semua retry: {{ $operationalHealth['retry_exhausted_24h'] }}</small>
+                        <small>429 aplikasi {{ $operationalHealth['app_throttled_24h'] }} · 429 hosting/jaringan {{ $operationalHealth['hosting_throttled_24h'] }} · gagal setelah pemulihan {{ $operationalHealth['retry_exhausted_24h'] }}</small>
                     </article>
-                    <article @class(['literasi-health-card', 'is-warning' => $operationalHealth['validation_failed_24h'] + $operationalHealth['expired_24h'] > 0])>
-                        <span>Kejadian 24 Jam</span>
-                        <strong>{{ $operationalHealth['validation_failed_24h'] }} validasi gagal</strong>
-                        <small>Batal {{ $operationalHealth['cancelled_24h'] }} · tiket kedaluwarsa {{ $operationalHealth['expired_24h'] }}</small>
+                    <article @class(['literasi-health-card', 'is-warning' => $operationalHealth['validation_failed_24h'] + $operationalHealth['verification_mismatch_24h'] > 0])>
+                        <span>Perlu Diperbaiki Murid</span>
+                        <strong>{{ $operationalHealth['verification_mismatch_24h'] }} verifikasi tidak cocok</strong>
+                        <small>Validasi {{ $operationalHealth['validation_failed_24h'] }} · sudah mengisi {{ $operationalHealth['already_submitted_24h'] }} · Sampah {{ $operationalHealth['response_in_trash_24h'] }}</small>
+                    </article>
+                    <article @class(['literasi-health-card', 'is-warning' => $operationalHealth['unexpected_payload_24h'] > 0, 'is-danger' => $operationalHealth['server_error_24h'] > 0])>
+                        <span>Pemulihan Struk</span>
+                        <strong>{{ $operationalHealth['receipt_recovered_24h'] }} berhasil dipulihkan</strong>
+                        <small>Respons tidak sesuai {{ $operationalHealth['unexpected_payload_24h'] }} · error aplikasi {{ $operationalHealth['server_error_24h'] }} · deadlock {{ $operationalHealth['queue_deadlock_24h'] }}</small>
                     </article>
                     <article @class(['literasi-health-card', 'is-danger' => $operationalHealth['failed_jobs'] > 0, 'is-warning' => ! $operationalHealth['scheduler_healthy'] && $operationalHealth['failed_jobs'] === 0])>
                         <span>Analisis Background</span>
