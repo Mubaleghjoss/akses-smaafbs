@@ -36,6 +36,7 @@ Dokumen ini adalah pintu masuk wajib bagi pengembang dan AI yang mengubah modul 
 - Kalkulator: `app/Support/Assessment/AssessmentCalculator.php`
 - Impor: `app/Support/AssessmentMaster` dan `app/Exports/AssessmentMasterTemplateExport.php`
 - Data awal plotting 2026/2027: `php artisan assessment:teaching-plan-2026` untuk preview, lalu `--apply` setelah seluruh guru dan kelas cocok.
+- Sinkron mapel ke periode Terbuka: `php artisan assessment:sync-open-period-subjects {period} --all` untuk dry-run. Tambahkan `--source-scheme=ID --apply --actor=ID` hanya setelah pratinjau bebas konflik.
 - Admin: `app/Filament/Pages/Assessment` dan resource `Assessment*Resource`
 - Reporting: `app/Support/Assessment/Reporting`, `app/Jobs/Assessment`, dan `AssessmentReportController`
 - PDF: `resources/views/assessment/reports`

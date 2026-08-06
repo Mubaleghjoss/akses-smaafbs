@@ -42,6 +42,28 @@ Perubahan master melalui halaman Mapel atau Guru & Tendik otomatis dipakai pada
 periode berikutnya. Penerapan ke periode berjalan harus eksplisit dan hanya
 untuk periode Terbuka. Snapshot rapor yang sudah dibuat tetap immutable.
 
+### Sinkronisasi mapel ke periode Terbuka
+
+- Halaman **Mapel Penilaian** menyediakan aksi per mapel, bulk mapel terpilih,
+  dan **Masukkan Semua Mapel Aktif ke Periode**. Ketiganya memakai service dan
+  validasi atomik yang sama.
+- Sinkronisasi bersifat aditif: assignment baru dibuat, metadata assignment
+  `draft`/`returned` dapat diperbarui, sedangkan assignment lama tidak dihapus.
+  Perubahan metadata assignment yang sudah dikirim, diverifikasi, atau dikunci
+  membatalkan seluruh batch sebelum ada data parsial.
+- Guru ganda, akun guru yang belum tertaut/siap Input dan Kirim Nilai, kategori
+  kosong, kelas di luar periode, dan duplikat assignment juga membatalkan batch.
+- Jika belum tersedia fallback, sistem menyalin skema aktif yang dipilih menjadi
+  satu **Skema Default Periode**, termasuk komponen, bobot, KKM, predikat,
+  rentang nilai, presisi pembulatan, dan pengaturan deskripsi. Skema khusus
+  mapel/kelas tetap menang karena resolver memprioritaskan scope paling spesifik.
+- Satu skema aktif otomatis menjadi sumber. Jika terdapat beberapa skema aktif,
+  admin memilih sumber; jika tidak ada, notifikasi persisten membuka langsung
+  **Komponen dan Bobot**.
+- Command `assessment:sync-open-period-subjects` selalu dry-run kecuali diberi
+  `--apply --actor=ID`. Gunakan `--all` atau satu/lebih `--subject=ID/KODE`, dan
+  `--source-scheme=ID` bila pemilihan sumber tidak otomatis.
+
 Saat periode dibuka, siswa diambil dari `data_siswa` yang berstatus aktif dan
 `rombel_saat_ini`-nya sama dengan nama rombel aktif yang dipilih. Guru pengampu
 dan wali kelas wajib memiliki akun `users.guru_tendik_id` yang tertaut sebelum

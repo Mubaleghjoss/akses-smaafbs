@@ -15,6 +15,7 @@ use App\Filament\Pages\Assessment\AstsInputScores;
 use App\Filament\Pages\Assessment\AstsReports;
 use App\Filament\Pages\Assessment\AstsSubmissionStatus;
 use App\Filament\Resources\AssessmentReportTemplateResource;
+use App\Filament\Resources\AssessmentSchemeResource;
 use App\Models\Assessment\AssessmentPeriod;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
@@ -70,6 +71,19 @@ final class AssessmentActionFailureNotification
         $type = $period?->type instanceof AssessmentType
             ? $period->type
             : AssessmentType::tryFrom((string) $period?->type);
+
+        if (self::containsAny($context, [
+            'scheme', 'skema', 'komponen', 'bobot',
+        ]) && AssessmentSchemeResource::canViewAny()) {
+            return [
+                'label' => 'Buka Komponen dan Bobot',
+                'url' => AssessmentSchemeResource::getUrl('index', $periodId ? ['tableFilters' => [
+                    'assessment_period_id' => ['value' => $periodId],
+                ]] : []),
+                'icon' => 'heroicon-o-adjustments-horizontal',
+                'solution' => 'Pilih atau lengkapi skema aktif beserta komponen dengan total bobot 100%, lalu jalankan sinkronisasi kembali.',
+            ];
+        }
 
         if ($period && self::containsAny($context, [
             'assignment', 'assignments', 'penugasan', 'dikirim', 'verifikasi',

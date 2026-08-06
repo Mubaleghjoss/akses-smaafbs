@@ -26,6 +26,7 @@ use App\Models\Assessment\AuditLog;
 use App\Models\Assessment\HomeroomAssignment;
 use App\Models\Assessment\Semester;
 use App\Models\Assessment\Subject;
+use App\Models\Assessment\SubjectCategory;
 use App\Models\Assessment\TeachingAssignment;
 use App\Models\GuruTendik;
 use App\Models\Rombel;
@@ -212,7 +213,7 @@ class AssessmentAdminIntegrationTest extends TestCase
             'sort_order' => 20,
         ]);
         $this->assertDatabaseHas('assessment_teaching_assignments', [
-            'assessment_subject_category_id' => \App\Models\Assessment\SubjectCategory::query()->where('code', 'WAJIB')->value('id'),
+            'assessment_subject_category_id' => SubjectCategory::query()->where('code', 'WAJIB')->value('id'),
         ]);
     }
 
@@ -276,6 +277,33 @@ class AssessmentAdminIntegrationTest extends TestCase
             'event' => 'assignment.report_metadata_synchronized',
             'subject_id' => $assignment->getKey(),
         ]);
+    }
+
+    public function test_subject_page_exposes_single_selected_and_all_active_period_sync_actions(): void
+    {
+        $admin = $this->createUser('assessment-subject-actions-admin', 'admin');
+        Subject::query()->create([
+            'code' => 'ACT-SYNC',
+            'name' => 'Mapel Aksi Sinkron',
+            'report_group_code' => 'BELUM',
+            'report_group_name' => 'Belum Dikelompokkan',
+            'report_group_sort_order' => 999,
+            'sort_order' => 10,
+            'is_active' => true,
+        ]);
+
+        $component = Livewire::actingAs($admin)
+            ->test(ListAssessmentSubjects::class)
+            ->assertActionExists('syncAllActiveToOpenPeriod')
+            ->assertTableActionExists('applyToOpenPeriod')
+            ->assertTableBulkActionExists('syncSelectedToOpenPeriod');
+
+        $component
+            ->mountAction('syncAllActiveToOpenPeriod')
+            ->assertActionMounted('syncAllActiveToOpenPeriod')
+            ->unmountAction()
+            ->mountTableBulkAction('syncSelectedToOpenPeriod', [Subject::query()->firstOrFail()])
+            ->assertTableBulkActionMounted('syncSelectedToOpenPeriod');
     }
 
     public function test_preview_fingerprint_prevents_modified_payload_from_being_applied(): void
@@ -668,7 +696,7 @@ class AssessmentAdminIntegrationTest extends TestCase
             ->callTableAction('create', data: [
                 'assessment_semester_id' => $semester->getKey(),
                 'assessment_subject_id' => $subject->getKey(),
-                'assessment_subject_category_id' => \App\Models\Assessment\SubjectCategory::query()->where('code', 'WAJIB')->value('id'),
+                'assessment_subject_category_id' => SubjectCategory::query()->where('code', 'WAJIB')->value('id'),
                 'rombel_id' => $rombel->getKey(),
                 'is_active' => true,
             ])

@@ -2,12 +2,20 @@
 
 namespace App\Filament\Resources;
 
-use App\Actions\Assessment\SyncOpenPeriodSubjectAssignmentsAction;
+use App\Actions\Assessment\SyncOpenPeriodSubjectsAction;
 use App\Enums\Assessment\AssessmentPeriodStatus;
+use App\Enums\Assessment\AssessmentType;
 use App\Filament\Concerns\HasAssessmentPermissions;
 use App\Filament\Concerns\HasOptimizedAdminTable;
+use App\Filament\Pages\Assessment\AsasInputScores;
+use App\Filament\Pages\Assessment\AsasReports;
+use App\Filament\Pages\Assessment\AsasSubmissionStatus;
+use App\Filament\Pages\Assessment\AstsInputScores;
+use App\Filament\Pages\Assessment\AstsReports;
+use App\Filament\Pages\Assessment\AstsSubmissionStatus;
 use App\Filament\Resources\AssessmentSubjectResource\Pages;
 use App\Models\Assessment\AssessmentPeriod;
+use App\Models\Assessment\AssessmentScheme;
 use App\Models\Assessment\Semester;
 use App\Models\Assessment\Subject;
 use App\Models\Assessment\SubjectCategory;
@@ -26,12 +34,14 @@ use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -269,26 +279,19 @@ class AssessmentSubjectResource extends Resource
                     ->icon('heroicon-o-arrow-path')
                     ->color('warning')
                     ->visible(fn (): bool => static::canManageAssessment())
-                    ->requiresConfirmation()
-                    ->modalDescription('Nilai yang sudah ada dipertahankan. Assignment yang sudah dikumpulkan, diverifikasi, dikunci, atau memiliki data yang tidak aman akan membatalkan seluruh sinkronisasi.')
-                    ->form([
-                        Forms\Components\Select::make('period_id')
-                            ->label('Periode Terbuka')
-                            ->options(fn (Subject $record): array => static::openPeriodOptions($record))
-                            ->native(false)
-                            ->required(),
-                    ])
-                    ->action(function (Subject $record, array $data, SyncOpenPeriodSubjectAssignmentsAction $sync): void {
-                        $period = AssessmentPeriod::query()->findOrFail((int) $data['period_id']);
+                    ->modalWidth('xl')
+                    ->modalHeading('Masukkan mapel ke periode terbuka')
+                    ->modalDescription('Skema khusus tetap diprioritaskan. Jika diperlukan, sistem membuat satu fallback bersama dengan menyalin skema sumber.')
+                    ->modalSubmitActionLabel('Masukkan Mapel')
+                    ->form(fn (Subject $record): array => static::syncPeriodForm([(int) $record->getKey()]))
+                    ->action(function (Subject $record, array $data, SyncOpenPeriodSubjectsAction $sync): void {
+                        $period = null;
                         try {
+                            $period = AssessmentPeriod::query()->findOrFail((int) $data['period_id']);
                             $actor = auth()->user();
                             abort_unless($actor instanceof User, 403);
-                            $summary = $sync->execute($actor, $record, $period);
-                            Notification::make()
-                                ->title('Plotting diterapkan ke periode')
-                                ->body("{$summary['created']} dibuat, {$summary['updated']} diperbarui, dan {$summary['deleted']} assignment kosong dihapus.")
-                                ->success()
-                                ->send();
+                            $summary = $sync->execute($actor, $period, [(int) $record->getKey()], static::sourceSchemeId($data));
+                            static::sendSyncSuccessNotification($period, $summary);
                         } catch (Throwable $exception) {
                             report($exception);
                             AssessmentActionFailureNotification::send($exception, 'menerapkan plotting ke periode berjalan', $period);
@@ -300,6 +303,30 @@ class AssessmentSubjectResource extends Resource
             ])
             ->bulkActions([
                 BulkActionGroup::make([
+                    BulkAction::make('syncSelectedToOpenPeriod')
+                        ->label('Masukkan Mapel Terpilih ke Periode')
+                        ->icon('heroicon-o-arrow-down-on-square-stack')
+                        ->color('primary')
+                        ->visible(fn (): bool => static::canManageAssessment())
+                        ->modalWidth('xl')
+                        ->modalHeading('Masukkan mapel terpilih ke periode terbuka')
+                        ->modalDescription('Sinkronisasi bersifat aditif. Assignment lama, nilai, dan snapshot/PDF historis tidak dihapus atau ditimpa.')
+                        ->modalSubmitActionLabel('Masukkan Mapel Terpilih')
+                        ->form(fn (Collection $records): array => static::syncPeriodForm($records->modelKeys()))
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (Collection $records, array $data, SyncOpenPeriodSubjectsAction $sync): void {
+                            $period = null;
+                            try {
+                                $period = AssessmentPeriod::query()->findOrFail((int) $data['period_id']);
+                                $actor = auth()->user();
+                                abort_unless($actor instanceof User, 403);
+                                $summary = $sync->execute($actor, $period, $records->modelKeys(), static::sourceSchemeId($data));
+                                static::sendSyncSuccessNotification($period, $summary);
+                            } catch (Throwable $exception) {
+                                report($exception);
+                                AssessmentActionFailureNotification::send($exception, 'memasukkan mapel terpilih ke periode', $period);
+                            }
+                        }),
                     BulkAction::make('syncUnlockedPeriodMetadata')
                         ->label('Terapkan Kelompok ke Periode Berjalan')
                         ->icon('heroicon-o-arrow-path')
@@ -374,6 +401,165 @@ class AssessmentSubjectResource extends Resource
                         }),
                 ]),
             ]);
+    }
+
+    public static function syncAllActiveAction(): Action
+    {
+        return Action::make('syncAllActiveToOpenPeriod')
+            ->label('Masukkan Semua Mapel Aktif ke Periode')
+            ->icon('heroicon-o-arrow-down-on-square-stack')
+            ->color('primary')
+            ->visible(fn (): bool => static::canManageAssessment())
+            ->modalWidth('xl')
+            ->modalHeading('Masukkan semua mapel aktif ke periode terbuka')
+            ->modalDescription('Sistem memeriksa seluruh plotting lebih dulu. Skema, assignment, nilai, dan PDF lama tetap dipertahankan.')
+            ->modalSubmitActionLabel('Masukkan Semua Mapel')
+            ->form(fn (): array => static::syncPeriodForm(
+                Subject::query()->where('is_active', true)->orderBy('sort_order')->pluck('id')->map(fn ($id): int => (int) $id)->all(),
+            ))
+            ->action(function (array $data, SyncOpenPeriodSubjectsAction $sync): void {
+                $period = null;
+                try {
+                    $period = AssessmentPeriod::query()->findOrFail((int) $data['period_id']);
+                    $actor = auth()->user();
+                    abort_unless($actor instanceof User, 403);
+                    $subjectIds = Subject::query()->where('is_active', true)->pluck('id')->map(fn ($id): int => (int) $id)->all();
+                    $summary = $sync->execute($actor, $period, $subjectIds, static::sourceSchemeId($data));
+                    static::sendSyncSuccessNotification($period, $summary);
+                } catch (Throwable $exception) {
+                    report($exception);
+                    AssessmentActionFailureNotification::send($exception, 'memasukkan semua mapel aktif ke periode', $period);
+                }
+            });
+    }
+
+    /** @param array<int, int|string> $subjectIds @return array<int, mixed> */
+    private static function syncPeriodForm(array $subjectIds): array
+    {
+        return [
+            Section::make('Tujuan Sinkronisasi')
+                ->description('Form tetap satu kolom di HP. Pilih periode untuk melihat hitungan sebelum konfirmasi.')
+                ->columns(1)
+                ->schema([
+                    Forms\Components\Select::make('period_id')
+                        ->label('Periode Terbuka')
+                        ->options(fn (): array => AssessmentPeriod::query()
+                            ->where('status', AssessmentPeriodStatus::OPEN->value)
+                            ->latest('id')
+                            ->get()
+                            ->mapWithKeys(fn (AssessmentPeriod $period): array => [
+                                $period->getKey() => $period->name.' · '.$period->type->label(),
+                            ])->all())
+                        ->searchable()
+                        ->preload()
+                        ->native(false)
+                        ->live()
+                        ->required(),
+                    Forms\Components\Select::make('source_scheme_id')
+                        ->label('Skema Sumber Default')
+                        ->helperText('Boleh dikosongkan bila periode sudah memiliki skema default atau hanya mempunyai satu skema aktif.')
+                        ->options(fn (Get $get): array => static::schemeSourceOptions((int) ($get('period_id') ?? 0)))
+                        ->searchable()
+                        ->preload()
+                        ->native(false)
+                        ->live()
+                        ->placeholder('Pilih otomatis jika memungkinkan'),
+                    Forms\Components\Placeholder::make('sync_preview')
+                        ->label('Pratinjau Dampak')
+                        ->content(fn (Get $get): HtmlString => static::syncPreviewHtml(
+                            $subjectIds,
+                            (int) ($get('period_id') ?? 0),
+                            filled($get('source_scheme_id')) ? (int) $get('source_scheme_id') : null,
+                        )),
+                ]),
+        ];
+    }
+
+    /** @return array<int, string> */
+    private static function schemeSourceOptions(int $periodId): array
+    {
+        if ($periodId <= 0) {
+            return [];
+        }
+
+        return AssessmentScheme::query()
+            ->with(['subject:id,name', 'sourceRombel:id,nama'])
+            ->where('assessment_period_id', $periodId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get()
+            ->mapWithKeys(function (AssessmentScheme $scheme): array {
+                $scope = $scheme->subject?->name ?? 'Semua mapel';
+                $class = $scheme->sourceRombel?->nama ?? 'semua kelas';
+
+                return [$scheme->getKey() => $scheme->name.' · '.$scope.' · '.$class];
+            })
+            ->all();
+    }
+
+    /** @param array<int, int|string> $subjectIds */
+    private static function syncPreviewHtml(array $subjectIds, int $periodId, ?int $sourceSchemeId): HtmlString
+    {
+        if ($periodId <= 0) {
+            return new HtmlString('<p>Pilih periode untuk menghitung mapel, kelas, assignment, dan skema.</p>');
+        }
+
+        try {
+            $period = AssessmentPeriod::query()->findOrFail($periodId);
+            $summary = app(SyncOpenPeriodSubjectsAction::class)->preview($period, $subjectIds, $sourceSchemeId);
+            $scheme = $summary['default_scheme_created']
+                ? 'Skema default akan dibuat dari skema sumber.'
+                : 'Skema default periode sudah tersedia.';
+
+            return new HtmlString(
+                '<p><strong>'.e($summary['period_name']).'</strong></p>'
+                .'<p>'.e("{$summary['subject_count']} mapel · {$summary['class_count']} kelas · {$summary['plotting_count']} plotting").'</p>'
+                .'<p>'.e("{$summary['created']} assignment dibuat · {$summary['updated']} diperbarui · {$summary['unchanged']} tetap").'</p>'
+                .'<p>'.e($scheme).' Tidak ada assignment lama yang dihapus.</p>',
+            );
+        } catch (Throwable $exception) {
+            $message = $exception instanceof ValidationException
+                ? collect($exception->errors())->flatten()->first()
+                : $exception->getMessage();
+
+            return new HtmlString('<p><strong>Kendala:</strong> '.e((string) $message).'</p>');
+        }
+    }
+
+    /** @param array<string, mixed> $data */
+    private static function sourceSchemeId(array $data): ?int
+    {
+        return filled($data['source_scheme_id'] ?? null) ? (int) $data['source_scheme_id'] : null;
+    }
+
+    /** @param array<string, mixed> $summary */
+    private static function sendSyncSuccessNotification(AssessmentPeriod $period, array $summary): void
+    {
+        $type = $period->type instanceof AssessmentType
+            ? $period->type
+            : AssessmentType::from((string) $period->type);
+        $inputPage = $type === AssessmentType::ASAS ? AsasInputScores::class : AstsInputScores::class;
+        $statusPage = $type === AssessmentType::ASAS ? AsasSubmissionStatus::class : AstsSubmissionStatus::class;
+        $reportsPage = $type === AssessmentType::ASAS ? AsasReports::class : AstsReports::class;
+        $actions = [];
+        foreach ([
+            ['name' => 'input', 'label' => 'Buka Input Nilai', 'page' => $inputPage],
+            ['name' => 'status', 'label' => 'Status Pengumpulan', 'page' => $statusPage],
+            ['name' => 'reports', 'label' => 'Proses Rapor', 'page' => $reportsPage],
+        ] as $link) {
+            if ($link['page']::canAccess()) {
+                $actions[] = Action::make($link['name'])
+                    ->label($link['label'])
+                    ->url($link['page']::getUrl(['period' => $period->getKey()]));
+            }
+        }
+
+        Notification::make()
+            ->title('Mapel berhasil dimasukkan ke periode')
+            ->body("{$summary['created']} dibuat, {$summary['updated']} diperbarui, {$summary['unchanged']} tetap. Nilai dan rapor lama tidak berubah; mapel baru masuk rapor resmi setelah nilai lengkap dan periode dikunci kembali.")
+            ->success()
+            ->actions($actions)
+            ->send();
     }
 
     private static function plottingSummary(Subject $subject): string

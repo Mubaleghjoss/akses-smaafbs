@@ -133,6 +133,12 @@ Preview tetap tersedia ketika data belum lengkap dan diberi penanda
 **PRATINJAU - DATA BELUM LENGKAP**. Watermark mendukung posisi
 atas/tengah/bawah, lebar 20-90%, dan opacity 5-25%.
 
+Mapel yang disinkronkan ke periode Terbuka langsung tersedia pada Input Nilai,
+scope akun guru, Status Pengumpulan, dan pratinjau bertanda belum lengkap.
+Baris tanpa hasil tidak dipaksakan masuk rapor resmi. Setelah guru melengkapi,
+mengirim, dan verifikasi selesai, penguncian ulang membuat revisi snapshot baru
+yang membawa mapel terbaru. Snapshot dan PDF revisi sebelumnya tetap immutable.
+
 ## Preflight rapor resmi
 
 Generate ditolak sebelum membuat snapshot/job jika kelas terpilih masih

@@ -10,6 +10,7 @@ use App\Filament\Pages\Assessment\AstsHomeroomRecap;
 use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\Assessment\AstsInputScores;
 use App\Filament\Pages\Assessment\AstsSubmissionStatus;
+use App\Filament\Resources\AssessmentSchemeResource;
 use App\Models\Assessment\AssessmentComponent;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodAssignment;
@@ -628,6 +629,34 @@ class AssessmentTeacherExperienceTest extends TestCase
             AsasSubmissionStatus::getUrl(['period' => $asasPeriod->getKey()]),
             $asasNotification['actions'][0]['url'],
         );
+    }
+
+    public function test_scheme_failure_notification_points_to_components_and_weights_before_submission_status(): void
+    {
+        Role::findOrCreate('admin', 'web');
+        $admin = User::query()->create([
+            'name' => 'Admin Skema',
+            'username' => 'admin-skema-notice',
+            'password' => 'test-password',
+        ]);
+        $admin->assignRole('admin');
+        $period = AssessmentPeriod::factory()->asts()->create([
+            'status' => AssessmentPeriodStatus::OPEN,
+        ]);
+        $this->actingAs($admin);
+
+        $notification = AssessmentActionFailureNotification::make(
+            ValidationException::withMessages([
+                'scheme' => 'Tidak ada skema penilaian aktif yang cocok dengan mapel dan kelas penugasan.',
+            ]),
+            'Sinkronisasi Mapel',
+            $period,
+        )->toArray();
+
+        $this->assertSame('persistent', $notification['duration']);
+        $this->assertSame('Buka Komponen dan Bobot', $notification['actions'][0]['label']);
+        $this->assertStringContainsString(AssessmentSchemeResource::getUrl(), $notification['actions'][0]['url']);
+        $this->assertStringContainsString('total bobot 100%', (string) $notification['body']);
     }
 
     private function teacher(int $teacherId): User

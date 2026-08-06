@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Actions\Assessment\SyncOpenPeriodSubjectAssignmentsAction;
+use App\Actions\Assessment\SyncOpenPeriodSubjectsAction;
 use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssessmentType;
 use App\Enums\Assessment\AssignmentStatus;
@@ -10,6 +11,7 @@ use App\Models\Assessment\AcademicYear;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodAssignment;
 use App\Models\Assessment\AssessmentPeriodRombel;
+use App\Models\Assessment\AssessmentScheme;
 use App\Models\Assessment\Semester;
 use App\Models\Assessment\Subject;
 use App\Models\Assessment\SubjectCategory;
@@ -17,6 +19,8 @@ use App\Models\Assessment\TeachingAssignment;
 use App\Models\GuruTendik;
 use App\Models\Rombel;
 use App\Models\User;
+use App\Support\Assessment\AssessmentSchemeResolver;
+use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Role;
 use Tests\Feature\Concerns\BootstrapsStudentAndTeacherTables;
 use Tests\Feature\Concerns\BootstrapsUserAndPermissionTables;
@@ -158,6 +162,7 @@ class AssessmentTeachingPlanTest extends TestCase
             'rombel_id' => $rombel->getKey(),
             'is_active' => true,
         ])->firstOrFail();
+        $desiredMaster->teacher->userAccount->assignRole('admin');
         $oldTeacher = GuruTendik::query()->create(['nama' => 'Guru Lama Fisika', 'jenis_ptk' => 'Guru', 'status' => 'aktif']);
         $year = $semester->academicYear;
         $period = AssessmentPeriod::query()->create([
@@ -192,6 +197,26 @@ class AssessmentTeachingPlanTest extends TestCase
             'status' => AssignmentStatus::DRAFT,
             'lock_version' => 1,
         ]);
+        $scheme = AssessmentScheme::query()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_subject_id' => $subject->getKey(),
+            'name' => 'TES 1',
+            'rounding_precision' => 2,
+            'minimum_score' => 50,
+            'maximum_score' => 100,
+            'settings' => ['kkm' => 75],
+            'is_active' => true,
+        ]);
+        $scheme->components()->create([
+            'code' => 'TES1',
+            'name' => 'TES 1',
+            'weight' => 100,
+            'maximum_score' => 100,
+            'is_required' => true,
+            'sort_order' => 1,
+            'score_source' => 'manual',
+            'settings' => ['is_active' => true],
+        ]);
 
         $summary = app(SyncOpenPeriodSubjectAssignmentsAction::class)->execute($actor, $subject, $period);
         $this->assertSame(['created' => 0, 'updated' => 1, 'deleted' => 0], $summary);
@@ -200,7 +225,171 @@ class AssessmentTeachingPlanTest extends TestCase
         $this->assertSame('PILIHAN', $periodAssignment->fresh()->subject_group_code_snapshot);
 
         $period->forceFill(['status' => AssessmentPeriodStatus::LOCKED])->save();
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $this->expectException(ValidationException::class);
         app(SyncOpenPeriodSubjectAssignmentsAction::class)->execute($actor, $subject, $period->fresh());
+    }
+
+    public function test_bulk_sync_uses_one_default_scheme_and_turns_19_subjects_and_99_plots_into_period_assignments(): void
+    {
+        $this->artisan('assessment:teaching-plan-2026', ['--apply' => true])->assertSuccessful();
+        $adminRole = Role::findOrCreate('admin', 'web');
+        User::query()->whereNotNull('guru_tendik_id')->get()->each->assignRole($adminRole);
+        $actor = User::query()->create([
+            'name' => 'Admin Bulk Periode',
+            'username' => 'admin-bulk-periode',
+            'password' => 'secret123',
+        ]);
+        $actor->assignRole($adminRole);
+
+        $semester = Semester::query()->where('code', '2026-2027-GANJIL')->firstOrFail();
+        $period = AssessmentPeriod::query()->create([
+            'assessment_academic_year_id' => $semester->assessment_academic_year_id,
+            'assessment_semester_id' => $semester->getKey(),
+            'code' => 'ASTS-BULK-99',
+            'name' => 'ASTS Bulk 99',
+            'type' => AssessmentType::ASTS,
+            'status' => AssessmentPeriodStatus::OPEN,
+            'settings' => ['rombel_ids' => Rombel::query()->pluck('id')->all()],
+            'created_by' => $actor->getKey(),
+        ]);
+        $periodRombels = Rombel::query()->orderBy('id')->get()->mapWithKeys(function (Rombel $rombel) use ($period): array {
+            $snapshot = AssessmentPeriodRombel::query()->create([
+                'assessment_period_id' => $period->getKey(),
+                'source_rombel_id' => $rombel->getKey(),
+                'rombel_name_snapshot' => $rombel->nama,
+                'grade_level' => str($rombel->nama)->before(' ')->toString(),
+                'is_active' => true,
+            ]);
+
+            return [$rombel->getKey() => $snapshot];
+        });
+
+        $bin = Subject::query()->where('code', 'BIN')->firstOrFail();
+        $binMasters = TeachingAssignment::query()
+            ->with('category')
+            ->where('assessment_semester_id', $semester->getKey())
+            ->where('assessment_subject_id', $bin->getKey())
+            ->where('is_active', true)
+            ->get();
+        $originalAssignmentIds = [];
+        foreach ($binMasters as $master) {
+            $periodRombel = $periodRombels->get($master->rombel_id);
+            $assignment = AssessmentPeriodAssignment::query()->create([
+                'assessment_period_id' => $period->getKey(),
+                'source_teaching_assignment_id' => $master->getKey(),
+                'assessment_period_rombel_id' => $periodRombel->getKey(),
+                'assessment_subject_id' => $bin->getKey(),
+                'teacher_id' => $master->teacher_id,
+                'teacher_name_snapshot' => $master->teacher_name_snapshot,
+                'subject_name_snapshot' => $bin->name,
+                'subject_group_code_snapshot' => $master->category->code,
+                'subject_group_name_snapshot' => $master->category->name,
+                'subject_group_sort_order_snapshot' => $master->category->sort_order,
+                'subject_sort_order_snapshot' => $bin->sort_order,
+                'rombel_name_snapshot' => $periodRombel->rombel_name_snapshot,
+                'status' => AssignmentStatus::DRAFT,
+                'lock_version' => 1,
+            ]);
+            $originalAssignmentIds[] = (int) $assignment->getKey();
+        }
+
+        $source = AssessmentScheme::query()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_subject_id' => $bin->getKey(),
+            'name' => 'TES 1',
+            'rounding_precision' => 2,
+            'minimum_score' => 50,
+            'maximum_score' => 100,
+            'settings' => [
+                'kkm' => 75,
+                'predicates' => [['label' => 'A', 'minimum_score' => 90]],
+                'fallback_predicate' => 'B',
+                'description_template' => 'SEMANGAT',
+            ],
+            'is_active' => true,
+        ]);
+        $source->components()->create([
+            'code' => 'TES1',
+            'name' => 'TES 1',
+            'domain' => 'TES1-',
+            'weight' => 100,
+            'maximum_score' => 100,
+            'is_required' => true,
+            'sort_order' => 1,
+            'score_source' => 'manual',
+            'settings' => ['is_active' => true],
+        ]);
+
+        $subjectIds = Subject::query()->where('is_active', true)->pluck('id')->map(fn ($id): int => (int) $id)->all();
+        $sync = app(SyncOpenPeriodSubjectsAction::class);
+        try {
+            $sync->preview($period, $subjectIds, 999999);
+            $this->fail('Skema sumber dari luar periode seharusnya ditolak.');
+        } catch (ValidationException $exception) {
+            $this->assertStringContainsString('Skema sumber tidak aktif', collect($exception->errors())->flatten()->first());
+        }
+        $preview = $sync->preview($period, $subjectIds, $source->getKey());
+        $this->assertSame(19, $preview['subject_count']);
+        $this->assertSame(7, $preview['class_count']);
+        $this->assertSame(99, $preview['plotting_count']);
+        $this->assertSame(92, $preview['created']);
+        $this->assertSame(7, $preview['unchanged']);
+        $this->assertTrue($preview['default_scheme_created']);
+        $this->assertSame(7, AssessmentPeriodAssignment::query()->where('assessment_period_id', $period->getKey())->count());
+        $this->assertSame(1, AssessmentScheme::query()->where('assessment_period_id', $period->getKey())->count());
+
+        $this->artisan('assessment:sync-open-period-subjects', [
+            'period' => $period->getKey(),
+            '--all' => true,
+            '--source-scheme' => $source->getKey(),
+        ])->expectsOutputToContain('Mode preview: database belum diubah')->assertSuccessful();
+        $this->assertSame(7, AssessmentPeriodAssignment::query()->where('assessment_period_id', $period->getKey())->count());
+
+        $blockedAccount = User::query()->whereNotNull('guru_tendik_id')->firstOrFail();
+        $blockedAccount->removeRole($adminRole);
+        try {
+            $sync->execute($actor, $period, $subjectIds, $source->getKey());
+            $this->fail('Sinkronisasi seharusnya ditolak ketika satu akun guru belum siap.');
+        } catch (ValidationException $exception) {
+            $this->assertStringContainsString('belum siap Input dan Kirim Nilai', collect($exception->errors())->flatten()->first());
+        }
+        $this->assertSame(7, AssessmentPeriodAssignment::query()->where('assessment_period_id', $period->getKey())->count());
+        $this->assertSame(1, AssessmentScheme::query()->where('assessment_period_id', $period->getKey())->count());
+        $blockedAccount->assignRole($adminRole);
+
+        $summary = $sync->execute($actor, $period, $subjectIds, $source->getKey());
+        $this->assertSame(92, $summary['created']);
+        $this->assertSame(0, $summary['updated']);
+        $this->assertSame(7, $summary['unchanged']);
+        $this->assertSame(99, AssessmentPeriodAssignment::query()->where('assessment_period_id', $period->getKey())->count());
+        $this->assertEqualsCanonicalizing($originalAssignmentIds, AssessmentPeriodAssignment::query()->whereIn('id', $originalAssignmentIds)->pluck('id')->map(fn ($id): int => (int) $id)->all());
+
+        $default = AssessmentScheme::query()
+            ->where('assessment_period_id', $period->getKey())
+            ->whereNull('assessment_subject_id')
+            ->whereNull('source_rombel_id')
+            ->where('is_active', true)
+            ->firstOrFail();
+        $this->assertSame($source->rounding_precision, $default->rounding_precision);
+        $this->assertSame($source->settings, $default->settings);
+        $this->assertSame(1, $default->components()->count());
+        $this->assertSame('TES1', $default->components()->firstOrFail()->code);
+        $resolver = app(AssessmentSchemeResolver::class);
+        $binPeriodAssignment = AssessmentPeriodAssignment::query()
+            ->where('assessment_period_id', $period->getKey())
+            ->where('assessment_subject_id', $bin->getKey())
+            ->firstOrFail();
+        $fisPeriodAssignment = AssessmentPeriodAssignment::query()
+            ->where('assessment_period_id', $period->getKey())
+            ->where('assessment_subject_id', Subject::query()->where('code', 'FIS')->value('id'))
+            ->firstOrFail();
+        $this->assertTrue($resolver->forAssignment($binPeriodAssignment)->is($source));
+        $this->assertTrue($resolver->forAssignment($fisPeriodAssignment)->is($default));
+
+        $second = $sync->execute($actor, $period->fresh(), $subjectIds);
+        $this->assertSame(0, $second['created']);
+        $this->assertSame(0, $second['updated']);
+        $this->assertSame(99, $second['unchanged']);
+        $this->assertSame(2, AssessmentScheme::query()->where('assessment_period_id', $period->getKey())->count());
     }
 }

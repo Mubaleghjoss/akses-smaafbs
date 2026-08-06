@@ -12,6 +12,9 @@ class ListAssessmentSubjects extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [CreateAction::make()->label('Tambah Mapel')];
+        return [
+            AssessmentSubjectResource::syncAllActiveAction(),
+            CreateAction::make()->label('Tambah Mapel')->color('gray'),
+        ];
     }
 }
