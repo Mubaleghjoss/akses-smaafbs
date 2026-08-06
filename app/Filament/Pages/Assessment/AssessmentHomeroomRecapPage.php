@@ -25,6 +25,80 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
 {
     use HasAssessmentTypeNavigation;
 
+    /**
+     * @var array<string, array{header: string, bulk_label: string, input: string, max: int}>
+     */
+    private const RECAP_FIELD_DEFINITIONS = [
+        'sick_days' => [
+            'header' => 'Sakit',
+            'bulk_label' => 'Jumlah Hari Sakit',
+            'input' => 'number',
+            'max' => 366,
+        ],
+        'permission_days' => [
+            'header' => 'Izin',
+            'bulk_label' => 'Jumlah Hari Izin',
+            'input' => 'number',
+            'max' => 366,
+        ],
+        'absent_days' => [
+            'header' => 'Alpa',
+            'bulk_label' => 'Jumlah Hari Alpa',
+            'input' => 'number',
+            'max' => 366,
+        ],
+        'spiritual_predicate' => [
+            'header' => 'Predikat Spiritual',
+            'bulk_label' => 'Predikat Sikap Spiritual',
+            'input' => 'predicate',
+            'max' => 30,
+        ],
+        'spiritual_description' => [
+            'header' => 'Deskripsi Spiritual',
+            'bulk_label' => 'Deskripsi Sikap Spiritual',
+            'input' => 'text',
+            'max' => 2000,
+        ],
+        'social_predicate' => [
+            'header' => 'Predikat Sosial',
+            'bulk_label' => 'Predikat Sikap Sosial',
+            'input' => 'predicate',
+            'max' => 30,
+        ],
+        'social_description' => [
+            'header' => 'Deskripsi Sosial',
+            'bulk_label' => 'Deskripsi Sikap Sosial',
+            'input' => 'text',
+            'max' => 2000,
+        ],
+        'extracurricular' => [
+            'header' => 'Ekstrakurikuler',
+            'bulk_label' => 'Ekstrakurikuler',
+            'input' => 'text',
+            'max' => 4000,
+        ],
+        'achievement' => [
+            'header' => 'Prestasi',
+            'bulk_label' => 'Prestasi',
+            'input' => 'text',
+            'max' => 4000,
+        ],
+        'homeroom_note' => [
+            'header' => 'Catatan Wali',
+            'bulk_label' => 'Catatan Wali Kelas',
+            'input' => 'text',
+            'max' => 2000,
+        ],
+    ];
+
+    /** @var array{header: string, bulk_label: string, input: string, max: int} */
+    private const PROMOTION_STATUS_FIELD_DEFINITION = [
+        'header' => 'Status Semester',
+        'bulk_label' => 'Status Semester',
+        'input' => 'text',
+        'max' => 50,
+    ];
+
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-user-group';
 
     protected static string $assessmentPermission = 'penilaian.homeroom';
@@ -123,6 +197,11 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
         $this->loadReports();
     }
 
+    public function updatedBulkField(): void
+    {
+        $this->bulkValue = '';
+    }
+
     public function loadReports(): void
     {
         $this->reportRows = [];
@@ -182,28 +261,45 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
     }
 
     /**
+     * @return array<string, array{header: string, bulk_label: string, input: string, max: int}>
+     */
+    public function getRecapFieldDefinitions(): array
+    {
+        return self::RECAP_FIELD_DEFINITIONS;
+    }
+
+    /**
      * @return array<string, string>
      */
     public function getBulkFieldOptions(): array
     {
-        $options = [
-            'sick_days' => 'Jumlah Hari Sakit',
-            'permission_days' => 'Jumlah Hari Izin',
-            'absent_days' => 'Jumlah Hari Alpa',
-            'spiritual_predicate' => 'Predikat Sikap Spiritual',
-            'spiritual_description' => 'Deskripsi Sikap Spiritual',
-            'social_predicate' => 'Predikat Sikap Sosial',
-            'social_description' => 'Deskripsi Sikap Sosial',
-            'extracurricular' => 'Ekstrakurikuler',
-            'achievement' => 'Prestasi',
-            'homeroom_note' => 'Catatan Wali Kelas',
-        ];
+        return collect($this->getBulkFieldDefinitions())
+            ->mapWithKeys(fn (array $definition, string $field): array => [
+                $field => $definition['bulk_label'],
+            ])
+            ->all();
+    }
+
+    /**
+     * @return array{header: string, bulk_label: string, input: string, max: int}|null
+     */
+    public function getBulkFieldDefinition(?string $field = null): ?array
+    {
+        return $this->getBulkFieldDefinitions()[$field ?? $this->bulkField] ?? null;
+    }
+
+    /**
+     * @return array<string, array{header: string, bulk_label: string, input: string, max: int}>
+     */
+    protected function getBulkFieldDefinitions(): array
+    {
+        $definitions = $this->getRecapFieldDefinitions();
 
         if (data_get($this->homeroomMeta, 'collect_promotion_status')) {
-            $options['promotion_status'] = 'Status Semester';
+            $definitions['promotion_status'] = self::PROMOTION_STATUS_FIELD_DEFINITION;
         }
 
-        return $options;
+        return $definitions;
     }
 
     /**
@@ -256,8 +352,8 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
             return;
         }
 
-        $fieldOptions = $this->getBulkFieldOptions();
-        if (! array_key_exists($this->bulkField, $fieldOptions)) {
+        $fieldDefinition = $this->getBulkFieldDefinition();
+        if ($fieldDefinition === null) {
             Notification::make()->title('Kolom bulk tidak valid')->danger()->send();
 
             return;
@@ -274,13 +370,11 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
             return;
         }
 
-        $numericFields = ['sick_days', 'permission_days', 'absent_days'];
-        $predicateFields = ['spiritual_predicate', 'social_predicate'];
-        if (in_array($this->bulkField, $numericFields, true)) {
-            if (! ctype_digit($value) || (int) $value > 366) {
+        if ($fieldDefinition['input'] === 'number') {
+            if (! ctype_digit($value) || (int) $value > $fieldDefinition['max']) {
                 Notification::make()
                     ->title('Jumlah hari tidak valid')
-                    ->body('Masukkan angka bulat antara 0 sampai 366.')
+                    ->body("Masukkan angka bulat antara 0 sampai {$fieldDefinition['max']}.")
                     ->danger()
                     ->send();
 
@@ -288,7 +382,7 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
             }
 
             $value = (int) $value;
-        } elseif (in_array($this->bulkField, $predicateFields, true)) {
+        } elseif ($fieldDefinition['input'] === 'predicate') {
             if (! array_key_exists($value, $this->getAttitudePredicateOptions())) {
                 Notification::make()
                     ->title('Predikat sikap tidak valid')
@@ -299,17 +393,11 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
                 return;
             }
         } else {
-            $maximum = match ($this->bulkField) {
-                'spiritual_predicate', 'social_predicate' => 30,
-                'spiritual_description', 'social_description' => 2000,
-                'homeroom_note' => 2000,
-                'promotion_status' => 50,
-                default => 4000,
-            };
+            $maximum = $fieldDefinition['max'];
             if (mb_strlen($value) > $maximum) {
                 Notification::make()
                     ->title('Teks terlalu panjang')
-                    ->body("Kolom {$fieldOptions[$this->bulkField]} maksimal {$maximum} karakter.")
+                    ->body("Kolom {$fieldDefinition['bulk_label']} maksimal {$maximum} karakter.")
                     ->danger()
                     ->send();
 
@@ -320,7 +408,7 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
         $changed = 0;
         foreach ($studentIds as $studentId) {
             $current = data_get($this->reportRows, "{$studentId}.{$this->bulkField}");
-            $isEmpty = in_array($this->bulkField, $numericFields, true)
+            $isEmpty = $fieldDefinition['input'] === 'number'
                 ? (int) $current === 0
                 : trim((string) $current) === '';
 
@@ -353,20 +441,7 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
         try {
             $validatedRows = Validator::make(
                 ['rows' => $this->reportRows],
-                [
-                    'rows' => ['array'],
-                    'rows.*.sick_days' => ['required', 'integer', 'min:0', 'max:366'],
-                    'rows.*.permission_days' => ['required', 'integer', 'min:0', 'max:366'],
-                    'rows.*.absent_days' => ['required', 'integer', 'min:0', 'max:366'],
-                    'rows.*.spiritual_predicate' => ['nullable', 'string', 'max:30'],
-                    'rows.*.spiritual_description' => ['nullable', 'string', 'max:2000'],
-                    'rows.*.social_predicate' => ['nullable', 'string', 'max:30'],
-                    'rows.*.social_description' => ['nullable', 'string', 'max:2000'],
-                    'rows.*.extracurricular' => ['nullable', 'string', 'max:4000'],
-                    'rows.*.achievement' => ['nullable', 'string', 'max:4000'],
-                    'rows.*.homeroom_note' => ['nullable', 'string', 'max:2000'],
-                    'rows.*.promotion_status' => ['nullable', 'string', 'max:50'],
-                ],
+                $this->getReportValidationRules(),
                 [
                     'rows.*.sick_days.max' => 'Jumlah hari sakit maksimal 366.',
                     'rows.*.permission_days.max' => 'Jumlah hari izin maksimal 366.',
@@ -534,6 +609,28 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
             : AssessmentType::tryFrom((string) $period->type);
 
         return $type === AssessmentType::ASAS;
+    }
+
+    /**
+     * @return array<string, array<int, string>>
+     */
+    protected function getReportValidationRules(): array
+    {
+        $rules = ['rows' => ['array']];
+
+        foreach ($this->getRecapFieldDefinitions() as $field => $definition) {
+            $rules["rows.*.{$field}"] = $definition['input'] === 'number'
+                ? ['required', 'integer', 'min:0', "max:{$definition['max']}"]
+                : ['nullable', 'string', "max:{$definition['max']}"];
+        }
+
+        $rules['rows.*.promotion_status'] = [
+            'nullable',
+            'string',
+            'max:'.self::PROMOTION_STATUS_FIELD_DEFINITION['max'],
+        ];
+
+        return $rules;
     }
 
     protected function textToList(mixed $value): array

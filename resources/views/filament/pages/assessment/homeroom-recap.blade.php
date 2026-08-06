@@ -53,9 +53,9 @@
                         </label>
                         <label>
                             <span>Nilai / Teks</span>
-                            @if (in_array($bulkField, ['sick_days', 'permission_days', 'absent_days'], true))
-                                <input wire:model="bulkValue" type="number" min="0" max="366" placeholder="Contoh: 2">
-                            @elseif (in_array($bulkField, ['spiritual_predicate', 'social_predicate'], true))
+                            @if (data_get($this->getBulkFieldDefinition(), 'input') === 'number')
+                                <input wire:model="bulkValue" type="number" min="0" max="{{ data_get($this->getBulkFieldDefinition(), 'max') }}" placeholder="Contoh: 2">
+                            @elseif (data_get($this->getBulkFieldDefinition(), 'input') === 'predicate')
                                 <select wire:model="bulkValue">
                                     <option value="">Pilih predikat</option>
                                     @foreach ($this->getAttitudePredicateOptions() as $value => $label)
@@ -89,16 +89,9 @@
                         <thead>
                             <tr>
                                 <th class="student-column">Siswa</th>
-                                <th>Sakit</th>
-                                <th>Izin</th>
-                                <th>Alpa</th>
-                                <th>Predikat Spiritual</th>
-                                <th>Deskripsi Spiritual</th>
-                                <th>Predikat Sosial</th>
-                                <th>Deskripsi Sosial</th>
-                                <th>Ekstrakurikuler</th>
-                                <th>Prestasi</th>
-                                <th>Catatan Wali</th>
+                                @foreach ($this->getRecapFieldDefinitions() as $definition)
+                                    <th>{{ $definition['header'] }}</th>
+                                @endforeach
                                 @if ($homeroomMeta['collect_promotion_status'])
                                     <th>Status Semester</th>
                                 @endif
@@ -115,30 +108,22 @@
                                             <span><strong>{{ $row['student_name'] }}</strong><small>{{ $row['nis'] }}</small></span>
                                         </label>
                                     </td>
-                                    @foreach (['sick_days', 'permission_days', 'absent_days'] as $field)
-                                        <td><input type="number" min="0" max="366" class="is-number" wire:model.blur="reportRows.{{ $studentId }}.{{ $field }}" @disabled(! $homeroomMeta['editable'])></td>
+                                    @foreach ($this->getRecapFieldDefinitions() as $field => $definition)
+                                        <td>
+                                            @if ($definition['input'] === 'number')
+                                                <input type="number" min="0" max="{{ $definition['max'] }}" class="is-number" wire:model.blur="reportRows.{{ $studentId }}.{{ $field }}" @disabled(! $homeroomMeta['editable'])>
+                                            @elseif ($definition['input'] === 'predicate')
+                                                <select wire:model.blur="reportRows.{{ $studentId }}.{{ $field }}" @disabled(! $homeroomMeta['editable'])>
+                                                    <option value="">Belum diisi</option>
+                                                    @foreach ($this->getAttitudePredicateOptions() as $value => $label)
+                                                        <option value="{{ $value }}">{{ $label }}</option>
+                                                    @endforeach
+                                                </select>
+                                            @else
+                                                <textarea rows="3" maxlength="{{ $definition['max'] }}" wire:model.blur="reportRows.{{ $studentId }}.{{ $field }}" @disabled(! $homeroomMeta['editable'])></textarea>
+                                            @endif
+                                        </td>
                                     @endforeach
-                                    <td>
-                                        <select wire:model.blur="reportRows.{{ $studentId }}.spiritual_predicate" @disabled(! $homeroomMeta['editable'])>
-                                            <option value="">Belum diisi</option>
-                                            @foreach ($this->getAttitudePredicateOptions() as $value => $label)
-                                                <option value="{{ $value }}">{{ $label }}</option>
-                                            @endforeach
-                                        </select>
-                                    </td>
-                                    <td><textarea rows="3" wire:model.blur="reportRows.{{ $studentId }}.spiritual_description" @disabled(! $homeroomMeta['editable'])></textarea></td>
-                                    <td>
-                                        <select wire:model.blur="reportRows.{{ $studentId }}.social_predicate" @disabled(! $homeroomMeta['editable'])>
-                                            <option value="">Belum diisi</option>
-                                            @foreach ($this->getAttitudePredicateOptions() as $value => $label)
-                                                <option value="{{ $value }}">{{ $label }}</option>
-                                            @endforeach
-                                        </select>
-                                    </td>
-                                    <td><textarea rows="3" wire:model.blur="reportRows.{{ $studentId }}.social_description" @disabled(! $homeroomMeta['editable'])></textarea></td>
-                                    <td><textarea rows="3" wire:model.blur="reportRows.{{ $studentId }}.extracurricular" @disabled(! $homeroomMeta['editable'])></textarea></td>
-                                    <td><textarea rows="3" wire:model.blur="reportRows.{{ $studentId }}.achievement" @disabled(! $homeroomMeta['editable'])></textarea></td>
-                                    <td><textarea rows="3" wire:model.blur="reportRows.{{ $studentId }}.homeroom_note" @disabled(! $homeroomMeta['editable'])></textarea></td>
                                     @if ($homeroomMeta['collect_promotion_status'])
                                         <td><input type="text" maxlength="50" wire:model.blur="reportRows.{{ $studentId }}.promotion_status" @disabled(! $homeroomMeta['editable'])></td>
                                     @endif

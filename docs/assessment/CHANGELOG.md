@@ -1,5 +1,12 @@
 # Riwayat Perubahan Penilaian
 
+## 2026-08-06
+
+- Menyatukan konfigurasi 11 kolom rekap wali kelas ASTS/ASAS agar header,
+  pilihan isi massal, jenis input, dan batas validasinya selalu konsisten.
+- Mengosongkan nilai isi massal ketika pengguna mengganti kolom untuk mencegah
+  angka, predikat, atau teks lama diterapkan ke jenis kolom yang berbeda.
+
 ## 2026-07-31
 
 - Mengubah status Aktif template menjadi **Template Utama** dengan satu template

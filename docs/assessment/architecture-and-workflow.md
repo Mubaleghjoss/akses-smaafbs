@@ -139,8 +139,9 @@ Role baru bersifat aditif: `super_admin`, `kurikulum`, `guru_mapel`, `wali_kelas
 ## Pengisian rekap wali kelas massal
 
 - Wali kelas dapat memilih beberapa siswa lalu mengisi massal salah satu kolom:
-  Sakit, Izin, Alpa, Ekstrakurikuler, Prestasi, Catatan Wali, dan Status
-  Semester ketika periode mengaktifkannya.
+  Sakit, Izin, Alpa, Predikat Spiritual, Deskripsi Spiritual, Predikat Sosial,
+  Deskripsi Sosial, Ekstrakurikuler, Prestasi, Catatan Wali, dan Status Semester
+  ketika periode mengaktifkannya.
 - Opsi aman bawaan hanya mengisi data kosong. Untuk kolom ketidakhadiran, angka
   nol diperlakukan sebagai data kosong.
 - Aksi massal hanya mengubah state formulir. Penyimpanan database tetap melalui

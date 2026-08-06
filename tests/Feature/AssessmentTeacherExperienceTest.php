@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssignmentStatus;
+use App\Filament\Pages\Assessment\AsasHomeroomRecap;
 use App\Filament\Pages\Assessment\AstsHomeroomRecap;
 use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\Assessment\AstsInputScores;
@@ -272,6 +273,186 @@ class AssessmentTeacherExperienceTest extends TestCase
             ->assertSet('assignmentMeta.returned_reason', $reason)
             ->assertSet('assignmentMeta.returned_by', 'Admin Kurikulum')
             ->assertSee('Perlu Revisi');
+    }
+
+    public function test_all_homeroom_recap_columns_support_safe_bulk_fill_and_period_scoped_save(): void
+    {
+        $teacher = $this->teacher(348);
+
+        $astsPeriod = AssessmentPeriod::factory()
+            ->asts()
+            ->create(['status' => AssessmentPeriodStatus::OPEN]);
+        $astsRombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $astsPeriod->getKey(),
+            'rombel_name_snapshot' => 'X 1',
+        ]);
+        $astsStudents = AssessmentPeriodStudent::factory()->count(2)->create([
+            'assessment_period_id' => $astsPeriod->getKey(),
+            'assessment_period_rombel_id' => $astsRombel->getKey(),
+            'rombel_name_snapshot' => 'X 1',
+        ]);
+        $astsHomeroom = AssessmentPeriodHomeroom::factory()->create([
+            'assessment_period_id' => $astsPeriod->getKey(),
+            'assessment_period_rombel_id' => $astsRombel->getKey(),
+            'teacher_id' => 348,
+            'teacher_name_snapshot' => 'Putra Kamulyan',
+            'rombel_name_snapshot' => 'X 1',
+        ]);
+
+        $asasPeriod = AssessmentPeriod::factory()
+            ->asas()
+            ->create(['status' => AssessmentPeriodStatus::OPEN]);
+        $asasRombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $asasPeriod->getKey(),
+            'rombel_name_snapshot' => 'XI 1',
+        ]);
+        $asasStudent = AssessmentPeriodStudent::factory()->create([
+            'assessment_period_id' => $asasPeriod->getKey(),
+            'assessment_period_rombel_id' => $asasRombel->getKey(),
+            'rombel_name_snapshot' => 'XI 1',
+        ]);
+        $asasHomeroom = AssessmentPeriodHomeroom::factory()->create([
+            'assessment_period_id' => $asasPeriod->getKey(),
+            'assessment_period_rombel_id' => $asasRombel->getKey(),
+            'teacher_id' => 348,
+            'teacher_name_snapshot' => 'Putra Kamulyan',
+            'rombel_name_snapshot' => 'XI 1',
+        ]);
+        $asasReport = HomeroomReport::factory()->create([
+            'assessment_period_id' => $asasPeriod->getKey(),
+            'assessment_period_student_id' => $asasStudent->getKey(),
+            'homeroom_note' => 'Catatan ASAS tetap.',
+        ]);
+
+        $expectedHeaders = [
+            'Sakit',
+            'Izin',
+            'Alpa',
+            'Predikat Spiritual',
+            'Deskripsi Spiritual',
+            'Predikat Sosial',
+            'Deskripsi Sosial',
+            'Ekstrakurikuler',
+            'Prestasi',
+            'Catatan Wali',
+        ];
+        $expectedFields = [
+            'sick_days',
+            'permission_days',
+            'absent_days',
+            'spiritual_predicate',
+            'spiritual_description',
+            'social_predicate',
+            'social_description',
+            'extracurricular',
+            'achievement',
+            'homeroom_note',
+        ];
+
+        $astsComponent = Livewire::actingAs($teacher)
+            ->test(AstsHomeroomRecap::class)
+            ->set('periodId', $astsPeriod->getKey())
+            ->set('homeroomId', $astsHomeroom->getKey())
+            ->call('loadReports')
+            ->assertSet('bulkFillEmptyOnly', true);
+
+        $this->assertSame(
+            $expectedHeaders,
+            array_column($astsComponent->instance()->getRecapFieldDefinitions(), 'header'),
+        );
+        $this->assertSame($expectedFields, array_keys($astsComponent->instance()->getBulkFieldOptions()));
+
+        $asasComponent = Livewire::actingAs($teacher)
+            ->test(AsasHomeroomRecap::class)
+            ->set('periodId', $asasPeriod->getKey())
+            ->set('homeroomId', $asasHomeroom->getKey())
+            ->call('loadReports');
+        $asasBulkFields = array_keys($asasComponent->instance()->getBulkFieldOptions());
+
+        $this->assertSame($expectedFields, array_slice($asasBulkFields, 0, count($expectedFields)));
+        $this->assertSame('promotion_status', $asasBulkFields[count($expectedFields)] ?? null);
+
+        $selectedStudentId = (int) $astsStudents->first()->getKey();
+        $unselectedStudentId = (int) $astsStudents->last()->getKey();
+        $bulkValues = [
+            'sick_days' => ['3', 3],
+            'permission_days' => ['2', 2],
+            'absent_days' => ['1', 1],
+            'spiritual_predicate' => ['Baik', 'Baik'],
+            'spiritual_description' => ['Membiasakan ibadah dengan tertib.', 'Membiasakan ibadah dengan tertib.'],
+            'social_predicate' => ['Sangat Baik', 'Sangat Baik'],
+            'social_description' => ['Santun dan peduli terhadap teman.', 'Santun dan peduli terhadap teman.'],
+            'extracurricular' => ["Pramuka\nBasket", "Pramuka\nBasket"],
+            'achievement' => ['Juara 1 Olimpiade Sains', 'Juara 1 Olimpiade Sains'],
+            'homeroom_note' => ['Pertahankan semangat belajar.', 'Pertahankan semangat belajar.'],
+        ];
+
+        $astsComponent->set('selectedStudentIds', [$selectedStudentId]);
+        foreach ($bulkValues as $field => [$input, $expected]) {
+            $astsComponent
+                ->set('bulkField', $field)
+                ->assertSet('bulkValue', '')
+                ->set('bulkValue', $input)
+                ->call('applyBulkValue')
+                ->assertSet("reportRows.{$selectedStudentId}.{$field}", $expected);
+        }
+
+        $astsComponent
+            ->assertSet("reportRows.{$unselectedStudentId}.sick_days", 0)
+            ->assertSet("reportRows.{$unselectedStudentId}.homeroom_note", null)
+            ->set('bulkField', 'permission_days')
+            ->set('bulkValue', '9')
+            ->call('applyBulkValue')
+            ->assertSet("reportRows.{$selectedStudentId}.permission_days", 2)
+            ->set('bulkField', 'homeroom_note')
+            ->set('bulkValue', 'Catatan yang tidak boleh menimpa.')
+            ->call('applyBulkValue')
+            ->assertSet("reportRows.{$selectedStudentId}.homeroom_note", 'Pertahankan semangat belajar.')
+            ->set('bulkFillEmptyOnly', false)
+            ->set('bulkField', 'permission_days')
+            ->set('bulkValue', '9')
+            ->call('applyBulkValue')
+            ->assertSet("reportRows.{$selectedStudentId}.permission_days", 9)
+            ->set('bulkField', 'homeroom_note')
+            ->set('bulkValue', 'Catatan hasil timpa.')
+            ->call('applyBulkValue')
+            ->assertSet("reportRows.{$selectedStudentId}.homeroom_note", 'Catatan hasil timpa.');
+
+        $this->assertDatabaseMissing('assessment_homeroom_reports', [
+            'assessment_period_id' => $astsPeriod->getKey(),
+            'assessment_period_student_id' => $selectedStudentId,
+        ]);
+
+        $astsComponent->call('saveReports');
+
+        $savedReport = HomeroomReport::query()
+            ->where('assessment_period_id', $astsPeriod->getKey())
+            ->where('assessment_period_student_id', $selectedStudentId)
+            ->firstOrFail();
+        $this->assertSame(3, $savedReport->sick_days);
+        $this->assertSame(9, $savedReport->permission_days);
+        $this->assertSame(1, $savedReport->absent_days);
+        $this->assertSame('Baik', $savedReport->spiritual_predicate);
+        $this->assertSame('Membiasakan ibadah dengan tertib.', $savedReport->spiritual_description);
+        $this->assertSame('Sangat Baik', $savedReport->social_predicate);
+        $this->assertSame('Santun dan peduli terhadap teman.', $savedReport->social_description);
+        $this->assertSame(
+            [['description' => 'Pramuka'], ['description' => 'Basket']],
+            $savedReport->extracurricular_data,
+        );
+        $this->assertSame(
+            [['description' => 'Juara 1 Olimpiade Sains']],
+            $savedReport->achievement_data,
+        );
+        $this->assertSame('Catatan hasil timpa.', $savedReport->homeroom_note);
+
+        $unselectedReport = HomeroomReport::query()
+            ->where('assessment_period_id', $astsPeriod->getKey())
+            ->where('assessment_period_student_id', $unselectedStudentId)
+            ->firstOrFail();
+        $this->assertSame(0, $unselectedReport->sick_days);
+        $this->assertNull($unselectedReport->homeroom_note);
+        $this->assertSame('Catatan ASAS tetap.', $asasReport->refresh()->homeroom_note);
     }
 
     private function teacher(int $teacherId): User
