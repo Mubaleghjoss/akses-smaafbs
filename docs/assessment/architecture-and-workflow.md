@@ -142,6 +142,16 @@ Role baru bersifat aditif: `super_admin`, `kurikulum`, `guru_mapel`, `wali_kelas
   role masih memiliki permission granular.
 - Kurikulum, kepala sekolah, dan wali kelas dalam scope dapat membuka matriks
   nilai baca-saja; hanya guru pengampu yang memenuhi Policy dapat mengedit.
+- **Input Nilai Saya** memakai scope guru pengampu saja (`teacher_id` snapshot
+  sama dengan `users.guru_tendik_id`). Status wali kelas tidak menambahkan
+  mapel guru lain ke dropdown, assignment awal, atau angka progres input.
+- Wali kelas meninjau mapel lain di kelasnya melalui **Status → Tinjau Nilai**.
+  Tautan tersebut memakai `mode=review`, selalu baca-saja, dan tetap dibatasi
+  snapshot `assessment_period_homerooms`. Nilai mode selain `input`/`review`
+  dinormalkan kembali ke `input`.
+- Pengelola dengan akses penuh, kurikulum, dan kepala sekolah tetap dapat
+  meninjau seluruh assignment sesuai Policy. Mode review tidak pernah
+  memberikan hak tulis tambahan.
 - Snapshot `assessment_period_homerooms` menjadi bukti akses record wali kelas.
   Akun yang tertaut ke guru pada snapshot dapat membuka dan mengisi rekap
   kelasnya sendiri walaupun akun masih memakai role umum `guru`; akses modul
@@ -154,6 +164,9 @@ Role baru bersifat aditif: `super_admin`, `kurikulum`, `guru_mapel`, `wali_kelas
 - Penugasan `draft` dan `returned` selalu diprioritaskan di pilihan Mapel dan
   Kelas. Penugasan `submitted`, `verified`, dan `locked` tetap dapat ditinjau
   tetapi tidak dibuka kembali secara diam-diam.
+- Dropdown dan progres pada **Input Nilai Saya** hanya menghitung assignment
+  guru pengampu. **Status Pengumpulan** tetap menghitung cakupan pemantauan
+  gabungan mapel yang diampu dan mapel pada kelas wali.
 - Guru dapat mencentang siswa lalu menerapkan satu nilai komponen dan/atau satu
   deskripsi ke banyak siswa. Mode bawaan menimpa data lama siswa terpilih dan
   menampilkan konfirmasi jumlah nilai/deskripsi yang berubah. Opsi **Hanya isi

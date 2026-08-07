@@ -218,6 +218,149 @@ class AssessmentTeacherExperienceTest extends TestCase
         $this->assertSame(AssignmentStatus::SUBMITTED, $submittedAssignment->refresh()->status);
     }
 
+    public function test_teacher_homeroom_input_only_lists_own_subjects_and_review_is_read_only(): void
+    {
+        $teacher = $this->teacher(348);
+        $period = AssessmentPeriod::factory()->asts()->create([
+            'status' => AssessmentPeriodStatus::OPEN,
+        ]);
+        $homeroomRombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'rombel_name_snapshot' => 'XII 2',
+        ]);
+        $otherRombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'rombel_name_snapshot' => 'XII 3',
+        ]);
+        $english = Subject::factory()->create(['name' => 'Bahasa Inggris']);
+        $math = Subject::factory()->create(['name' => 'Matematika']);
+        $scheme = AssessmentScheme::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_subject_id' => null,
+            'assessment_period_rombel_id' => null,
+        ]);
+        AssessmentComponent::factory()->create([
+            'assessment_scheme_id' => $scheme->getKey(),
+            'name' => 'Nilai ASTS',
+        ]);
+
+        $ownAssignments = collect([$homeroomRombel, $otherRombel])
+            ->map(fn (AssessmentPeriodRombel $rombel): AssessmentPeriodAssignment => AssessmentPeriodAssignment::factory()->create([
+                'assessment_period_id' => $period->getKey(),
+                'assessment_period_rombel_id' => $rombel->getKey(),
+                'assessment_subject_id' => $english->getKey(),
+                'teacher_id' => 348,
+                'teacher_name_snapshot' => 'Putra Kamulyan',
+                'subject_name_snapshot' => 'Bahasa Inggris',
+                'rombel_name_snapshot' => $rombel->rombel_name_snapshot,
+                'status' => AssignmentStatus::DRAFT,
+            ]));
+        $foreignAssignment = AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $homeroomRombel->getKey(),
+            'assessment_subject_id' => $math->getKey(),
+            'teacher_id' => 999,
+            'teacher_name_snapshot' => 'Guru Matematika',
+            'subject_name_snapshot' => 'Matematika',
+            'rombel_name_snapshot' => 'XII 2',
+            'status' => AssignmentStatus::DRAFT,
+        ]);
+        AssessmentPeriodStudent::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $homeroomRombel->getKey(),
+            'rombel_name_snapshot' => 'XII 2',
+        ]);
+        AssessmentPeriodHomeroom::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $homeroomRombel->getKey(),
+            'teacher_id' => 348,
+            'teacher_name_snapshot' => 'Putra Kamulyan',
+            'rombel_name_snapshot' => 'XII 2',
+        ]);
+
+        $input = Livewire::actingAs($teacher)
+            ->test(AstsInputScores::class)
+            ->set('periodId', $period->getKey());
+        $this->assertEqualsCanonicalizing(
+            $ownAssignments->pluck('id')->all(),
+            array_map('intval', array_keys($input->instance()->getAssignmentOptions())),
+        );
+        $this->assertSame([
+            'total' => 2,
+            'sent' => 0,
+            'remaining' => 2,
+        ], $input->instance()->getAssignmentProgress());
+
+        $input
+            ->set('mode', 'tidak-dikenal')
+            ->assertSet('mode', 'input');
+        $this->assertEqualsCanonicalizing(
+            $ownAssignments->pluck('id')->all(),
+            array_map('intval', array_keys($input->instance()->getAssignmentOptions())),
+        );
+
+        $input
+            ->set('assignmentId', $foreignAssignment->getKey())
+            ->call('loadAssignment')
+            ->assertSet('assignmentId', null)
+            ->assertSet('assignmentMeta', null);
+
+        $status = Livewire::actingAs($teacher)
+            ->test(AstsSubmissionStatus::class)
+            ->set('periodId', $period->getKey());
+        $statusRows = collect($status->instance()->getAssignmentRows());
+        $this->assertCount(3, $statusRows);
+        $this->assertStringContainsString(
+            'mode=review',
+            (string) $statusRows->firstWhere('id', $foreignAssignment->getKey())['review_url'],
+        );
+
+        Livewire::actingAs($teacher)
+            ->test(AstsInputScores::class)
+            ->set('periodId', $period->getKey())
+            ->set('mode', 'review')
+            ->set('assignmentId', $foreignAssignment->getKey())
+            ->call('loadAssignment')
+            ->assertSet('assignmentMeta.subject', 'Matematika')
+            ->assertSet('assignmentMeta.editable', false)
+            ->assertSee('Mode Tinjau Wali Kelas');
+
+        $hub = Livewire::actingAs($teacher)
+            ->test(AstsHub::class)
+            ->set('periodId', $period->getKey())
+            ->instance()
+            ->getHubData();
+        $this->assertSame(2, $hub['input_assignment_count']);
+        $this->assertSame(3, $hub['assignment_count']);
+        $this->assertSame('2', $hub['cards'][0]['value']);
+    }
+
+    public function test_homeroom_teacher_without_subject_gets_recap_empty_state(): void
+    {
+        $teacher = $this->teacher(777);
+        $period = AssessmentPeriod::factory()->asas()->create([
+            'status' => AssessmentPeriodStatus::OPEN,
+        ]);
+        $rombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'rombel_name_snapshot' => 'XI 1',
+        ]);
+        AssessmentPeriodHomeroom::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'teacher_id' => 777,
+            'teacher_name_snapshot' => 'Wali Tanpa Mapel',
+            'rombel_name_snapshot' => 'XI 1',
+        ]);
+
+        Livewire::actingAs($teacher)
+            ->test(\App\Filament\Pages\Assessment\AsasInputScores::class)
+            ->set('periodId', $period->getKey())
+            ->assertSet('assignmentId', null)
+            ->assertSee('Belum ada mapel yang diampu')
+            ->assertSee('Buka Rekap Wali');
+    }
+
     public function test_admin_can_verify_and_return_filtered_assignments_atomically_with_visible_revision_note(): void
     {
         $admin = User::query()->create([

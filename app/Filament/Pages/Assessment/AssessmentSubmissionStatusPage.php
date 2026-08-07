@@ -415,6 +415,7 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
         return $page::getUrl([
             'period' => $assignment->assessment_period_id,
             'assignment' => $assignment->getKey(),
+            'mode' => 'review',
         ]);
     }
 }

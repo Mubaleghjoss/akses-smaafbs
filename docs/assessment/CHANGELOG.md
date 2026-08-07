@@ -1,5 +1,15 @@
 # Riwayat Perubahan Penilaian
 
+## 2026-08-07
+
+- Memisahkan scope **Input Nilai Saya** dari scope pemantauan wali kelas:
+  dropdown, assignment awal, progres, dan kartu Input hanya memuat mapel guru
+  pengampu.
+- Menambahkan `mode=review` pada **Status → Tinjau Nilai** agar wali kelas tetap
+  dapat memeriksa mapel lain di kelasnya dalam keadaan baca-saja.
+- Menambahkan empty state untuk wali kelas tanpa mapel beserta tombol langsung
+  ke Rekap Wali dan penjelasan cakupan yang responsif pada ASTS/ASAS.
+
 ## 2026-08-06
 
 - Menyatukan konfigurasi 11 kolom rekap wali kelas ASTS/ASAS agar header,

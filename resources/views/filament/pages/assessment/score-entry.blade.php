@@ -61,6 +61,27 @@
     <div class="assessment-score-page space-y-5">
         @include('filament.pages.assessment.partials.type-navigation')
 
+        @php($scopeNotice = $this->getEntryScopeNotice())
+        <section @class([
+            'rounded-2xl border p-4 sm:p-5',
+            'border-warning-300 bg-warning-50 dark:border-warning-500/30 dark:bg-warning-950/20' => $scopeNotice['tone'] === 'warning',
+            'border-primary-200 bg-primary-50 dark:border-primary-500/25 dark:bg-primary-950/20' => $scopeNotice['tone'] !== 'warning',
+        ])>
+            <div class="flex min-w-0 items-start gap-3">
+                <span @class([
+                    'flex size-10 shrink-0 items-center justify-center rounded-xl',
+                    'bg-warning-100 text-warning-700 dark:bg-warning-500/15 dark:text-warning-300' => $scopeNotice['tone'] === 'warning',
+                    'bg-primary-100 text-primary-700 dark:bg-primary-500/15 dark:text-primary-300' => $scopeNotice['tone'] !== 'warning',
+                ])>
+                    <x-filament::icon :icon="$scopeNotice['tone'] === 'warning' ? 'heroicon-o-eye' : 'heroicon-o-academic-cap'" class="size-5" />
+                </span>
+                <div class="min-w-0">
+                    <h2 class="text-balance font-bold text-gray-950 dark:text-white">{{ $scopeNotice['title'] }}</h2>
+                    <p class="mt-1 text-pretty text-sm leading-6 text-gray-600 dark:text-gray-300">{{ $scopeNotice['description'] }}</p>
+                </div>
+            </div>
+        </section>
+
         @php($assignmentProgress = $this->getAssignmentProgress())
         <section class="assessment-progress-note">
             <span class="assessment-progress-note__icon">
@@ -401,9 +422,24 @@
                 @endif
             </div>
         @else
-            <section class="rounded-xl border border-dashed border-gray-300 p-8 text-center dark:border-white/15">
-                <h2 class="font-semibold text-gray-950 dark:text-white">Belum ada penugasan yang dapat dibuka</h2>
-                <p class="mt-2 text-sm text-gray-500">Pastikan periode sudah dibuka dan akun guru tertaut ke data guru/tendik.</p>
+            @php($emptyState = $this->getEmptyAssignmentState())
+            <section class="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center sm:p-8 dark:border-white/15 dark:bg-white/5">
+                <span class="mx-auto flex size-12 items-center justify-center rounded-xl bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300">
+                    <x-filament::icon icon="heroicon-o-clipboard-document-list" class="size-6" />
+                </span>
+                <h2 class="mt-4 text-balance font-bold text-gray-950 dark:text-white">{{ $emptyState['title'] }}</h2>
+                <p class="mx-auto mt-2 max-w-xl text-pretty text-sm leading-6 text-gray-600 dark:text-gray-300">{{ $emptyState['description'] }}</p>
+                @if ($emptyState['action_url'])
+                    <div class="mt-5">
+                        <x-filament::button
+                            :href="$emptyState['action_url']"
+                            tag="a"
+                            icon="heroicon-o-user-group"
+                        >
+                            {{ $emptyState['action_label'] }}
+                        </x-filament::button>
+                    </div>
+                @endif
             </section>
         @endif
     </div>

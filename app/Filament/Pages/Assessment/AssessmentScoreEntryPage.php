@@ -42,6 +42,9 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
     #[Url(as: 'assignment')]
     public ?int $assignmentId = null;
 
+    #[Url(as: 'mode')]
+    public string $mode = 'input';
+
     public int $currentStudentIndex = 0;
 
     public int $lockVersion = 0;
@@ -105,6 +108,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
 
     public function mount(): void
     {
+        $this->mode = $this->normalizedMode();
         $periodIds = array_map('intval', array_keys($this->getPeriodOptions()));
 
         if (! $this->periodId || ! in_array($this->periodId, $periodIds, true)) {
@@ -117,15 +121,15 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
 
     public function getTitle(): string|Htmlable
     {
-        return ($this->canEnterScores() ? 'Input Nilai Saya' : 'Tinjau Nilai')
+        return ($this->isReviewMode() ? 'Tinjau Nilai' : 'Input Nilai Saya')
             .' · '.static::$assessmentType->label();
     }
 
     public function getSubheading(): string|Htmlable|null
     {
-        return $this->canEnterScores()
-            ? 'Nilai disimpan sekaligus melalui tombol Simpan Draf. Perubahan di browser dipulihkan jika koneksi terputus.'
-            : 'Mode baca-saja untuk memeriksa nilai per siswa, komponen, nilai akhir, dan deskripsi sebelum verifikasi.';
+        return $this->isReviewMode()
+            ? 'Mode baca-saja untuk memeriksa nilai per siswa, komponen, nilai akhir, dan deskripsi sebelum verifikasi.'
+            : 'Nilai disimpan sekaligus melalui tombol Simpan Draf. Perubahan di browser dipulihkan jika koneksi terputus.';
     }
 
     /**
@@ -133,9 +137,8 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
      */
     public function getPeriodOptions(): array
     {
-        return AssessmentPeriod::query()
+        return $this->scopePeriods(AssessmentPeriod::query())
             ->where('type', static::$assessmentType->value)
-            ->whereHas('assignments', fn (Builder $query): Builder => $this->scopeAssignments($query))
             ->latest('id')
             ->pluck('name', 'id')
             ->all();
@@ -203,6 +206,85 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
     {
         $this->selectDefaultAssignment();
         $this->loadAssignment();
+    }
+
+    public function updatedMode(): void
+    {
+        $this->mode = $this->normalizedMode();
+        $this->selectDefaultAssignment();
+        $this->loadAssignment();
+    }
+
+    public function isReviewMode(): bool
+    {
+        return $this->normalizedMode() === 'review';
+    }
+
+    /**
+     * @return array{title: string, description: string, tone: string}
+     */
+    public function getEntryScopeNotice(): array
+    {
+        if ($this->isReviewMode()) {
+            return [
+                'title' => 'Mode Tinjau Wali Kelas',
+                'description' => 'Nilai mapel pada kelas wali ditampilkan baca-saja. Perubahan nilai tetap dilakukan oleh guru pengampu.',
+                'tone' => 'warning',
+            ];
+        }
+
+        $user = auth()->user();
+        if ($user instanceof User
+            && ($user->hasFullAdminAccess() || $user->can('penilaian.verify') || $user->hasRole('kepala_sekolah'))) {
+            return [
+                'title' => 'Cakupan pengelola',
+                'description' => 'Akun pengelola dapat memilih seluruh mapel dan kelas sesuai kewenangan Policy Penilaian.',
+                'tone' => 'info',
+            ];
+        }
+
+        return [
+            'title' => 'Mapel sesuai penugasan guru',
+            'description' => 'Input Nilai hanya menampilkan mapel dan kelas yang Anda ampu. Status wali kelas tidak menambahkan mapel ke daftar ini.',
+            'tone' => 'info',
+        ];
+    }
+
+    /**
+     * @return array{title: string, description: string, action_label: ?string, action_url: ?string}
+     */
+    public function getEmptyAssignmentState(): array
+    {
+        $access = $this->getAssessmentAccessSummary();
+        $isHomeroomOnly = ! $this->isReviewMode()
+            && ($access['homerooms'] ?? []) !== []
+            && ($access['subjects'] ?? []) === [];
+
+        if ($isHomeroomOnly) {
+            $page = static::$assessmentType === AssessmentType::ASTS
+                ? AstsHomeroomRecap::class
+                : AsasHomeroomRecap::class;
+
+            return [
+                'title' => 'Belum ada mapel yang diampu',
+                'description' => 'Akun ini tercatat sebagai wali kelas, tetapi belum memiliki penugasan guru mapel pada periode ini. Gunakan Rekap Wali untuk melengkapi data kelas.',
+                'action_label' => 'Buka Rekap Wali',
+                'action_url' => $page::canAccess()
+                    ? $page::getUrl(array_filter(['period' => $this->periodId]))
+                    : null,
+            ];
+        }
+
+        return [
+            'title' => $this->isReviewMode()
+                ? 'Belum ada nilai kelas wali yang dapat ditinjau'
+                : 'Belum ada penugasan mapel yang dapat dibuka',
+            'description' => $this->isReviewMode()
+                ? 'Buka halaman Status untuk memilih mapel pada kelas wali yang ingin ditinjau.'
+                : 'Pastikan penugasan guru–mapel–kelas sudah dibuat dan akun login tertaut ke data Guru & Tendik.',
+            'action_label' => null,
+            'action_url' => null,
+        ];
     }
 
     public function updatedAssignmentId(): void
@@ -305,7 +387,8 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             'teacher' => (string) $assignment->teacher_name_snapshot,
             'status' => $status->value,
             'status_label' => $status->label(),
-            'editable' => $status->isEditable()
+            'editable' => ! $this->isReviewMode()
+                && $status->isEditable()
                 && Gate::forUser(auth()->user())->allows('updateScores', $assignment),
             'returned_reason' => $revisionAssignment->returned_reason,
             'returned_at' => $revisionAssignment->returned_at?->format('d/m/Y H:i'),
@@ -550,14 +633,35 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
 
     protected function assignmentQuery(): Builder
     {
-        return $this->scopeAssignments(
-            AssessmentPeriodAssignment::query()
-                ->where('assessment_period_id', $this->periodId)
-                ->whereHas('period', fn (Builder $query): Builder => $query->where('type', static::$assessmentType->value)),
-        );
+        $query = AssessmentPeriodAssignment::query()
+            ->where('assessment_period_id', $this->periodId)
+            ->whereHas('period', fn (Builder $query): Builder => $query->where('type', static::$assessmentType->value));
+
+        return $this->isReviewMode()
+            ? $this->scopeReviewAssignments($query)
+            : $this->scopeInputAssignments($query);
     }
 
-    protected function scopeAssignments(Builder $query): Builder
+    protected function scopeInputAssignments(Builder $query): Builder
+    {
+        $user = auth()->user();
+
+        if (! $user instanceof User) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if ($user->hasFullAdminAccess() || $user->can('penilaian.verify') || $user->hasRole('kepala_sekolah')) {
+            return $query;
+        }
+
+        if (! $user->guru_tendik_id) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where('teacher_id', $user->guru_tendik_id);
+    }
+
+    protected function scopeReviewAssignments(Builder $query): Builder
     {
         $user = auth()->user();
 
@@ -590,8 +694,40 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
         });
     }
 
+    protected function scopePeriods(Builder $query): Builder
+    {
+        $user = auth()->user();
+
+        if (! $user instanceof User) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if ($user->hasFullAdminAccess() || $user->can('penilaian.verify') || $user->hasRole('kepala_sekolah')) {
+            return $query;
+        }
+
+        if (! $user->guru_tendik_id) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where(function (Builder $periods) use ($user): void {
+            $periods
+                ->whereHas('assignments', fn (Builder $assignments): Builder => $assignments->where('teacher_id', $user->guru_tendik_id))
+                ->orWhereHas('homerooms', fn (Builder $homerooms): Builder => $homerooms->where('teacher_id', $user->guru_tendik_id));
+        });
+    }
+
+    protected function normalizedMode(): string
+    {
+        return $this->mode === 'review' ? 'review' : 'input';
+    }
+
     protected function canEnterScores(): bool
     {
+        if ($this->isReviewMode()) {
+            return false;
+        }
+
         $user = auth()->user();
 
         return $user instanceof User

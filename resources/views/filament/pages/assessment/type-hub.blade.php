@@ -42,7 +42,7 @@
                 </span>
                 <div>
                     <strong>{{ $hub['completed_count'] }} penugasan sudah dikirim; {{ $hub['remaining_count'] }} masih dapat dilengkapi.</strong>
-                    <p>Mengirim atau memverifikasi satu mapel/kelas tidak menutup penugasan lain. Buka Input Nilai lalu pilih kelas yang masih berstatus Draf.</p>
+                    <p>Status mencakup mapel yang diampu dan mapel pada kelas wali yang boleh dipantau. Input Nilai hanya menampilkan mapel yang Anda ampu.</p>
                 </div>
             </section>
 

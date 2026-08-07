@@ -82,10 +82,12 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
                 'class_count' => 0,
                 'assignment_count' => 0,
                 'completed_count' => 0,
+                'input_assignment_count' => 0,
+                'input_completed_count' => 0,
                 'remaining_count' => 0,
                 'homeroom_count' => 0,
                 'completion_percentage' => 0,
-                'cards' => $this->actionCards(null, 0, 0, 0, 0, 0),
+                'cards' => $this->actionCards(null, 0, 0, 0, 0, 0, 0, 0),
             ];
         }
 
@@ -95,6 +97,17 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
         );
         $assignmentCount = (clone $assignmentQuery)->count();
         $completedCount = (clone $assignmentQuery)
+            ->whereIn('status', [
+                AssignmentStatus::SUBMITTED->value,
+                AssignmentStatus::VERIFIED->value,
+                AssignmentStatus::LOCKED->value,
+            ])
+            ->count();
+        $inputAssignmentQuery = $this->scopeInputAssignments(
+            $period->assignments()->getQuery(),
+        );
+        $inputAssignmentCount = (clone $inputAssignmentQuery)->count();
+        $inputCompletedCount = (clone $inputAssignmentQuery)
             ->whereIn('status', [
                 AssignmentStatus::SUBMITTED->value,
                 AssignmentStatus::VERIFIED->value,
@@ -125,6 +138,8 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
             'class_count' => $classCount,
             'assignment_count' => $assignmentCount,
             'completed_count' => $completedCount,
+            'input_assignment_count' => $inputAssignmentCount,
+            'input_completed_count' => $inputCompletedCount,
             'remaining_count' => $remainingCount,
             'homeroom_count' => $homeroomCount,
             'completion_percentage' => $completionPercentage,
@@ -134,6 +149,8 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
                 $classCount,
                 $assignmentCount,
                 $completedCount,
+                $inputAssignmentCount,
+                $inputCompletedCount,
                 $homeroomCount,
             ),
         ];
@@ -148,6 +165,8 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
         int $classCount,
         int $assignmentCount,
         int $completedCount,
+        int $inputAssignmentCount,
+        int $inputCompletedCount,
         int $homeroomCount,
     ): array {
         $isAsts = static::$assessmentType === AssessmentType::ASTS;
@@ -163,8 +182,10 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
                 'description' => 'Isi nilai per kelas, simpan draf, lalu kirim untuk diverifikasi.',
                 'icon' => 'heroicon-o-pencil-square',
                 'tone' => 'primary',
-                'value' => number_format($assignmentCount, 0, ',', '.'),
-                'caption' => max(0, $assignmentCount - $completedCount).' masih perlu dilengkapi',
+                'value' => number_format($inputAssignmentCount, 0, ',', '.'),
+                'caption' => $inputAssignmentCount > 0
+                    ? max(0, $inputAssignmentCount - $inputCompletedCount).' mapel/kelas masih perlu dilengkapi'
+                    : 'Belum ada mapel yang diampu',
                 'url' => $inputPage::canAccess() ? $inputPage::getUrl($parameters) : null,
             ],
             [
@@ -249,6 +270,23 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
                 $assignments->orWhereIn('assessment_period_rombel_id', $homeroomRombelIds);
             }
         });
+    }
+
+    protected function scopeInputAssignments(Builder $query): Builder
+    {
+        $user = auth()->user();
+
+        if (! $user instanceof User) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if ($user->hasFullAdminAccess() || $user->can('penilaian.verify') || $user->hasRole('kepala_sekolah')) {
+            return $query;
+        }
+
+        return $user->guru_tendik_id
+            ? $query->where('teacher_id', $user->guru_tendik_id)
+            : $query->whereRaw('1 = 0');
     }
 
     protected function scopeHomerooms(Builder $query): Builder
