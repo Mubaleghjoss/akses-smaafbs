@@ -236,28 +236,48 @@ class HomeController extends Controller
                     $rombelQuery->whereIn('rombel_saat_ini', $activeRombelNames);
                 }
 
-                $rombelStudentCounts = $rombelQuery
+                $rombelStudentCountsQuery = $rombelQuery
                     ->select('rombel_saat_ini')
-                    ->selectRaw('count(*) as total_students')
+                    ->selectRaw('count(*) as total_students');
+
+                if ($hasDataSiswaGenderColumn) {
+                    $rombelStudentCountsQuery
+                        ->selectRaw("sum(case when jk = 'L' then 1 else 0 end) as total_male")
+                        ->selectRaw("sum(case when jk = 'P' then 1 else 0 end) as total_female");
+                }
+
+                $rombelStudentCounts = $rombelStudentCountsQuery
                     ->groupBy('rombel_saat_ini')
                     ->orderBy('rombel_saat_ini')
-                    ->pluck('total_students', 'rombel_saat_ini');
+                    ->get()
+                    ->keyBy(fn ($row): string => (string) $row->rombel_saat_ini);
+
+                $mapRombelStats = function (string $name, mixed $row) use ($hasDataSiswaGenderColumn): array {
+                    $students = (int) ($row?->total_students ?? 0);
+                    $male = $hasDataSiswaGenderColumn ? (int) ($row?->total_male ?? 0) : 0;
+                    $female = $hasDataSiswaGenderColumn ? (int) ($row?->total_female ?? 0) : 0;
+
+                    return [
+                        'name' => $name,
+                        'students' => $students,
+                        'male' => $male,
+                        'female' => $female,
+                        'unspecified' => max(0, $students - $male - $female),
+                    ];
+                };
 
                 if ($activeRombelNames instanceof Collection) {
                     $stats['rombel_count'] = $activeRombelNames->count();
                     $stats['rombel_items'] = $activeRombelNames
-                        ->map(fn ($name): array => [
-                            'name' => (string) $name,
-                            'students' => (int) ($rombelStudentCounts[$name] ?? 0),
-                        ])
+                        ->map(fn ($name): array => $mapRombelStats(
+                            (string) $name,
+                            $rombelStudentCounts->get((string) $name),
+                        ))
                         ->all();
                 } else {
                     $stats['rombel_count'] = $rombelStudentCounts->count();
                     $stats['rombel_items'] = $rombelStudentCounts
-                        ->map(fn ($total, $name): array => [
-                            'name' => (string) $name,
-                            'students' => (int) $total,
-                        ])
+                        ->map(fn ($row, $name): array => $mapRombelStats((string) $name, $row))
                         ->values()
                         ->all();
                 }

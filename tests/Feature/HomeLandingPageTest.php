@@ -212,6 +212,10 @@ class HomeLandingPageTest extends TestCase
         $this->assertStringContainsString('data-home-mini-chart-card="rombel"', $html);
         $this->assertStringContainsString('data-home-mini-chart-card="proker-status"', $html);
         $this->assertStringContainsString('data-home-mini-chart-visual="rombel-bars"', $html);
+        preg_match_all('/<button[^>]*data-rombel-detail-trigger/s', $html, $rombelDetailTriggers);
+        $this->assertCount(2, $rombelDetailTriggers[0]);
+        $this->assertStringContainsString('id="home-rombel-detail-dialog"', $html);
+        $this->assertStringContainsString('aria-labelledby="home-rombel-detail-title"', $html);
         $this->assertStringContainsString('data-home-mini-chart-visual="donut-segments"', $html);
         $this->assertMatchesRegularExpression('/id="home-profile-panel-prestasi-siswa"[^>]*data-home-profile-tab-panel="prestasi-siswa"[^>]*hidden/s', $html);
         $this->assertStringContainsString('--mini-chart-fill: 50%;', $html);
@@ -275,8 +279,58 @@ class HomeLandingPageTest extends TestCase
         $this->assertSame(0, $stats['student_active_female']);
         $this->assertSame(1, $stats['rombel_count']);
         $this->assertSame([
-            ['name' => 'X Aktif', 'students' => 1],
+            [
+                'name' => 'X Aktif',
+                'students' => 1,
+                'male' => 1,
+                'female' => 0,
+                'unspecified' => 0,
+            ],
         ], $stats['rombel_items']);
+    }
+
+    public function test_homepage_rombel_detail_counts_gender_and_unspecified_students(): void
+    {
+        $this->ensureRombelTable();
+
+        DB::table('rombels')->insert([
+            'nama' => 'X Detail',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        foreach ([
+            ['nama' => 'Putra Detail', 'nisn' => '9911000001', 'jk' => 'L'],
+            ['nama' => 'Putri Detail', 'nisn' => '9911000002', 'jk' => 'P'],
+            ['nama' => 'Belum Lengkap', 'nisn' => '9911000003', 'jk' => null],
+        ] as $student) {
+            DataSiswa::query()->create($student + [
+                'status' => 'aktif',
+                'rombel_saat_ini' => 'X Detail',
+                'tanggal_lahir' => '2010-02-03',
+            ]);
+        }
+
+        $response = $this->get(route('home'));
+        $rombel = collect($response->viewData('stats')['rombel_items'])
+            ->firstWhere('name', 'X Detail');
+
+        $response
+            ->assertOk()
+            ->assertSee('data-rombel-name="X Detail"', false)
+            ->assertSee('data-rombel-students="3"', false)
+            ->assertSee('data-rombel-male="1"', false)
+            ->assertSee('data-rombel-female="1"', false)
+            ->assertSee('data-rombel-unspecified="1"', false);
+
+        $this->assertSame([
+            'name' => 'X Detail',
+            'students' => 3,
+            'male' => 1,
+            'female' => 1,
+            'unspecified' => 1,
+        ], $rombel);
     }
 
     public function test_home_landing_page_student_search_matches_partial_keyword(): void

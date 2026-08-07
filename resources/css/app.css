@@ -344,6 +344,44 @@
         @apply block h-full rounded-full bg-sky-500;
     }
 
+    .hero-mini-card__rombel-button {
+        @apply block min-h-11 w-full rounded-xl border border-transparent px-2 py-2 text-left hover:border-sky-200 hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2;
+    }
+
+    .hero-mini-card__rombel-button .hero-mini-card__bars-head {
+        @apply mb-1.5;
+    }
+
+    .home-rombel-dialog {
+        @apply m-auto w-full max-w-lg overflow-visible border-0 bg-transparent p-4;
+    }
+
+    .home-rombel-dialog::backdrop {
+        background-color: rgb(15 23 42 / 0.65);
+    }
+
+    .home-rombel-dialog__panel {
+        @apply max-h-[85vh] overflow-y-auto rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6;
+    }
+
+    .home-rombel-dialog__chart {
+        @apply flex h-3 w-full overflow-hidden rounded-full bg-slate-200;
+    }
+
+    .home-rombel-dialog__chart > span {
+        @apply block min-w-0;
+    }
+
+    @media (max-width: 640px) {
+        .home-rombel-dialog {
+            @apply mb-0 mt-auto max-w-none p-0;
+        }
+
+        .home-rombel-dialog__panel {
+            @apply max-h-[calc(100dvh-2rem)] rounded-b-none rounded-t-3xl border-b-0 pb-[max(1.25rem,env(safe-area-inset-bottom))];
+        }
+    }
+
     .hero-mini-card__chart {
         @apply relative h-14 w-14 shrink-0 rounded-full;
         background: conic-gradient(var(--mini-chart-primary, #2563eb) 0 var(--mini-chart-fill, 0%), var(--mini-chart-secondary, #cbd5e1) var(--mini-chart-fill, 0%) 100%);
