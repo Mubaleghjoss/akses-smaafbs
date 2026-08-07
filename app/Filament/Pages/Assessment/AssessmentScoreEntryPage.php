@@ -121,15 +121,15 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
 
     public function getTitle(): string|Htmlable
     {
-        return ($this->isReviewMode() ? 'Tinjau Nilai' : 'Input Nilai Saya')
+        return ($this->canEnterScores() ? 'Input Nilai Saya' : 'Tinjau Nilai')
             .' · '.static::$assessmentType->label();
     }
 
     public function getSubheading(): string|Htmlable|null
     {
-        return $this->isReviewMode()
-            ? 'Mode baca-saja untuk memeriksa nilai per siswa, komponen, nilai akhir, dan deskripsi sebelum verifikasi.'
-            : 'Nilai disimpan sekaligus melalui tombol Simpan Draf. Perubahan di browser dipulihkan jika koneksi terputus.';
+        return $this->canEnterScores()
+            ? 'Nilai disimpan sekaligus melalui tombol Simpan Draf. Perubahan di browser dipulihkan jika koneksi terputus.'
+            : 'Mode baca-saja untuk memeriksa nilai per siswa, komponen, nilai akhir, dan deskripsi sebelum verifikasi.';
     }
 
     /**
@@ -229,6 +229,14 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             return [
                 'title' => 'Mode Tinjau Wali Kelas',
                 'description' => 'Nilai mapel pada kelas wali ditampilkan baca-saja. Perubahan nilai tetap dilakukan oleh guru pengampu.',
+                'tone' => 'warning',
+            ];
+        }
+
+        if (! $this->canEnterScores()) {
+            return [
+                'title' => 'Cakupan baca-saja',
+                'description' => 'Akun ini dapat meninjau assignment sesuai Policy, tetapi tidak dapat mengubah atau mengirim nilai.',
                 'tone' => 'warning',
             ];
         }

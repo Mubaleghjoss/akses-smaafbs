@@ -83,15 +83,17 @@
         </section>
 
         @php($assignmentProgress = $this->getAssignmentProgress())
-        <section class="assessment-progress-note">
-            <span class="assessment-progress-note__icon">
-                <x-filament::icon icon="heroicon-o-information-circle" />
-            </span>
-            <div>
-                <strong>{{ $assignmentProgress['sent'] }} dari {{ $assignmentProgress['total'] }} penugasan sudah dikirim.</strong>
-                <p>{{ $assignmentProgress['remaining'] }} penugasan masih dapat dilengkapi. Pilihan Draf dan Dikembalikan ditampilkan lebih dahulu.</p>
-            </div>
-        </section>
+        @if ($assignmentProgress['total'] > 0)
+            <section class="assessment-progress-note">
+                <span class="assessment-progress-note__icon">
+                    <x-filament::icon icon="heroicon-o-information-circle" />
+                </span>
+                <div>
+                    <strong>{{ $assignmentProgress['sent'] }} dari {{ $assignmentProgress['total'] }} penugasan sudah dikirim.</strong>
+                    <p>{{ $assignmentProgress['remaining'] }} penugasan masih dapat dilengkapi. Pilihan Draf dan Dikembalikan ditampilkan lebih dahulu.</p>
+                </div>
+            </section>
+        @endif
 
         <section class="assessment-score-toolbar">
             <div class="assessment-score-field">
