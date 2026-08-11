@@ -16,6 +16,11 @@ class WebAuthnCredential extends Model
         return [
             'transports' => 'array',
             'sign_count' => 'integer',
+            'signature_counter' => 'integer',
+            'user_verified' => 'boolean',
+            'backup_eligible' => 'boolean',
+            'backed_up' => 'boolean',
+            'verified_at' => 'datetime',
             'last_used_at' => 'datetime',
             'revoked_at' => 'datetime',
             'created_at' => 'datetime',
@@ -31,5 +36,17 @@ class WebAuthnCredential extends Model
     public function isRevoked(): bool
     {
         return $this->revoked_at !== null;
+    }
+
+    public function isVerifiedPasskey(): bool
+    {
+        return $this->revoked_at === null
+            && filled($this->credential_public_key)
+            && $this->verified_at !== null;
+    }
+
+    public function isLegacy(): bool
+    {
+        return blank($this->credential_public_key) || $this->verified_at === null;
     }
 }

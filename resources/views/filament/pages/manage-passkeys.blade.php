@@ -1,91 +1,101 @@
 <x-filament-panels::page>
-    <div class="mx-auto w-full max-w-3xl space-y-4">
-        <section class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">
-            Simpan passkey hanya pada perangkat pribadi/tepercaya. Passkey bersifat opsional: login password di <strong>/admin/login</strong> tetap tersedia.
+    <div x-data="adminPasskeySettingsBridge()" class="passkey-settings">
+        <section class="passkey-hero">
+            <div class="passkey-hero__icon"><x-heroicon-o-finger-print /></div>
+            <div class="passkey-hero__content">
+                <span class="passkey-status passkey-status--{{ str($this->passkeyStatus)->slug() }}">{{ $this->passkeyStatus }}</span>
+                <h2>Masuk tanpa mengetik username</h2>
+                <p>Gunakan sidik jari, pengenalan wajah, PIN Windows Hello, atau pengunci layar HP. Password tetap tersedia sebagai cadangan.</p>
+            </div>
+            <div class="passkey-hero__count">
+                <strong>{{ $this->activeCredentials->count() }}</strong>
+                <span>dari {{ config('webauthn.max_credentials_per_user', 5) }} perangkat aktif</span>
+            </div>
         </section>
 
-        <section class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-gray-900">
-            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Daftarkan Passkey</h3>
-            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Form ini memakai seam WebAuthn backend yang sudah ada. Untuk integrasi browser penuh, isi credential dari perangkat autentikator.</p>
-
-            <form wire:submit="enrollPasskey" class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+        <section class="passkey-card">
+            <div class="passkey-card__heading">
                 <div>
-                    <label for="passkey-label" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">Label Perangkat</label>
-                    <input id="passkey-label" type="text" wire:model.defer="label" class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-200 dark:border-white/15 dark:bg-gray-950 dark:text-white" placeholder="Laptop kantor" />
-                    @error('label')
-                        <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
-                    @enderror
+                    <span class="passkey-eyebrow">Aktivasi perangkat</span>
+                    <h3>Tiga langkah singkat</h3>
                 </div>
+            </div>
 
-                <div>
-                    <label for="passkey-sign-count" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">Sign Count Awal</label>
-                    <input id="passkey-sign-count" type="number" min="0" wire:model.defer="signCount" class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-200 dark:border-white/15 dark:bg-gray-950 dark:text-white" placeholder="0" />
-                    @error('signCount')
-                        <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
-                    @enderror
-                </div>
+            <ol class="passkey-steps">
+                <li><span>1</span><div><strong>Beri nama perangkat</strong><p>Opsional, agar mudah mengenali HP atau laptop.</p></div></li>
+                <li><span>2</span><div><strong>Tekan tombol aktivasi</strong><p>Browser akan membuka Windows Hello atau pengunci layar.</p></div></li>
+                <li><span>3</span><div><strong>Verifikasi diri</strong><p>Kunci teknis dibuat otomatis dan diverifikasi server.</p></div></li>
+            </ol>
 
-                <div class="md:col-span-2">
-                    <label for="passkey-credential-id" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">Credential ID</label>
-                    <input id="passkey-credential-id" type="text" wire:model.defer="credentialId" class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-200 dark:border-white/15 dark:bg-gray-950 dark:text-white" required />
-                    @error('credentialId')
-                        <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
-                    @enderror
-                </div>
+            <div class="passkey-trust-note">
+                <x-heroicon-o-shield-check />
+                <p>Aktifkan hanya pada HP/laptop pribadi atau perangkat sekolah yang benar-benar tepercaya. Sidik jari tidak pernah dikirim atau disimpan oleh aplikasi.</p>
+            </div>
 
-                <div class="md:col-span-2">
-                    <label for="passkey-public-key" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">Public Key</label>
-                    <textarea id="passkey-public-key" rows="3" wire:model.defer="publicKey" class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-200 dark:border-white/15 dark:bg-gray-950 dark:text-white" required></textarea>
-                    @error('publicKey')
-                        <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
-                    @enderror
-                </div>
+            <div class="passkey-register-form">
+                <label for="passkey-device-name">Nama perangkat <span>(opsional)</span></label>
+                <input id="passkey-device-name" type="text" maxlength="100" wire:model="deviceName" placeholder="Contoh: HP Samsung pribadi" autocomplete="off">
+                @error('deviceName') <p class="passkey-field-error">{{ $message }}</p> @enderror
 
-                <div class="md:col-span-2">
-                    <label for="passkey-transports" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">Transport (opsional)</label>
-                    <input id="passkey-transports" type="text" wire:model.defer="transports" class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-200 dark:border-white/15 dark:bg-gray-950 dark:text-white" placeholder="internal, usb, hybrid" />
-                    @error('transports')
-                        <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
-                    @enderror
-                </div>
-
-                <div class="md:col-span-2 flex justify-end">
-                    <button type="submit" class="inline-flex items-center justify-center rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-300">
-                        Tambahkan Passkey
-                    </button>
-                </div>
-            </form>
+                <button type="button" class="passkey-primary-button" x-on:click="register($wire)" x-bind:disabled="isProcessing || {{ $this->activeCredentials->count() >= config('webauthn.max_credentials_per_user', 5) ? 'true' : 'false' }}">
+                    <span x-show="!isProcessing"><x-heroicon-o-finger-print /> Aktifkan Passkey di Perangkat Ini</span>
+                    <span x-show="isProcessing" x-cloak><x-filament::loading-indicator /> Menunggu verifikasi...</span>
+                </button>
+                <p class="passkey-live-message" role="status" aria-live="polite" x-show="localMessage || @js(filled($registrationMessage))" x-text="localMessage || @js((string) $registrationMessage)"></p>
+            </div>
         </section>
 
-        <section class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-gray-900">
-            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Passkey Terdaftar</h3>
+        <section class="passkey-card">
+            <div class="passkey-card__heading">
+                <div><span class="passkey-eyebrow">Perangkat tepercaya</span><h3>Passkey aktif</h3></div>
+                <span class="passkey-count-badge">{{ $this->activeCredentials->count() }}</span>
+            </div>
 
-            <div class="mt-4 space-y-3">
-                @forelse ($this->credentials as $credential)
-                    <article class="rounded-xl border border-gray-200 p-4 text-sm dark:border-white/10">
-                        <div class="flex flex-wrap items-start justify-between gap-3">
-                            <div class="min-w-0 space-y-1">
-                                <div class="font-semibold text-gray-900 dark:text-white">{{ $credential->label ?: 'Tanpa label' }}</div>
-                                <div class="break-all text-xs text-gray-600 dark:text-gray-300">ID: {{ $credential->credential_id }}</div>
-                                <div class="text-xs text-gray-500 dark:text-gray-400">Transport: {{ collect($credential->transports ?? [])->implode(', ') ?: '-' }}</div>
-                                <div class="text-xs text-gray-500 dark:text-gray-400">Terakhir dipakai: {{ $credential->last_used_at?->diffForHumans() ?? 'Belum pernah' }}</div>
-                            </div>
-
-                            @if ($credential->revoked_at)
-                                <span class="inline-flex items-center rounded-full bg-rose-100 px-2 py-1 text-xs font-medium text-rose-700 dark:bg-rose-500/20 dark:text-rose-200">Dinonaktifkan</span>
-                            @else
-                                <button type="button" wire:click="revokePasskey('{{ $credential->credential_id }}')" class="inline-flex items-center rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:border-rose-500/40 dark:text-rose-200 dark:hover:bg-rose-500/10">
-                                    Nonaktifkan
-                                </button>
-                            @endif
+            <div class="passkey-device-list">
+                @forelse ($this->activeCredentials as $credential)
+                    <article class="passkey-device">
+                        <div class="passkey-device__icon"><x-heroicon-o-device-phone-mobile /></div>
+                        <div class="passkey-device__content">
+                            <strong>{{ $credential->device_name ?: $credential->label ?: 'Perangkat passkey' }}</strong>
+                            <span>Ditambahkan {{ $credential->verified_at?->format('d/m/Y H:i') ?? $credential->created_at?->format('d/m/Y H:i') }}</span>
+                            <span>Terakhir digunakan: {{ $credential->last_used_at?->diffForHumans() ?? 'Belum pernah' }}</span>
                         </div>
+
+                        <x-filament::modal id="revoke-passkey-{{ $credential->id }}" width="md">
+                            <x-slot name="trigger">
+                                <x-filament::button color="danger" outlined icon="heroicon-o-no-symbol">Nonaktifkan</x-filament::button>
+                            </x-slot>
+                            <x-slot name="heading">Nonaktifkan passkey?</x-slot>
+                            <x-slot name="description">Perangkat ini tidak dapat digunakan untuk login lagi. Riwayatnya tetap disimpan.</x-slot>
+                            <div class="passkey-modal-device">{{ $credential->device_name ?: $credential->label ?: 'Perangkat passkey' }}</div>
+                            <x-slot name="footerActions">
+                                <x-filament::button color="gray" x-on:click="$dispatch('close-modal', { id: 'revoke-passkey-{{ $credential->id }}' })">Batal</x-filament::button>
+                                <x-filament::button color="danger" wire:click="revokePasskey('{{ $credential->credential_id }}')" x-on:click="$dispatch('close-modal', { id: 'revoke-passkey-{{ $credential->id }}' })">Ya, Nonaktifkan</x-filament::button>
+                            </x-slot>
+                        </x-filament::modal>
                     </article>
                 @empty
-                    <div class="rounded-xl border border-dashed border-gray-300 px-4 py-5 text-sm text-gray-600 dark:border-white/20 dark:text-gray-300">
-                        Belum ada passkey untuk akun ini. Tambahkan satu passkey agar opsi login passkey muncul di halaman login admin.
-                    </div>
+                    <div class="passkey-empty"><x-heroicon-o-finger-print /><strong>Belum ada passkey aktif</strong><p>Daftarkan perangkat di atas. Sesudah berhasil, tombol login sidik jari dapat langsung digunakan.</p></div>
                 @endforelse
             </div>
         </section>
+
+        @if ($this->historyCredentials->isNotEmpty())
+            <details class="passkey-card passkey-history">
+                <summary><span>Riwayat & perangkat yang perlu daftar ulang</span><span>{{ $this->historyCredentials->count() }}</span></summary>
+                <div class="passkey-device-list">
+                    @foreach ($this->historyCredentials as $credential)
+                        <article class="passkey-device passkey-device--history">
+                            <div class="passkey-device__icon"><x-heroicon-o-clock /></div>
+                            <div class="passkey-device__content">
+                                <strong>{{ $credential->device_name ?: $credential->label ?: 'Credential lama' }}</strong>
+                                <span>{{ $credential->isLegacy() ? 'Perlu daftar ulang — belum memiliki kunci attestation terverifikasi.' : 'Dinonaktifkan '.$credential->revoked_at?->format('d/m/Y H:i') }}</span>
+                            </div>
+                            <span class="passkey-status passkey-status--history">{{ $credential->isLegacy() ? 'Daftar ulang' : 'Nonaktif' }}</span>
+                        </article>
+                    @endforeach
+                </div>
+            </details>
+        @endif
     </div>
 </x-filament-panels::page>

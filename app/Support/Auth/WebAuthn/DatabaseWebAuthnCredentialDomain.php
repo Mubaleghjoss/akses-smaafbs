@@ -94,6 +94,16 @@ class DatabaseWebAuthnCredentialDomain implements WebAuthnCredentialDomain
             ->first();
     }
 
+    public function findVerifiedActiveByCredentialId(string $credentialId): ?WebAuthnCredential
+    {
+        return WebAuthnCredential::query()
+            ->where('credential_id', $credentialId)
+            ->whereNotNull('credential_public_key')
+            ->whereNotNull('verified_at')
+            ->whereNull('revoked_at')
+            ->first();
+    }
+
     private function nullableTrimmedString(mixed $value): ?string
     {
         $normalized = trim((string) $value);

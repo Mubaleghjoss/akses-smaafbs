@@ -63,6 +63,7 @@ if [ -d "${PUBLIC_WEB_ROOT}" ] && [ "${PUBLIC_WEB_ROOT}" != "$(pwd)/public" ]; t
     mkdir -p "${PUBLIC_WEB_ROOT}/js"
     cp public/js/filament-admin-fallback.js "${PUBLIC_WEB_ROOT}/js/filament-admin-fallback.js"
     cp public/js/pwa-registration.js "${PUBLIC_WEB_ROOT}/js/pwa-registration.js"
+    cp public/js/filament-admin-passkeys.js "${PUBLIC_WEB_ROOT}/js/filament-admin-passkeys.js"
 
     # Header cache aset publik harus ikut aktif pada document root produksi.
     cp public/.htaccess "${PUBLIC_WEB_ROOT}/.htaccess"

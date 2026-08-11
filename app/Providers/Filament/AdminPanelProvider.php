@@ -80,12 +80,17 @@ class AdminPanelProvider extends PanelProvider
                     $pwaRegistrarVersion = is_file($pwaRegistrarPath)
                         ? substr((string) hash_file('sha256', $pwaRegistrarPath), 0, 12)
                         : '1';
+                    $passkeyJsPath = public_path('js/filament-admin-passkeys.js');
+                    $passkeyJsVersion = is_file($passkeyJsPath)
+                        ? substr((string) hash_file('sha256', $passkeyJsPath), 0, 12)
+                        : '1';
 
                     $headSnippets = [
                         '<link rel="stylesheet" href="'.asset('css/filament-admin-responsive.css').'?v='.e($responsiveCssVersion).'" data-navigate-track="reload">',
                         '<link rel="stylesheet" href="'.asset('css/filament-admin-auth.css').'?v='.e($authCssVersion).'" data-navigate-track="reload">',
                         '<script src="'.asset('js/filament-admin-fallback.js').'?v='.e($fallbackJsVersion).'" data-navigate-once></script>',
                         '<script src="'.asset('js/pwa-registration.js').'?v='.e($pwaRegistrarVersion).'" data-navigate-once></script>',
+                        '<script src="'.asset('js/filament-admin-passkeys.js').'?v='.e($passkeyJsVersion).'" data-navigate-once></script>',
                         '<link rel="manifest" href="'.e(url('/manifest.webmanifest')).'">',
                         '<meta name="theme-color" content="'.e($themeColor).'">',
                         '<link rel="icon" href="'.e((string) $faviconUrl).'">',
@@ -123,12 +128,16 @@ class AdminPanelProvider extends PanelProvider
             ->renderHook(
                 PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
                 fn (): string => view('filament.components.auth.login-after')->render()
+            )
+            ->renderHook(
+                PanelsRenderHook::PAGE_START,
+                fn (): string => view('filament.components.passkey-onboarding')->render()
             );
 
         $userMenuItems = [
             MenuItem::make()
-                ->label('Kelola Passkey')
-                ->icon('heroicon-o-key')
+                ->label('Passkey & Sidik Jari')
+                ->icon('heroicon-o-finger-print')
                 ->url(fn (): string => ManagePasskeys::getUrl())
                 ->sort(5),
         ];

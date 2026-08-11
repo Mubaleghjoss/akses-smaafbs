@@ -206,6 +206,22 @@ html.dark .fi-panel-admin,
     color: color-mix(in srgb, var(--auth-accent) 68%, var(--auth-ink)) !important;
 }
 
+.admin-passkey-divider { display:flex; align-items:center; gap:.75rem; margin:1rem 0; color:var(--auth-muted); font-size:.72rem; font-weight:750; text-transform:uppercase; letter-spacing:.08em; }
+.admin-passkey-divider::before,.admin-passkey-divider::after { content:""; height:1px; flex:1; background:var(--auth-input-border); }
+.admin-passkey-login { display:grid; grid-template-columns:2.7rem minmax(0,1fr); gap:.75rem; padding:1rem; border:1px solid color-mix(in srgb,var(--auth-accent) 30%,var(--auth-input-border)); border-radius:1.1rem; background:color-mix(in srgb,var(--auth-accent) 6%,var(--auth-card)); }
+.admin-passkey-login__icon { display:grid; place-items:center; width:2.7rem; height:2.7rem; border-radius:.85rem; background:var(--auth-button); color:var(--auth-button-ink)!important; }
+.admin-passkey-login__icon svg { width:1.45rem; height:1.45rem; color:inherit!important; }
+.admin-passkey-login__content { min-width:0; }
+.admin-passkey-login__content h2 { margin:0; color:var(--auth-ink)!important; font-size:.92rem; font-weight:850; }
+.admin-passkey-login__content p { margin:.2rem 0 0; color:var(--auth-muted)!important; font-size:.78rem; line-height:1.45; }
+.admin-passkey-login__primary { grid-column:1/-1; min-height:2.85rem; width:100%; border:0; border-radius:.9rem; background:var(--auth-button); color:var(--auth-button-ink)!important; font-weight:800; cursor:pointer; }
+.admin-passkey-login__primary>span { display:flex; align-items:center; justify-content:center; gap:.5rem; color:inherit!important; }
+.admin-passkey-login__primary svg { width:1.15rem; height:1.15rem; color:inherit!important; }
+.admin-passkey-login__primary:disabled { cursor:wait; opacity:.72; }
+.admin-passkey-login__message,.admin-passkey-login__fallback { grid-column:1/-1; margin:0; overflow-wrap:anywhere; font-size:.75rem; line-height:1.45; }
+.admin-passkey-login__message { padding:.65rem .75rem; border-radius:.75rem; background:var(--auth-soft); color:var(--auth-ink)!important; }
+.admin-passkey-login__fallback { color:var(--auth-muted)!important; }
+
 .fi-panel-admin .admin-login-alert {
     display: flex;
     width: 100%;

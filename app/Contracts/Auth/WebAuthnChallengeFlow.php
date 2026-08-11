@@ -3,11 +3,32 @@
 namespace App\Contracts\Auth;
 
 use App\Models\User;
+use App\Models\WebAuthnCredential;
 use App\Support\Auth\WebAuthn\WebAuthnAssertionResult;
 use App\Support\Auth\WebAuthn\WebAuthnChallengeIssueResult;
 
 interface WebAuthnChallengeFlow
 {
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    public function issueRegistrationChallenge(User $user, bool $browserSupported, array $context = []): WebAuthnChallengeIssueResult;
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    public function verifyRegistration(User $user, string $challengeId, array $payload, ?string $deviceName = null): WebAuthnCredential;
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    public function issueDiscoverableAssertionChallenge(bool $browserSupported, array $context = []): WebAuthnChallengeIssueResult;
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    public function verifyDiscoverableAssertion(string $challengeId, string $credentialId, array $payload): WebAuthnAssertionResult;
+
     /**
      * @param  array<string, mixed>  $context
      */

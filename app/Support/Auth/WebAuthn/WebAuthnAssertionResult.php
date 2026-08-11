@@ -2,6 +2,9 @@
 
 namespace App\Support\Auth\WebAuthn;
 
+use App\Models\User;
+use App\Models\WebAuthnCredential;
+
 class WebAuthnAssertionResult
 {
     public const VERIFIED = 'verified';
@@ -21,6 +24,8 @@ class WebAuthnAssertionResult
     public function __construct(
         public readonly string $status,
         public readonly bool $canFallbackToPassword,
+        public readonly ?User $user = null,
+        public readonly ?WebAuthnCredential $credential = null,
     ) {}
 
     public function verified(): bool

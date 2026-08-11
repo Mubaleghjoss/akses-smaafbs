@@ -235,6 +235,18 @@ Schedule::call(function (): void {
             ->where('occurred_at', '<', now()->subDays(30))
             ->delete();
     }
+
+    if (Schema::hasTable('webauthn_challenges')) {
+        DB::table('webauthn_challenges')
+            ->where('updated_at', '<', now()->subDays(7))
+            ->where(function ($query): void {
+                $query
+                    ->whereNotNull('used_at')
+                    ->orWhereNotNull('cancelled_at')
+                    ->orWhere('challenge_expires_at', '<', now()->subDays(7));
+            })
+            ->delete();
+    }
 })
     ->dailyAt('02:15')
     ->name('literacy-operational-log-cleanup')
