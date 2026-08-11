@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Contracts\Auth\WebAuthnChallengeFlow;
 use App\Filament\Pages\Auth\Login;
 use App\Support\Auth\WebAuthn\WebAuthnChallengeIssueResult;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
+use Mockery;
 use Tests\TestCase;
 
 class AdminPasskeyFallbackTest extends TestCase
@@ -47,6 +49,65 @@ class AdminPasskeyFallbackTest extends TestCase
             ->assertSet('passkeyStatus', 'invalid_challenge');
 
         $this->assertGuest();
+    }
+
+    public function test_starting_a_new_passkey_login_cancels_the_previous_pending_challenge(): void
+    {
+        config(['webauthn.enabled' => true]);
+
+        $flow = Mockery::mock(WebAuthnChallengeFlow::class);
+        $flow->shouldReceive('issueDiscoverableAssertionChallenge')->twice()->andReturn(
+            new WebAuthnChallengeIssueResult(
+                WebAuthnChallengeIssueResult::ISSUED,
+                '11111111-1111-4111-8111-111111111111',
+                'challenge-one',
+                true,
+                ['challenge' => 'Y2hhbGxlbmdlLTE'],
+            ),
+            new WebAuthnChallengeIssueResult(
+                WebAuthnChallengeIssueResult::ISSUED,
+                '22222222-2222-4222-8222-222222222222',
+                'challenge-two',
+                true,
+                ['challenge' => 'Y2hhbGxlbmdlLTI'],
+            ),
+        );
+        $flow->shouldReceive('cancel')
+            ->once()
+            ->with('11111111-1111-4111-8111-111111111111', 'superseded_by_new_challenge');
+        $this->app->instance(WebAuthnChallengeFlow::class, $flow);
+
+        Livewire::test(Login::class)
+            ->call('beginPasskeyLogin', true)
+            ->call('beginPasskeyLogin', true)
+            ->assertSet('pendingPasskeyChallengeId', '22222222-2222-4222-8222-222222222222');
+    }
+
+    public function test_client_credential_manager_failure_only_cancels_the_session_pending_challenge(): void
+    {
+        config(['webauthn.enabled' => true]);
+
+        $flow = Mockery::mock(WebAuthnChallengeFlow::class);
+        $flow->shouldReceive('issueDiscoverableAssertionChallenge')->once()->andReturn(
+            new WebAuthnChallengeIssueResult(
+                WebAuthnChallengeIssueResult::ISSUED,
+                '33333333-3333-4333-8333-333333333333',
+                'challenge',
+                true,
+                ['challenge' => 'Y2hhbGxlbmdl'],
+            ),
+        );
+        $flow->shouldReceive('cancel')
+            ->once()
+            ->with('33333333-3333-4333-8333-333333333333', 'client_credential_manager_unknown');
+        $this->app->instance(WebAuthnChallengeFlow::class, $flow);
+
+        Livewire::test(Login::class)
+            ->call('beginPasskeyLogin', true)
+            ->call('reportPasskeyClientFailure', 'not-the-pending-challenge', 'client_credential_manager_unknown')
+            ->assertSet('pendingPasskeyChallengeId', '33333333-3333-4333-8333-333333333333')
+            ->call('reportPasskeyClientFailure', '33333333-3333-4333-8333-333333333333', 'client_credential_manager_unknown')
+            ->assertSet('pendingPasskeyChallengeId', null);
     }
 
     private function runWebAuthnMigrations(): void

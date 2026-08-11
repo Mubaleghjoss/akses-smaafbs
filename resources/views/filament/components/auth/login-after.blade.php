@@ -11,11 +11,11 @@
         </div>
 
         <button type="button" x-on:click="start($wire)" x-bind:disabled="isProcessing" class="admin-passkey-login__primary">
-            <span x-show="!isProcessing"><x-heroicon-o-finger-print /> Gunakan Passkey</span>
+            <span x-show="!isProcessing"><x-heroicon-o-finger-print /> <span x-text="canRetry ? 'Coba Passkey Lagi' : 'Gunakan Passkey'">Gunakan Passkey</span></span>
             <span x-show="isProcessing" x-cloak><x-filament::loading-indicator /> Menunggu verifikasi...</span>
         </button>
 
-        <p class="admin-passkey-login__message" role="status" aria-live="polite" x-show="localMessage || @js(filled($this->passkeyMessage))" x-text="localMessage || @js((string) $this->passkeyMessage)"></p>
+        <p class="admin-passkey-login__message" x-bind:data-tone="messageTone" role="status" aria-live="polite" x-show="localMessage || @js(filled($this->passkeyMessage))" x-text="localMessage || @js((string) $this->passkeyMessage)"></p>
         <p class="admin-passkey-login__fallback">Passkey bermasalah? Form username dan password di atas tetap dapat digunakan.</p>
     </section>
 @endif

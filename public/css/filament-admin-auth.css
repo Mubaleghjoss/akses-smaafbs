@@ -110,7 +110,7 @@ html.dark .fi-panel-admin,
 }
 
 .fi-panel-admin .fi-simple-page-content,
-.fi-panel-admin .fi-simple-page-content :where(p, span, div, label, button, a, small, strong),
+.fi-panel-admin .fi-simple-page-content :where(p, span, div, label, a, small, strong),
 .fi-panel-admin .fi-fo,
 .fi-panel-admin .fi-fo :where(p, span, div, label, small, strong),
 .fi-panel-admin .fi-fo-field-label,
@@ -214,12 +214,19 @@ html.dark .fi-panel-admin,
 .admin-passkey-login__content { min-width:0; }
 .admin-passkey-login__content h2 { margin:0; color:var(--auth-ink)!important; font-size:.92rem; font-weight:850; }
 .admin-passkey-login__content p { margin:.2rem 0 0; color:var(--auth-muted)!important; font-size:.78rem; line-height:1.45; }
-.admin-passkey-login__primary { grid-column:1/-1; min-height:2.85rem; width:100%; border:0; border-radius:.9rem; background:var(--auth-button); color:var(--auth-button-ink)!important; font-weight:800; cursor:pointer; }
-.admin-passkey-login__primary>span { display:flex; align-items:center; justify-content:center; gap:.5rem; color:inherit!important; }
-.admin-passkey-login__primary svg { width:1.15rem; height:1.15rem; color:inherit!important; }
+.fi-panel-admin .fi-simple-page-content .admin-passkey-login__primary { grid-column:1/-1; min-height:2.85rem; width:100%; border:0; border-radius:.9rem; background:var(--auth-button); color:var(--auth-button-ink)!important; font-weight:800; cursor:pointer; }
+.fi-panel-admin .fi-simple-page-content .admin-passkey-login__primary>span,
+.fi-panel-admin .fi-simple-page-content .admin-passkey-login__primary>span>span { display:flex; align-items:center; justify-content:center; gap:.5rem; color:var(--auth-button-ink)!important; }
+.fi-panel-admin .fi-simple-page-content .admin-passkey-login__primary svg { width:1.15rem; height:1.15rem; color:var(--auth-button-ink)!important; }
+.fi-panel-admin .fi-simple-page-content .admin-passkey-login__primary:hover,
+.fi-panel-admin .fi-simple-page-content .admin-passkey-login__primary:focus-visible,
+.fi-panel-admin .fi-simple-page-content .admin-passkey-login__primary:disabled { color:var(--auth-button-ink)!important; }
+.fi-panel-admin .fi-simple-page-content .admin-passkey-login__primary:focus-visible { outline:3px solid var(--auth-ring); outline-offset:2px; }
 .admin-passkey-login__primary:disabled { cursor:wait; opacity:.72; }
 .admin-passkey-login__message,.admin-passkey-login__fallback { grid-column:1/-1; margin:0; overflow-wrap:anywhere; font-size:.75rem; line-height:1.45; }
 .admin-passkey-login__message { padding:.65rem .75rem; border-radius:.75rem; background:var(--auth-soft); color:var(--auth-ink)!important; }
+.fi-panel-admin .fi-simple-page-content .admin-passkey-login__message[data-tone="error"] { border:1px solid rgba(225,29,72,.28); background:#fff1f2; color:#9f1239!important; }
+.dark .fi-panel-admin .fi-simple-page-content .admin-passkey-login__message[data-tone="error"] { border-color:rgba(251,113,133,.35); background:rgba(136,19,55,.2); color:#fecdd3!important; }
 .admin-passkey-login__fallback { color:var(--auth-muted)!important; }
 
 .fi-panel-admin .admin-login-alert {

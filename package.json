@@ -4,7 +4,8 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "test:passkey-js": "node --test tests/Browser/passkey-recovery.test.mjs"
     },
     "engines": {
         "node": "^20.19.0 || >=22.12.0"

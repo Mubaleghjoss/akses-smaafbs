@@ -111,6 +111,8 @@ class Login extends BaseLogin
             return $this->passkeyPayload();
         }
 
+        $this->cancelPendingPasskeyChallenge('superseded_by_new_challenge');
+
         $issue = app(WebAuthnChallengeFlow::class)->issueDiscoverableAssertionChallenge(
             browserSupported: $browserSupported ?? true,
             context: ['origin' => 'admin_login'],
@@ -130,6 +132,28 @@ class Login extends BaseLogin
         );
 
         return $this->passkeyPayload();
+    }
+
+    public function reportPasskeyClientFailure(?string $challengeId, string $errorCode): void
+    {
+        $challengeId = trim((string) $challengeId);
+        $pendingChallengeId = trim((string) ($this->pendingPasskeyChallengeId ?? ''));
+        $allowedCodes = [
+            'client_credential_manager_unknown',
+            'client_credential_manager_unavailable',
+        ];
+
+        if (
+            $challengeId === '' ||
+            $pendingChallengeId === '' ||
+            ! hash_equals($pendingChallengeId, $challengeId) ||
+            ! in_array($errorCode, $allowedCodes, true)
+        ) {
+            return;
+        }
+
+        app(WebAuthnChallengeFlow::class)->cancel($challengeId, $errorCode);
+        $this->resetPasskeyFlow();
     }
 
     public function completePasskeyLogin(
@@ -411,6 +435,17 @@ class Login extends BaseLogin
     {
         $this->pendingPasskeyChallengeId = null;
         $this->pendingPasskeyPublicKeyOptions = [];
+    }
+
+    private function cancelPendingPasskeyChallenge(string $reason): void
+    {
+        $challengeId = trim((string) ($this->pendingPasskeyChallengeId ?? ''));
+
+        if ($challengeId !== '') {
+            app(WebAuthnChallengeFlow::class)->cancel($challengeId, $reason);
+        }
+
+        $this->resetPasskeyFlow();
     }
 
     /**
