@@ -282,7 +282,8 @@ Route::get('/manifest.webmanifest', function () {
 
 Route::get('/service-worker.js', function () {
     $script = <<<'JS'
-const CACHE_NAME = 'akses-public-shell-v6';
+const CACHE_NAME = 'akses-public-shell-v7';
+const SERVICE_WORKER_VERSION = 'public-shell-v7';
 const PASSTHROUGH_PREFIXES = [
     '/admin',
     '/livewire',
@@ -314,17 +315,40 @@ const shouldPassThrough = (request, url) => {
     return false;
 };
 
-const offlineResponse = () => new Response(
-    '<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#16a34a"><title>Koneksi terputus</title></head><body style="margin:0;background:#f8fafc;color:#0f172a"><main style="font-family:system-ui,sans-serif;max-width:36rem;margin:12vh auto;padding:1.25rem;line-height:1.6"><section style="border:1px solid #cbd5e1;border-radius:1rem;background:#fff;padding:1.25rem"><h1 style="margin:0;font-size:1.25rem">Koneksi ke server terputus</h1><p style="margin:.75rem 0 0">Jawaban tidak dikirim dari halaman offline. Periksa Wi-Fi atau jaringan seluler, lalu muat ulang halaman.</p><button type="button" onclick="location.reload()" style="margin-top:1rem;border:0;border-radius:.75rem;background:#16a34a;color:#fff;padding:.7rem 1rem;font-weight:700">Muat ulang</button></section></main></body></html>',
-    {
+const offlineResponse = (kind = 'network_error', httpStatus = 0) => {
+    const serverUnavailable = kind === 'server_unavailable';
+    const title = serverUnavailable ? 'Server sedang tidak tersedia' : 'Koneksi jaringan terputus';
+    const message = serverUnavailable
+        ? 'Server memberi respons sementara tidak tersedia. Jawaban tidak dikirim dari halaman ini.'
+        : 'Browser tidak memperoleh respons jaringan. Periksa Wi-Fi, access point, atau koneksi internet.';
+    const eventType = serverUnavailable
+        ? 'navigation_server_unavailable'
+        : 'navigation_network_error';
+    const html = `<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0f766e"><title>${title}</title>
+<style>body{margin:0;background:#f8fafc;color:#0f172a;font-family:system-ui,sans-serif}.wrap{max-width:38rem;margin:8vh auto;padding:1rem}.card{border:1px solid #cbd5e1;border-radius:1rem;background:#fff;padding:1.25rem;box-shadow:0 1px 2px rgba(15,23,42,.06)}h1{margin:0;font-size:1.3rem;line-height:1.3}p{margin:.75rem 0 0;line-height:1.6}.status{margin-top:1rem;border-radius:.75rem;background:#f1f5f9;padding:.75rem;font-size:.92rem}.actions{display:flex;flex-wrap:wrap;gap:.65rem;margin-top:1rem}button{min-height:44px;border:1px solid #0f766e;border-radius:.75rem;background:#fff;color:#0f766e;padding:.7rem 1rem;font-weight:700;cursor:pointer}button.primary{background:#0f766e;color:#fff}.hint{font-size:.85rem;color:#475569}@media(max-width:520px){.wrap{margin:4vh auto}.actions button{width:100%}}</style></head>
+<body><main class="wrap"><section class="card"><h1>${title}</h1><p>${message}</p><p class="hint">Isian pada form sebelumnya belum dinyatakan tersimpan. Jangan menekan Kirim berulang.</p><div class="status" aria-live="polite"><strong id="connection-label">Status: belum diperiksa</strong><br><span id="connection-meta"></span></div><div class="actions"><button class="primary" id="probe-button" type="button">Periksa Koneksi Server</button><button id="reload-button" type="button">Muat Ulang Halaman</button></div></section></main>
+<script>(function(){
+var clientKey='akses:connectivity:client-id:v1';var queueKey='akses:connectivity:events:v1';
+var eventType=${JSON.stringify(eventType)};var httpStatus=${Number(httpStatus) || 0};var workerVersion=${JSON.stringify(SERVICE_WORKER_VERSION)};
+function uuid(){if(window.crypto&&window.crypto.randomUUID){return window.crypto.randomUUID();}return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.floor(Math.random()*16);var v=c==='x'?r:(r&3)|8;return v.toString(16);});}
+function group(path){if(path==='/'){return 'home';}if(path==='/admin/login'||path==='/login'){return 'login';}if(path==='/perpustakaan/program-literasi-numerasi'){return 'literacy_list';}if(path.indexOf('/perpustakaan/program-literasi-numerasi/')===0){return 'literacy_material';}return 'other_public';}
+try{var client=localStorage.getItem(clientKey);if(!client){client=uuid();localStorage.setItem(clientKey,client);}var queue=JSON.parse(localStorage.getItem(queueKey)||'[]');if(!Array.isArray(queue)){queue=[];}queue.push({event_uuid:uuid(),event_type:eventType,route_group:group(location.pathname),http_status:httpStatus,service_worker_version:workerVersion,occurred_at:new Date().toISOString(),recovered_at:null});localStorage.setItem(queueKey,JSON.stringify(queue.slice(-20)));}catch(e){}
+var label=document.getElementById('connection-label');var meta=document.getElementById('connection-meta');var probe=document.getElementById('probe-button');
+function updateBrowserStatus(){meta.textContent='Browser '+(navigator.onLine?'mendeteksi jaringan aktif':'sedang offline')+' · '+new Date().toLocaleString('id-ID');}updateBrowserStatus();
+probe.addEventListener('click',async function(){probe.disabled=true;label.textContent='Status: memeriksa server...';var controller=new AbortController();var timeout=setTimeout(function(){controller.abort();},8000);try{var response=await fetch('/up?connectivity_probe='+Date.now(),{cache:'no-store',signal:controller.signal});if(response.ok){label.textContent='Status: server dapat dijangkau';meta.textContent='Koneksi sudah pulih. Tekan Muat Ulang Halaman.';}else{label.textContent='Status: server merespons '+response.status;updateBrowserStatus();}}catch(e){label.textContent='Status: server belum dapat dijangkau';updateBrowserStatus();}finally{clearTimeout(timeout);probe.disabled=false;}});
+document.getElementById('reload-button').addEventListener('click',function(){location.reload();});window.addEventListener('online',updateBrowserStatus);window.addEventListener('offline',updateBrowserStatus);
+})();</script></body></html>`;
+
+    return new Response(html, {
         status: 503,
         statusText: 'Service Unavailable',
         headers: {
-        'Cache-Control': 'no-store',
+            'Cache-Control': 'no-store',
             'Content-Type': 'text/html; charset=UTF-8',
         },
-    },
-);
+    });
+};
 
 self.addEventListener('install', (event) => {
     self.skipWaiting();
@@ -355,9 +379,15 @@ self.addEventListener('fetch', (event) => {
     }
 
     // Dynamic HTML (including literacy forms and CSRF tokens) is never cached.
-    // Only provide a tiny offline explanation when a public navigation fails.
+    // Only provide a diagnostic explanation when a public navigation fails.
     if (request.mode === 'navigate') {
-        event.respondWith(fetch(request, { cache: 'no-store' }).catch(offlineResponse));
+        event.respondWith(
+            fetch(request, { cache: 'no-store' })
+                .then((response) => [503, 504].includes(response.status)
+                    ? offlineResponse('server_unavailable', response.status)
+                    : response)
+                .catch(() => offlineResponse('network_error', 0))
+        );
     }
 });
 JS;

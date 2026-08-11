@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $stateFile = Join-Path $projectRoot 'storage\app\private\literacy-school-monitor-state.json'
-$logFile = Join-Path $projectRoot 'storage\logs\literacy-school-monitor.csv'
+$logFile = Join-Path $projectRoot 'storage\logs\literacy-school-monitor-v2.csv'
 
 Add-Type -AssemblyName PresentationFramework
 
@@ -32,7 +32,7 @@ try {
     if ($Action -eq 'enable') {
         Enable-ScheduledTask -TaskName $TaskName | Out-Null
         Start-ScheduledTask -TaskName $TaskName
-        Show-MonitorMessage "Monitor jaringan sudah diaktifkan.`nPemeriksaan pertama sedang dijalankan dan berikutnya berjalan setiap 5 menit."
+        Show-MonitorMessage "Monitor jaringan sudah diaktifkan.`nPemeriksaan pertama sedang dijalankan dan berikutnya berjalan setiap 1 menit."
         exit 0
     }
 
@@ -48,7 +48,7 @@ try {
         }
 
         Disable-ScheduledTask -TaskName $TaskName | Out-Null
-        Show-MonitorMessage "Monitor jaringan sudah dinonaktifkan.`nPemeriksaan otomatis setiap 5 menit dihentikan."
+        Show-MonitorMessage "Monitor jaringan sudah dinonaktifkan.`nPemeriksaan otomatis setiap 1 menit dihentikan."
         exit 0
     }
 

@@ -3,7 +3,7 @@
     class="admin-passkey-login mt-3"
 >
     <div class="admin-passkey-login__panel">
-        <div class="admin-passkey-login__title">Login biometrik</div>
+        <div class="admin-passkey-login__title">Login sidik jari / passkey</div>
         <p class="admin-passkey-login__hint">Gunakan fingerprint atau face unlock jika perangkat ini sudah terdaftar.</p>
 
         <button

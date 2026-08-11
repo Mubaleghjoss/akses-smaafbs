@@ -16,7 +16,7 @@ if ([string]::IsNullOrWhiteSpace($TokenFile)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($LogFile)) {
-    $LogFile = Join-Path $ProjectRoot 'storage\logs\literacy-school-monitor.csv'
+    $LogFile = Join-Path $ProjectRoot 'storage\logs\literacy-school-monitor-v2.csv'
 }
 
 if ([string]::IsNullOrWhiteSpace($StateFile)) {
@@ -30,27 +30,95 @@ New-Item -ItemType Directory -Force -Path $stateDirectory | Out-Null
 
 $uri = [Uri]$BaseUrl
 $checkedAt = [DateTimeOffset]::Now
+$gatewayOk = $false
+$internetOk = $false
 $dnsOk = $false
 $tcpOk = $false
 $httpStatus = 0
 $durationMs = 0
+$gatewayDurationMs = 0
+$internetDurationMs = 0
+$dnsDurationMs = 0
+$tcpDurationMs = 0
+$httpsDurationMs = 0
 $errorCode = ''
 
+function Test-TcpEndpoint {
+    param(
+        [string]$HostName,
+        [int]$Port = 443,
+        [int]$TimeoutMs = 5000
+    )
+
+    $client = [Net.Sockets.TcpClient]::new()
+
+    try {
+        $task = $client.ConnectAsync($HostName, $Port)
+
+        return $task.Wait($TimeoutMs) -and $client.Connected
+    } catch {
+        return $false
+    } finally {
+        $client.Dispose()
+    }
+}
+
+$gatewayAddress = ''
+
+try {
+    $routeOutput = & route.exe print -4 2>$null
+    $routeMatch = $routeOutput | Select-String -Pattern '^\s*0\.0\.0\.0\s+0\.0\.0\.0\s+(\S+)' | Select-Object -First 1
+
+    if ($routeMatch -and $routeMatch.Matches.Count -gt 0) {
+        $gatewayAddress = [string]$routeMatch.Matches[0].Groups[1].Value
+    }
+} catch {
+    $gatewayAddress = ''
+}
+
+if (-not [string]::IsNullOrWhiteSpace($gatewayAddress)) {
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    try {
+        $gatewayOk = Test-Connection -ComputerName $gatewayAddress -Count 1 -Quiet -ErrorAction SilentlyContinue
+
+        if (-not $gatewayOk) {
+            $arpOutput = & arp.exe -a $gatewayAddress 2>$null
+            $gatewayOk = ($arpOutput -join "`n") -match [regex]::Escape($gatewayAddress)
+        }
+    } finally {
+        $stopwatch.Stop()
+        $gatewayDurationMs = [int]$stopwatch.ElapsedMilliseconds
+    }
+}
+
+$stopwatch = [Diagnostics.Stopwatch]::StartNew()
+try {
+    $internetOk = Test-TcpEndpoint -HostName '1.1.1.1' -Port 443 -TimeoutMs 5000
+} finally {
+    $stopwatch.Stop()
+    $internetDurationMs = [int]$stopwatch.ElapsedMilliseconds
+}
+
+$stopwatch = [Diagnostics.Stopwatch]::StartNew()
 try {
     Resolve-DnsName -Name $uri.Host -Type A -ErrorAction Stop | Out-Null
     $dnsOk = $true
 } catch {
-    $errorCode = 'DNS_FAILED'
+    $dnsOk = $false
+} finally {
+    $stopwatch.Stop()
+    $dnsDurationMs = [int]$stopwatch.ElapsedMilliseconds
 }
 
 if ($dnsOk) {
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
     try {
-        $tcpOk = Test-NetConnection -ComputerName $uri.Host -Port 443 -InformationLevel Quiet
-        if (-not $tcpOk) {
-            $errorCode = 'TCP_443_FAILED'
-        }
+        $tcpOk = Test-TcpEndpoint -HostName $uri.Host -Port 443 -TimeoutMs 5000
     } catch {
-        $errorCode = 'TCP_443_FAILED'
+        $tcpOk = $false
+    } finally {
+        $stopwatch.Stop()
+        $tcpDurationMs = [int]$stopwatch.ElapsedMilliseconds
     }
 }
 
@@ -58,15 +126,15 @@ if ($tcpOk) {
     $nodeProbe = Join-Path $PSScriptRoot 'monitor-school-http-probe.cjs'
 
     if ((Get-Command node -ErrorAction SilentlyContinue) -and (Test-Path -LiteralPath $nodeProbe)) {
+        $stopwatch = [Diagnostics.Stopwatch]::StartNew()
         try {
             $probeResult = (& node $nodeProbe probe ($BaseUrl.TrimEnd('/') + '/up') 2>$null) | ConvertFrom-Json
             $httpStatus = [int]$probeResult.status
-            $durationMs = [int]$probeResult.duration_ms
-            if ($LASTEXITCODE -ne 0 -or $httpStatus -lt 200 -or $httpStatus -ge 400) {
-                $errorCode = if ($httpStatus -gt 0) { 'HTTP_' + $httpStatus } else { 'CONNECTION_RESET_OR_TIMEOUT' }
-            }
         } catch {
-            $errorCode = 'NODE_HTTPS_PROBE_FAILED'
+            $httpStatus = 0
+        } finally {
+            $stopwatch.Stop()
+            $httpsDurationMs = [int]$stopwatch.ElapsedMilliseconds
         }
     } else {
         $stopwatch = [Diagnostics.Stopwatch]::StartNew()
@@ -74,27 +142,45 @@ if ($tcpOk) {
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
             $response = Invoke-WebRequest -Uri ($BaseUrl.TrimEnd('/') + '/up') -Method Get -TimeoutSec 20 -UseBasicParsing
             $httpStatus = [int]$response.StatusCode
-            if ($httpStatus -lt 200 -or $httpStatus -ge 400) {
-                $errorCode = 'HTTP_' + $httpStatus
-            }
         } catch {
-            $errorCode = 'CONNECTION_RESET_OR_TIMEOUT'
+            $httpStatus = 0
         } finally {
             $stopwatch.Stop()
-            $durationMs = [int]$stopwatch.ElapsedMilliseconds
+            $httpsDurationMs = [int]$stopwatch.ElapsedMilliseconds
         }
     }
 }
 
+$durationMs = $gatewayDurationMs + $internetDurationMs + $dnsDurationMs + $tcpDurationMs + $httpsDurationMs
 $isOk = $dnsOk -and $tcpOk -and $httpStatus -ge 200 -and $httpStatus -lt 400
+
+if (-not $isOk) {
+    $errorCode = if (-not $gatewayOk -and -not $internetOk) {
+        'GATEWAY_OR_LAN_FAILED'
+    } elseif (-not $internetOk) {
+        'INTERNET_OR_ONT_FAILED'
+    } elseif (-not $dnsOk) {
+        'DNS_FAILED'
+    } elseif (-not $tcpOk) {
+        'TCP_443_FAILED'
+    } elseif ($httpStatus -gt 0) {
+        'HTTP_' + $httpStatus
+    } else {
+        'HTTPS_RESET_OR_TIMEOUT'
+    }
+}
+
 $previousFailures = 0
+$previousErrorCode = ''
 
 if (Test-Path -LiteralPath $StateFile) {
     try {
         $previousState = Get-Content -LiteralPath $StateFile -Raw | ConvertFrom-Json
         $previousFailures = [int]$previousState.consecutive_failures
+        $previousErrorCode = [string]$previousState.last_error_code
     } catch {
         $previousFailures = 0
+        $previousErrorCode = ''
     }
 }
 
@@ -106,6 +192,12 @@ $state = [ordered]@{
     monitor_enabled = $MonitorEnabled
     consecutive_failures = $consecutiveFailures
     last_error_code = $errorCode
+    gateway_ok = $gatewayOk
+    internet_ok = $internetOk
+    dns_ok = $dnsOk
+    tcp_ok = $tcpOk
+    http_status = $httpStatus
+    duration_ms = $durationMs
 }
 $state | ConvertTo-Json | Set-Content -LiteralPath $StateFile -Encoding UTF8
 
@@ -113,10 +205,17 @@ $logRow = [pscustomobject]@{
     checked_at = $checkedAt.ToString('o')
     source = $Source
     status = $status
+    gateway_ok = $gatewayOk
+    internet_ok = $internetOk
     dns_ok = $dnsOk
     tcp_ok = $tcpOk
     http_status = $httpStatus
     duration_ms = $durationMs
+    gateway_duration_ms = $gatewayDurationMs
+    internet_duration_ms = $internetDurationMs
+    dns_duration_ms = $dnsDurationMs
+    tcp_duration_ms = $tcpDurationMs
+    https_duration_ms = $httpsDurationMs
     consecutive_failures = $consecutiveFailures
     error_code = $errorCode
 }
@@ -138,13 +237,21 @@ if ($isOk -and (Test-Path -LiteralPath $TokenFile)) {
             tcp_ok = $tcpOk
             http_status = $httpStatus
             duration_ms = $durationMs
-            consecutive_failures = $previousFailures
+            consecutive_failures = $consecutiveFailures
             error_code = if ($status -eq 'recovered') { 'RECOVERED_AFTER_FAILURES' } else { $null }
             checked_at = $checkedAt.ToString('o')
             context = @{
-                client_version = '1.1'
+                client_version = '2.0'
                 monitor_enabled = $MonitorEnabled
                 event_type = $EventType
+                gateway_ok = $gatewayOk
+                internet_ok = $internetOk
+                gateway_duration_ms = $gatewayDurationMs
+                internet_duration_ms = $internetDurationMs
+                dns_duration_ms = $dnsDurationMs
+                tcp_duration_ms = $tcpDurationMs
+                https_duration_ms = $httpsDurationMs
+                previous_error_code = if ($status -eq 'recovered') { $previousErrorCode } else { $null }
             }
         } | ConvertTo-Json -Depth 3
 
@@ -176,3 +283,12 @@ if ($isOk -and (Test-Path -LiteralPath $TokenFile)) {
         }
     }
 }
+
+if ((Test-Path -LiteralPath $LogFile) -and (Get-Item -LiteralPath $LogFile).Length -gt 5MB) {
+    $archivePath = Join-Path $logDirectory ('literacy-school-monitor-v2-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.csv')
+    Move-Item -LiteralPath $LogFile -Destination $archivePath
+}
+
+Get-ChildItem -LiteralPath $logDirectory -Filter 'literacy-school-monitor-v2-*.csv' -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-30) } |
+    Remove-Item -Force -ErrorAction SilentlyContinue

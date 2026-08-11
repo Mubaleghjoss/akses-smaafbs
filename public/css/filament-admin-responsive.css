@@ -2845,6 +2845,13 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
     font-size: 0.74rem;
 }
 
+.literasi-health-card .literasi-network-stages {
+    margin-top: 0.55rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(148, 163, 184, 0.25);
+    font-variant-numeric: tabular-nums;
+}
+
 .literasi-health-card.is-warning {
     border-color: rgba(245, 158, 11, 0.48);
     background: #fffbeb;
@@ -2853,6 +2860,241 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .literasi-health-card.is-danger {
     border-color: rgba(244, 63, 94, 0.42);
     background: #fff1f2;
+}
+
+.literasi-connectivity {
+    display: grid;
+    gap: 1rem;
+    padding: 1rem;
+    border: 1px solid rgb(203 213 225);
+    border-radius: 1rem;
+    background: rgb(248 250 252);
+}
+
+.dark .literasi-connectivity,
+.fi-theme-dark .literasi-connectivity {
+    border-color: rgb(51 65 85);
+    background: rgb(15 23 42 / 0.72);
+}
+
+.literasi-connectivity__heading,
+.literasi-connectivity__period,
+.literasi-connectivity__hourly-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.literasi-connectivity__heading > span,
+.literasi-connectivity__hourly-heading {
+    min-width: 0;
+}
+
+.literasi-connectivity__heading strong,
+.literasi-connectivity__heading small,
+.literasi-connectivity__hourly-heading strong,
+.literasi-connectivity__hourly-heading small {
+    display: block;
+}
+
+.literasi-connectivity__heading svg {
+    width: 1.5rem;
+    height: 1.5rem;
+    flex: 0 0 auto;
+    color: rgb(15 118 110);
+}
+
+.literasi-connectivity__filters {
+    display: grid;
+    grid-template-columns: minmax(10rem, 1.35fr) repeat(2, minmax(7rem, 0.8fr)) auto;
+    gap: .75rem;
+    align-items: end;
+}
+
+.literasi-connectivity__filters label {
+    display: grid;
+    gap: .35rem;
+    min-width: 0;
+    font-size: .78rem;
+    font-weight: 700;
+    color: rgb(51 65 85);
+}
+
+.dark .literasi-connectivity__filters label,
+.fi-theme-dark .literasi-connectivity__filters label {
+    color: rgb(203 213 225);
+}
+
+.literasi-connectivity__filters input {
+    width: 100%;
+    min-height: 2.65rem;
+    border: 1px solid rgb(203 213 225);
+    border-radius: .75rem;
+    background: white;
+    padding: .55rem .7rem;
+    color: rgb(15 23 42);
+    font: inherit;
+}
+
+.dark .literasi-connectivity__filters input,
+.fi-theme-dark .literasi-connectivity__filters input {
+    border-color: rgb(71 85 105);
+    background: rgb(15 23 42);
+    color: rgb(241 245 249);
+}
+
+.literasi-connectivity__error {
+    margin: -.4rem 0 0;
+    color: rgb(185 28 28);
+    font-size: .8rem;
+    font-weight: 700;
+}
+
+.literasi-connectivity__period {
+    justify-content: flex-start;
+    font-size: .84rem;
+    color: rgb(71 85 105);
+}
+
+.dark .literasi-connectivity__period,
+.fi-theme-dark .literasi-connectivity__period {
+    color: rgb(148 163 184);
+}
+
+.literasi-connectivity__metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: .75rem;
+}
+
+.literasi-connectivity__metrics article {
+    display: grid;
+    gap: .25rem;
+    min-width: 0;
+    padding: .85rem;
+    border: 1px solid rgb(226 232 240);
+    border-radius: .85rem;
+    background: white;
+}
+
+.literasi-connectivity__metrics article.is-warning {
+    border-color: rgb(245 158 11 / .55);
+    background: rgb(255 251 235);
+}
+
+.literasi-connectivity__metrics article.is-danger {
+    border-color: rgb(239 68 68 / .5);
+    background: rgb(254 242 242);
+}
+
+.dark .literasi-connectivity__metrics article,
+.fi-theme-dark .literasi-connectivity__metrics article {
+    border-color: rgb(51 65 85);
+    background: rgb(15 23 42);
+}
+
+.dark .literasi-connectivity__metrics article.is-warning,
+.fi-theme-dark .literasi-connectivity__metrics article.is-warning {
+    border-color: rgb(180 83 9);
+    background: rgb(69 26 3 / .45);
+}
+
+.dark .literasi-connectivity__metrics article.is-danger,
+.fi-theme-dark .literasi-connectivity__metrics article.is-danger {
+    border-color: rgb(185 28 28);
+    background: rgb(69 10 10 / .45);
+}
+
+.literasi-connectivity__metrics span,
+.literasi-connectivity__metrics small {
+    color: rgb(71 85 105);
+    font-size: .75rem;
+}
+
+.literasi-connectivity__metrics strong {
+    color: rgb(15 23 42);
+    font-size: 1.35rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.dark .literasi-connectivity__metrics span,
+.dark .literasi-connectivity__metrics small,
+.fi-theme-dark .literasi-connectivity__metrics span,
+.fi-theme-dark .literasi-connectivity__metrics small {
+    color: rgb(148 163 184);
+}
+
+.dark .literasi-connectivity__metrics strong,
+.fi-theme-dark .literasi-connectivity__metrics strong {
+    color: rgb(248 250 252);
+}
+
+.literasi-connectivity__hourly {
+    display: grid;
+    gap: .6rem;
+}
+
+.literasi-connectivity__hourly > article {
+    display: grid;
+    grid-template-columns: minmax(4rem, .7fr) repeat(6, minmax(5rem, 1fr));
+    gap: .5rem;
+    align-items: center;
+    padding: .7rem .8rem;
+    border: 1px solid rgb(226 232 240);
+    border-radius: .75rem;
+    background: white;
+    font-size: .78rem;
+}
+
+.dark .literasi-connectivity__hourly > article,
+.fi-theme-dark .literasi-connectivity__hourly > article {
+    border-color: rgb(51 65 85);
+    background: rgb(15 23 42);
+}
+
+.literasi-connectivity__hourly b {
+    font-variant-numeric: tabular-nums;
+}
+
+.literasi-connectivity__empty {
+    display: grid;
+    gap: .25rem;
+    padding: 1rem;
+    border: 1px dashed rgb(148 163 184);
+    border-radius: .75rem;
+    text-align: center;
+}
+
+@media (max-width: 900px) {
+    .literasi-connectivity__metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .literasi-connectivity__hourly > article {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    .literasi-connectivity {
+        padding: .8rem;
+    }
+
+    .literasi-connectivity__heading,
+    .literasi-connectivity__hourly-heading {
+        align-items: flex-start;
+    }
+
+    .literasi-connectivity__filters,
+    .literasi-connectivity__metrics,
+    .literasi-connectivity__hourly > article {
+        grid-template-columns: 1fr;
+    }
+
+    .literasi-connectivity__filters .fi-btn {
+        width: 100%;
+    }
 }
 
 .dark .literasi-health-card,

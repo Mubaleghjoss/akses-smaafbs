@@ -30,6 +30,10 @@ return [
 
     'school_monitor' => [
         'token' => env('LITERACY_SCHOOL_MONITOR_TOKEN'),
-        'stale_minutes' => max(2, (int) env('LITERACY_SCHOOL_MONITOR_STALE_MINUTES', 10)),
+        'stale_minutes' => max(2, (int) env('LITERACY_SCHOOL_MONITOR_STALE_MINUTES', 3)),
+    ],
+
+    'traffic_audit' => [
+        'log_path' => env('APP_ACCESS_LOG_PATH'),
     ],
 ];

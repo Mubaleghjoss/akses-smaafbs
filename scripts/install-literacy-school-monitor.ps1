@@ -24,7 +24,7 @@ if ($existing) {
 
 $action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('//B //Nologo "' + $hiddenRunner + '"')
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
-    -RepetitionInterval (New-TimeSpan -Minutes 5)
+    -RepetitionInterval (New-TimeSpan -Minutes 1)
 $settings = New-ScheduledTaskSettingsSet -Hidden -StartWhenAvailable `
     -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
     -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 2)
@@ -33,7 +33,7 @@ $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.Wind
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
     -Settings $settings -Principal $principal `
-    -Description 'Memantau DNS, TCP 443, dan HTTPS aplikasi SMA AFBS setiap 5 menit tanpa membuka jendela PowerShell.' | Out-Null
+    -Description 'Memantau gateway, internet, DNS, TCP 443, dan HTTPS aplikasi SMA AFBS setiap 1 menit tanpa membuka jendela PowerShell.' | Out-Null
 
 $shortcutDefinitions = @(
     @{ Name = 'Aktifkan Monitor Jaringan.lnk'; Action = 'enable' },

@@ -21,6 +21,7 @@ class LiteracySubmissionEventRecorder
         'throttled',
         'queue_deadlock_retry',
         'hosting_throttled',
+        'receipt_viewed',
     ];
 
     public function record(string $eventCode, array $attributes = []): void

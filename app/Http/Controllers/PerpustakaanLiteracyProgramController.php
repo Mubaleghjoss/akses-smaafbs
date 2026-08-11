@@ -656,6 +656,19 @@ class PerpustakaanLiteracyProgramController extends Controller
     {
         $receipt = $request->session()->get('literacy_submission_receipt');
 
+        if (is_array($receipt)) {
+            app(LiteracySubmissionEventRecorder::class)->record('receipt_viewed', [
+                'material_id' => $receipt['material_id'] ?? null,
+                'data_siswa_id' => $receipt['student_id'] ?? null,
+                'context' => [
+                    'operation' => str_starts_with((string) ($receipt['draft_key'] ?? ''), 'update:')
+                        ? 'update'
+                        : 'create',
+                    'request_kind' => 'receipt_navigation',
+                ],
+            ]);
+        }
+
         return $this->noStoreView('library.literacy.completed', [
             'title' => 'Jawaban Berhasil Disimpan',
             'receipt' => $receipt,

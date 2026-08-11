@@ -1,5 +1,15 @@
 # Riwayat Literasi Numerasi
 
+## 2026-08-11 - Telemetri konektivitas dan monitor jaringan v2
+
+- Mengurangi pemeriksaan Service Worker dengan registrasi bersama dan interval pembaruan enam jam.
+- Membedakan navigasi tanpa jaringan dari HTTP 503/504 serta menambahkan probe `/up` manual tanpa retry otomatis.
+- Menambahkan telemetri browser anonim yang dikirim setelah koneksi pulih, dibatasi 20 event lokal dan retensi server 30 hari.
+- Menambahkan kartu Konektivitas dan Pengunjung dengan filter tanggal/jam serta rincian informasional per jam.
+- Menambahkan audit access log read-only melalui `app:traffic-audit`.
+- Memperluas monitor Windows menjadi gateway, internet, DNS, TCP 443, dan HTTPS setiap satu menit dengan log v2.
+- Menyimpan hash IP heartbeat agar IP sekolah yang dinamis dapat dikenali tanpa menyimpan alamat IP mentah pada telemetri.
+
 ## 2026-08-06 - Salin rekap bulanan WhatsApp
 
 - Menambahkan empat tombol rekap bulanan untuk keseluruhan, SIGAP 29 Karakter, Literasi, dan Numerasi.

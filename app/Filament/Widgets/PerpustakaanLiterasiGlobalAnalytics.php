@@ -4,9 +4,10 @@ namespace App\Filament\Widgets;
 
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource;
 use App\Models\PerpustakaanLiterasiMaterial;
-use App\Support\Perpustakaan\LiterasiAnalytics;
+use App\Support\Perpustakaan\LiteracyConnectivityAnalytics;
 use App\Support\Perpustakaan\LiteracyMonthlyShareText;
 use App\Support\Perpustakaan\LiteracyOperationalHealth;
+use App\Support\Perpustakaan\LiterasiAnalytics;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -26,6 +27,17 @@ class PerpustakaanLiterasiGlobalAnalytics extends Widget
     public ?string $monthlyShareText = null;
 
     public ?string $monthlyShareTitle = null;
+
+    public string $connectivityDate = '';
+
+    public string $connectivityFrom = '06:00';
+
+    public string $connectivityTo = '10:00';
+
+    public function mount(): void
+    {
+        $this->connectivityDate = now()->format('Y-m-d');
+    }
 
     public static function canView(): bool
     {
@@ -57,7 +69,25 @@ class PerpustakaanLiterasiGlobalAnalytics extends Widget
                 : 'Rekap bulan berjalan khusus kategori '.$tabs[$activeTab].'.',
             'operationalHealth' => app(LiteracyOperationalHealth::class)->snapshot(),
             'monthlyShareScopes' => LiteracyMonthlyShareText::scopeOptions(),
+            'connectivity' => app(LiteracyConnectivityAnalytics::class)->snapshot(
+                $this->connectivityDate ?: now()->format('Y-m-d'),
+                $this->connectivityFrom,
+                $this->connectivityTo,
+            ),
         ];
+    }
+
+    public function refreshConnectivity(): void
+    {
+        abort_unless(static::canView(), 403);
+
+        $this->validate([
+            'connectivityDate' => ['required', 'date_format:Y-m-d'],
+            'connectivityFrom' => ['required', 'date_format:H:i'],
+            'connectivityTo' => ['required', 'date_format:H:i', 'after_or_equal:connectivityFrom'],
+        ], [
+            'connectivityTo.after_or_equal' => 'Jam akhir harus sama atau lebih besar daripada jam awal.',
+        ]);
     }
 
     public function selectAnalyticsTab(string $tab): void

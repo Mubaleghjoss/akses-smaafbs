@@ -133,6 +133,12 @@ class LiteracyOperationalHealth
                 : 'Pasang monitor sekolah',
             'network_duration_ms' => $network?->duration_ms,
             'network_error_code' => $network?->error_code,
+            'network_gateway_ok' => $network ? data_get($network->context, 'gateway_ok') : null,
+            'network_internet_ok' => $network ? data_get($network->context, 'internet_ok') : null,
+            'network_dns_ok' => $network?->dns_ok,
+            'network_tcp_ok' => $network?->tcp_ok,
+            'network_http_status' => $network?->http_status,
+            'network_previous_error_code' => $network ? data_get($network->context, 'previous_error_code') : null,
             'updated_at' => now(),
         ];
     }

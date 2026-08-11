@@ -12,9 +12,20 @@
 
 1. Bandingkan hotspot, Wi-Fi gedung lain, dan VPN.
 2. Buka shortcut Cek Status Monitor Jaringan.
-3. Periksa DNS, TCP 443, HTTPS, latensi, dan log CSV.
+3. Periksa gateway, internet umum, DNS, TCP 443, HTTPS, latensi, dan log CSV v2.
 4. Jika hotspot/VPN normal sementara Wi-Fi sekolah gagal, fokus pada ONT/router, DNS, IPv6/MTU, NAT/session table, atau jalur ISP.
 5. Jangan menganggap Laravel menolak koneksi jika request tidak muncul di access log server.
+6. Halaman fallback Service Worker berarti browser tidak memperoleh respons navigasi; bedakan dengan satu baris HTTP 503 yang benar-benar tercatat di access log.
+7. Gunakan kartu Konektivitas dan Pengunjung untuk melihat event browser yang baru terkirim setelah koneksi pulih.
+8. Untuk audit hosting per jam jalankan `php artisan app:traffic-audit --date=YYYY-MM-DD --from=06:00 --to=10:00 --school-ip=IP_SAAT_ITU`.
+
+## Topologi jaringan sekolah
+
+1. Router kelas harus mode AP: DHCP/NAT/firewall mati dan uplink LAN-ke-LAN.
+2. Hanya router utama atau ONT yang membagikan DHCP, dengan kapasitas minimal 200–250 alamat dan lease 8–12 jam.
+3. Jangan mengganti MTU, mematikan IPv6, atau mengubah ONT menjadi bridge hanya berdasarkan satu foto gangguan.
+4. Jika tiga sesi monitor menunjukkan gateway normal tetapi internet gagal, kirim log bertimestamp ke ISP.
+5. Bridge ONT dan router utama khusus hanya dilakukan bersama ISP setelah NAT/session ONT terbukti menjadi batas; VLAN, TR069, dan VoIP harus dipertahankan.
 
 ## Jawaban tidak tersimpan
 

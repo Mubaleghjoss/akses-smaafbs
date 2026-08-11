@@ -20,6 +20,13 @@
     <title>{{ $meta['title'] }}</title>
     <meta name="description" content="{{ $meta['description'] }}">
     <meta name="theme-color" content="{{ $meta['theme_color'] }}">
+    @php
+        $pwaRegistrarPath = public_path('js/pwa-registration.js');
+        $pwaRegistrarVersion = is_file($pwaRegistrarPath)
+            ? substr((string) hash_file('sha256', $pwaRegistrarPath), 0, 12)
+            : '1';
+    @endphp
+    <script defer src="{{ asset('js/pwa-registration.js') }}?v={{ $pwaRegistrarVersion }}"></script>
     <link rel="canonical" href="{{ $meta['canonical_url'] }}">
     <link rel="manifest" href="{{ $meta['manifest_url'] }}">
     <link rel="icon" href="{{ $meta['favicon_url'] }}">

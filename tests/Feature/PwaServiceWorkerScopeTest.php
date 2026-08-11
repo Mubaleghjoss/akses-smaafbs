@@ -20,7 +20,7 @@ class PwaServiceWorkerScopeTest extends TestCase
     {
         $this->get('/service-worker.js')
             ->assertOk()
-            ->assertSee("const CACHE_NAME = 'akses-public-shell-v6'", false)
+            ->assertSee("const CACHE_NAME = 'akses-public-shell-v7'", false)
             ->assertSee("request.method !== 'GET'", false)
             ->assertSee("'/admin'", false)
             ->assertSee("'/livewire'", false)
@@ -32,11 +32,30 @@ class PwaServiceWorkerScopeTest extends TestCase
             ->assertSee('if (shouldPassThrough(request, url))', false)
             ->assertSee('return;', false)
             ->assertSee('offlineResponse', false)
-            ->assertSee("status: 503", false)
+            ->assertSee('status: 503', false)
             ->assertSee("request.mode === 'navigate'", false)
-            ->assertSee("fetch(request, { cache: 'no-store' }).catch(offlineResponse)", false)
+            ->assertSee('[503, 504].includes(response.status)', false)
+            ->assertSee("offlineResponse('network_error', 0)", false)
+            ->assertSee('Periksa Koneksi Server', false)
+            ->assertSee("fetch('/up?connectivity_probe='", false)
             ->assertDontSee("cache.addAll(['/'])", false)
             ->assertDontSee('cache.put(request', false);
+    }
+
+    public function test_shared_pwa_registrar_reuses_existing_registration_and_limits_updates(): void
+    {
+        $script = file_get_contents(public_path('js/pwa-registration.js'));
+
+        $this->assertIsString($script);
+        $this->assertStringContainsString('getRegistration(\'/\')', $script);
+        $this->assertStringContainsString('6 * 60 * 60 * 1000', $script);
+        $this->assertStringContainsString('if (!existing)', $script);
+        $this->assertStringContainsString('registration.update()', $script);
+
+        $this->get('/admin/login')
+            ->assertOk()
+            ->assertSee('js/pwa-registration.js', false)
+            ->assertDontSee('.then((registration) => registration.update())', false);
     }
 
     public function test_manifest_can_be_cached_for_one_day(): void

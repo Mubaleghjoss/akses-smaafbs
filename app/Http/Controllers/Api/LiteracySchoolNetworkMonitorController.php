@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\PerpustakaanLiterasiNetworkCheck;
+use App\Support\Perpustakaan\AnonymousConnectivity;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -25,7 +26,18 @@ class LiteracySchoolNetworkMonitorController extends Controller
             'context.client_version' => ['nullable', 'string', 'max:30'],
             'context.monitor_enabled' => ['nullable', 'boolean'],
             'context.event_type' => ['nullable', 'in:heartbeat,state_change'],
+            'context.gateway_ok' => ['nullable', 'boolean'],
+            'context.internet_ok' => ['nullable', 'boolean'],
+            'context.gateway_duration_ms' => ['nullable', 'integer', 'min:0', 'max:300000'],
+            'context.internet_duration_ms' => ['nullable', 'integer', 'min:0', 'max:300000'],
+            'context.dns_duration_ms' => ['nullable', 'integer', 'min:0', 'max:300000'],
+            'context.tcp_duration_ms' => ['nullable', 'integer', 'min:0', 'max:300000'],
+            'context.https_duration_ms' => ['nullable', 'integer', 'min:0', 'max:300000'],
+            'context.previous_error_code' => ['nullable', 'string', 'max:80'],
         ]);
+
+        $context = $validated['context'] ?? [];
+        $context['source_ip_hash'] = AnonymousConnectivity::hashIp($request->ip());
 
         $check = PerpustakaanLiterasiNetworkCheck::query()->create([
             'source' => trim((string) ($validated['source'] ?? 'school')) ?: 'school',
@@ -37,7 +49,7 @@ class LiteracySchoolNetworkMonitorController extends Controller
             'consecutive_failures' => $validated['consecutive_failures'] ?? 0,
             'error_code' => $validated['error_code'] ?? null,
             'checked_at' => $validated['checked_at'],
-            'context' => $validated['context'] ?? null,
+            'context' => $context,
         ]);
 
         return response()->json([

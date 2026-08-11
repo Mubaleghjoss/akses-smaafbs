@@ -62,6 +62,7 @@ if [ -d "${PUBLIC_WEB_ROOT}" ] && [ "${PUBLIC_WEB_ROOT}" != "$(pwd)/public" ]; t
     # JavaScript fallback admin juga dimuat langsung oleh AdminPanelProvider.
     mkdir -p "${PUBLIC_WEB_ROOT}/js"
     cp public/js/filament-admin-fallback.js "${PUBLIC_WEB_ROOT}/js/filament-admin-fallback.js"
+    cp public/js/pwa-registration.js "${PUBLIC_WEB_ROOT}/js/pwa-registration.js"
 
     # Header cache aset publik harus ikut aktif pada document root produksi.
     cp public/.htaccess "${PUBLIC_WEB_ROOT}/.htaccess"

@@ -159,6 +159,16 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('literacy_school_monitor', fn (Request $request): array => [
             Limit::perMinute(30)->by('literacy-school-monitor|'.$request->ip()),
         ]);
+
+        RateLimiter::for('public_connectivity', function (Request $request): array {
+            $clientId = $request->string('client_id')->toString();
+            $clientKey = $clientId !== '' ? hash('sha256', $clientId) : (string) $request->ip();
+
+            return [
+                Limit::perMinute(30)->by('public-connectivity-client|'.$clientKey),
+                Limit::perMinute(1200)->by('public-connectivity-ip|'.$request->ip()),
+            ];
+        });
     }
 
     protected function literacySessionKey(Request $request): string

@@ -76,11 +76,16 @@ class AdminPanelProvider extends PanelProvider
                     $fallbackJsVersion = is_file($fallbackJsPath)
                         ? substr((string) hash_file('sha256', $fallbackJsPath), 0, 12)
                         : '1';
+                    $pwaRegistrarPath = public_path('js/pwa-registration.js');
+                    $pwaRegistrarVersion = is_file($pwaRegistrarPath)
+                        ? substr((string) hash_file('sha256', $pwaRegistrarPath), 0, 12)
+                        : '1';
 
                     $headSnippets = [
                         '<link rel="stylesheet" href="'.asset('css/filament-admin-responsive.css').'?v='.e($responsiveCssVersion).'" data-navigate-track="reload">',
                         '<link rel="stylesheet" href="'.asset('css/filament-admin-auth.css').'?v='.e($authCssVersion).'" data-navigate-track="reload">',
                         '<script src="'.asset('js/filament-admin-fallback.js').'?v='.e($fallbackJsVersion).'" data-navigate-once></script>',
+                        '<script src="'.asset('js/pwa-registration.js').'?v='.e($pwaRegistrarVersion).'" data-navigate-once></script>',
                         '<link rel="manifest" href="'.e(url('/manifest.webmanifest')).'">',
                         '<meta name="theme-color" content="'.e($themeColor).'">',
                         '<link rel="icon" href="'.e((string) $faviconUrl).'">',
@@ -113,11 +118,11 @@ class AdminPanelProvider extends PanelProvider
             )
             ->renderHook(
                 PanelsRenderHook::AUTH_LOGIN_FORM_BEFORE,
-                fn (): string => ''
+                fn (): string => view('filament.components.auth.login-before')->render()
             )
             ->renderHook(
                 PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
-                fn (): string => ''
+                fn (): string => view('filament.components.auth.login-after')->render()
             );
 
         $userMenuItems = [

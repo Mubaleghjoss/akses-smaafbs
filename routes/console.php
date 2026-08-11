@@ -226,7 +226,13 @@ Schedule::call(function (): void {
 
     if (Schema::hasTable('perpustakaan_literasi_network_checks')) {
         DB::table('perpustakaan_literasi_network_checks')
-            ->where('checked_at', '<', now()->subDays(90))
+            ->where('checked_at', '<', now()->subDays(30))
+            ->delete();
+    }
+
+    if (Schema::hasTable('public_connectivity_events')) {
+        DB::table('public_connectivity_events')
+            ->where('occurred_at', '<', now()->subDays(30))
             ->delete();
     }
 })

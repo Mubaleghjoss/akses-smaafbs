@@ -1795,6 +1795,13 @@ class LibraryLiteracyProgramTest extends TestCase
                 'client_version' => 'test',
                 'monitor_enabled' => false,
                 'event_type' => 'state_change',
+                'gateway_ok' => true,
+                'internet_ok' => true,
+                'gateway_duration_ms' => 12,
+                'internet_duration_ms' => 24,
+                'dns_duration_ms' => 30,
+                'tcp_duration_ms' => 40,
+                'https_duration_ms' => 139,
             ],
         ];
 
@@ -1811,6 +1818,8 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertTrue($check->dns_ok);
         $this->assertSame(200, $check->http_status);
         $this->assertFalse(data_get($check->context, 'monitor_enabled'));
+        $this->assertTrue(data_get($check->context, 'gateway_ok'));
+        $this->assertSame(64, strlen((string) data_get($check->context, 'source_ip_hash')));
 
         $health = app(LiteracyOperationalHealth::class)->snapshot();
         $this->assertSame('disabled', $health['network_monitor_state']);

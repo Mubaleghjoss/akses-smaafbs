@@ -1,7 +1,3 @@
-const SW_PATH = '/service-worker.js';
-const SW_UPDATE_KEY = 'akses:pwa:last-update-at';
-const SW_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000;
-
 const isStandaloneDisplay = () => {
     return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 };
@@ -12,21 +8,7 @@ const registerServiceWorker = () => {
     }
 
     window.addEventListener('load', () => {
-        navigator.serviceWorker
-            .register(SW_PATH, { scope: '/' })
-            .then((registration) => {
-                const lastUpdateAt = Number(window.localStorage.getItem(SW_UPDATE_KEY) || 0);
-
-                if (!Number.isFinite(lastUpdateAt) || Date.now() - lastUpdateAt >= SW_UPDATE_INTERVAL_MS) {
-                    window.localStorage.setItem(SW_UPDATE_KEY, String(Date.now()));
-                    registration.update().catch(() => {
-                        // The installed worker remains usable when the update check fails.
-                    });
-                }
-            })
-            .catch(() => {
-                // Ignore registration failures to keep unsupported/blocked browsers graceful.
-            });
+        window.AksesPwa?.register();
     });
 };
 
