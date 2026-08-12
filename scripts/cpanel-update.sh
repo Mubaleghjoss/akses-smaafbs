@@ -71,7 +71,11 @@ if [ -d "${PUBLIC_WEB_ROOT}" ] && [ "${PUBLIC_WEB_ROOT}" != "$(pwd)/public" ]; t
     # Lindungi dokumen privat-yang-masih-berada-di-disk-publik dari URL langsung.
     # Preview/download tetap dilayani controller yang terotorisasi.
     mkdir -p "${PUBLIC_WEB_ROOT}/storage"
-    cp public/storage/.htaccess "${PUBLIC_WEB_ROOT}/storage/.htaccess"
+    install -m 0644 public/storage/.htaccess "${PUBLIC_WEB_ROOT}/storage/.htaccess"
+    if [ ! -f "${PUBLIC_WEB_ROOT}/storage/.htaccess" ]; then
+        echo "ERROR: guard dokumen guru gagal dipasang pada document root."
+        exit 1
+    fi
 
     rm -f "${PUBLIC_WEB_ROOT}/hot"
 fi
