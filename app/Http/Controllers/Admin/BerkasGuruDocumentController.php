@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class BerkasGuruDocumentController extends Controller
@@ -29,6 +30,24 @@ class BerkasGuruDocumentController extends Controller
         abort_unless($path !== null && Storage::disk('public')->exists($path), Response::HTTP_NOT_FOUND);
 
         return Storage::disk('public')->download($path, $record->displayFileName());
+    }
+
+    public function content(BerkasGuru $berkasGuru): BinaryFileResponse
+    {
+        $record = $this->resolveAuthorizedRecord($berkasGuru);
+        $path = $record->resolvedFilePath();
+
+        abort_unless($path !== null && Storage::disk('public')->exists($path), Response::HTTP_NOT_FOUND);
+
+        $disk = Storage::disk('public');
+        $mimeType = $disk->mimeType($path) ?: 'application/octet-stream';
+
+        return response()->file($disk->path($path), [
+            'Cache-Control' => 'private, no-store, max-age=0, must-revalidate',
+            'Content-Disposition' => 'inline; filename="'.addcslashes($record->displayFileName(), '"\\').'"',
+            'Content-Type' => $mimeType,
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 
     protected function resolveAuthorizedRecord(BerkasGuru $berkasGuru): BerkasGuru

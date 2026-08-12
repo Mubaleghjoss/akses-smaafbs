@@ -68,6 +68,11 @@ if [ -d "${PUBLIC_WEB_ROOT}" ] && [ "${PUBLIC_WEB_ROOT}" != "$(pwd)/public" ]; t
     # Header cache aset publik harus ikut aktif pada document root produksi.
     cp public/.htaccess "${PUBLIC_WEB_ROOT}/.htaccess"
 
+    # Lindungi dokumen privat-yang-masih-berada-di-disk-publik dari URL langsung.
+    # Preview/download tetap dilayani controller yang terotorisasi.
+    mkdir -p "${PUBLIC_WEB_ROOT}/storage"
+    cp public/storage/.htaccess "${PUBLIC_WEB_ROOT}/storage/.htaccess"
+
     rm -f "${PUBLIC_WEB_ROOT}/hot"
 fi
 

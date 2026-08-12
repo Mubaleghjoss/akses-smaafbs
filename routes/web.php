@@ -174,6 +174,8 @@ Route::middleware('auth')->prefix('/admin/boarding-rapots/{boardingRapot}')->gro
 Route::middleware('auth')->prefix('/admin/berkas-gurus/{berkasGuru}')->group(function (): void {
     Route::get('/preview', [BerkasGuruDocumentController::class, 'preview'])
         ->name('admin.berkas-gurus.preview');
+    Route::get('/content', [BerkasGuruDocumentController::class, 'content'])
+        ->name('admin.berkas-gurus.content');
     Route::get('/download', [BerkasGuruDocumentController::class, 'download'])
         ->name('admin.berkas-gurus.download');
 });

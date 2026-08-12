@@ -68,7 +68,7 @@
 
             <div class="actions">
                 <a href="{{ url('/admin/berkas-gurus') }}" class="btn">Kembali</a>
-                <a href="{{ $berkasGuru->resolvedFileUrl() }}" target="_blank" class="btn">Buka File Asli</a>
+                <a href="{{ $berkasGuru->resolvedFileUrl() }}" target="_blank" rel="noopener noreferrer" class="btn">Buka File Aman</a>
                 <a href="{{ route('admin.berkas-gurus.download', $berkasGuru) }}" class="btn btn-primary">Download</a>
             </div>
         </div>

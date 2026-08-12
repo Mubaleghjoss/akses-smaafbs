@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\AdminAwareVerifyCsrfToken;
+use App\Http\Middleware\ApplySecurityHeaders;
 use App\Http\Middleware\AuthenticateTagihanStudentIntegration;
 use App\Http\Middleware\AuthenticateLiteracySchoolMonitor;
 use App\Http\Middleware\LogSlowAdminRequests;
@@ -45,6 +46,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->append(PreventAdminResponseCaching::class);
         $middleware->append(LogSlowAdminRequests::class);
+        $middleware->append(ApplySecurityHeaders::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (AuthorizationException $exception, Request $request) {

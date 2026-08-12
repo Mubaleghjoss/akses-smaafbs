@@ -13,15 +13,15 @@
 
     <div class="mt-3 rounded-xl border border-sky-200 bg-white/75 p-3 text-xs leading-5 text-slate-700">
         <div class="font-semibold text-slate-900">Patokan status jawaban</div>
-        <ol class="mt-1.5 space-y-1">
-            <li><strong>Masih menunggu atau mencoba ulang:</strong> isian aman sebagai draf di tab ini, tetapi belum dikonfirmasi tersimpan oleh server.</li>
-            <li><strong>Tidak perlu menekan Kirim lagi:</strong> sistem mencoba kembali secara otomatis. Biarkan tab tetap terbuka.</li>
-            <li><strong>Struk dan kode edit sudah tampil:</strong> jawaban telah dikonfirmasi tersimpan. Simpan kode edit tersebut.</li>
+        <ol class="mt-2 space-y-2">
+            <li class="flex gap-2"><span class="font-semibold tabular-nums text-sky-700">1.</span><span><strong>Memeriksa data:</strong> kesalahan nama, verifikasi, atau jawaban akan ditunjukkan pada kolom terkait.</span></li>
+            <li class="flex gap-2"><span class="font-semibold tabular-nums text-sky-700">2.</span><span><strong>Mengirim atau menunggu:</strong> isian tetap menjadi draf di tab ini. Jangan menekan Kirim berulang.</span></li>
+            <li class="flex gap-2"><span class="font-semibold tabular-nums text-sky-700">3.</span><span><strong>Struk dan kode edit sudah tampil:</strong> barulah jawaban dikonfirmasi tersimpan. Simpan kode edit pada Struk.</span></li>
         </ol>
     </div>
 
     <div class="mt-3 flex flex-wrap gap-2">
-        <button class="min-h-10 rounded-xl border border-sky-300 bg-white px-3 py-2 text-xs font-semibold text-sky-900" type="button" data-literacy-queue-cancel>Berhenti mencoba otomatis</button>
-        <button class="hidden min-h-10 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800" type="button" data-literacy-queue-repair>Kembali Perbaiki Jawaban</button>
+        <button class="min-h-11 rounded-xl border border-sky-300 bg-white px-4 py-2 text-xs font-semibold text-sky-900" type="button" data-literacy-queue-cancel>Berhenti mencoba otomatis</button>
+        <button class="hidden min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-800" type="button" data-literacy-queue-repair>Kembali Perbaiki Jawaban</button>
     </div>
 </div>

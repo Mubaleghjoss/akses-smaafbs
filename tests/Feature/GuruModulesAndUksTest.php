@@ -111,16 +111,26 @@ class GuruModulesAndUksTest extends TestCase
 
         $this->actingAs($guruUser);
 
-        $this->assertSame(['Dashboard', 'Guru/Tendik'], $guruUser->resolvedNavigationGroups());
+        $this->assertSame(['Dashboard', 'Manajemen Sekolah'], $guruUser->resolvedNavigationGroups());
         $this->assertSame([$guruSendiri->id], GuruTendikResource::getEloquentQuery()->pluck('id')->all());
         $this->assertSame([$berkasSendiri->id], BerkasGuruResource::getEloquentQuery()->pluck('id')->all());
 
         $this->get(route('admin.berkas-gurus.preview', $berkasSendiri))
             ->assertOk()
             ->assertSee('Preview Berkas Guru')
-            ->assertSee('Ustadz Hafid');
+            ->assertSee('Ustadz Hafid')
+            ->assertSee(route('admin.berkas-gurus.content', $berkasSendiri), false);
+
+        $contentResponse = $this->get(route('admin.berkas-gurus.content', $berkasSendiri));
+        $contentResponse
+            ->assertOk()
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
+        $this->assertStringContainsString('no-store', (string) $contentResponse->headers->get('Cache-Control'));
 
         $this->get(route('admin.berkas-gurus.preview', $berkasGuruLain))
+            ->assertNotFound();
+
+        $this->get(route('admin.berkas-gurus.content', $berkasGuruLain))
             ->assertNotFound();
     }
 

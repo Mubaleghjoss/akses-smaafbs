@@ -93,7 +93,9 @@ class BerkasGuru extends Model
     {
         $path = $this->resolvedFilePath();
 
-        return $path ? Storage::disk('public')->url($path) : null;
+        return $path && $this->exists
+            ? route('admin.berkas-gurus.content', $this)
+            : null;
     }
 
     public function hasUploadableFiles(): bool
