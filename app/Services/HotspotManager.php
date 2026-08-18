@@ -19,15 +19,16 @@ class HotspotManager
         return $this->lastError;
     }
 
-    /** Buka koneksi ke router (dari config/hotspot.php). Return true jika berhasil. */
+    /** Buka koneksi ke router. Sumber config: hh_settings (via UI) dengan fallback config/hotspot.php (.env). */
     public function connect(): bool
     {
         $this->lastError = '';
+        $s = static::settings();
         $this->ros = new RouterOS(
-            (string) config('hotspot.host'),
-            (int) config('hotspot.port'),
-            (string) config('hotspot.user'),
-            (string) config('hotspot.pass'),
+            (string) $s['host'],
+            (int) $s['port'],
+            (string) $s['user'],
+            (string) $s['pass'],
         );
         if ($this->ros->connect()) {
             return true;
@@ -36,6 +37,30 @@ class HotspotManager
         $this->ros = null;
 
         return false;
+    }
+
+    /** Pengaturan koneksi efektif: hh_settings (dari UI) menimpa config/hotspot.php (.env). */
+    public static function settings(): array
+    {
+        return [
+            'host' => \App\Models\HhSetting::get('mt_host', (string) config('hotspot.host')),
+            'port' => (int) (\App\Models\HhSetting::get('mt_port', (string) config('hotspot.port')) ?: config('hotspot.port')),
+            'user' => \App\Models\HhSetting::get('mt_user', (string) config('hotspot.user')),
+            'pass' => \App\Models\HhSetting::get('mt_pass', (string) config('hotspot.pass')),
+        ];
+    }
+
+    /** Tes koneksi ke router dengan parameter tertentu (untuk tombol Tes Koneksi). */
+    public static function testConnection(string $host, int $port, string $user, string $pass): array
+    {
+        $ros = new RouterOS($host, $port, $user, $pass);
+        if (! $ros->connect()) {
+            return ['ok' => false, 'error' => $ros->lastError()];
+        }
+        $info = $ros->systemInfo();
+        $ros->close();
+
+        return ['ok' => true, 'identity' => $info['identity'] ?? '?', 'version' => $info['version'] ?? '?'];
     }
 
     public function ros(): ?RouterOS

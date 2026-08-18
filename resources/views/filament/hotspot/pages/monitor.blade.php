@@ -1,7 +1,26 @@
 <x-filament-panels::page>
     @if($error)
-        <div class="fi-section rounded-xl border border-danger-300 bg-danger-50 p-4 text-sm text-danger-700 dark:border-danger-600 dark:bg-danger-950 dark:text-danger-300">
-            ⚠️ Router tidak terhubung: {{ $error }} — periksa <code>HOTSPOT_MT_HOST</code> / <code>HOTSPOT_MT_USER</code> / <code>HOTSPOT_MT_PASS</code> di <code>.env</code>.
+        <div class="fi-section rounded-xl border border-amber-300 bg-amber-50 p-5 dark:border-amber-600 dark:bg-amber-950">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-start gap-3">
+                    <x-heroicon-o-wifi class="h-8 w-8 text-amber-500" />
+                    <div>
+                        <p class="font-semibold text-amber-800 dark:text-amber-200">Router tidak terhubung</p>
+                        <p class="mt-1 max-w-xl text-sm text-amber-700 dark:text-amber-300">
+                            Laptop ini sedang <strong>di luar jaringan sekolah</strong>, atau host/koneksi belum
+                            benar. Pastikan laptop terhubung ke jaringan sekolah, lalu periksa pengaturan koneksi
+                            (host, port, user, password).
+                        </p>
+                        @if ($error)
+                            <p class="mt-2 break-all font-mono text-xs text-amber-500">{{ $error }}</p>
+                        @endif
+                    </div>
+                </div>
+                <a href="{{ \App\Filament\Pages\HotspotSettings::getUrl() }}"
+                   class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+                    ⚙️ Pengaturan Koneksi
+                </a>
+            </div>
         </div>
     @else
         <x-filament-widgets::widgets :widgets="$this->getWidgets()" />

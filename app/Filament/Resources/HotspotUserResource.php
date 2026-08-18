@@ -6,6 +6,7 @@ use App\Filament\Resources\HotspotUserResource\Pages;
 use App\Models\HotspotUser;
 use App\Services\HotspotManager;
 use App\Support\Hotspot\HotspotAccessible;
+use Filament\Actions;
 use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -120,20 +121,20 @@ class HotspotUserResource extends Resource
                     ->trueLabel('Disabled'),
             ])
             ->actions([
-                Tables\Actions\Action::make('toggle')
+                Actions\Action::make('toggle')
                     ->label(fn (HotspotUser $record): string => $record->disabled ? 'Aktifkan' : 'Nonaktifkan')
                     ->icon(fn (HotspotUser $record): string => $record->disabled ? 'heroicon-o-play' : 'heroicon-o-pause')
                     ->color(fn (HotspotUser $record): string => $record->disabled ? 'success' : 'warning')
                     ->requiresConfirmation()
                     ->action(fn (HotspotUser $record) => self::toggleEnabled($record)),
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make()
+                Actions\EditAction::make(),
+                Actions\DeleteAction::make()
                     ->requiresConfirmation()
                     ->modalHeading('Hapus akun dari router & lokal?')
                     ->using(fn (HotspotUser $record): bool => self::deleteOnRouter($record)),
             ])
             ->bulkActions([
-                Tables\Actions\DeleteBulkAction::make()
+                Actions\DeleteBulkAction::make()
                     ->requiresConfirmation()
                     ->using(function ($records) {
                         foreach ($records as $record) {

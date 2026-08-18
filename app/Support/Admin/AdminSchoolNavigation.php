@@ -6,6 +6,7 @@ use App\Filament\Pages\Assessment\AsasHub;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\DashboardProker;
+use App\Filament\Pages\HotspotSettings;
 use App\Filament\Pages\Monitor;
 use App\Filament\Pages\SarprasStickerSettings;
 use App\Filament\Resources\BeritaResource;
@@ -95,6 +96,7 @@ class AdminSchoolNavigation
         Monitor::class => 'IT SMA AFBS',
         HotspotUserResource::class => 'IT SMA AFBS',
         BlockedDomainResource::class => 'IT SMA AFBS',
+        HotspotSettings::class => 'IT SMA AFBS',
         CalendarEventResource::class => 'Agenda',
         EventTimelineResource::class => 'Agenda',
         BeritaResource::class => 'Konten',

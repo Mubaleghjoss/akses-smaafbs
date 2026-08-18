@@ -3,9 +3,12 @@
 namespace App\Filament\Resources\BlockedDomainResource\Pages;
 
 use App\Filament\Resources\BlockedDomainResource;
+use App\Models\BlockedDomain;
 use App\Services\HotspotBlocker;
 use App\Services\HotspotManager;
+use App\Support\Hotspot\Presets;
 use Filament\Actions;
+use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 
@@ -17,6 +20,36 @@ class ListBlockedDomains extends ListRecords
     {
         return [
             Actions\CreateAction::make(),
+            Actions\Action::make('preset')
+                ->label('Tambah Preset')
+                ->icon('heroicon-o-sparkles')
+                ->color('purple')
+                ->modalHeading('Tambah Domain dari Preset Kategori')
+                ->modalDescription('Domain baru ditambahkan ke daftar (belum ke router sampai tombol "Sync ke Router" diklik).')
+                ->form([
+                    Forms\Components\CheckboxList::make('presets')
+                        ->label('Pilih kategori')
+                        ->options(collect(Presets::PRESETS)->map(fn (array $v, string $k): string => $k.' ('.count($v).' domain)')->all())
+                        ->columns(2)
+                        ->required(),
+                ])
+                ->action(function (array $data): void {
+                    $n = 0;
+                    foreach ((array) ($data['presets'] ?? []) as $key) {
+                        foreach (Presets::PRESETS[$key] ?? [] as $domain) {
+                            if (BlockedDomain::where('domain', $domain)->exists()) {
+                                continue;
+                            }
+                            BlockedDomain::create(['domain' => $domain, 'note' => 'Preset: '.$key]);
+                            $n++;
+                        }
+                    }
+                    Notification::make()
+                        ->title("{$n} domain baru dari preset ditambahkan")
+                        ->body('Klik "Sync ke Router" untuk mengirim ke MikroTik.')
+                        ->{$n > 0 ? 'success' : 'info'}()
+                        ->send();
+                }),
             Actions\Action::make('sync')
                 ->label('Sync ke Router')
                 ->icon('heroicon-o-arrow-path')

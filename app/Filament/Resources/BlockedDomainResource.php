@@ -6,6 +6,7 @@ use App\Filament\Resources\BlockedDomainResource\Pages;
 use App\Models\BlockedDomain;
 use App\Services\HotspotBlocker;
 use App\Services\HotspotManager;
+use Filament\Actions;
 use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -59,12 +60,12 @@ class BlockedDomainResource extends Resource
                     ->sortable(),
             ])
             ->actions([
-                Tables\Actions\DeleteAction::make()
+                Actions\DeleteAction::make()
                     ->requiresConfirmation()
                     ->using(fn (BlockedDomain $record): bool => self::deleteFromRouter($record)),
             ])
             ->bulkActions([
-                Tables\Actions\DeleteBulkAction::make()
+                Actions\DeleteBulkAction::make()
                     ->requiresConfirmation()
                     ->using(function ($records) {
                         foreach ($records as $record) {
