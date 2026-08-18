@@ -5,6 +5,7 @@ namespace App\Support\Admin;
 use App\Filament\Pages\Assessment\AsasHub;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Assessment\AstsHub;
+use App\Filament\Pages\BuatAkunSiswa;
 use App\Filament\Pages\DashboardProker;
 use App\Filament\Pages\HotspotSettings;
 use App\Filament\Pages\Monitor;
@@ -97,6 +98,7 @@ class AdminSchoolNavigation
         HotspotUserResource::class => 'IT SMA AFBS',
         BlockedDomainResource::class => 'IT SMA AFBS',
         HotspotSettings::class => 'IT SMA AFBS',
+        BuatAkunSiswa::class => 'IT SMA AFBS',
         CalendarEventResource::class => 'Agenda',
         EventTimelineResource::class => 'Agenda',
         BeritaResource::class => 'Konten',
