@@ -6,6 +6,7 @@ use App\Filament\Pages\Assessment\AsasHub;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\DashboardProker;
+use App\Filament\Pages\Monitor;
 use App\Filament\Pages\SarprasStickerSettings;
 use App\Filament\Resources\BeritaResource;
 use App\Filament\Resources\BerkasGuruResource;
@@ -17,6 +18,8 @@ use App\Filament\Resources\DokumenKomiteResource;
 use App\Filament\Resources\EventTimelineResource;
 use App\Filament\Resources\GaleriResource;
 use App\Filament\Resources\GuruTendikResource;
+use App\Filament\Resources\HotspotUserResource;
+use App\Filament\Resources\BlockedDomainResource;
 use App\Filament\Resources\JenisBerkasResource;
 use App\Filament\Resources\PerpustakaanBukuResource;
 use App\Filament\Resources\PerpustakaanKategoriResource;
@@ -59,6 +62,7 @@ class AdminSchoolNavigation
         'Konten' => ['icon' => 'heroicon-o-newspaper', 'sort' => 200],
         'Perpustakaan' => ['icon' => 'heroicon-o-book-open', 'sort' => 210],
         'Penilaian' => ['icon' => 'heroicon-o-academic-cap', 'sort' => 115],
+        'IT SMA AFBS' => ['icon' => 'heroicon-o-server', 'sort' => 220],
     ];
 
     /**
@@ -88,6 +92,9 @@ class AdminSchoolNavigation
         GuruTendikResource::class => 'Guru',
         BerkasGuruResource::class => 'Guru',
         JenisBerkasResource::class => 'Guru',
+        Monitor::class => 'IT SMA AFBS',
+        HotspotUserResource::class => 'IT SMA AFBS',
+        BlockedDomainResource::class => 'IT SMA AFBS',
         CalendarEventResource::class => 'Agenda',
         EventTimelineResource::class => 'Agenda',
         BeritaResource::class => 'Konten',

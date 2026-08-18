@@ -34,3 +34,17 @@
 - Prefer shared Filament-compatible solutions first.
 - Do not edit vendor files to achieve responsiveness.
 - If a screen needs a special mobile treatment, keep it local and explain why the shared pattern was not enough.
+
+## Hotspot MikroTik (hasil-hermes integration)
+
+- Kredensial router: env `HOTSPOT_MT_*` (~/.env lokal, JANGAN di-commit).
+- Service: `App\Services\RouterOS` (klien API), `HotspotManager` (user/profil), `HotspotBlocker` (blokir/kesehatan).
+- Menu di PANEL ADMIN (`/admin`), grup **Manajemen Sekolah → parent "IT SMA AFBS"**:
+  `Monitor` (halaman), `HotspotUserResource` (Akun Hotspot), `BlockedDomainResource` (Blokir Situs) —
+  mapping ada di `App\Support\Admin\AdminSchoolNavigation` (CLASS_PARENT_MAP).
+- AKSES: hanya role admin penuh (admin/guru_admin/super_admin) atau user yang diberi
+  item ini lewat kolom `allowed_navigation_items` di UserResource. Gate: trait
+  `App\Support\Hotspot\HotspotAccessible` (canViewAny/canAccess).
+- Router = sumber kebenaran akun; tabel `hotspot_users` adalah MIRROR lokal (pola Mikhmon).
+- Address-list `blocklist` + komentar firewall `hasil-hermes-block/-dns-lock/-dns-lock2` (config/hotspot.php).
+- Migrasi integrasi: `database/migrations/2026_08_18_0000*` — jangan diubah tanpa perlu.
