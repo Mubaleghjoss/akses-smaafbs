@@ -33,6 +33,11 @@ class HotspotSettings extends Page implements HasForms
         return self::hotspotAccessGranted();
     }
 
+    protected function getFormStatePath(): ?string
+    {
+        return 'data';
+    }
+
     public ?array $data = [];
 
     public function mount(): void

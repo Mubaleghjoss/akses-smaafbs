@@ -34,6 +34,11 @@ class BuatAkunSiswa extends Page implements HasForms
         return self::hotspotAccessGranted();
     }
 
+    protected function getFormStatePath(): ?string
+    {
+        return 'data';
+    }
+
     public ?array $data = [];
 
     /** @var array<int, array{id:int,nama:string,rombel:string,username:string,password:string}> */

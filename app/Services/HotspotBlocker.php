@@ -192,7 +192,7 @@ class HotspotBlocker
             'hdd_used' => max(0, $hddTotal - $hddFree),
             'hdd_total' => $hddTotal,
             'hdd_pct' => $hddTotal > 0 ? (int) round(($hddTotal - $hddFree) * 100 / $hddTotal) : 0,
-            'active' => count($this->routerActive()),
+            'active' => count($this->ros->hotspotActive()['rows'] ?? []),
             'blocked' => count($this->routerNames()),
         ];
 
