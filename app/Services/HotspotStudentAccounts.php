@@ -18,7 +18,7 @@ class HotspotStudentAccounts
         $q = DB::table('data_siswa')
             ->where('status', 'aktif')
             ->orderBy('nama')
-            ->get(['id', 'nama', 'rombel_saat_ini', 'nipd', 'nisn']);
+            ->get(['id', 'nama', 'rombel_saat_ini', 'nipd', 'nisn', 'tanggal_lahir']);
 
         if (filled($rombel)) {
             $q = $q->filter(fn ($r): bool => (string) ($r->rombel_saat_ini ?? '') === $rombel)->values();
@@ -82,9 +82,21 @@ class HotspotStudentAccounts
         return $out;
     }
 
-    /** Password sesuai mode: username | nipd4 | nisn4. */
+    /** Password sesuai mode: username | nipd4 | nisn4 | tanggal (dd-mm-yyyy dari tanggal_lahir). */
     public static function passwordFor(string $username, string $mode, object $st): string
     {
+        if ($mode === 'tanggal') {
+            $dob = (string) ($st->tanggal_lahir ?? '');
+            if ($dob !== '') {
+                $ts = strtotime($dob);
+                if ($ts !== false) {
+                    return date('d-m-Y', $ts);
+                }
+            }
+
+            return $username; // fallback: tanpa tanggal lahir → password = username
+        }
+
         return match ($mode) {
             'nipd4' => (string) substr((string) $st->nipd, -4) ?: $username,
             'nisn4' => (string) substr((string) $st->nisn, -4) ?: $username,
@@ -92,12 +104,20 @@ class HotspotStudentAccounts
         };
     }
 
+    /** Nama profil hotspot dari rombel (di-trim). */
+    public static function classProfileName(string $rombel): string
+    {
+        $c = trim((string) $rombel);
+
+        return $c !== '' ? $c : 'Siswa';
+    }
+
     /**
      * Buat akun di router + mirror lokal.
      * $items: array [['username','password','nama','rombel'], ...]
      * Return: ['done'=>int,'skipped'=>int,'failed'=>array].
      */
-    public static function createAccounts(array $items, string $profile, int $durasi = 0): array
+    public static function createAccounts(array $items, string $profile, int $durasi = 0, string $rateLimit = '1M/1M'): array
     {
         $m = new HotspotManager();
         if (! $m->connect()) {
@@ -108,6 +128,21 @@ class HotspotStudentAccounts
         $skipped = 0;
         $failed = [];
         try {
+            // Mode 'kelas': pastikan profil per rombel ada + rate-limitnya benar
+            $perClass = $profile === 'kelas';
+            if ($perClass) {
+                $classes = [];
+                foreach ($items as $item) {
+                    $classes[] = self::classProfileName((string) ($item['rombel'] ?? ''));
+                }
+                foreach (array_unique(array_filter($classes)) as $class) {
+                    $r = $m->ensureProfile($class, $rateLimit);
+                    if (! $r['ok']) {
+                        $failed[] = "profil {$class}: ".($r['msg'] ?? 'gagal');
+                    }
+                }
+            }
+
             foreach ($items as $item) {
                 $username = (string) ($item['username'] ?? '');
                 if ($username === '') {
@@ -118,20 +153,21 @@ class HotspotStudentAccounts
 
                     continue;
                 }
+                $p = $perClass ? self::classProfileName((string) ($item['rombel'] ?? '')) : $profile;
                 $r = $m->addUser([
                     'username' => $username,
                     'password' => (string) ($item['password'] ?? $username),
-                    'profile' => $profile,
+                    'profile' => $p,
                     'durasi' => $durasi,
                 ]);
                 if ($r['ok']) {
                     HotspotUser::create([
                         'username' => $username,
                         'password' => (string) ($item['password'] ?? $username),
-                        'profile' => $profile,
+                        'profile' => $p,
                         'durasi' => $durasi,
                         'source' => 'both',
-                        'note' => 'Siswa: '.(string) ($item['nama'] ?? '').' ('.(string) ($item['rombel'] ?? '').')',
+                        'note' => (string) ($item['nama'] ?? ''), // nama siswa lengkap di catatan
                     ]);
                     $done++;
                 } else {

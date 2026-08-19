@@ -57,8 +57,9 @@ class BuatAkunSiswa extends Page implements HasForms
     {
         $this->form->fill([
             'rombel' => '',
-            'profil' => array_key_first(HotspotStudentAccounts::rombelOptions() ?: ['']) ?: 'default',
-            'password_mode' => 'username',
+            'profil' => 'kelas',
+            'password_mode' => 'tanggal',
+            'rate' => '1M/1M',
             'prefix' => '',
             'durasi' => 0,
         ]);
@@ -73,16 +74,24 @@ class BuatAkunSiswa extends Page implements HasForms
                 ->searchable(),
             Forms\Components\Select::make('profil')
                 ->label('Grup / Profil hotspot')
-                ->options(fn (): array => HotspotUserResource::profileOptions())
+                ->options(['kelas' => 'Per Kelas (otomatis buat profil + rate-limit)'] + HotspotUserResource::profileOptions())
                 ->required(),
+            Forms\Components\TextInput::make('rate')
+                ->label('Rate-limit profil kelas (cth 1M/1M)')
+                ->placeholder('1M/1M')
+                ->default('1M/1M')
+                ->dehydrated(true)
+                ->helperText('Hanya dipakai saat profil = Per Kelas'),
             Forms\Components\Select::make('password_mode')
                 ->label('Password')
                 ->options([
+                    'tanggal' => 'Tanggal lahir (dd-mm-yyyy)',
                     'username' => 'Sama dengan username',
                     'nipd4' => '4 digit terakhir NIPD',
                     'nisn4' => '4 digit terakhir NISN',
                 ])
-                ->default('username'),
+                ->default('tanggal')
+                ->helperText('Tanpa tanggal lahir → fallback: sama dengan username'),
             Forms\Components\TextInput::make('prefix')
                 ->label('Awalan username (opsional, mis. "siswa-")')
                 ->maxLength(10),
@@ -135,7 +144,12 @@ class BuatAkunSiswa extends Page implements HasForms
             ->values()
             ->all();
 
-        $r = HotspotStudentAccounts::createAccounts($items, (string) ($data['profil'] ?? 'default'), (int) ($data['durasi'] ?? 0));
+        $profil = (string) ($data['profil'] ?? 'default');
+        $rate = (string) ($data['rate'] ?? '1M/1M');
+        if ($rate === '') {
+            $rate = '1M/1M';
+        }
+        $r = HotspotStudentAccounts::createAccounts($items, $profil, (int) ($data['durasi'] ?? 0), $rate);
 
         if (! ($r['connected'] ?? true)) {
             Notification::make()->title('Router tidak terhubung: '.($r['failed'][0] ?? ''))->danger()->send();

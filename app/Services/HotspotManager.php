@@ -110,6 +110,42 @@ class HotspotManager
         return $this->ros?->hotspotProfilesAll() ?? [];
     }
 
+    /** Pastikan profil ada dengan rate-limit benar; buat/update bila perlu. */
+    public function ensureProfile(string $name, string $rateLimit = '1M/1M'): array
+    {
+        $res = $this->ros?->hotspotProfilesAll() ?? ['ok' => false, 'rows' => []];
+        if (! ($res['ok'] ?? false)) {
+            return ['ok' => false, 'msg' => $res['error'] ?? 'Gagal baca profil'];
+        }
+        $existing = null;
+        foreach (($res['rows'] ?? []) as $row) {
+            if ((string) ($row['name'] ?? '') === $name) {
+                $existing = $row;
+
+                break;
+            }
+        }
+        if ($existing !== null) {
+            $cur = (string) ($existing['rate-limit'] ?? '');
+            if ($cur !== $rateLimit) {
+                $set = $this->ros->hotspotProfileSet((string) ($existing['.id'] ?? ''), ['rate-limit' => $rateLimit]);
+                if (! ($set['ok'] ?? false)) {
+                    return ['ok' => false, 'msg' => $set['error'] ?? "Gagal set rate-limit {$name}"];
+                }
+
+                return ['ok' => true, 'created' => false, 'updated' => true];
+            }
+
+            return ['ok' => true, 'created' => false, 'updated' => false];
+        }
+        $add = $this->ros->hotspotProfileAdd($name, $rateLimit);
+        if (! ($add['ok'] ?? false)) {
+            return ['ok' => false, 'msg' => $add['error'] ?? "Gagal buat profil {$name}"];
+        }
+
+        return ['ok' => true, 'created' => true, 'updated' => false];
+    }
+
     public function profileNames(): array
     {
         return array_values(array_unique(array_filter(array_map(
