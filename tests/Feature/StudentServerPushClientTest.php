@@ -28,11 +28,22 @@ class StudentServerPushClientTest extends TestCase
             $table->string('rombel_saat_ini')->nullable();
             $table->string('status')->nullable();
             $table->string('private_note')->nullable();
+            $table->unsignedInteger('numeric_zero')->nullable();
+            $table->boolean('boolean_false')->nullable();
+            $table->date('tanggal_lahir')->nullable();
+            $table->string('kategori_non_aktif')->nullable();
+            $table->string('alasan_non_aktif')->nullable();
+            $table->date('tanggal_non_aktif')->nullable();
+            $table->timestamp('spmb_synced_at')->nullable();
+            $table->timestamp('spmb_source_updated_at')->nullable();
+            $table->string('unexpected_source_schema_column')->nullable();
             $table->timestamps();
         });
 
         config(['student_sync.denied_fields' => [
-            'id', 'created_at', 'updated_at', 'status', 'private_note',
+            'id', 'created_at', 'updated_at', 'status', 'kategori_non_aktif',
+            'alasan_non_aktif', 'tanggal_non_aktif', 'spmb_synced_at',
+            'spmb_source_updated_at', 'private_note', 'unexpected_source_schema_column',
         ]]);
     }
 
@@ -109,6 +120,40 @@ class StudentServerPushClientTest extends TestCase
         $this->assertSame($this->checksum($payload['students']), $payload['payload_checksum']);
     }
 
+    public function test_builder_retains_scalar_edges_and_raw_date_while_excluding_configured_schema_fields(): void
+    {
+        $this->student(10, 'aktif', [
+            'nama' => 'Alya',
+            'nipd' => 'P010',
+            'numeric_zero' => 0,
+            'boolean_false' => false,
+            'tanggal_lahir' => '2010-02-03',
+            'kategori_non_aktif' => 'system-category',
+            'alasan_non_aktif' => 'system-reason',
+            'tanggal_non_aktif' => '2026-01-01',
+            'spmb_synced_at' => '2026-01-02 03:04:05',
+            'spmb_source_updated_at' => '2026-01-03 04:05:06',
+            'private_note' => 'private',
+            'unexpected_source_schema_column' => 'must not emit',
+        ]);
+
+        $student = app(StudentServerPushPayloadBuilder::class)->build()['students'][0];
+
+        $this->assertSame(0, $student['fields']['numeric_zero']);
+        $this->assertArrayHasKey('boolean_false', $student['fields']);
+        $this->assertSame(0, $student['fields']['boolean_false']);
+        $this->assertSame('2010-02-03', $student['fields']['tanggal_lahir']);
+        $this->assertSame('2010-02-03', $student['identity']['tanggal_lahir']);
+        $this->assertArrayNotHasKey('id', $student['fields']);
+        $this->assertArrayNotHasKey('status', $student['fields']);
+
+        foreach (config('student_sync.denied_fields') as $column) {
+            $this->assertArrayNotHasKey($column, $student['fields']);
+        }
+
+        $this->assertArrayNotHasKey('unexpected_source_schema_column', $student['fields']);
+    }
+
     private function checksum(mixed $value): string
     {
         return hash('sha256', json_encode(
@@ -181,6 +226,52 @@ class StudentServerPushClientTest extends TestCase
         });
     }
 
+    public function test_client_rejects_disabled_configuration_without_sending_a_request(): void
+    {
+        config([
+            'student_sync.client.enabled' => false,
+            'student_sync.client.server_url' => 'https://sync.example.test',
+            'student_sync.client.client_id' => 'school-local',
+            'student_sync.client.secret' => str_repeat('s', 32),
+        ]);
+        Http::fake();
+
+        try {
+            app(StudentServerPushClient::class)->preview(['payload_checksum' => 'checksum', 'students' => []]);
+            $this->fail('Expected disabled client configuration to be rejected.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('Student sync client is disabled.', $exception->getMessage());
+        }
+
+        Http::assertNothingSent();
+    }
+
+    public function test_client_rejects_missing_or_short_credentials_without_sending_or_leaking_secret(): void
+    {
+        foreach ([
+            ['client_id' => '', 'secret' => 'missing-secret'],
+            ['client_id' => 'school-local', 'secret' => 'short-secret'],
+        ] as $credentials) {
+            config([
+                'student_sync.client.enabled' => true,
+                'student_sync.client.server_url' => 'https://sync.example.test',
+                'student_sync.client.client_id' => $credentials['client_id'],
+                'student_sync.client.secret' => $credentials['secret'],
+            ]);
+            Http::fake();
+
+            try {
+                app(StudentServerPushClient::class)->preview(['payload_checksum' => 'checksum', 'students' => []]);
+                $this->fail('Expected insecure credentials to be rejected.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('Student sync client credentials are not configured securely.', $exception->getMessage());
+                $this->assertStringNotContainsString($credentials['secret'], $exception->getMessage());
+            }
+
+            Http::assertNothingSent();
+        }
+    }
+
     public function test_client_rejects_insecure_production_url_without_sending_a_request(): void
     {
         config([
@@ -225,6 +316,35 @@ class StudentServerPushClientTest extends TestCase
         ])['preview_token']);
         Http::assertSentCount(2);
 
+    }
+
+    public function test_apply_retries_connection_failure_with_the_caller_idempotency_key_on_every_request(): void
+    {
+        config([
+            'student_sync.client.enabled' => true,
+            'student_sync.client.server_url' => 'https://sync.example.test',
+            'student_sync.client.client_id' => 'school-local',
+            'student_sync.client.secret' => str_repeat('s', 32),
+        ]);
+        $attempts = 0;
+        Http::fake(function () use (&$attempts) {
+            $attempts++;
+
+            return $attempts === 1
+                ? Http::failedConnection('connection failed')
+                : Http::response(['counts' => ['update' => 1]]);
+        });
+
+        $result = app(StudentServerPushClient::class)->apply('preview-token', 'checksum', 'caller-idempotency-key');
+
+        $this->assertSame(['update' => 1], $result['counts']);
+        Http::assertSentCount(2);
+        $this->assertSame(
+            ['caller-idempotency-key', 'caller-idempotency-key'],
+            Http::recorded()
+                ->map(fn (array $record): string => $record[0]->header('X-Student-Sync-Idempotency-Key')[0])
+                ->all(),
+        );
     }
 
     public function test_non_success_response_fails_without_response_body_data(): void
