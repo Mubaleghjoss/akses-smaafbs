@@ -3,7 +3,6 @@
 namespace App\Support\StudentSync;
 
 use App\Models\StudentSyncScopeTokenRecord;
-use Closure;
 use Illuminate\Database\Connection;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
@@ -14,11 +13,7 @@ final class StudentSyncScopeToken
 {
     private const TTL_MINUTES = 15;
 
-    /** @param (Closure(): void)|null $afterClaim */
-    public function __construct(
-        private readonly ?string $connection = null,
-        private readonly ?Closure $afterClaim = null,
-    ) {}
+    public function __construct(private readonly ?string $connection = null) {}
 
     /** @param array<int, int|string> $studentIds */
     public function issue(array $studentIds, int $userId): string
@@ -43,6 +38,8 @@ final class StudentSyncScopeToken
         }
 
         try {
+            $this->runTestHook('before_database');
+
             return $this->database()->transaction(function () use ($token, $userId): array {
                 $record = $this->query()
                     ->where('token_hash', hash('sha256', $token))
@@ -64,14 +61,25 @@ final class StudentSyncScopeToken
                     return [];
                 }
 
-                if ($this->afterClaim !== null) {
-                    ($this->afterClaim)();
-                }
+                $this->runTestHook('after_claim');
 
                 return $this->normalizeIds($record->encrypted_student_ids);
             }, 3);
         } catch (QueryException) {
             return [];
+        }
+    }
+
+    private function runTestHook(string $stage): void
+    {
+        if (! app()->environment('testing')) {
+            return;
+        }
+
+        $hook = config('student_sync.scope_token_test_hook');
+
+        if (is_callable($hook)) {
+            $hook($stage);
         }
     }
 

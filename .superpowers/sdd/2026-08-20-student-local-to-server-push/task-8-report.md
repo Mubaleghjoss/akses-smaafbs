@@ -115,3 +115,27 @@
 
 ### Final self-review
 - Cached/committed paths were limited to this regression test and report; protected production WIP was neither staged nor included.
+
+## Round 3 — inner consume contention proof
+
+### RED
+- Replaced the second child’s pre-call `contender-ready` signal with a marker that requires a `consume()`-internal hook. Before the hook existed, the race regression failed at the first durable-claim barrier because the previous constructor-only after-claim seam had been removed from the child harness; there was no internal marker path for the second child.
+- Added an explicit regression that configures a hook while the app environment is non-testing and requires the callback never to run.
+
+### GREEN / test-only seam
+- `StudentSyncScopeToken::consume()` now invokes a configured callback only when `app()->environment('testing')`, immediately before the transaction/database work, and after the durable conditional claim. It has no public constructor parameter or production-environment behavior.
+- The first independent child signals after the durable conditional claim and holds its transaction. The second child signals from the new `before_database` hook, then blocks until the parent has held the first for seven seconds. The parent releases the second toward the still-held transaction before releasing the first.
+- Both marker waits are bounded and assert the relevant child remains running. `finally` releases and stops both children before cleaning up every barrier marker and the isolated SQLite file. The exact-one `[98]`/`[]` assertion remains; SQLite fail-closed `[]` is now accompanied by proof that the second child entered `consume()` during the held window.
+
+### Verification
+- `E:/xampp/php/php.exe -d opcache.enable_cli=0 artisan test tests/Feature/HotspotStudentPushShortcutTest.php tests/Feature/StudentServerPushPageTest.php tests/Feature/StudentServerPushClientTest.php`: PASS — **26 tests, 128 assertions**.
+- `E:/xampp/php/php.exe vendor/bin/pint --test app/Support/StudentSync/StudentSyncScopeToken.php tests/Feature/HotspotStudentPushShortcutTest.php`: PASS after focused formatting.
+- PHP syntax checks for both changed PHP files and `git diff --check`: PASS.
+
+### Scope / self-review
+- Only `app/Support/StudentSync/StudentSyncScopeToken.php`, `tests/Feature/HotspotStudentPushShortcutTest.php`, and this report are staged for this remediation.
+- `HotspotManager.php`, `RouterOS.php`, and the pre-existing unstaged `HotspotStudentAccounts.php` `updateOrCreate` hunk remain untouched and unstaged.
+- The hook is configuration-only, is only callable under the `testing` environment gate, accepts only a stage label, and is regression-tested as ignored outside that environment. No production/router/network/user or assessment storage was accessed.
+
+### Commit
+- Created as `bfa895743ad52da48fab028ebda1f4a03c343150 test(hotspot): prove durable shortcut claim contention`; amended immediately to record this evidence, with final SHA reported in the delivery summary.

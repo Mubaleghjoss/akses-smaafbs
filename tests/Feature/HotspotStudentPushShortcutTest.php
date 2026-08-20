@@ -54,6 +54,26 @@ class HotspotStudentPushShortcutTest extends TestCase
         $this->assertSame([12, 34], app(StudentSyncScopeToken::class)->consume($token, $owner->id));
     }
 
+    public function test_scope_token_test_hook_is_ignored_outside_the_testing_environment(): void
+    {
+        $calls = 0;
+        $environment = app()->environment();
+        app()->detectEnvironment(static fn (): string => 'production');
+        config(['student_sync.scope_token_test_hook' => function () use (&$calls): void {
+            $calls++;
+        }]);
+
+        try {
+            $token = app(StudentSyncScopeToken::class)->issue([12], 7654321);
+
+            $this->assertSame([12], app(StudentSyncScopeToken::class)->consume($token, 7654321));
+            $this->assertSame(0, $calls);
+        } finally {
+            app()->detectEnvironment(static fn (): string => $environment);
+            config(['student_sync.scope_token_test_hook' => null]);
+        }
+    }
+
     public function test_account_creation_result_only_includes_successful_source_student_ids(): void
     {
         $manager = Mockery::mock('overload:App\\Services\\HotspotManager');
@@ -98,7 +118,8 @@ class HotspotStudentPushShortcutTest extends TestCase
     {
         $database = tempnam(sys_get_temp_dir(), 'student-shortcut-claim-');
         $claimed = $database.'.claimed';
-        $contenderReady = $database.'.contender-ready';
+        $contenderEntered = $database.'.contender-entered';
+        $contenderRelease = $database.'.contender-release';
         $firstRelease = $database.'.first-release';
         $first = null;
         $second = null;
@@ -119,26 +140,39 @@ class HotspotStudentPushShortcutTest extends TestCase
 require getcwd().'/vendor/autoload.php';
 $app = require getcwd().'/bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
-config(['app.key' => $argv[8]]);
+config(['app.key' => $argv[9]]);
 $app->forgetInstance('encrypter');
-config(['database.connections.shortcut_claim' => ['driver' => 'sqlite', 'database' => $argv[1], 'prefix' => '']]);
+config([
+    'app.env' => 'testing',
+    'database.connections.shortcut_claim' => ['driver' => 'sqlite', 'database' => $argv[1], 'prefix' => ''],
+    'student_sync.scope_token_test_hook' => function (string $stage) use ($argv): void {
+        if ($argv[5] === 'first' && $stage === 'after_claim') {
+            touch($argv[4]);
+            while (! file_exists($argv[8])) { usleep(1000); }
+        }
+
+        if ($argv[5] === 'second' && $stage === 'before_database') {
+            touch($argv[6]);
+            while (! file_exists($argv[7])) { usleep(1000); }
+        }
+    },
+]);
 Illuminate\Support\Facades\DB::purge('shortcut_claim');
-$hook = $argv[5] === 'first' ? function () use ($argv): void { touch($argv[4]); while (! file_exists($argv[7])) { usleep(1000); } } : null;
-if ($argv[5] === 'second') { touch($argv[6]); }
-echo json_encode((new App\Support\StudentSync\StudentSyncScopeToken('shortcut_claim', $hook))->consume($argv[2], (int) $argv[3]));
+echo json_encode((new App\Support\StudentSync\StudentSyncScopeToken('shortcut_claim'))->consume($argv[2], (int) $argv[3]));
 PHP);
             $appKey = (string) config('app.key');
-            $firstCommand = [PHP_BINARY, '-r', "eval(base64_decode('{$script}'));", $database, $token, '7654321', $claimed, 'first', $contenderReady, $firstRelease, $appKey];
-            $secondCommand = [PHP_BINARY, '-r', "eval(base64_decode('{$script}'));", $database, $token, '7654321', $claimed, 'second', $contenderReady, $firstRelease, $appKey];
+            $firstCommand = [PHP_BINARY, '-r', "eval(base64_decode('{$script}'));", $database, $token, '7654321', $claimed, 'first', $contenderEntered, $contenderRelease, $firstRelease, $appKey];
+            $secondCommand = [PHP_BINARY, '-r', "eval(base64_decode('{$script}'));", $database, $token, '7654321', $claimed, 'second', $contenderEntered, $contenderRelease, $firstRelease, $appKey];
             $first = new Process($firstCommand, base_path(), null, null, 20);
             $first->start();
             $this->waitForFile($claimed, $first, 'first claimant marker');
 
             $second = new Process($secondCommand, base_path(), null, null, 20);
             $second->start();
-            $this->waitForFile($contenderReady, $second, 'second contender-ready marker');
+            $this->waitForFile($contenderEntered, $second, 'second consume inner-hook marker');
 
             sleep(7);
+            touch($contenderRelease);
             touch($firstRelease);
             $first->wait();
             $second->wait();
@@ -149,11 +183,13 @@ PHP);
             sort($claims);
             $this->assertSame([[], [98]], $claims);
         } finally {
+            touch($contenderRelease);
             touch($firstRelease);
             $this->stopProcess($second);
             $this->stopProcess($first);
             @unlink($claimed);
-            @unlink($contenderReady);
+            @unlink($contenderEntered);
+            @unlink($contenderRelease);
             @unlink($firstRelease);
             @unlink($database);
         }
