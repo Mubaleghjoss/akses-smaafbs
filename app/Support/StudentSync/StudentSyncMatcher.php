@@ -18,6 +18,9 @@ class StudentSyncMatcher
     public function match(array $source): StudentSyncMatchResult
     {
         $identifiers = $this->strongIdentifiers($source);
+        $strongCandidates = $identifiers === []
+            ? null
+            : $this->strongCandidates($identifiers);
         $sourceId = $this->normalizeId($source['id'] ?? null);
         $idLackedEvidence = false;
 
@@ -37,6 +40,10 @@ class StudentSyncMatcher
                 }
 
                 if ($matches !== []) {
+                    if ($strongCandidates?->count() > 1) {
+                        return $this->candidateConflict('multiple_strong_candidates', $strongCandidates);
+                    }
+
                     return new StudentSyncMatchResult(
                         StudentSyncMatchResult::MATCHED,
                         $idCandidate,
@@ -49,8 +56,8 @@ class StudentSyncMatcher
             }
         }
 
-        if ($identifiers !== []) {
-            $candidates = $this->strongCandidates($identifiers);
+        if ($strongCandidates !== null) {
+            $candidates = $strongCandidates;
 
             if ($candidates->count() > 1) {
                 return $this->candidateConflict('multiple_strong_candidates', $candidates);

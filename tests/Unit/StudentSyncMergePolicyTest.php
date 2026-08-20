@@ -4,6 +4,7 @@ namespace Tests\Unit;
 
 use App\Support\StudentSync\StudentSyncMergePolicy;
 use Carbon\CarbonImmutable;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class StudentSyncMergePolicyTest extends TestCase
@@ -75,5 +76,38 @@ class StudentSyncMergePolicyTest extends TestCase
             'is_active' => true,
             'jumlah_saudara' => 0,
         ], $patch);
+    }
+
+    #[DataProvider('booleanPairs')]
+    public function test_boolean_fields_are_compared_by_field_semantics(
+        mixed $source,
+        mixed $target,
+        bool $equivalent,
+    ): void {
+        $patch = app(StudentSyncMergePolicy::class)->patch(
+            ['is_active' => $source],
+            ['is_active' => $target],
+            ['is_active'],
+        );
+
+        $this->assertSame($equivalent ? [] : ['is_active' => $source], $patch);
+    }
+
+    /**
+     * @return array<string, array{mixed, mixed, bool}>
+     */
+    public static function booleanPairs(): array
+    {
+        return [
+            'bool true equals int true' => [true, 1, true],
+            'int true equals string true' => [1, 'true', true],
+            'string true equals bool true' => ['1', true, true],
+            'bool false equals int false' => [false, 0, true],
+            'int false equals string false' => [0, 'false', true],
+            'string false equals bool false' => ['0', false, true],
+            'bool true differs from bool false' => [true, false, false],
+            'int true differs from int false' => [1, 0, false],
+            'string true differs from string false' => ['true', 'false', false],
+        ];
     }
 }

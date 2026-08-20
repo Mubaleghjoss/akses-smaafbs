@@ -8,6 +8,9 @@ use Throwable;
 
 class StudentSyncMergePolicy
 {
+    /** @var array<int, string> */
+    private const BOOLEAN_FIELDS = ['is_active', 'is_boarding'];
+
     /**
      * @param  array<string, mixed>  $source
      * @param  array<string, mixed>  $target
@@ -32,7 +35,7 @@ class StudentSyncMergePolicy
 
             $current = $this->normalize($column, $target[$column] ?? null);
 
-            if ($this->equivalent($value, $current)) {
+            if ($this->equivalent($column, $value, $current)) {
                 continue;
             }
 
@@ -67,14 +70,27 @@ class StudentSyncMergePolicy
         return $value;
     }
 
-    private function equivalent(mixed $source, mixed $target): bool
+    private function equivalent(string $column, mixed $source, mixed $target): bool
     {
-        if (is_bool($source) || is_bool($target)) {
-            return filter_var($source, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE)
-                === filter_var($target, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
+        if (in_array($column, self::BOOLEAN_FIELDS, true)) {
+            $sourceBoolean = $this->normalizeBoolean($source);
+            $targetBoolean = $this->normalizeBoolean($target);
+
+            if ($sourceBoolean !== null && $targetBoolean !== null) {
+                return $sourceBoolean === $targetBoolean;
+            }
         }
 
         return $source === $target;
+    }
+
+    private function normalizeBoolean(mixed $value): ?bool
+    {
+        return match ($value) {
+            true, 1, '1', 'true' => true,
+            false, 0, '0', 'false' => false,
+            default => null,
+        };
     }
 
     private function isEmpty(mixed $value): bool

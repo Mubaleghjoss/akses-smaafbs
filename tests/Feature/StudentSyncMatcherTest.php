@@ -106,6 +106,19 @@ class StudentSyncMatcherTest extends TestCase
         $this->assertSame(['candidate_ids' => [10, 20]], $result->evidence);
     }
 
+    public function test_id_candidate_with_duplicated_nipd_returns_conflict(): void
+    {
+        $this->student(10, 'Alya', 'P001', null, null, '2010-01-01');
+        $this->student(20, 'Bella', 'P001', null, null, '2010-02-01');
+
+        $result = app(StudentSyncMatcher::class)->match(['id' => 10, 'nipd' => 'P001']);
+
+        $this->assertSame(StudentSyncMatchResult::CONFLICT, $result->status);
+        $this->assertNull($result->matched);
+        $this->assertSame('multiple_strong_candidates', $result->reason);
+        $this->assertSame(['candidate_ids' => [10, 20]], $result->evidence);
+    }
+
     public function test_same_id_with_contradictory_strong_identifiers_returns_conflict(): void
     {
         $this->student(10, 'Alya', 'P001', 'N001', null, '2010-01-01');
