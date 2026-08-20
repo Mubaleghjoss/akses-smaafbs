@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Support\StudentSync\StudentPushScopeToken;
 use App\Support\StudentSync\StudentServerPushClient;
 use App\Support\StudentSync\StudentServerPushPayloadBuilder;
+use App\Support\StudentSync\StudentSyncScopeToken;
 use Carbon\CarbonImmutable;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
@@ -51,12 +52,22 @@ class PushDataSiswasToServer extends Page
 
     public bool $isProcessing = false;
 
-    public function mount(?string $scope = null): void
+    public function mount(?string $scope = null, ?string $scope_token = null): void
     {
         abort_unless(static::canAccessPage(), 403);
+
+        if ($scope_token !== null) {
+            $ids = auth()->check()
+                ? app(StudentSyncScopeToken::class)->consume($scope_token, (int) auth()->id())
+                : [];
+            $scope = $ids === []
+                ? null
+                : app(StudentPushScopeToken::class)->forUser(auth()->user(), $ids);
+        }
+
         $this->scopeToken = $scope;
         $this->scopeIds = app(StudentPushScopeToken::class)->idsFor(auth()->user(), $scope);
-        $this->hasInvalidScope = $scope !== null && $this->scopeIds === [];
+        $this->hasInvalidScope = ($scope_token !== null || $scope !== null) && $this->scopeIds === [];
     }
 
     public static function canAccessPage(?User $user = null): bool
