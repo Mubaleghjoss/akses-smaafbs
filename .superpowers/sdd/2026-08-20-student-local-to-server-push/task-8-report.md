@@ -89,3 +89,29 @@
 
 ### Commit
 - `fix(hotspot): atomically claim student push shortcuts` (recorded in this commit)
+
+## Round 2 regression remediation — deterministic contender coordination
+
+### RED
+- The re-review correctly identified that the prior race test had only the first post-claim marker: it had no second-child acknowledgement before `consume()`, waited indefinitely for the first marker, and did not stop started children before deleting its temporary SQLite/barrier files.
+- A focused run after adding the contender-block assertion demonstrated that SQLite may fail the second contender closed with a lock/query failure before the first holder is released; the stable regression therefore proves contention via the second child’s pre-consume acknowledgement and final `[]` result rather than assuming it remains alive for the full hold.
+
+### GREEN / test-only change
+- Added a separate `contender-ready` marker emitted by the second child immediately before its `consume()` call. The parent bounded-waits for the first durable-claim marker, then for that contender marker, holds the first child for seven seconds (past the former five-second lease), and only then releases it.
+- Added bounded marker waits that fail early if a child exits, plus `finally` cleanup that releases/stops every started child before removing the markers and isolated SQLite file.
+- The test still requires clean exits and exactly one `[98]` and one `[]`; no production service behavior was changed.
+
+### Verification
+- `E:/xampp/php/php.exe -d opcache.enable_cli=0 artisan test tests/Feature/HotspotStudentPushShortcutTest.php tests/Feature/StudentServerPushPageTest.php tests/Feature/StudentServerPushClientTest.php`: PASS — 25 tests, 126 assertions.
+- `E:/xampp/php/php.exe vendor/bin/pint --test tests/Feature/HotspotStudentPushShortcutTest.php`: PASS.
+- PHP syntax check and `git diff --check`: PASS.
+
+### Scope / self-review
+- Only `tests/Feature/HotspotStudentPushShortcutTest.php` and this report are changed for this remediation.
+- `HotspotManager.php`, `RouterOS.php`, and the pre-existing unstaged `HotspotStudentAccounts.php` `updateOrCreate` hunk remain untouched and unstaged.
+
+### Commit
+- Recorded in `test(hotspot): coordinate durable shortcut claim race`.
+
+### Final self-review
+- Cached/committed paths were limited to this regression test and report; protected production WIP was neither staged nor included.

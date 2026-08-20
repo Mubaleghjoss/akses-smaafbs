@@ -98,7 +98,10 @@ class HotspotStudentPushShortcutTest extends TestCase
     {
         $database = tempnam(sys_get_temp_dir(), 'student-shortcut-claim-');
         $claimed = $database.'.claimed';
-        $release = $database.'.release';
+        $contenderReady = $database.'.contender-ready';
+        $firstRelease = $database.'.first-release';
+        $first = null;
+        $second = null;
         try {
             config(['database.connections.shortcut_claim' => ['driver' => 'sqlite', 'database' => $database, 'prefix' => '']]);
             app('db')->purge('shortcut_claim');
@@ -116,25 +119,27 @@ class HotspotStudentPushShortcutTest extends TestCase
 require getcwd().'/vendor/autoload.php';
 $app = require getcwd().'/bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
-config(['app.key' => $argv[7]]);
+config(['app.key' => $argv[8]]);
 $app->forgetInstance('encrypter');
 config(['database.connections.shortcut_claim' => ['driver' => 'sqlite', 'database' => $argv[1], 'prefix' => '']]);
 Illuminate\Support\Facades\DB::purge('shortcut_claim');
-$hook = $argv[5] === 'first' ? function () use ($argv): void { touch($argv[4]); while (! file_exists($argv[6])) { usleep(1000); } } : null;
+$hook = $argv[5] === 'first' ? function () use ($argv): void { touch($argv[4]); while (! file_exists($argv[7])) { usleep(1000); } } : null;
+if ($argv[5] === 'second') { touch($argv[6]); }
 echo json_encode((new App\Support\StudentSync\StudentSyncScopeToken('shortcut_claim', $hook))->consume($argv[2], (int) $argv[3]));
 PHP);
             $appKey = (string) config('app.key');
-            $firstCommand = [PHP_BINARY, '-r', "eval(base64_decode('{$script}'));", $database, $token, '7654321', $claimed, 'first', $release, $appKey];
-            $secondCommand = [PHP_BINARY, '-r', "eval(base64_decode('{$script}'));", $database, $token, '7654321', $claimed, 'second', $release, $appKey];
+            $firstCommand = [PHP_BINARY, '-r', "eval(base64_decode('{$script}'));", $database, $token, '7654321', $claimed, 'first', $contenderReady, $firstRelease, $appKey];
+            $secondCommand = [PHP_BINARY, '-r', "eval(base64_decode('{$script}'));", $database, $token, '7654321', $claimed, 'second', $contenderReady, $firstRelease, $appKey];
             $first = new Process($firstCommand, base_path(), null, null, 20);
             $first->start();
-            while (! file_exists($claimed)) {
-                usleep(1000);
-            }
+            $this->waitForFile($claimed, $first, 'first claimant marker');
+
             $second = new Process($secondCommand, base_path(), null, null, 20);
             $second->start();
-            sleep(6);
-            touch($release);
+            $this->waitForFile($contenderReady, $second, 'second contender-ready marker');
+
+            sleep(7);
+            touch($firstRelease);
             $first->wait();
             $second->wait();
 
@@ -144,8 +149,12 @@ PHP);
             sort($claims);
             $this->assertSame([[], [98]], $claims);
         } finally {
+            touch($firstRelease);
+            $this->stopProcess($second);
+            $this->stopProcess($first);
             @unlink($claimed);
-            @unlink($release);
+            @unlink($contenderReady);
+            @unlink($firstRelease);
             @unlink($database);
         }
     }
@@ -215,6 +224,28 @@ PHP);
             ->assertDontSeeText((string) $rawStudentId)
             ->assertDontSeeText($token);
         $this->assertMatchesRegularExpression('/^[A-Za-z0-9]{64}$/', $token);
+    }
+
+    private function waitForFile(string $path, Process $process, string $marker): void
+    {
+        $deadline = microtime(true) + 10;
+
+        while (! file_exists($path) && microtime(true) < $deadline) {
+            if (! $process->isRunning()) {
+                $this->fail("{$marker} process stopped: ".$process->getErrorOutput());
+            }
+
+            usleep(1000);
+        }
+
+        $this->assertFileExists($path, "Timed out waiting for {$marker}.");
+    }
+
+    private function stopProcess(?Process $process): void
+    {
+        if ($process !== null && $process->isRunning()) {
+            $process->stop(1);
+        }
     }
 
     private function user(string $username): User
