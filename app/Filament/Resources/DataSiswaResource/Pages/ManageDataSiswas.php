@@ -20,13 +20,13 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ManageRecords;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
-use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Throwable;
 
 class ManageDataSiswas extends ManageRecords
@@ -60,6 +60,13 @@ class ManageDataSiswas extends ManageRecords
     protected function getHeaderActions(): array
     {
         return [
+            Actions\Action::make('pushToServer')
+                ->label('Push ke Server')
+                ->icon('heroicon-o-cloud-arrow-up')
+                ->color('info')
+                ->url(DataSiswaResource::getUrl('push-server'))
+                ->visible(fn (): bool => config('student_sync.client.enabled', false)
+                    && PushDataSiswasToServer::canAccessPage()),
             Actions\Action::make('syncSpmb')
                 ->label('Sinkron SPMB')
                 ->icon('heroicon-o-arrow-path')
