@@ -9,6 +9,7 @@ __pycache__/
 *.pyc
 .playwright-mcp/
 .sisyphus/
+.worktrees/
 docs/
 DATA_SISWA.xlsx
 __test_gdrive_key
