@@ -176,6 +176,31 @@ class StudentSyncMatcherTest extends TestCase
         $this->assertSame(['nipd' => 'MISSING'], $result->evidence);
     }
 
+    public function test_matching_from_locked_candidates_uses_only_the_supplied_current_rows(): void
+    {
+        $this->student(10, 'Snapshot Alya', 'P001', null, null, '2010-01-01');
+        $currentLockedRow = new DataSiswa;
+        $currentLockedRow->forceFill([
+            'id' => 10,
+            'nama' => 'Current Alya',
+            'nipd' => 'CHANGED',
+            'tanggal_lahir' => '2010-01-01',
+        ]);
+        $queries = 0;
+        DB::listen(function () use (&$queries): void {
+            $queries++;
+        });
+
+        $result = app(StudentSyncMatcher::class)->matchCandidates(
+            ['id' => 10, 'nipd' => 'P001'],
+            [$currentLockedRow],
+        );
+
+        $this->assertSame(StudentSyncMatchResult::CONFLICT, $result->status);
+        $this->assertSame('contradictory_strong_identifiers', $result->reason);
+        $this->assertSame(0, $queries, 'Pure locked-candidate matching must not perform a database read.');
+    }
+
     private function student(
         int $id,
         string $nama,

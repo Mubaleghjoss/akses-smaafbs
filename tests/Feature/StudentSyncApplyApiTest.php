@@ -2,19 +2,27 @@
 
 namespace Tests\Feature;
 
+use App\Models\DataSiswa;
 use App\Models\StudentSyncPreview;
 use App\Models\StudentSyncRun;
 use App\Support\StudentSync\StudentSyncBackupStore;
+use App\Support\StudentSync\StudentSyncMatcher;
+use App\Support\StudentSync\StudentSyncMatchResult;
 use App\Support\StudentSync\StudentSyncPreviewService;
 use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Database\Events\TransactionCommitted;
 use Illuminate\Database\Query\Grammars\MySqlGrammar;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use PDO;
+use PDOException;
 use RuntimeException;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class StudentSyncApplyApiTest extends TestCase
@@ -151,7 +159,7 @@ class StudentSyncApplyApiTest extends TestCase
                 ->assertUnprocessable();
         }
 
-        $this->assertDatabaseCount('student_sync_runs', 0);
+        $this->assertSame(5, StudentSyncRun::query()->where('operation', 'apply')->where('status', 'failed')->count());
     }
 
     public function test_apply_rejects_extra_top_level_fields(): void
@@ -242,7 +250,9 @@ class StudentSyncApplyApiTest extends TestCase
 
         $this->assertSame('Before', DB::table('data_siswa')->where('id', 10)->value('nama'));
         $this->assertNull($preview->fresh()->applied_at);
-        $this->assertSame(0, StudentSyncRun::query()->where('operation', 'apply')->count());
+        $run = StudentSyncRun::query()->where('operation', 'apply')->sole();
+        $this->assertSame('failed', $run->status);
+        $this->assertNotNull($run->backup_path);
         $this->assertSame([], Storage::disk('local')->allFiles('student-sync/backups'));
     }
 
@@ -298,12 +308,11 @@ class StudentSyncApplyApiTest extends TestCase
             'The apply must atomically claim the globally unique idempotency key.',
         );
         $this->assertTrue(
-            collect($queries)->contains(fn (string $sql): bool => str_contains($sql, 'from "data_siswa" where "id" in (?, ?) order by "id" asc')
-                || str_contains($sql, 'from `data_siswa` where `id` in (?, ?) order by `id` asc')),
-            'All potential target rows must be selected in deterministic ID order before updates.',
+            collect($queries)->contains(fn (string $sql): bool => str_contains($sql, 'from "data_siswa" order by "id" asc')
+                || str_contains($sql, 'from `data_siswa` order by `id` asc')),
+            'The complete target candidate universe must be selected in deterministic ID order before updates.',
         );
         $productionLockQuery = DB::table('data_siswa')
-            ->whereIn('id', [10, 20])
             ->orderBy('id')
             ->lockForUpdate();
         $productionLockQuery->grammar = new MySqlGrammar(DB::connection());
@@ -316,7 +325,7 @@ class StudentSyncApplyApiTest extends TestCase
         $preview = $this->preview([
             $this->payloadStudent(10, ['nipd' => 'P001'], ['nama' => 'Must Roll Back']),
         ]);
-        $this->mock(StudentSyncBackupStore::class, function ($mock): void {
+        $this->partialMock(StudentSyncBackupStore::class, function ($mock): void {
             $mock->shouldReceive('write')->once()->andThrow(new RuntimeException('simulated backup failure'));
         });
 
@@ -324,10 +333,13 @@ class StudentSyncApplyApiTest extends TestCase
 
         $this->assertSame('Before', DB::table('data_siswa')->where('id', 10)->value('nama'));
         $this->assertNull($preview->fresh()->applied_at);
-        $this->assertSame(0, StudentSyncRun::query()->where('operation', 'apply')->count());
+        $run = StudentSyncRun::query()->where('operation', 'apply')->sole();
+        $this->assertSame('failed', $run->status);
+        $this->assertNotNull($run->backup_path);
+        Storage::disk('local')->assertMissing($run->backup_path);
     }
 
-    public function test_database_failure_after_successful_backup_deletes_orphan_and_rolls_back_everything(): void
+    public function test_database_failure_after_successful_backup_retains_discoverable_backup_and_failed_audit(): void
     {
         $this->student(10, 'Before', 'P001', 'N001', 'X-A');
         $preview = $this->preview([
@@ -345,8 +357,147 @@ class StudentSyncApplyApiTest extends TestCase
 
         $this->assertSame('Before', DB::table('data_siswa')->where('id', 10)->value('nama'));
         $this->assertNull($preview->fresh()->applied_at);
-        $this->assertSame(0, StudentSyncRun::query()->where('operation', 'apply')->count());
-        $this->assertSame([], Storage::disk('local')->allFiles('student-sync/backups'));
+        $run = StudentSyncRun::query()->where('operation', 'apply')->sole();
+        $this->assertSame('failed', $run->status);
+        $this->assertNotNull($run->finished_at);
+        $this->assertNotNull($run->backup_path);
+        Storage::disk('local')->assertExists($run->backup_path);
+    }
+
+    public function test_ambiguous_commit_exception_never_deletes_a_possibly_committed_backup(): void
+    {
+        $this->student(10, 'Before', 'P001', 'N001', 'X-A');
+        $preview = $this->preview([
+            $this->payloadStudent(10, ['nipd' => 'P001'], ['nama' => 'Possibly Committed']),
+        ]);
+        $armed = true;
+        Event::listen(TransactionCommitted::class, function () use (&$armed): void {
+            if ($armed) {
+                $armed = false;
+                throw new RuntimeException('simulated ambiguous commit acknowledgement');
+            }
+        });
+
+        $this->postApply($preview, 'ambiguous-commit', 'nonce-ambiguous-commit')->assertStatus(500);
+
+        $run = StudentSyncRun::query()->where('operation', 'apply')->sole();
+        $this->assertSame('completed', $run->status);
+        $this->assertSame('Possibly Committed', DB::table('data_siswa')->where('id', 10)->value('nama'));
+        $this->assertNotNull($run->backup_path);
+        Storage::disk('local')->assertExists($run->backup_path);
+    }
+
+    public function test_mysql_innodb_current_lock_read_drives_matching_from_current_row_data(): void
+    {
+        [$admin, $first, $second, $database] = $this->mysqlSandbox();
+
+        try {
+            $first->exec('CREATE TABLE data_siswa (id BIGINT PRIMARY KEY, nama VARCHAR(100), nipd VARCHAR(100) NULL, nisn VARCHAR(100) NULL, billing_code VARCHAR(100) NULL, tanggal_lahir DATE NULL) ENGINE=InnoDB');
+            $first->exec("INSERT INTO data_siswa (id, nama, nipd) VALUES (10, 'Alya', 'P001')");
+            $first->exec('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+            $first->beginTransaction();
+
+            $snapshot = $first->query('SELECT nipd FROM data_siswa WHERE id = 10')->fetchColumn();
+            $this->assertSame('P001', $snapshot);
+            $second->exec("UPDATE data_siswa SET nipd = 'CHANGED' WHERE id = 10");
+            $locked = $first->query('SELECT * FROM data_siswa ORDER BY id FOR UPDATE')->fetch(PDO::FETCH_ASSOC);
+            $this->assertSame('CHANGED', $locked['nipd'], 'InnoDB locking read must return the current row, not the earlier consistent snapshot.');
+
+            $currentStudent = new DataSiswa;
+            $currentStudent->forceFill($locked);
+            $match = app(StudentSyncMatcher::class)->matchCandidates(
+                ['id' => 10, 'nipd' => 'P001'],
+                [$currentStudent],
+            );
+
+            $this->assertSame(StudentSyncMatchResult::CONFLICT, $match->status);
+            $this->assertSame('contradictory_strong_identifiers', $match->reason);
+            $first->commit();
+        } finally {
+            if ($first->inTransaction()) {
+                $first->rollBack();
+            }
+
+            $first = null;
+            $second = null;
+            $admin->exec("DROP DATABASE IF EXISTS `{$database}`");
+        }
+    }
+
+    public function test_mysql_innodb_atomic_claim_serializes_same_key_and_preserves_first_binding(): void
+    {
+        [$admin, $first, $second, $database, $dsn, $username, $password] = $this->mysqlSandbox();
+        $process = null;
+
+        try {
+            $first->exec('CREATE TABLE student_sync_runs (id VARCHAR(36) PRIMARY KEY, idempotency_key VARCHAR(100) NOT NULL UNIQUE, binding VARCHAR(100) NOT NULL) ENGINE=InnoDB');
+            $first->beginTransaction();
+            $statement = $first->prepare('INSERT IGNORE INTO student_sync_runs (id, idempotency_key, binding) VALUES (?, ?, ?)');
+            $statement->execute(['first-run', 'same-key', 'preview-a']);
+            $this->assertSame(1, $statement->rowCount());
+
+            $child = <<<'PHP'
+$pdo = new PDO($argv[1], $argv[2], $argv[3], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$pdo->exec('SET SESSION innodb_lock_wait_timeout = 5');
+$statement = $pdo->prepare('INSERT IGNORE INTO student_sync_runs (id, idempotency_key, binding) VALUES (?, ?, ?)');
+$statement->execute(['second-run', 'same-key', 'preview-b']);
+$owner = $pdo->query("SELECT id, binding FROM student_sync_runs WHERE idempotency_key = 'same-key'")->fetch(PDO::FETCH_ASSOC);
+echo json_encode(['inserted' => $statement->rowCount(), 'owner' => $owner], JSON_THROW_ON_ERROR);
+PHP;
+            $process = new Process([PHP_BINARY, '-r', $child, $dsn, $username, $password]);
+            $process->start();
+            usleep(250000);
+            $this->assertTrue($process->isRunning(), 'The competing atomic claim should wait for the uncommitted unique-key owner.');
+
+            $first->commit();
+            $process->wait();
+            $this->assertTrue($process->isSuccessful(), $process->getErrorOutput());
+            $result = json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+            $this->assertSame(0, $result['inserted']);
+            $this->assertSame(['id' => 'first-run', 'binding' => 'preview-a'], $result['owner']);
+        } finally {
+            if ($process?->isRunning()) {
+                $process->stop();
+            }
+
+            if ($first->inTransaction()) {
+                $first->rollBack();
+            }
+
+            $first = null;
+            $second = null;
+            $admin->exec("DROP DATABASE IF EXISTS `{$database}`");
+        }
+    }
+
+    /** @return array{PDO, PDO, PDO, string, string, string, string} */
+    private function mysqlSandbox(): array
+    {
+        $host = getenv('STUDENT_SYNC_MYSQL_TEST_HOST') ?: '127.0.0.1';
+
+        if (! in_array($host, ['127.0.0.1', 'localhost'], true)) {
+            $this->markTestSkipped('Student sync MySQL integration tests only permit a local host.');
+        }
+
+        $port = getenv('STUDENT_SYNC_MYSQL_TEST_PORT') ?: '3306';
+        $username = getenv('STUDENT_SYNC_MYSQL_TEST_USER') ?: 'root';
+        $password = getenv('STUDENT_SYNC_MYSQL_TEST_PASSWORD') ?: '';
+        $serverDsn = "mysql:host={$host};port={$port};charset=utf8mb4";
+        $database = 'student_sync_test_'.bin2hex(random_bytes(8));
+        $admin = null;
+
+        try {
+            $admin = new PDO($serverDsn, $username, $password, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+            $admin->exec("CREATE DATABASE `{$database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            $dsn = "mysql:host={$host};port={$port};dbname={$database};charset=utf8mb4";
+            $first = new PDO($dsn, $username, $password, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+            $second = new PDO($dsn, $username, $password, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+        } catch (PDOException $exception) {
+            $admin?->exec("DROP DATABASE IF EXISTS `{$database}`");
+            $this->markTestSkipped('Local MySQL/InnoDB integration unavailable: '.$exception->getMessage());
+        }
+
+        return [$admin, $first, $second, $database, $dsn, $username, $password];
     }
 
     /** @param array<int, array<string, mixed>> $students */

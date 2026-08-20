@@ -17,15 +17,38 @@ class StudentSyncMatcher
      */
     public function match(array $source): StudentSyncMatchResult
     {
+        return $this->matchCandidates($source, $this->collectCandidates($source));
+    }
+
+    /**
+     * Match against a caller-supplied current row set without performing database reads.
+     *
+     * @param  array<string, mixed>  $source
+     * @param  iterable<int, DataSiswa>  $candidates
+     */
+    public function matchCandidates(array $source, iterable $candidates): StudentSyncMatchResult
+    {
+        $candidates = $candidates instanceof Collection
+            ? $candidates->values()
+            : new Collection(is_array($candidates) ? $candidates : iterator_to_array($candidates, false));
         $identifiers = $this->strongIdentifiers($source);
         $strongCandidates = $identifiers === []
             ? null
-            : $this->strongCandidates($identifiers);
+            : $candidates->filter(function (DataSiswa $student) use ($identifiers): bool {
+                foreach ($identifiers as $column => $value) {
+                    if ($this->nonEmptyString($student->getAttribute($column)) === $value) {
+                        return true;
+                    }
+                }
+
+                return false;
+            })->sortBy(fn (DataSiswa $student): int => (int) $student->getKey())->values();
         $sourceId = $this->normalizeId($source['id'] ?? null);
         $idLackedEvidence = false;
 
         if ($sourceId !== null) {
-            $idCandidate = DataSiswa::query()->find($sourceId);
+            /** @var DataSiswa|null $idCandidate */
+            $idCandidate = $candidates->first(fn (DataSiswa $student): bool => (int) $student->getKey() === $sourceId);
 
             if ($idCandidate !== null) {
                 [$matches, $conflicts] = $this->compareIdentifiers($identifiers, $idCandidate);
@@ -57,15 +80,13 @@ class StudentSyncMatcher
         }
 
         if ($strongCandidates !== null) {
-            $candidates = $strongCandidates;
-
-            if ($candidates->count() > 1) {
-                return $this->candidateConflict('multiple_strong_candidates', $candidates);
+            if ($strongCandidates->count() > 1) {
+                return $this->candidateConflict('multiple_strong_candidates', $strongCandidates);
             }
 
-            if ($candidates->count() === 1) {
+            if ($strongCandidates->count() === 1) {
                 /** @var DataSiswa $candidate */
-                $candidate = $candidates->first();
+                $candidate = $strongCandidates->first();
                 [$matches, $conflicts] = $this->compareIdentifiers($identifiers, $candidate);
 
                 if ($conflicts !== []) {
@@ -96,20 +117,20 @@ class StudentSyncMatcher
         $fallback = $this->nameAndDateEvidence($source);
 
         if ($fallback !== null) {
-            $candidates = DataSiswa::query()
-                ->whereDate('tanggal_lahir', $fallback['tanggal_lahir'])
-                ->get()
-                ->filter(fn (DataSiswa $student): bool => $this->normalizeName($student->nama) === $fallback['nama'])
+            $fallbackCandidates = $candidates
+                ->filter(fn (DataSiswa $student): bool => $this->normalizeDate($student->tanggal_lahir) === $fallback['tanggal_lahir']
+                    && $this->normalizeName($student->nama) === $fallback['nama'])
+                ->sortBy(fn (DataSiswa $student): int => (int) $student->getKey())
                 ->values();
 
-            if ($candidates->count() > 1) {
-                return $this->candidateConflict('ambiguous_name_and_dob', $candidates);
+            if ($fallbackCandidates->count() > 1) {
+                return $this->candidateConflict('ambiguous_name_and_dob', $fallbackCandidates);
             }
 
-            if ($candidates->count() === 1) {
+            if ($fallbackCandidates->count() === 1) {
                 return new StudentSyncMatchResult(
                     StudentSyncMatchResult::MATCHED,
-                    $candidates->first(),
+                    $fallbackCandidates->first(),
                     'matched_by_name_and_dob',
                     $fallback,
                 );
@@ -125,15 +146,33 @@ class StudentSyncMatcher
     }
 
     /**
-     * @param  array<string, string>  $identifiers
+     * Collect every row that could affect the pure match decision.
+     *
+     * @param  array<string, mixed>  $source
      * @return Collection<int, DataSiswa>
      */
-    private function strongCandidates(array $identifiers): Collection
+    private function collectCandidates(array $source): Collection
     {
+        $sourceId = $this->normalizeId($source['id'] ?? null);
+        $identifiers = $this->strongIdentifiers($source);
+        $fallback = $this->nameAndDateEvidence($source);
+
+        if ($sourceId === null && $identifiers === [] && $fallback === null) {
+            return new Collection;
+        }
+
         return DataSiswa::query()
-            ->where(function ($query) use ($identifiers): void {
+            ->where(function ($query) use ($fallback, $identifiers, $sourceId): void {
+                if ($sourceId !== null) {
+                    $query->orWhere('id', $sourceId);
+                }
+
                 foreach ($identifiers as $column => $value) {
                     $query->orWhereRaw("TRIM({$column}) = ?", [$value]);
+                }
+
+                if ($fallback !== null) {
+                    $query->orWhereDate('tanggal_lahir', $fallback['tanggal_lahir']);
                 }
             })
             ->orderBy('id')

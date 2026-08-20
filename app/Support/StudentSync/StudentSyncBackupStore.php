@@ -9,10 +9,18 @@ use RuntimeException;
 
 class StudentSyncBackupStore
 {
+    public function pathForRun(string $runId): string
+    {
+        $path = 'student-sync/backups/'.$runId.'.json.enc';
+        $this->assertBackupPath($path);
+
+        return $path;
+    }
+
     /** @param array<string, mixed> $snapshot */
     public function write(string $runId, array $snapshot): string
     {
-        $path = 'student-sync/backups/'.$runId.'.json.enc';
+        $path = $this->pathForRun($runId);
         $json = json_encode($snapshot, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $encrypted = Crypt::encryptString($json);
 
@@ -21,24 +29,6 @@ class StudentSyncBackupStore
         }
 
         return $path;
-    }
-
-    public function exists(string $path): bool
-    {
-        $this->assertBackupPath($path);
-
-        return Storage::disk('local')->exists($path);
-    }
-
-    public function delete(string $path): void
-    {
-        $this->assertBackupPath($path);
-
-        $disk = Storage::disk('local');
-
-        if ($disk->exists($path) && ! $disk->delete($path)) {
-            throw new RuntimeException('Student sync backup could not be deleted.');
-        }
     }
 
     private function assertBackupPath(string $path): void
