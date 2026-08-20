@@ -2,6 +2,7 @@
 
 namespace App\Support\StudentSync;
 
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
@@ -25,16 +26,26 @@ final class StudentSyncScopeToken
     /** @return array<int, int> */
     public function consume(string $token, int $userId): array
     {
-        $payload = Cache::pull($this->cacheKey($token, $userId));
+        $cacheKey = $this->cacheKey($token, $userId);
 
-        if (! is_array($payload)
-            || ! is_int($payload['user_id'] ?? null)
-            || $payload['user_id'] !== $userId
-            || ! is_array($payload['student_ids'] ?? null)) {
+        try {
+            return Cache::lock($cacheKey.':consume-lock', 5)->block(2, function () use ($cacheKey, $userId): array {
+                $payload = Cache::get($cacheKey);
+
+                if (! is_array($payload)
+                    || ! is_int($payload['user_id'] ?? null)
+                    || $payload['user_id'] !== $userId
+                    || ! is_array($payload['student_ids'] ?? null)) {
+                    return [];
+                }
+
+                Cache::forget($cacheKey);
+
+                return $this->normalizeIds($payload['student_ids']);
+            });
+        } catch (LockTimeoutException) {
             return [];
         }
-
-        return $this->normalizeIds($payload['student_ids']);
     }
 
     /** @param array<mixed> $ids

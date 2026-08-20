@@ -11,8 +11,10 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Mockery;
+use Symfony\Component\Process\Process;
 use Tests\Feature\Concerns\BootstrapsUserAndPermissionTables;
 use Tests\TestCase;
 
@@ -92,6 +94,57 @@ class HotspotStudentPushShortcutTest extends TestCase
         }
     }
 
+    public function test_database_cache_allows_exactly_one_concurrent_claimant(): void
+    {
+        $database = tempnam(sys_get_temp_dir(), 'student-shortcut-race-');
+        $barrier = $database.'.start';
+        $originalCacheStore = config('cache.default');
+        $this->configureDatabaseCache($database);
+        Schema::connection('shortcut_race')->create('cache', function (Blueprint $table): void {
+            $table->string('key')->primary();
+            $table->text('value');
+            $table->integer('expiration');
+        });
+        Schema::connection('shortcut_race')->create('cache_locks', function (Blueprint $table): void {
+            $table->string('key')->primary();
+            $table->string('owner');
+            $table->integer('expiration');
+        });
+
+        try {
+            $token = app(StudentSyncScopeToken::class)->issue([98], 7654321);
+            $script = base64_encode(<<<'PHP'
+require getcwd().'/vendor/autoload.php';
+$app = require getcwd().'/bootstrap/app.php';
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+config(['database.connections.shortcut_race' => ['driver' => 'sqlite', 'database' => $argv[1], 'prefix' => ''], 'cache.stores.shortcut_race' => ['driver' => 'database', 'connection' => 'shortcut_race', 'table' => 'cache', 'lock_connection' => 'shortcut_race', 'lock_table' => 'cache_locks'], 'cache.default' => 'shortcut_race']);
+Illuminate\Support\Facades\DB::purge('shortcut_race');
+Illuminate\Support\Facades\Cache::forgetDriver('shortcut_race');
+while (! file_exists($argv[4])) { usleep(1000); }
+echo json_encode(app(App\Support\StudentSync\StudentSyncScopeToken::class)->consume($argv[2], (int) $argv[3]));
+PHP);
+            $command = [PHP_BINARY, '-r', "eval(base64_decode('{$script}'));", $database, $token, '7654321', $barrier];
+            $first = new Process($command, base_path(), null, null, 10);
+            $second = new Process($command, base_path(), null, null, 10);
+            $first->start();
+            $second->start();
+            touch($barrier);
+            $first->wait();
+            $second->wait();
+
+            $this->assertTrue($first->isSuccessful(), $first->getErrorOutput());
+            $this->assertTrue($second->isSuccessful(), $second->getErrorOutput());
+            $claims = [json_decode($first->getOutput(), true), json_decode($second->getOutput(), true)];
+            sort($claims);
+            $this->assertSame([[], [98]], $claims);
+        } finally {
+            config(['cache.default' => $originalCacheStore]);
+            Cache::forgetDriver('shortcut_race');
+            @unlink($barrier);
+            @unlink($database);
+        }
+    }
+
     public function test_push_page_consumes_shortcut_token_once_without_widening_or_auto_apply(): void
     {
         $admin = $this->user('shortcut-admin');
@@ -132,6 +185,48 @@ class HotspotStudentPushShortcutTest extends TestCase
         $this->assertStringContainsString('scope_token=', $url);
         $this->assertStringNotContainsString('123', $url);
         $this->assertStringNotContainsString('siswa2', $url);
+    }
+
+    public function test_rendered_shortcut_hides_password_and_raw_token_while_linking_to_opaque_url(): void
+    {
+        $admin = $this->user('shortcut-render-admin');
+        $admin->assignRole('admin');
+        $password = 'password-only-in-hotspot-preview';
+        $rawStudentId = 987654;
+
+        $page = Livewire::actingAs($admin)->test(BuatAkunSiswa::class)
+            ->set('candidates', [['id' => $rawStudentId, 'nama' => 'Shortcut Test', 'rombel' => 'X', 'username' => 'shortcut-user', 'password' => $password]])
+            ->set('candidates', [])
+            ->set('lastCreationResult', ['student_ids' => [$rawStudentId]])
+            ->call('buildStudentPushShortcut');
+
+        $url = (string) $page->get('studentPushShortcutUrl');
+        $token = (string) Str::of(parse_url($url, PHP_URL_QUERY) ?? '')
+            ->after('scope_token=');
+
+        $page->assertSeeHtml('href="'.e($url).'"')
+            ->assertSee('Preview Push Data Siswa ke Server')
+            ->assertDontSeeText($password)
+            ->assertDontSeeText((string) $rawStudentId)
+            ->assertDontSeeText($token);
+        $this->assertMatchesRegularExpression('/^[A-Za-z0-9]{64}$/', $token);
+    }
+
+    private function configureDatabaseCache(string $database): void
+    {
+        config([
+            'database.connections.shortcut_race' => ['driver' => 'sqlite', 'database' => $database, 'prefix' => ''],
+            'cache.stores.shortcut_race' => [
+                'driver' => 'database',
+                'connection' => 'shortcut_race',
+                'table' => 'cache',
+                'lock_connection' => 'shortcut_race',
+                'lock_table' => 'cache_locks',
+            ],
+            'cache.default' => 'shortcut_race',
+        ]);
+        app('db')->purge('shortcut_race');
+        Cache::forgetDriver('shortcut_race');
     }
 
     private function user(string $username): User
