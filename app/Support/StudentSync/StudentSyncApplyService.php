@@ -6,7 +6,9 @@ use App\Models\StudentSyncPreview;
 use App\Models\StudentSyncRun;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class StudentSyncApplyService
 {
@@ -24,158 +26,291 @@ class StudentSyncApplyService
         string $idempotencyKey,
         ?int $actorId,
     ): array {
-        return DB::transaction(function () use (
-            $actorId,
-            $checksum,
-            $clientId,
-            $idempotencyKey,
-            $previewToken,
-        ): array {
-            /** @var StudentSyncPreview|null $preview */
-            $preview = StudentSyncPreview::query()
-                ->whereKey($previewToken)
-                ->lockForUpdate()
-                ->first();
+        $backupPath = null;
 
-            if ($preview === null) {
-                $this->rejectPreview('The preview token is invalid.');
-            }
+        try {
+            return DB::transaction(function () use (
+                $actorId,
+                &$backupPath,
+                $checksum,
+                $clientId,
+                $idempotencyKey,
+                $previewToken,
+            ): array {
+                [$run, $claimed] = $this->claimRun(
+                    $clientId,
+                    $previewToken,
+                    $checksum,
+                    $idempotencyKey,
+                    $actorId,
+                );
 
-            $this->validatePreviewIdentity($preview, $clientId, $checksum);
+                $this->validateRunBinding($run, $clientId, $previewToken, $checksum);
 
-            /** @var StudentSyncRun|null $existing */
-            $existing = StudentSyncRun::query()
-                ->where('operation', 'apply')
-                ->where('client_id', $clientId)
-                ->where('idempotency_key', $idempotencyKey)
-                ->lockForUpdate()
-                ->first();
+                if (! $claimed) {
+                    if ($run->status === 'completed' && is_array($run->result_summary)) {
+                        return $run->result_summary;
+                    }
 
-            if ($existing !== null) {
-                $result = $existing->result_summary;
-
-                if (
-                    is_array($result)
-                    && hash_equals((string) ($result['preview_token'] ?? ''), $previewToken)
-                    && hash_equals(strtolower((string) $existing->payload_checksum), strtolower($checksum))
-                ) {
-                    return $result;
+                    $this->rejectPreview('The idempotency key is already being processed.');
                 }
 
-                $this->rejectPreview('The idempotency key belongs to a different apply request.');
-            }
+                /** @var StudentSyncPreview|null $preview */
+                $preview = StudentSyncPreview::query()
+                    ->whereKey($previewToken)
+                    ->lockForUpdate()
+                    ->first();
 
-            $this->validatePreviewState($preview);
-            $startedAt = now();
-            $snapshot = $preview->encrypted_payload;
-            $snapshotItems = is_array($snapshot) ? ($snapshot['items'] ?? null) : null;
-
-            if (! is_array($snapshotItems)) {
-                $this->rejectPreview('The preview snapshot is invalid.');
-            }
-
-            $sharedSchema = array_flip(Schema::getColumnListing('data_siswa'));
-            $counts = [
-                'total' => count($snapshotItems),
-                'update' => 0,
-                'unchanged' => 0,
-                'conflict' => 0,
-                'not_found' => 0,
-            ];
-            $fieldSummary = [];
-            $items = [];
-            $updates = [];
-            $backupRecords = [];
-
-            foreach ($snapshotItems as $item) {
-                $outcome = $this->recheckItem($item, $sharedSchema);
-                $counts[$outcome['status']]++;
-
-                foreach ($outcome['changed_fields'] as $field) {
-                    $fieldSummary[$field] = ($fieldSummary[$field] ?? 0) + 1;
+                if ($preview === null) {
+                    $this->rejectPreview('The preview token is invalid.');
                 }
 
-                $items[] = [
-                    'status' => $outcome['status'],
-                    'source_id' => $outcome['source_id'],
-                    'target_id' => $outcome['target_id'],
-                    'changed_fields' => $outcome['changed_fields'],
-                    'reason' => $outcome['reason'],
-                ];
+                $this->validatePreviewIdentity($preview, $clientId, $checksum);
+                $this->validatePreviewState($preview);
+                $snapshot = $preview->encrypted_payload;
+                $snapshotItems = is_array($snapshot) ? ($snapshot['items'] ?? null) : null;
 
-                if ($outcome['status'] !== 'update') {
-                    continue;
+                if (! is_array($snapshotItems)) {
+                    $this->rejectPreview('The preview snapshot is invalid.');
                 }
 
-                $updates[] = [
-                    'target_id' => $outcome['target_id'],
-                    'patch' => $outcome['patch'],
+                $this->rejectDuplicateTargets($snapshotItems);
+                $lockedTargets = $this->lockPotentialTargets($snapshotItems);
+                $sharedSchema = array_flip(Schema::getColumnListing('data_siswa'));
+                $counts = [
+                    'total' => count($snapshotItems),
+                    'update' => 0,
+                    'unchanged' => 0,
+                    'conflict' => 0,
+                    'not_found' => 0,
                 ];
-                $backupRecords[] = [
-                    'target_id' => $outcome['target_id'],
-                    'changed_fields' => $outcome['changed_fields'],
-                    'before' => $outcome['before'],
-                ];
-            }
+                $fieldSummary = [];
+                $items = [];
+                $updates = [];
+                $backupRecords = [];
 
-            ksort($fieldSummary, SORT_STRING);
-            $run = StudentSyncRun::query()->create([
-                'operation' => 'apply',
-                'client_id' => $clientId,
-                'user_id' => $actorId,
-                'status' => 'running',
-                'idempotency_key' => $idempotencyKey,
-                'payload_checksum' => $preview->payload_checksum,
-                'started_at' => $startedAt,
-            ]);
-            $backupPath = null;
+                foreach ($snapshotItems as $item) {
+                    $outcome = $this->recheckItem($item, $sharedSchema, $lockedTargets);
+                    $counts[$outcome['status']]++;
 
-            if ($backupRecords !== []) {
-                $backupPath = $this->backupStore->write((string) $run->getKey(), [
+                    foreach ($outcome['changed_fields'] as $field) {
+                        $fieldSummary[$field] = ($fieldSummary[$field] ?? 0) + 1;
+                    }
+
+                    $items[] = [
+                        'status' => $outcome['status'],
+                        'source_id' => $outcome['source_id'],
+                        'target_id' => $outcome['target_id'],
+                        'changed_fields' => $outcome['changed_fields'],
+                        'reason' => $outcome['reason'],
+                    ];
+
+                    if ($outcome['status'] !== 'update') {
+                        continue;
+                    }
+
+                    $updates[] = [
+                        'target_id' => $outcome['target_id'],
+                        'patch' => $outcome['patch'],
+                    ];
+                    $backupRecords[] = [
+                        'target_id' => $outcome['target_id'],
+                        'changed_fields' => $outcome['changed_fields'],
+                        'before' => $outcome['before'],
+                    ];
+                }
+
+                ksort($fieldSummary, SORT_STRING);
+
+                if ($backupRecords !== []) {
+                    $backupPath = $this->backupStore->write((string) $run->getKey(), [
+                        'run_id' => $run->getKey(),
+                        'client_id' => $clientId,
+                        'preview_token' => $preview->getKey(),
+                        'payload_checksum' => $preview->payload_checksum,
+                        'created_at' => now()->toIso8601String(),
+                        'records' => $backupRecords,
+                    ]);
+                }
+
+                foreach ($updates as $update) {
+                    DB::table('data_siswa')
+                        ->where('id', $update['target_id'])
+                        ->update($update['patch']);
+                }
+
+                $result = [
                     'run_id' => $run->getKey(),
-                    'client_id' => $clientId,
                     'preview_token' => $preview->getKey(),
                     'payload_checksum' => $preview->payload_checksum,
-                    'created_at' => now()->toIso8601String(),
-                    'records' => $backupRecords,
-                ]);
+                    'counts' => $counts,
+                    'field_summary' => $fieldSummary,
+                    'items' => $items,
+                ];
+
+                $preview->forceFill(['applied_at' => now()])->save();
+                $run->forceFill([
+                    'status' => 'completed',
+                    'counts' => $counts,
+                    'field_summary' => $fieldSummary,
+                    'result_summary' => $result,
+                    'backup_path' => $backupPath,
+                    'finished_at' => now(),
+                ])->save();
+
+                return $result;
+            });
+        } catch (Throwable $exception) {
+            if ($backupPath !== null) {
+                try {
+                    if ($this->backupStore->exists($backupPath)) {
+                        $this->backupStore->delete($backupPath);
+                    }
+                } catch (Throwable $cleanupException) {
+                    report($cleanupException);
+                }
             }
 
-            foreach ($updates as $update) {
-                DB::table('data_siswa')
-                    ->where('id', $update['target_id'])
-                    ->update($update['patch']);
+            throw $exception;
+        }
+    }
+
+    /** @return array{0: StudentSyncRun, 1: bool} */
+    private function claimRun(
+        string $clientId,
+        string $previewToken,
+        string $checksum,
+        string $idempotencyKey,
+        ?int $actorId,
+    ): array {
+        $runId = (string) Str::uuid();
+        $now = now();
+        $binding = json_encode([
+            'preview_token' => $previewToken,
+        ], JSON_THROW_ON_ERROR);
+        $claimed = StudentSyncRun::query()->insertOrIgnore([
+            'id' => $runId,
+            'operation' => 'apply',
+            'client_id' => $clientId,
+            'user_id' => $actorId,
+            'status' => 'running',
+            'idempotency_key' => $idempotencyKey,
+            'payload_checksum' => strtolower($checksum),
+            'result_summary' => $binding,
+            'started_at' => $now,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]) === 1;
+
+        /** @var StudentSyncRun|null $run */
+        $run = StudentSyncRun::query()
+            ->where('idempotency_key', $idempotencyKey)
+            ->lockForUpdate()
+            ->first();
+
+        if ($run === null) {
+            $this->rejectPreview('The idempotency key could not be claimed.');
+        }
+
+        return [$run, $claimed && hash_equals((string) $run->getKey(), $runId)];
+    }
+
+    private function validateRunBinding(
+        StudentSyncRun $run,
+        string $clientId,
+        string $previewToken,
+        string $checksum,
+    ): void {
+        $result = $run->result_summary;
+
+        if (
+            $run->operation !== 'apply'
+            || ! hash_equals((string) $run->client_id, $clientId)
+            || ! is_array($result)
+            || ! hash_equals((string) ($result['preview_token'] ?? ''), $previewToken)
+            || ! hash_equals(strtolower((string) $run->payload_checksum), strtolower($checksum))
+        ) {
+            $this->rejectPreview('The idempotency key belongs to a different apply request.');
+        }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $snapshotItems
+     */
+    private function rejectDuplicateTargets(array $snapshotItems): void
+    {
+        $seen = [];
+
+        foreach ($snapshotItems as $item) {
+            if (($item['status'] ?? null) !== 'update' || ! is_numeric($item['target_id'] ?? null)) {
+                continue;
             }
 
-            $result = [
-                'run_id' => $run->getKey(),
-                'preview_token' => $preview->getKey(),
-                'payload_checksum' => $preview->payload_checksum,
-                'counts' => $counts,
-                'field_summary' => $fieldSummary,
-                'items' => $items,
-            ];
+            $targetId = (int) $item['target_id'];
 
-            $preview->forceFill(['applied_at' => now()])->save();
-            $run->forceFill([
-                'status' => 'completed',
-                'counts' => $counts,
-                'field_summary' => $fieldSummary,
-                'result_summary' => $result,
-                'backup_path' => $backupPath,
-                'finished_at' => now(),
-            ])->save();
+            if (isset($seen[$targetId])) {
+                $this->rejectPreview('The preview contains duplicate target students.');
+            }
 
-            return $result;
-        });
+            $seen[$targetId] = true;
+        }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $snapshotItems
+     * @return array<int, array<string, mixed>>
+     */
+    private function lockPotentialTargets(array $snapshotItems): array
+    {
+        $targetIds = [];
+
+        foreach ($snapshotItems as $item) {
+            if (($item['status'] ?? null) !== 'update') {
+                continue;
+            }
+
+            if (is_numeric($item['target_id'] ?? null)) {
+                $targetIds[] = (int) $item['target_id'];
+            }
+
+            $sourceId = (int) ($item['source_id'] ?? 0);
+            $identity = is_array($item['identity'] ?? null) ? $item['identity'] : [];
+            $match = $this->matcher->match(['id' => $sourceId, ...$identity]);
+
+            if ($match->status === StudentSyncMatchResult::MATCHED) {
+                $targetIds[] = (int) $match->matched->getKey();
+            }
+
+            foreach ($match->evidence['candidate_ids'] ?? [] as $candidateId) {
+                if (is_numeric($candidateId)) {
+                    $targetIds[] = (int) $candidateId;
+                }
+            }
+        }
+
+        $targetIds = array_values(array_unique($targetIds));
+        sort($targetIds, SORT_NUMERIC);
+
+        if ($targetIds === []) {
+            return [];
+        }
+
+        return DB::table('data_siswa')
+            ->whereIn('id', $targetIds)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get()
+            ->mapWithKeys(fn (object $row): array => [(int) $row->id => (array) $row])
+            ->all();
     }
 
     /**
      * @param  array<string, mixed>  $item
      * @param  array<string, int>  $sharedSchema
+     * @param  array<int, array<string, mixed>>  $lockedTargets
      * @return array{status: string, source_id: int, target_id: ?int, changed_fields: array<int, string>, reason: string, patch: array<string, mixed>, before: array<string, mixed>}
      */
-    private function recheckItem(array $item, array $sharedSchema): array
+    private function recheckItem(array $item, array $sharedSchema, array $lockedTargets): array
     {
         $sourceId = (int) ($item['source_id'] ?? 0);
         $previewStatus = (string) ($item['status'] ?? 'conflict');
@@ -212,13 +347,13 @@ class StudentSyncApplyService
         $targetId = (int) $match->matched->getKey();
         $previewTargetId = is_numeric($item['target_id'] ?? null) ? (int) $item['target_id'] : null;
 
-        if ($previewTargetId === null || $targetId !== $previewTargetId) {
+        if ($previewTargetId === null || $targetId !== $previewTargetId || ! isset($lockedTargets[$targetId])) {
             return [
                 'status' => 'conflict',
                 'source_id' => $sourceId,
                 'target_id' => $targetId,
                 'changed_fields' => [],
-                'reason' => 'stale_target',
+                'reason' => $targetId !== $previewTargetId ? 'stale_target' : 'unlocked_target',
                 'patch' => [],
                 'before' => [],
             ];
@@ -227,7 +362,7 @@ class StudentSyncApplyService
         $fields = is_array($item['fields'] ?? null) ? $item['fields'] : [];
         $sharedColumns = array_values(array_intersect(array_keys($fields), array_keys($sharedSchema)));
         sort($sharedColumns, SORT_STRING);
-        $before = $match->matched->getAttributes();
+        $before = $lockedTargets[$targetId];
         $patch = $this->mergePolicy->patch($fields, $before, $sharedColumns);
         ksort($patch, SORT_STRING);
         $changedFields = array_keys($patch);

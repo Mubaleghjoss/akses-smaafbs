@@ -4,6 +4,7 @@ namespace App\Support\StudentSync;
 
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
+use InvalidArgumentException;
 use RuntimeException;
 
 class StudentSyncBackupStore
@@ -20,5 +21,30 @@ class StudentSyncBackupStore
         }
 
         return $path;
+    }
+
+    public function exists(string $path): bool
+    {
+        $this->assertBackupPath($path);
+
+        return Storage::disk('local')->exists($path);
+    }
+
+    public function delete(string $path): void
+    {
+        $this->assertBackupPath($path);
+
+        $disk = Storage::disk('local');
+
+        if ($disk->exists($path) && ! $disk->delete($path)) {
+            throw new RuntimeException('Student sync backup could not be deleted.');
+        }
+    }
+
+    private function assertBackupPath(string $path): void
+    {
+        if (preg_match('/\Astudent-sync\/backups\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.json\.enc\z/i', $path) !== 1) {
+            throw new InvalidArgumentException('Invalid student sync backup path.');
+        }
     }
 }

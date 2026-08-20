@@ -6,6 +6,8 @@ use App\Models\StudentSyncPreview;
 use App\Models\StudentSyncRun;
 use App\Support\StudentSync\StudentSyncBackupStore;
 use App\Support\StudentSync\StudentSyncPreviewService;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Database\Query\Grammars\MySqlGrammar;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Crypt;
@@ -152,6 +154,22 @@ class StudentSyncApplyApiTest extends TestCase
         $this->assertDatabaseCount('student_sync_runs', 0);
     }
 
+    public function test_apply_rejects_extra_top_level_fields(): void
+    {
+        $preview = $this->preview([]);
+
+        $this->postSignedApply([
+            'preview_token' => $preview->getKey(),
+            'payload_checksum' => $preview->payload_checksum,
+            'students' => [],
+        ], 'strict-root', 'nonce-strict-root')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('students');
+
+        $this->assertNull($preview->fresh()->applied_at);
+        $this->assertSame(0, StudentSyncRun::query()->where('operation', 'apply')->count());
+    }
+
     public function test_repeated_idempotency_key_returns_first_result_without_reapplying_or_reauditing(): void
     {
         $this->student(10, 'Before', 'P001', 'N001', 'X-A');
@@ -211,6 +229,87 @@ class StudentSyncApplyApiTest extends TestCase
         $this->assertSame([], Storage::disk('local')->allFiles('student-sync/backups'));
     }
 
+    public function test_apply_rejects_duplicate_target_ids_in_one_preview_without_mutation(): void
+    {
+        $this->student(10, 'Before', 'P001', 'N001', 'X-A');
+        $preview = $this->preview([
+            $this->payloadStudent(101, ['nipd' => 'P001'], ['nama' => 'First proposal']),
+            $this->payloadStudent(102, ['nipd' => 'P001'], ['nama' => 'Second proposal']),
+        ]);
+
+        $this->postApply($preview, 'duplicate-target', 'nonce-duplicate-target')
+            ->assertUnprocessable();
+
+        $this->assertSame('Before', DB::table('data_siswa')->where('id', 10)->value('nama'));
+        $this->assertNull($preview->fresh()->applied_at);
+        $this->assertSame(0, StudentSyncRun::query()->where('operation', 'apply')->count());
+        $this->assertSame([], Storage::disk('local')->allFiles('student-sync/backups'));
+    }
+
+    public function test_apply_recomputes_patch_and_backup_from_current_locked_target_values(): void
+    {
+        $this->student(10, 'Old Ten', 'P010', 'N010', 'X-A');
+        $this->student(20, 'Old Twenty', 'P020', 'N020', 'X-B');
+        $preview = $this->preview([
+            $this->payloadStudent(10, ['nipd' => 'P010'], ['nama' => 'Proposed Ten']),
+            $this->payloadStudent(20, ['nipd' => 'P020'], ['nama' => 'Proposed Twenty']),
+        ]);
+        DB::table('data_siswa')->where('id', 10)->update(['nama' => 'Proposed Ten']);
+        DB::table('data_siswa')->where('id', 20)->update(['nama' => 'Concurrent Twenty']);
+
+        $response = $this->postApply($preview, 'recompute-current', 'nonce-recompute-current');
+
+        $response->assertOk()
+            ->assertJsonPath('counts.unchanged', 1)
+            ->assertJsonPath('counts.update', 1)
+            ->assertJsonPath('items.0.status', 'unchanged')
+            ->assertJsonPath('items.0.changed_fields', [])
+            ->assertJsonPath('items.1.status', 'update')
+            ->assertJsonPath('items.1.changed_fields', ['nama']);
+        $run = StudentSyncRun::query()->where('operation', 'apply')->sole();
+        $backup = json_decode(
+            Crypt::decryptString(Storage::disk('local')->get($run->backup_path)),
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
+        $this->assertCount(1, $backup['records']);
+        $this->assertSame(20, $backup['records'][0]['target_id']);
+        $this->assertSame('Concurrent Twenty', $backup['records'][0]['before']['nama']);
+    }
+
+    public function test_apply_claims_idempotency_key_atomically_and_locks_targets_in_id_order(): void
+    {
+        $this->student(20, 'Twenty', 'P020', 'N020', 'X-B');
+        $this->student(10, 'Ten', 'P010', 'N010', 'X-A');
+        $preview = $this->preview([
+            $this->payloadStudent(20, ['nipd' => 'P020'], ['nama' => 'New Twenty']),
+            $this->payloadStudent(10, ['nipd' => 'P010'], ['nama' => 'New Ten']),
+        ]);
+        $queries = [];
+        DB::listen(function (QueryExecuted $query) use (&$queries): void {
+            $queries[] = strtolower($query->sql);
+        });
+
+        $this->postApply($preview, 'atomic-lock-order', 'nonce-atomic-lock-order')->assertOk();
+
+        $this->assertTrue(
+            collect($queries)->contains(fn (string $sql): bool => str_starts_with($sql, 'insert or ignore into "student_sync_runs"')
+                || str_starts_with($sql, 'insert ignore into `student_sync_runs`')),
+            'The apply must atomically claim the globally unique idempotency key.',
+        );
+        $this->assertTrue(
+            collect($queries)->contains(fn (string $sql): bool => str_contains($sql, 'from "data_siswa" where "id" in (?, ?) order by "id" asc')
+                || str_contains($sql, 'from `data_siswa` where `id` in (?, ?) order by `id` asc')),
+            'All potential target rows must be selected in deterministic ID order before updates.',
+        );
+        $productionLockQuery = DB::table('data_siswa')
+            ->whereIn('id', [10, 20])
+            ->orderBy('id')
+            ->lockForUpdate();
+        $productionLockQuery->grammar = new MySqlGrammar(DB::connection());
+        $this->assertStringEndsWith('order by `id` asc for update', $productionLockQuery->toSql());
+    }
+
     public function test_backup_failure_aborts_transaction_before_student_preview_or_audit_changes(): void
     {
         $this->student(10, 'Before', 'P001', 'N001', 'X-A');
@@ -226,6 +325,28 @@ class StudentSyncApplyApiTest extends TestCase
         $this->assertSame('Before', DB::table('data_siswa')->where('id', 10)->value('nama'));
         $this->assertNull($preview->fresh()->applied_at);
         $this->assertSame(0, StudentSyncRun::query()->where('operation', 'apply')->count());
+    }
+
+    public function test_database_failure_after_successful_backup_deletes_orphan_and_rolls_back_everything(): void
+    {
+        $this->student(10, 'Before', 'P001', 'N001', 'X-A');
+        $preview = $this->preview([
+            $this->payloadStudent(10, ['nipd' => 'P001'], ['nama' => 'Must Roll Back']),
+        ]);
+        $armed = true;
+        StudentSyncRun::saving(function (StudentSyncRun $run) use (&$armed): void {
+            if ($armed && $run->operation === 'apply' && $run->status === 'completed') {
+                throw new RuntimeException('forced post-backup database failure');
+            }
+        });
+
+        $this->postApply($preview, 'db-fails-after-backup', 'nonce-db-fails-after-backup')->assertStatus(500);
+        $armed = false;
+
+        $this->assertSame('Before', DB::table('data_siswa')->where('id', 10)->value('nama'));
+        $this->assertNull($preview->fresh()->applied_at);
+        $this->assertSame(0, StudentSyncRun::query()->where('operation', 'apply')->count());
+        $this->assertSame([], Storage::disk('local')->allFiles('student-sync/backups'));
     }
 
     /** @param array<int, array<string, mixed>> $students */
