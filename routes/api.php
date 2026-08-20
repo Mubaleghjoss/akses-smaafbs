@@ -2,9 +2,9 @@
 
 use App\Http\Controllers\Api\LiteracySchoolNetworkMonitorController;
 use App\Http\Controllers\Api\PublicConnectivityController;
+use App\Http\Controllers\Api\StudentSyncApplyController;
 use App\Http\Controllers\Api\StudentSyncPreviewController;
 use App\Http\Controllers\Api\TagihanStudentIntegrationController;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware([
@@ -35,8 +35,6 @@ Route::prefix('/internal/student-sync')->middleware([
     Route::post('/preview', StudentSyncPreviewController::class)
         ->name('api.internal.student-sync.preview');
 
-    Route::post('/apply', fn (Request $request) => response()->json([
-        'message' => 'Student sync apply receiver is not implemented yet.',
-        'client_id' => $request->attributes->get('student_sync_client_id'),
-    ], 503))->name('api.internal.student-sync.apply');
+    Route::post('/apply', StudentSyncApplyController::class)
+        ->name('api.internal.student-sync.apply');
 });
