@@ -174,6 +174,33 @@ class StudentSyncPreviewApiTest extends TestCase
         $this->assertDatabaseCount('student_sync_previews', 0);
     }
 
+    public function test_preview_rejects_unknown_top_level_keys(): void
+    {
+        $students = [$this->payloadStudent(1, ['nipd' => 'P001'], ['nama' => 'A'])];
+
+        $this->postSigned($students, 'nonce-root-key', extraPayload: ['unexpected' => 'value'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('unexpected');
+
+        $this->assertDatabaseCount('student_sync_previews', 0);
+        $this->assertDatabaseCount('student_sync_runs', 0);
+    }
+
+    public function test_preview_rejects_identity_id_that_could_diverge_from_source_id(): void
+    {
+        $this->student(10, 'Alya', 'P001', 'N001');
+        $this->student(20, 'Bella', 'P002', 'N002');
+        $students = [$this->payloadStudent(10, ['id' => 20, 'nipd' => 'P002'], ['nama' => 'Wrong Target'])];
+
+        $this->postSigned($students, 'nonce-identity-id')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('students.0.identity');
+
+        $this->assertDatabaseCount('student_sync_previews', 0);
+        $this->assertSame('Alya', DB::table('data_siswa')->where('id', 10)->value('nama'));
+        $this->assertSame('Bella', DB::table('data_siswa')->where('id', 20)->value('nama'));
+    }
+
     public function test_server_checksum_is_deterministic_for_object_key_order(): void
     {
         $this->student(10, 'Alya', 'P001', 'N001');
@@ -211,12 +238,16 @@ class StudentSyncPreviewApiTest extends TestCase
     }
 
     /** @param array<int, array<string, mixed>> $students */
-    private function postSigned(array $students, string $nonce, ?string $checksum = null)
-    {
-        $payload = [
+    private function postSigned(
+        array $students,
+        string $nonce,
+        ?string $checksum = null,
+        array $extraPayload = [],
+    ) {
+        $payload = [...$extraPayload, ...[
             'payload_checksum' => $checksum ?? $this->checksum($students),
             'students' => $students,
-        ];
+        ]];
         $body = json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $path = '/api/internal/student-sync/preview';
         $bodyHash = hash('sha256', $body);

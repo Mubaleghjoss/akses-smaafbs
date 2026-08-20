@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\StudentSyncNonce;
+use App\Support\StudentSync\StudentSyncPreviewService;
 use App\Support\StudentSync\StudentSyncRequestSigner;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -13,6 +15,15 @@ class StudentSyncSignatureTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        Schema::create('data_siswa', function (Blueprint $table): void {
+            $table->id();
+            $table->string('nama')->nullable();
+            $table->string('nipd')->nullable();
+            $table->string('nisn')->nullable();
+            $table->string('billing_code')->nullable();
+            $table->date('tanggal_lahir')->nullable();
+        });
 
         $migration = require database_path('migrations/2026_08_20_120000_create_student_sync_tables.php');
         $migration->up();
@@ -25,6 +36,7 @@ class StudentSyncSignatureTest extends TestCase
         Schema::dropIfExists('student_sync_nonces');
         Schema::dropIfExists('student_sync_previews');
         Schema::dropIfExists('student_sync_runs');
+        Schema::dropIfExists('data_siswa');
 
         parent::tearDown();
     }
@@ -76,7 +88,7 @@ class StudentSyncSignatureTest extends TestCase
     {
         Carbon::setTestNow('2026-08-20 12:34:56');
         $this->enableReceiver();
-        $body = '{"students":[1]}';
+        $body = $this->validPreviewBody();
 
         $response = $this->call(
             'POST',
@@ -93,8 +105,9 @@ class StudentSyncSignatureTest extends TestCase
             $body,
         );
 
-        $response->assertStatus(503)
-            ->assertJsonPath('client_id', 'school-local');
+        $response->assertOk()
+            ->assertJsonPath('counts.total', 1)
+            ->assertJsonPath('items.0.status', 'not_found');
 
         $nonce = StudentSyncNonce::query()->sole();
         $this->assertSame('school-local', $nonce->client_id);
@@ -165,7 +178,7 @@ class StudentSyncSignatureTest extends TestCase
     public function test_repeated_nonce_is_rejected(): void
     {
         $this->enableReceiver();
-        $body = '{"students":[1]}';
+        $body = $this->validPreviewBody();
         $headers = $this->signedHeaders(
             'POST',
             '/api/internal/student-sync/preview',
@@ -173,7 +186,7 @@ class StudentSyncSignatureTest extends TestCase
             'nonce-repeated',
         );
 
-        $this->postRaw('/api/internal/student-sync/preview', $body, $headers)->assertStatus(503);
+        $this->postRaw('/api/internal/student-sync/preview', $body, $headers)->assertOk();
         $this->postRaw('/api/internal/student-sync/preview', $body, $headers)->assertUnauthorized();
         $this->assertDatabaseCount('student_sync_nonces', 1);
     }
@@ -182,7 +195,7 @@ class StudentSyncSignatureTest extends TestCase
     {
         Carbon::setTestNow('2026-08-20 12:00:00');
         $this->enableReceiver();
-        $body = '{"students":[1]}';
+        $body = $this->validPreviewBody();
         $headers = $this->signedHeaders(
             'POST',
             '/api/internal/student-sync/preview',
@@ -191,7 +204,7 @@ class StudentSyncSignatureTest extends TestCase
             timestamp: now()->addSeconds(240)->timestamp,
         );
 
-        $this->postRaw('/api/internal/student-sync/preview', $body, $headers)->assertStatus(503);
+        $this->postRaw('/api/internal/student-sync/preview', $body, $headers)->assertOk();
 
         Carbon::setTestNow(now()->addSeconds(301));
 
@@ -269,7 +282,7 @@ class StudentSyncSignatureTest extends TestCase
         );
 
         $this->enableReceiver();
-        $body = '{"students":[1]}';
+        $body = $this->validPreviewBody();
 
         foreach (range(1, 20) as $attempt) {
             $this->postRaw('/api/internal/student-sync/preview', $body, $this->signedHeaders(
@@ -277,7 +290,7 @@ class StudentSyncSignatureTest extends TestCase
                 '/api/internal/student-sync/preview',
                 $body,
                 'nonce-rate-'.$attempt,
-            ))->assertStatus(503);
+            ))->assertOk();
         }
 
         $this->postRaw('/api/internal/student-sync/preview', $body, $this->signedHeaders(
@@ -299,6 +312,21 @@ class StudentSyncSignatureTest extends TestCase
             $this->serverHeaders($headers),
             $body,
         );
+    }
+
+    private function validPreviewBody(): string
+    {
+        $students = [[
+            'source_id' => 999999,
+            'identity' => ['nipd' => 'MISSING-PREVIEW-STUDENT'],
+            'fields' => ['nama' => 'Signature Test Student'],
+            'source_checksum' => hash('sha256', 'signature-test-source'),
+        ]];
+
+        return json_encode([
+            'payload_checksum' => StudentSyncPreviewService::payloadChecksum($students),
+            'students' => $students,
+        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     private function enableReceiver(): void

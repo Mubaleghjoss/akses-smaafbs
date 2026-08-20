@@ -31,7 +31,7 @@ class StudentSyncPreviewRequest extends FormRequest
             'students' => ['required', 'array', 'min:1', 'max:'.$maxBatch],
             'students.*' => ['required', 'array:source_id,identity,fields,source_checksum,context'],
             'students.*.source_id' => ['required', 'integer', 'min:1'],
-            'students.*.identity' => ['required', 'array'],
+            'students.*.identity' => ['required', 'array:nipd,nisn,billing_code,nama,tanggal_lahir'],
             'students.*.identity.*' => [$scalar],
             'students.*.fields' => ['required', 'array'],
             'students.*.fields.*' => [$scalar],
@@ -52,6 +52,10 @@ class StudentSyncPreviewRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
+            foreach (array_diff(array_keys($this->all()), ['payload_checksum', 'students']) as $key) {
+                $validator->errors()->add((string) $key, "The {$key} field is not allowed.");
+            }
+
             if ($validator->errors()->has('students') || $validator->errors()->has('payload_checksum')) {
                 return;
             }
