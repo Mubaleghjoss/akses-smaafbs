@@ -38,8 +38,10 @@ class VerifyStudentSyncSignature
         }
 
         $clockSkew = max(0, (int) config('student_sync.security.clock_skew_seconds', 300));
+        $signedTimestamp = (int) $timestamp;
+        $now = now();
 
-        if (abs(now()->timestamp - (int) $timestamp) > $clockSkew) {
+        if (abs($now->timestamp - $signedTimestamp) > $clockSkew) {
             return $this->reject();
         }
 
@@ -63,13 +65,15 @@ class VerifyStudentSyncSignature
             return $this->reject();
         }
 
-        StudentSyncNonce::query()->where('expires_at', '<=', now())->delete();
+        StudentSyncNonce::query()->where('expires_at', '<=', $now)->delete();
 
         try {
             StudentSyncNonce::create([
                 'client_id' => $clientId,
                 'nonce' => $nonce,
-                'expires_at' => now()->addSeconds($clockSkew),
+                'expires_at' => $now->copy()
+                    ->setTimestamp($signedTimestamp)
+                    ->addSeconds($clockSkew + 1),
             ]);
         } catch (QueryException) {
             return $this->reject();

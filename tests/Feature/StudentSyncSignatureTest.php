@@ -178,6 +178,27 @@ class StudentSyncSignatureTest extends TestCase
         $this->assertDatabaseCount('student_sync_nonces', 1);
     }
 
+    public function test_future_timestamp_nonce_remains_replay_protected_for_its_full_validity_window(): void
+    {
+        Carbon::setTestNow('2026-08-20 12:00:00');
+        $this->enableReceiver();
+        $body = '{"students":[1]}';
+        $headers = $this->signedHeaders(
+            'POST',
+            '/api/internal/student-sync/preview',
+            $body,
+            'nonce-future-replay',
+            timestamp: now()->addSeconds(240)->timestamp,
+        );
+
+        $this->postRaw('/api/internal/student-sync/preview', $body, $headers)->assertStatus(503);
+
+        Carbon::setTestNow(now()->addSeconds(301));
+
+        $this->postRaw('/api/internal/student-sync/preview', $body, $headers)->assertUnauthorized();
+        $this->assertDatabaseCount('student_sync_nonces', 1);
+    }
+
     public function test_short_receiver_secret_fails_closed(): void
     {
         $this->enableReceiver();
