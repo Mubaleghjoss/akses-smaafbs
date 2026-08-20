@@ -2,23 +2,35 @@
 
 namespace App\Support\StudentSync;
 
-use Illuminate\Contracts\Cache\LockTimeoutException;
-use Illuminate\Support\Facades\Cache;
+use App\Models\StudentSyncScopeTokenRecord;
+use Closure;
+use Illuminate\Database\Connection;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 final class StudentSyncScopeToken
 {
     private const TTL_MINUTES = 15;
 
+    /** @param (Closure(): void)|null $afterClaim */
+    public function __construct(
+        private readonly ?string $connection = null,
+        private readonly ?Closure $afterClaim = null,
+    ) {}
+
     /** @param array<int, int|string> $studentIds */
     public function issue(array $studentIds, int $userId): string
     {
         $token = Str::random(64);
 
-        Cache::put($this->cacheKey($token, $userId), [
+        $this->query()->create([
             'user_id' => $userId,
-            'student_ids' => $this->normalizeIds($studentIds),
-        ], now()->addMinutes(self::TTL_MINUTES));
+            'token_hash' => hash('sha256', $token),
+            'encrypted_student_ids' => $this->normalizeIds($studentIds),
+            'expires_at' => now()->addMinutes(self::TTL_MINUTES),
+        ]);
 
         return $token;
     }
@@ -26,29 +38,56 @@ final class StudentSyncScopeToken
     /** @return array<int, int> */
     public function consume(string $token, int $userId): array
     {
-        $cacheKey = $this->cacheKey($token, $userId);
+        if ($token === '' || $userId < 1) {
+            return [];
+        }
 
         try {
-            return Cache::lock($cacheKey.':consume-lock', 5)->block(2, function () use ($cacheKey, $userId): array {
-                $payload = Cache::get($cacheKey);
+            return $this->database()->transaction(function () use ($token, $userId): array {
+                $record = $this->query()
+                    ->where('token_hash', hash('sha256', $token))
+                    ->where('user_id', $userId)
+                    ->lockForUpdate()
+                    ->first();
 
-                if (! is_array($payload)
-                    || ! is_int($payload['user_id'] ?? null)
-                    || $payload['user_id'] !== $userId
-                    || ! is_array($payload['student_ids'] ?? null)) {
+                if ($record === null || $record->consumed_at !== null || $record->expires_at->isPast()) {
                     return [];
                 }
 
-                Cache::forget($cacheKey);
+                $claimed = $this->query()
+                    ->whereKey($record->getKey())
+                    ->whereNull('consumed_at')
+                    ->where('expires_at', '>', now())
+                    ->update(['consumed_at' => now()]);
 
-                return $this->normalizeIds($payload['student_ids']);
-            });
-        } catch (LockTimeoutException) {
+                if ($claimed !== 1) {
+                    return [];
+                }
+
+                if ($this->afterClaim !== null) {
+                    ($this->afterClaim)();
+                }
+
+                return $this->normalizeIds($record->encrypted_student_ids);
+            }, 3);
+        } catch (QueryException) {
             return [];
         }
     }
 
-    /** @param array<mixed> $ids
+    private function database(): Connection
+    {
+        return DB::connection($this->connection);
+    }
+
+    /** @return Builder<StudentSyncScopeTokenRecord> */
+    private function query(): Builder
+    {
+        return StudentSyncScopeTokenRecord::on($this->connection);
+    }
+
+    /**
+     * @param  array<mixed>  $ids
      * @return array<int, int>
      */
     private function normalizeIds(array $ids): array
@@ -57,10 +96,5 @@ final class StudentSyncScopeToken
             static fn (mixed $id): int => filter_var($id, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 0,
             $ids,
         ), static fn (int $id): bool => $id > 0)));
-    }
-
-    private function cacheKey(string $token, int $userId): string
-    {
-        return 'student-sync:shortcut-scope:'.$userId.':'.hash('sha256', $token);
     }
 }

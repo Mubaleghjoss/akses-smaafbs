@@ -9,7 +9,6 @@ use App\Services\HotspotStudentAccounts;
 use App\Support\StudentSync\StudentSyncScopeToken;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
@@ -41,7 +40,8 @@ class HotspotStudentPushShortcutTest extends TestCase
             $table->string('status')->nullable();
             $table->timestamps();
         });
-        Cache::flush();
+        $scopeTokenMigration = require database_path('migrations/2026_08_20_130000_create_student_sync_scope_tokens_table.php');
+        $scopeTokenMigration->up();
     }
 
     public function test_scope_token_normalizes_ids_and_is_bound_to_one_user(): void
@@ -94,41 +94,47 @@ class HotspotStudentPushShortcutTest extends TestCase
         }
     }
 
-    public function test_database_cache_allows_exactly_one_concurrent_claimant(): void
+    public function test_durable_token_claim_allows_one_claimant_even_when_first_is_delayed_past_old_lock_lease(): void
     {
-        $database = tempnam(sys_get_temp_dir(), 'student-shortcut-race-');
-        $barrier = $database.'.start';
-        $originalCacheStore = config('cache.default');
-        $this->configureDatabaseCache($database);
-        Schema::connection('shortcut_race')->create('cache', function (Blueprint $table): void {
-            $table->string('key')->primary();
-            $table->text('value');
-            $table->integer('expiration');
-        });
-        Schema::connection('shortcut_race')->create('cache_locks', function (Blueprint $table): void {
-            $table->string('key')->primary();
-            $table->string('owner');
-            $table->integer('expiration');
-        });
-
+        $database = tempnam(sys_get_temp_dir(), 'student-shortcut-claim-');
+        $claimed = $database.'.claimed';
+        $release = $database.'.release';
         try {
-            $token = app(StudentSyncScopeToken::class)->issue([98], 7654321);
+            config(['database.connections.shortcut_claim' => ['driver' => 'sqlite', 'database' => $database, 'prefix' => '']]);
+            app('db')->purge('shortcut_claim');
+            Schema::connection('shortcut_claim')->create('student_sync_scope_tokens', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('user_id');
+                $table->string('token_hash', 64)->unique();
+                $table->longText('encrypted_student_ids');
+                $table->timestamp('expires_at')->index();
+                $table->timestamp('consumed_at')->nullable()->index();
+                $table->timestamps();
+            });
+            $token = (new StudentSyncScopeToken('shortcut_claim'))->issue([98], 7654321);
             $script = base64_encode(<<<'PHP'
 require getcwd().'/vendor/autoload.php';
 $app = require getcwd().'/bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
-config(['database.connections.shortcut_race' => ['driver' => 'sqlite', 'database' => $argv[1], 'prefix' => ''], 'cache.stores.shortcut_race' => ['driver' => 'database', 'connection' => 'shortcut_race', 'table' => 'cache', 'lock_connection' => 'shortcut_race', 'lock_table' => 'cache_locks'], 'cache.default' => 'shortcut_race']);
-Illuminate\Support\Facades\DB::purge('shortcut_race');
-Illuminate\Support\Facades\Cache::forgetDriver('shortcut_race');
-while (! file_exists($argv[4])) { usleep(1000); }
-echo json_encode(app(App\Support\StudentSync\StudentSyncScopeToken::class)->consume($argv[2], (int) $argv[3]));
+config(['app.key' => $argv[7]]);
+$app->forgetInstance('encrypter');
+config(['database.connections.shortcut_claim' => ['driver' => 'sqlite', 'database' => $argv[1], 'prefix' => '']]);
+Illuminate\Support\Facades\DB::purge('shortcut_claim');
+$hook = $argv[5] === 'first' ? function () use ($argv): void { touch($argv[4]); while (! file_exists($argv[6])) { usleep(1000); } } : null;
+echo json_encode((new App\Support\StudentSync\StudentSyncScopeToken('shortcut_claim', $hook))->consume($argv[2], (int) $argv[3]));
 PHP);
-            $command = [PHP_BINARY, '-r', "eval(base64_decode('{$script}'));", $database, $token, '7654321', $barrier];
-            $first = new Process($command, base_path(), null, null, 10);
-            $second = new Process($command, base_path(), null, null, 10);
+            $appKey = (string) config('app.key');
+            $firstCommand = [PHP_BINARY, '-r', "eval(base64_decode('{$script}'));", $database, $token, '7654321', $claimed, 'first', $release, $appKey];
+            $secondCommand = [PHP_BINARY, '-r', "eval(base64_decode('{$script}'));", $database, $token, '7654321', $claimed, 'second', $release, $appKey];
+            $first = new Process($firstCommand, base_path(), null, null, 20);
             $first->start();
+            while (! file_exists($claimed)) {
+                usleep(1000);
+            }
+            $second = new Process($secondCommand, base_path(), null, null, 20);
             $second->start();
-            touch($barrier);
+            sleep(6);
+            touch($release);
             $first->wait();
             $second->wait();
 
@@ -138,9 +144,8 @@ PHP);
             sort($claims);
             $this->assertSame([[], [98]], $claims);
         } finally {
-            config(['cache.default' => $originalCacheStore]);
-            Cache::forgetDriver('shortcut_race');
-            @unlink($barrier);
+            @unlink($claimed);
+            @unlink($release);
             @unlink($database);
         }
     }
@@ -210,23 +215,6 @@ PHP);
             ->assertDontSeeText((string) $rawStudentId)
             ->assertDontSeeText($token);
         $this->assertMatchesRegularExpression('/^[A-Za-z0-9]{64}$/', $token);
-    }
-
-    private function configureDatabaseCache(string $database): void
-    {
-        config([
-            'database.connections.shortcut_race' => ['driver' => 'sqlite', 'database' => $database, 'prefix' => ''],
-            'cache.stores.shortcut_race' => [
-                'driver' => 'database',
-                'connection' => 'shortcut_race',
-                'table' => 'cache',
-                'lock_connection' => 'shortcut_race',
-                'lock_table' => 'cache_locks',
-            ],
-            'cache.default' => 'shortcut_race',
-        ]);
-        app('db')->purge('shortcut_race');
-        Cache::forgetDriver('shortcut_race');
     }
 
     private function user(string $username): User
