@@ -6,13 +6,16 @@ use App\Filament\Resources\DataSiswaResource\Pages\ManageDataSiswas;
 use App\Filament\Resources\DataSiswaResource\Pages\PushDataSiswasToServer;
 use App\Models\User;
 use App\Support\StudentSync\StudentPushScopeToken;
+use App\Support\StudentSync\StudentServerPushPayloadBuilder;
 use Filament\Facades\Filament;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
+use Mockery;
 use Spatie\Permission\Models\Permission;
 use Tests\Feature\Concerns\BootstrapsUserAndPermissionTables;
 use Tests\TestCase;
@@ -117,7 +120,7 @@ class StudentServerPushPageTest extends TestCase
             && array_column($request->data()['students'], 'source_id') === [20]);
     }
 
-    public function test_tampered_expired_or_wrong_user_scope_never_widens_preview_selection(): void
+    public function test_tampered_expired_or_wrong_user_scope_fails_closed_without_a_preview_request(): void
     {
         $owner = $this->user('scope-owner');
         $owner->assignRole('admin');
@@ -125,19 +128,11 @@ class StudentServerPushPageTest extends TestCase
         $other->assignRole('admin');
         $this->student(10, 'aktif');
         $this->student(20, 'aktif');
-        config([
-            'student_sync.client.enabled' => true,
-            'student_sync.client.server_url' => 'https://sync.example.test',
-            'student_sync.client.client_id' => 'school-local',
-            'student_sync.client.secret' => str_repeat('s', 32),
-        ]);
-        Http::fake(['https://sync.example.test/api/internal/student-sync/preview' => Http::response([
-            'preview_token' => 'unscoped-preview-token',
-            'payload_checksum' => str_repeat('c', 64),
-            'counts' => ['total' => 2],
-            'field_summary' => [],
-            'items' => [],
-        ])]);
+        $this->configurePushClient();
+        Http::fake();
+        $builder = Mockery::mock(StudentServerPushPayloadBuilder::class);
+        $builder->shouldNotReceive('build');
+        $this->app->instance(StudentServerPushPayloadBuilder::class, $builder);
 
         $valid = app(StudentPushScopeToken::class)->forUser($owner, [20]);
         $expired = app(StudentPushScopeToken::class)->forUser($owner, [20], now()->subSecond());
@@ -147,12 +142,53 @@ class StudentServerPushPageTest extends TestCase
             Livewire::actingAs($user)
                 ->test(PushDataSiswasToServer::class, ['scope' => $scope])
                 ->call('loadPreview')
-                ->assertSet('scopeIds', []);
+                ->call('resetPreview')
+                ->call('loadPreview')
+                ->assertSet('scopeIds', [])
+                ->assertSet('hasInvalidScope', true)
+                ->assertSet('previewToken', null);
         }
 
-        Http::assertSentCount(3);
-        foreach (Http::recorded() as [$request]) {
-            $this->assertSame([10, 20], array_column($request->data()['students'], 'source_id'));
+        Http::assertNothingSent();
+    }
+
+    public function test_absent_scope_permits_intended_unscoped_full_selection(): void
+    {
+        $admin = $this->user('unscoped-push-admin');
+        $admin->assignRole('admin');
+        $this->student(10, 'aktif');
+        $this->student(20, 'aktif');
+        $this->configurePushClient();
+        Http::fake(['https://sync.example.test/api/internal/student-sync/preview' => Http::response([
+            'preview_token' => 'unscoped-preview-token',
+            'payload_checksum' => str_repeat('c', 64),
+            'counts' => ['total' => 2],
+            'field_summary' => [],
+            'items' => [],
+        ])]);
+
+        Livewire::actingAs($admin)
+            ->test(PushDataSiswasToServer::class)
+            ->call('loadPreview')
+            ->assertSet('scopeIds', [])
+            ->assertSet('hasInvalidScope', false);
+
+        Http::assertSent(fn (Request $request): bool => $request->url() === 'https://sync.example.test/api/internal/student-sync/preview'
+            && array_column($request->data()['students'], 'source_id') === [10, 20]);
+    }
+
+    public function test_scope_token_rejects_exact_expiry_boundary(): void
+    {
+        $admin = $this->user('boundary-scope-admin');
+        $now = Carbon::parse('2026-08-20 12:00:00 UTC');
+        Carbon::setTestNow($now);
+
+        try {
+            $scope = app(StudentPushScopeToken::class)->forUser($admin, [20], $now);
+
+            $this->assertSame([], app(StudentPushScopeToken::class)->idsFor($admin, $scope));
+        } finally {
+            Carbon::setTestNow();
         }
     }
 
@@ -238,6 +274,16 @@ class StudentServerPushPageTest extends TestCase
         $this->assertSame(['counts' => []], $component->get('applyResult'));
         Http::assertSent(fn (Request $request): bool => $request->url() === 'https://sync.example.test/api/internal/student-sync/apply'
             && $request->header('X-Student-Sync-Idempotency-Key')[0] === hash('sha256', '5a0ee1ab-6462-4c9c-a858-cfd35f8c2d0c|'.str_repeat('a', 64)));
+    }
+
+    private function configurePushClient(): void
+    {
+        config([
+            'student_sync.client.enabled' => true,
+            'student_sync.client.server_url' => 'https://sync.example.test',
+            'student_sync.client.client_id' => 'school-local',
+            'student_sync.client.secret' => str_repeat('s', 32),
+        ]);
     }
 
     private function student(int $id, string $status): void

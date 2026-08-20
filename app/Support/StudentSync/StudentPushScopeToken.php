@@ -46,7 +46,7 @@ final class StudentPushScopeToken
                 || ! is_int($payload['user_id'] ?? null)
                 || ! hash_equals((string) $user->getAuthIdentifier(), (string) $payload['user_id'])
                 || ! is_int($payload['expires_at'] ?? null)
-                || $payload['expires_at'] < now()->getTimestamp()
+                || $payload['expires_at'] <= now()->getTimestamp()
                 || ! is_array($payload['student_ids'] ?? null)) {
                 return [];
             }

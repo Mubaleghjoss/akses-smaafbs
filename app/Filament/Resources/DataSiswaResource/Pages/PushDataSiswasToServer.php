@@ -29,6 +29,8 @@ class PushDataSiswasToServer extends Page
 
     public ?string $scopeToken = null;
 
+    public bool $hasInvalidScope = false;
+
     public ?string $previewToken = null;
 
     public ?string $payloadChecksum = null;
@@ -54,6 +56,7 @@ class PushDataSiswasToServer extends Page
         abort_unless(static::canAccessPage(), 403);
         $this->scopeToken = $scope;
         $this->scopeIds = app(StudentPushScopeToken::class)->idsFor(auth()->user(), $scope);
+        $this->hasInvalidScope = $scope !== null && $this->scopeIds === [];
     }
 
     public static function canAccessPage(?User $user = null): bool
@@ -104,6 +107,13 @@ class PushDataSiswasToServer extends Page
 
     public function loadPreview(): void
     {
+        if ($this->hasInvalidScope) {
+            $this->resetPreview();
+            Notification::make()->danger()->title('Scope push tidak valid atau sudah kedaluwarsa')->send();
+
+            return;
+        }
+
         $this->isProcessing = true;
 
         try {
