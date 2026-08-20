@@ -45,7 +45,14 @@ php artisan config:cache
 php artisan route:list --path=api/internal/student-sync --no-ansi
 ```
 
-Enable `STUDENT_SYNC_RECEIVER_ENABLED=true` only after the receiver configuration cache is rebuilt. Keep the local client disabled at this stage.
+Keep `STUDENT_SYNC_RECEIVER_ENABLED=false` while the credential values are first installed and checked. Keep the local client disabled at this stage. When the receiver is ready for the controlled fixture check, set `STUDENT_SYNC_RECEIVER_ENABLED=true`, then immediately rebuild the server configuration cache again:
+
+```bash
+php artisan config:clear
+php artisan config:cache
+```
+
+Do not send the fixture request until that second cache rebuild has completed.
 
 ## 4. Receiver fixture check
 
@@ -53,8 +60,8 @@ From an approved controlled client or test environment, send a minimal signed **
 
 Use the receiver's expected routes:
 
-- `POST /api/internal/v1/student-sync/preview`
-- `POST /api/internal/v1/student-sync/apply`
+- `POST /api/internal/student-sync/preview`
+- `POST /api/internal/student-sync/apply`
 
 Do not run apply during this fixture check unless a separately approved non-production fixture is in use.
 
