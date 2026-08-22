@@ -40,6 +40,35 @@ class DataSiswaManagementTest extends TestCase
         $this->bootstrapUserAndPermissionTables();
         $this->createDataSiswaTable();
         $this->createRombelsTable();
+        $this->createSiswaRelationExistsTables();
+    }
+
+    /**
+     * Tabel relasi minimal yang di-query halaman ViewDataSiswa lewat withExists().
+     * Hanya butuh kolom siswa_id agar subquery exists() valid pada SQLite in-memory.
+     */
+    protected function createSiswaRelationExistsTables(): void
+    {
+        foreach ([
+            'boarding_rapots',
+            'boarding_pencapaians',
+            'boarding_arsip_mts',
+            'boarding_konseling_mts',
+            'boarding_keuangan_siswas',
+            'boarding_perizinan_siswas',
+            'prestasis',
+            'berkas_siswa',
+        ] as $relationTable) {
+            if (Schema::hasTable($relationTable)) {
+                continue;
+            }
+
+            Schema::create($relationTable, function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('siswa_id')->nullable()->index();
+                $table->timestamps();
+            });
+        }
     }
 
     public function test_data_siswa_table_keeps_only_the_requested_identity_columns_visible_by_default(): void
@@ -603,8 +632,8 @@ class DataSiswaManagementTest extends TestCase
         $template = new DataSiswaImportTemplateExport;
         $sheets = $template->sheets();
         $templateRows = $sheets[0]->array();
-        $guideRows = $sheets[1]->array();
-        $exportRows = (new DataSiswaExport)->array();
+        $guideRows = $sheets[count($sheets) - 1]->array();
+        $exportRows = (new DataSiswaExport)->sheets()[0]->array();
         $exampleByColumn = array_combine($templateRows[0], $templateRows[1]) ?: [];
 
         $this->assertContains('nama', $templateRows[0]);
@@ -661,7 +690,7 @@ class DataSiswaManagementTest extends TestCase
             (string) $response->headers->get('content-type')
         );
         $this->assertStringContainsString('attachment;', (string) $response->headers->get('content-disposition'));
-        $this->assertStringContainsString('template-import-data-siswa.xlsx', (string) $response->headers->get('content-disposition'));
+        $this->assertStringContainsString('template-data-siswa-dan-data-tes.xlsx', (string) $response->headers->get('content-disposition'));
     }
 
     public function test_widgets_summarize_student_status_gender_and_non_active_reasons(): void
