@@ -33,6 +33,13 @@ class HotspotSettings extends Page implements HasForms
         return self::hotspotAccessGranted();
     }
 
+    // Dipensiunkan dari navigasi: pengaturan koneksi MikroTik pindah ke aplikasi
+    // terpisah (mikrotik.smaafbs.sch.id). Halaman & route tetap ada (reversibel).
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
     protected function getFormStatePath(): ?string
     {
         return 'data';

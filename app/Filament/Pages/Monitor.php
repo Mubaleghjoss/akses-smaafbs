@@ -27,6 +27,13 @@ class Monitor extends Page
         return self::hotspotAccessGranted();
     }
 
+    // Dipensiunkan dari navigasi: monitoring MikroTik pindah ke aplikasi terpisah
+    // (mikrotik.smaafbs.sch.id). Halaman & route tetap ada (reversibel).
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
     public array $health = [];
 
     public array $traffic = [];

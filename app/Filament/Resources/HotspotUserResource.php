@@ -35,6 +35,14 @@ class HotspotUserResource extends Resource
         return self::hotspotAccessGranted();
     }
 
+    // Dipensiunkan dari navigasi: pengelolaan akun hotspot pindah ke aplikasi
+    // terpisah (mikrotik.smaafbs.sch.id). Resource & route tetap ada (reversibel).
+    // Data akun WiFi baru dikelola lewat WifiAccountResource (menu Siswa/Guru).
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
     public static function canCreate(): bool
     {
         return self::hotspotAccessGranted();

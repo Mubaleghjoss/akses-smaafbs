@@ -28,6 +28,13 @@ class BlockedDomainResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Blokir Situs';
 
+    // Dipensiunkan dari navigasi: blokir situs pindah ke aplikasi MikroTik terpisah
+    // (mikrotik.smaafbs.sch.id). Resource & route tetap ada (reversibel).
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema

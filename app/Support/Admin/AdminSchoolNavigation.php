@@ -94,10 +94,11 @@ class AdminSchoolNavigation
         GuruTendikResource::class => 'Guru',
         BerkasGuruResource::class => 'Guru',
         JenisBerkasResource::class => 'Guru',
-        Monitor::class => 'IT SMA AFBS',
-        HotspotUserResource::class => 'IT SMA AFBS',
-        BlockedDomainResource::class => 'IT SMA AFBS',
-        HotspotSettings::class => 'IT SMA AFBS',
+        // Menu "IT SMA AFBS" dipensiunkan: monitoring/pengelolaan MikroTik sudah
+        // dipindah & lebih stabil di aplikasi terpisah (mikrotik.smaafbs.sch.id).
+        // Komponen router (Monitor/HotspotSettings/HotspotUser/BlockedDomain)
+        // disembunyikan dari navigasi via shouldRegisterNavigation() di masing-masing
+        // kelas; kode & route tetap ada (reversibel).
         BuatAkunSiswa::class => 'IT SMA AFBS',
         CalendarEventResource::class => 'Agenda',
         EventTimelineResource::class => 'Agenda',
