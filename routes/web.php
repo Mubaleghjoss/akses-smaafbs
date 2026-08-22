@@ -136,6 +136,11 @@ Route::middleware('auth')->get(
 )->name('admin.guru-tendiks.import-template');
 
 Route::middleware('auth')->get(
+    '/admin/belajar-id/import-template',
+    \App\Http\Controllers\Admin\BelajarIdImportTemplateController::class
+)->name('admin.belajar-id.import-template');
+
+Route::middleware('auth')->get(
     '/admin/guru-tendiks/export',
     GuruTendikExportController::class
 )->name('admin.guru-tendiks.export');

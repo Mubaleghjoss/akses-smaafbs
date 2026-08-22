@@ -5,18 +5,15 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class HotspotUser extends Model
+class BelajarIdAccount extends Model
 {
-    protected $table = 'hotspot_users';
+    protected $table = 'belajar_id_accounts';
 
     protected $fillable = [
-        'username', 'password', 'profile', 'durasi', 'note', 'disabled', 'source',
-        'role', 'nama', 'kelas', 'input_mode', 'category_id',
+        'role', 'nama', 'status', 'email', 'password', 'category_id',
     ];
 
     protected $casts = [
-        'durasi' => 'integer',
-        'disabled' => 'boolean',
         'category_id' => 'integer',
     ];
 
@@ -33,5 +30,13 @@ class HotspotUser extends Model
     public function scopeGuru($query)
     {
         return $query->where('role', 'guru');
+    }
+
+    /** Normalisasi STATUS Excel -> role. guru/tendik => guru, selain itu siswa. */
+    public static function roleFromStatus(?string $status): string
+    {
+        $s = strtolower(trim((string) $status));
+
+        return in_array($s, ['guru', 'tendik'], true) ? 'guru' : 'siswa';
     }
 }

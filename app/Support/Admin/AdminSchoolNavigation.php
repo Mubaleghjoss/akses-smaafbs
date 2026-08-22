@@ -10,7 +10,10 @@ use App\Filament\Pages\DashboardProker;
 use App\Filament\Pages\HotspotSettings;
 use App\Filament\Pages\Monitor;
 use App\Filament\Pages\SarprasStickerSettings;
+use App\Filament\Resources\AccountCategoryResource;
 use App\Filament\Resources\BeritaResource;
+use App\Filament\Resources\BelajarIdAccountResource;
+use App\Filament\Resources\BelajarIdGuruResource;
 use App\Filament\Resources\BerkasGuruResource;
 use App\Filament\Resources\BerkasSiswaResource;
 use App\Filament\Resources\CalendarEventResource;
@@ -41,6 +44,8 @@ use App\Filament\Resources\StrukturOrganisasiResource;
 use App\Filament\Resources\SurveiResource;
 use App\Filament\Resources\UksRecordResource;
 use App\Filament\Resources\VisiMisiResource;
+use App\Filament\Resources\WifiAccountResource;
+use App\Filament\Resources\WifiGuruResource;
 use Filament\Navigation\NavigationItem;
 
 class AdminSchoolNavigation
@@ -91,9 +96,14 @@ class AdminSchoolNavigation
         RombelResource::class => 'Siswa',
         BerkasSiswaResource::class => 'Siswa',
         PrestasiResource::class => 'Siswa',
+        WifiAccountResource::class => 'Siswa',
+        BelajarIdAccountResource::class => 'Siswa',
         GuruTendikResource::class => 'Guru',
         BerkasGuruResource::class => 'Guru',
         JenisBerkasResource::class => 'Guru',
+        WifiGuruResource::class => 'Guru',
+        BelajarIdGuruResource::class => 'Guru',
+        AccountCategoryResource::class => 'Guru',
         // Menu "IT SMA AFBS" dipensiunkan: monitoring/pengelolaan MikroTik sudah
         // dipindah & lebih stabil di aplikasi terpisah (mikrotik.smaafbs.sch.id).
         // Komponen router (Monitor/HotspotSettings/HotspotUser/BlockedDomain)
