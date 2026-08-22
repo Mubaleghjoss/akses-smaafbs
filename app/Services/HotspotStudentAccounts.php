@@ -114,19 +114,20 @@ class HotspotStudentAccounts
 
     /**
      * Buat akun di router + mirror lokal.
-     * $items: array [['username','password','nama','rombel'], ...]
-     * Return: ['done'=>int,'skipped'=>int,'failed'=>array].
+     * $items: array [['student_id','username','password','nama','rombel'], ...]
+     * Return: ['done'=>int,'skipped'=>int,'failed'=>array,'student_ids'=>array].
      */
     public static function createAccounts(array $items, string $profile, int $durasi = 0, string $rateLimit = '1M/1M'): array
     {
         $m = new HotspotManager();
         if (! $m->connect()) {
-            return ['done' => 0, 'skipped' => 0, 'failed' => [$m->error()], 'connected' => false];
+            return ['done' => 0, 'skipped' => 0, 'failed' => [$m->error()], 'student_ids' => [], 'connected' => false];
         }
         $routerUsers = $m->routerUsers();
         $done = 0;
         $skipped = 0;
         $failed = [];
+        $studentIds = [];
         try {
             // Mode 'kelas': pastikan profil per rombel ada + rate-limitnya benar
             $perClass = $profile === 'kelas';
@@ -170,6 +171,10 @@ class HotspotStudentAccounts
                         'note' => (string) ($item['nama'] ?? ''), // nama siswa lengkap di catatan
                     ]);
                     $done++;
+                    $studentId = filter_var($item['student_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+                    if ($studentId !== false) {
+                        $studentIds[] = (int) $studentId;
+                    }
                 } else {
                     $failed[] = $username.': '.($r['msg'] ?? 'gagal');
                 }
@@ -178,6 +183,6 @@ class HotspotStudentAccounts
             $m->close();
         }
 
-        return ['done' => $done, 'skipped' => $skipped, 'failed' => $failed, 'connected' => true];
+        return ['done' => $done, 'skipped' => $skipped, 'failed' => $failed, 'student_ids' => array_values(array_unique($studentIds)), 'connected' => true];
     }
 }

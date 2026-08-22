@@ -41,6 +41,7 @@ class AppServiceProvider extends ServiceProvider
     {
         EndpointProtectionPolicy::registerNamedLimiters();
         $this->registerLiteracyRateLimiters();
+        $this->registerStudentSyncRateLimiter();
         $this->registerSlowAdminQueryLogger();
 
         View::composer('layouts.app', function (BladeView $view): void {
@@ -167,6 +168,18 @@ class AppServiceProvider extends ServiceProvider
             return [
                 Limit::perMinute(30)->by('public-connectivity-client|'.$clientKey),
                 Limit::perMinute(1200)->by('public-connectivity-ip|'.$request->ip()),
+            ];
+        });
+    }
+
+    protected function registerStudentSyncRateLimiter(): void
+    {
+        RateLimiter::for('student_sync_receiver', function (Request $request): array {
+            $clientId = (string) $request->header('X-Student-Sync-Client', '');
+
+            return [
+                Limit::perMinute(20)->by('student-sync-receiver-client|'.hash('sha256', $clientId)),
+                Limit::perMinute(20)->by('student-sync-receiver-ip|'.$request->ip()),
             ];
         });
     }

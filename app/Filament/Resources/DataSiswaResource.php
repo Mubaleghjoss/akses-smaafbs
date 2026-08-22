@@ -14,8 +14,8 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms;
-use Filament\Notifications\Notification;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
@@ -25,8 +25,9 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Schema as DatabaseSchema;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema as DatabaseSchema;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -772,7 +773,7 @@ class DataSiswaResource extends Resource
         if ($record->relationLoaded($relation)) {
             $loadedRelation = $record->getRelation($relation);
 
-            if ($loadedRelation instanceof \Illuminate\Support\Collection) {
+            if ($loadedRelation instanceof Collection) {
                 return $loadedRelation->isNotEmpty();
             }
 
@@ -791,6 +792,7 @@ class DataSiswaResource extends Resource
         return [
             'index' => Pages\ManageDataSiswas::route('/'),
             'spmb-sync' => Pages\SyncSpmbStudents::route('/sync-spmb'),
+            'push-server' => Pages\PushDataSiswasToServer::route('/push-server'),
             'view' => Pages\ViewDataSiswa::route('/{record}'),
         ];
     }

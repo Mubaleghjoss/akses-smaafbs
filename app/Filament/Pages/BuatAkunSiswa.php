@@ -2,9 +2,11 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Resources\DataSiswaResource;
 use App\Filament\Resources\HotspotUserResource;
 use App\Services\HotspotStudentAccounts;
 use App\Support\Hotspot\HotspotAccessible;
+use App\Support\StudentSync\StudentSyncScopeToken;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Forms\Concerns\InteractsWithForms;
@@ -47,6 +49,11 @@ class BuatAkunSiswa extends Page implements HasForms
     public array $selected = [];
 
     public bool $selectAll = false;
+
+    public ?string $studentPushShortcutUrl = null;
+
+    /** @var array<string, mixed>|null */
+    public ?array $lastCreationResult = null;
 
     public function updatedSelectAll(bool $value): void
     {
@@ -136,6 +143,7 @@ class BuatAkunSiswa extends Page implements HasForms
         $items = collect($this->candidates)
             ->whereIn('id', $this->selected)
             ->map(fn (array $c): array => [
+                'student_id' => $c['id'],
                 'username' => $c['username'],
                 'password' => $c['password'],
                 'nama' => $c['nama'],
@@ -150,6 +158,7 @@ class BuatAkunSiswa extends Page implements HasForms
             $rate = '1M/1M';
         }
         $r = HotspotStudentAccounts::createAccounts($items, $profil, (int) ($data['durasi'] ?? 0), $rate);
+        $this->lastCreationResult = $r;
 
         if (! ($r['connected'] ?? true)) {
             Notification::make()->title('Router tidak terhubung: '.($r['failed'][0] ?? ''))->danger()->send();
@@ -170,8 +179,23 @@ class BuatAkunSiswa extends Page implements HasForms
             ->{$r['failed'] === [] ? 'success' : 'warning'}()
             ->send();
 
+        $this->buildStudentPushShortcut();
+
         $this->candidates = [];
         $this->selected = [];
+    }
+
+    public function buildStudentPushShortcut(): void
+    {
+        $ids = is_array($this->lastCreationResult['student_ids'] ?? null)
+            ? $this->lastCreationResult['student_ids']
+            : [];
+
+        $this->studentPushShortcutUrl = $ids === [] || ! auth()->check()
+            ? null
+            : DataSiswaResource::getUrl('push-server', [
+                'scope_token' => app(StudentSyncScopeToken::class)->issue($ids, (int) auth()->id()),
+            ]);
     }
 
     protected function getFormActions(): array

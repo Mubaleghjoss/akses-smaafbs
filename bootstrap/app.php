@@ -7,6 +7,7 @@ use App\Http\Middleware\AuthenticateLiteracySchoolMonitor;
 use App\Http\Middleware\LogSlowAdminRequests;
 use App\Http\Middleware\PreventAdminResponseCaching;
 use App\Http\Middleware\TrustProxies;
+use App\Http\Middleware\VerifyStudentSyncSignature;
 use App\Support\Admin\AdminAccessDenied;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Application;
@@ -32,6 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'tagihan.student.integration' => AuthenticateTagihanStudentIntegration::class,
             'literacy.school.monitor' => AuthenticateLiteracySchoolMonitor::class,
+            'student.sync.signature' => VerifyStudentSyncSignature::class,
         ]);
 
         $middleware->replace(

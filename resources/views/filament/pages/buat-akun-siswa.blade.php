@@ -58,4 +58,12 @@
             </div>
         </div>
     @endif
+
+    @if ($studentPushShortcutUrl)
+        <div class="mt-4">
+            <a href="{{ $studentPushShortcutUrl }}" class="inline-flex items-center rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700">
+                Preview Push Data Siswa ke Server
+            </a>
+        </div>
+    @endif
 </x-filament-panels::page>
