@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Assessment\HomeroomAssignment;
+use App\Models\Assessment\TeachingAssignment;
 use App\Support\Admin\Dashboard\DashboardCacheSupport;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -54,7 +56,7 @@ class GuruTendik extends Model
             return $query;
         }
 
-        if ($user->hasRole('admin')) {
+        if ($user->hasFullAdminAccess()) {
             return $query;
         }
 
@@ -91,6 +93,16 @@ class GuruTendik extends Model
             ->where(function (Builder $query): void {
                 $query->whereNull('tst')->orWhereDate('tst', '>=', now()->toDateString());
             });
+    }
+
+    public function assessmentTeachingAssignments(): HasMany
+    {
+        return $this->hasMany(TeachingAssignment::class, 'teacher_id');
+    }
+
+    public function assessmentHomeroomAssignments(): HasMany
+    {
+        return $this->hasMany(HomeroomAssignment::class, 'teacher_id');
     }
 
     public function strukturOrganisasiNode(): HasOne

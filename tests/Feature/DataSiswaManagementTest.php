@@ -12,6 +12,7 @@ use App\Filament\Widgets\DataSiswaNonAktifReasonChart;
 use App\Filament\Widgets\DataSiswaStatsOverview;
 use App\Filament\Widgets\DataSiswaStatusChart;
 use App\Models\DataSiswa;
+use App\Models\Rombel;
 use App\Models\User;
 use App\Support\DataSiswa\DataSiswaSupport;
 use App\Support\DataSiswa\DataSiswaProfileWorkbookImporter;
@@ -38,6 +39,36 @@ class DataSiswaManagementTest extends TestCase
 
         $this->bootstrapUserAndPermissionTables();
         $this->createDataSiswaTable();
+        $this->createRombelsTable();
+        $this->createSiswaRelationExistsTables();
+    }
+
+    /**
+     * Tabel relasi minimal yang di-query halaman ViewDataSiswa lewat withExists().
+     * Hanya butuh kolom siswa_id agar subquery exists() valid pada SQLite in-memory.
+     */
+    protected function createSiswaRelationExistsTables(): void
+    {
+        foreach ([
+            'boarding_rapots',
+            'boarding_pencapaians',
+            'boarding_arsip_mts',
+            'boarding_konseling_mts',
+            'boarding_keuangan_siswas',
+            'boarding_perizinan_siswas',
+            'prestasis',
+            'berkas_siswa',
+        ] as $relationTable) {
+            if (Schema::hasTable($relationTable)) {
+                continue;
+            }
+
+            Schema::create($relationTable, function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('siswa_id')->nullable()->index();
+                $table->timestamps();
+            });
+        }
     }
 
     public function test_data_siswa_table_keeps_only_the_requested_identity_columns_visible_by_default(): void
@@ -118,6 +149,222 @@ class DataSiswaManagementTest extends TestCase
             ->assertSee('Kelahiran')
             ->assertSee('Ringkasan Relasi')
             ->assertSee('Kolom Database Lainnya');
+    }
+
+    public function test_data_siswa_table_can_filter_blank_spmb_status_and_rombel(): void
+    {
+        $admin = User::query()->create([
+            'name' => 'Admin Filter SPMB',
+            'username' => 'admin-filter-spmb',
+            'password' => bcrypt('password'),
+        ]);
+        $admin->assignRole('admin');
+
+        $blankStatusAndRombel = DataSiswa::query()->create([
+            'nama' => 'Siswa SPMB Belum Lengkap',
+            'nisn' => '0011223344',
+            'status' => null,
+            'rombel_saat_ini' => null,
+        ]);
+        $emptyStatus = DataSiswa::query()->create([
+            'nama' => 'Siswa SPMB Status Kosong',
+            'nisn' => '0011223345',
+            'status' => '',
+            'rombel_saat_ini' => 'X.A / 2026-2027',
+        ]);
+        $activeStudent = DataSiswa::query()->create([
+            'nama' => 'Siswa Aktif Lengkap',
+            'nisn' => '0011223346',
+            'status' => 'aktif',
+            'rombel_saat_ini' => 'X.B / 2026-2027',
+        ]);
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::actingAs($admin)
+            ->test(ManageDataSiswas::class)
+            ->filterTable('status', '__blank')
+            ->call('loadTable')
+            ->assertCanSeeTableRecords([$blankStatusAndRombel, $emptyStatus])
+            ->assertCanNotSeeTableRecords([$activeStudent]);
+
+        Livewire::actingAs($admin)
+            ->test(ManageDataSiswas::class)
+            ->filterTable('rombel_saat_ini', '__blank')
+            ->call('loadTable')
+            ->assertCanSeeTableRecords([$blankStatusAndRombel])
+            ->assertCanNotSeeTableRecords([$emptyStatus, $activeStudent]);
+    }
+
+    public function test_data_siswa_angkatan_filter_uses_master_rombel_angkatan(): void
+    {
+        $admin = User::query()->create([
+            'name' => 'Admin Filter Angkatan',
+            'username' => 'admin-filter-angkatan',
+            'password' => bcrypt('password'),
+        ]);
+        $admin->assignRole('admin');
+
+        Rombel::query()->create([
+            'nama' => 'X 1',
+            'angkatan' => '6',
+            'is_active' => true,
+        ]);
+        Rombel::query()->create([
+            'nama' => 'XI 1',
+            'angkatan' => '5',
+            'is_active' => true,
+        ]);
+        Rombel::query()->create([
+            'nama' => 'ALUMNI 2021/2022',
+            'angkatan' => '1',
+            'is_active' => false,
+        ]);
+
+        $gradeSixStudent = DataSiswa::query()->create([
+            'nama' => 'Siswa Angkatan Enam',
+            'nisn' => '2010101001',
+            'status' => 'aktif',
+            'rombel_saat_ini' => 'X 1',
+        ]);
+        $gradeFiveStudent = DataSiswa::query()->create([
+            'nama' => 'Siswa Angkatan Lima',
+            'nisn' => '2010101002',
+            'status' => 'aktif',
+            'rombel_saat_ini' => 'XI 1',
+        ]);
+        $alumniStudent = DataSiswa::query()->create([
+            'nama' => 'Siswa Alumni Angkatan Satu',
+            'nisn' => '2010101004',
+            'status' => 'alumni',
+            'rombel_saat_ini' => 'ALUMNI 2021/2022',
+        ]);
+        DataSiswa::query()->create([
+            'nama' => 'Siswa Rombel Lama',
+            'nisn' => '2010101003',
+            'status' => 'aktif',
+            'rombel_saat_ini' => 'ROMBEL LAMA 2025/2026',
+        ]);
+        Rombel::query()
+            ->where('nama', 'ROMBEL LAMA 2025/2026')
+            ->first()
+            ?->delete();
+
+        $this->assertSame('6', DataSiswaSupport::angkatanLabelForRombel('X 1'));
+        $angkatanOptions = DataSiswaSupport::angkatanOptions($admin);
+        $rombelOptions = DataSiswaSupport::rombelFilterOptions($admin);
+
+        $this->assertArrayHasKey('6', $angkatanOptions);
+        $this->assertArrayHasKey('1', $angkatanOptions);
+        $this->assertArrayNotHasKey('2025/2026', $angkatanOptions);
+        $this->assertArrayHasKey('X 1', $rombelOptions);
+        $this->assertArrayNotHasKey('ROMBEL LAMA 2025/2026', $rombelOptions);
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::actingAs($admin)
+            ->test(ManageDataSiswas::class)
+            ->filterTable('angkatan', ['value' => '6'])
+            ->call('loadTable')
+            ->assertCanSeeTableRecords([$gradeSixStudent])
+            ->assertCanNotSeeTableRecords([$gradeFiveStudent]);
+
+        Livewire::actingAs($admin)
+            ->test(ManageDataSiswas::class)
+            ->filterTable('angkatan', ['value' => '1'])
+            ->call('loadTable')
+            ->assertCanSeeTableRecords([$alumniStudent])
+            ->assertCanNotSeeTableRecords([$gradeFiveStudent]);
+    }
+
+    public function test_data_siswa_table_can_bulk_move_rombel_and_update_status(): void
+    {
+        $admin = User::query()->create([
+            'name' => 'Admin Bulk Siswa',
+            'username' => 'admin-bulk-siswa',
+            'password' => bcrypt('password'),
+        ]);
+        $admin->assignRole('admin');
+
+        $firstStudent = DataSiswa::query()->create([
+            'nama' => 'Siswa Bulk Satu',
+            'nisn' => '1010101001',
+            'status' => 'aktif',
+            'rombel_saat_ini' => 'X.A / 2026-2027',
+        ]);
+        $secondStudent = DataSiswa::query()->create([
+            'nama' => 'Siswa Bulk Dua',
+            'nisn' => '1010101002',
+            'status' => 'aktif',
+            'rombel_saat_ini' => 'X.B / 2026-2027',
+        ]);
+        $thirdStudent = DataSiswa::query()->create([
+            'nama' => 'Siswa Bulk Tidak Dipilih',
+            'nisn' => '1010101003',
+            'status' => 'aktif',
+            'rombel_saat_ini' => 'X.C / 2026-2027',
+        ]);
+
+        Rombel::query()->create([
+            'nama' => 'XI IPA 1 / 2026-2027',
+            'is_active' => true,
+        ]);
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::actingAs($admin)
+            ->test(ManageDataSiswas::class)
+            ->callTableBulkAction('moveSelectedToRombel', [$firstStudent, $secondStudent], [
+                'rombel_saat_ini' => 'XI IPA 1 / 2026-2027',
+            ])
+            ->assertHasNoTableBulkActionErrors();
+
+        $this->assertDatabaseHas('data_siswa', [
+            'id' => $firstStudent->id,
+            'rombel_saat_ini' => 'XI IPA 1 / 2026-2027',
+        ]);
+        $this->assertDatabaseHas('data_siswa', [
+            'id' => $secondStudent->id,
+            'rombel_saat_ini' => 'XI IPA 1 / 2026-2027',
+        ]);
+        $this->assertDatabaseHas('data_siswa', [
+            'id' => $thirdStudent->id,
+            'rombel_saat_ini' => 'X.C / 2026-2027',
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(ManageDataSiswas::class)
+            ->callTableBulkAction('setSelectedStatus', [$firstStudent, $secondStudent], [
+                'status' => 'pindah',
+                'kategori_non_aktif' => 'mutasi',
+                'alasan_non_aktif' => 'Mutasi rombel lanjutan.',
+                'tanggal_non_aktif' => '2026-07-09',
+            ])
+            ->assertHasNoTableBulkActionErrors();
+
+        foreach ([$firstStudent, $secondStudent] as $student) {
+            $student->refresh();
+
+            $this->assertSame('pindah', $student->status);
+            $this->assertSame('mutasi', $student->kategori_non_aktif);
+            $this->assertSame('Mutasi rombel lanjutan.', $student->alasan_non_aktif);
+            $this->assertSame('2026-07-09', $student->tanggal_non_aktif?->format('Y-m-d'));
+        }
+
+        Livewire::actingAs($admin)
+            ->test(ManageDataSiswas::class)
+            ->callTableBulkAction('setSelectedStatus', [$firstStudent], [
+                'status' => 'aktif',
+            ])
+            ->assertHasNoTableBulkActionErrors();
+
+        $this->assertDatabaseHas('data_siswa', [
+            'id' => $firstStudent->id,
+            'status' => 'aktif',
+            'kategori_non_aktif' => null,
+            'alasan_non_aktif' => null,
+            'tanggal_non_aktif' => null,
+        ]);
     }
 
     public function test_data_tes_siswa_import_action_can_open_without_memory_error(): void
@@ -385,8 +632,8 @@ class DataSiswaManagementTest extends TestCase
         $template = new DataSiswaImportTemplateExport;
         $sheets = $template->sheets();
         $templateRows = $sheets[0]->array();
-        $guideRows = $sheets[1]->array();
-        $exportRows = (new DataSiswaExport)->array();
+        $guideRows = $sheets[count($sheets) - 1]->array();
+        $exportRows = (new DataSiswaExport)->sheets()[0]->array();
         $exampleByColumn = array_combine($templateRows[0], $templateRows[1]) ?: [];
 
         $this->assertContains('nama', $templateRows[0]);
@@ -443,7 +690,7 @@ class DataSiswaManagementTest extends TestCase
             (string) $response->headers->get('content-type')
         );
         $this->assertStringContainsString('attachment;', (string) $response->headers->get('content-disposition'));
-        $this->assertStringContainsString('template-import-data-siswa.xlsx', (string) $response->headers->get('content-disposition'));
+        $this->assertStringContainsString('template-data-siswa-dan-data-tes.xlsx', (string) $response->headers->get('content-disposition'));
     }
 
     public function test_widgets_summarize_student_status_gender_and_non_active_reasons(): void
@@ -579,6 +826,22 @@ class DataSiswaManagementTest extends TestCase
             $table->string('kategori_non_aktif')->nullable();
             $table->text('alasan_non_aktif')->nullable();
             $table->date('tanggal_non_aktif')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    protected function createRombelsTable(): void
+    {
+        if (Schema::hasTable('rombels')) {
+            return;
+        }
+
+        Schema::create('rombels', function (Blueprint $table): void {
+            $table->id();
+            $table->string('nama')->unique();
+            $table->string('angkatan')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->text('catatan')->nullable();
             $table->timestamps();
         });
     }

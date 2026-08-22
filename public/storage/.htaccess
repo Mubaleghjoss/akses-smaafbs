@@ -1,0 +1,11 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Dokumen guru hanya boleh dibaca melalui controller admin yang memeriksa
+    # autentikasi dan scope record. PHP tetap dapat membaca file dari disk.
+    RewriteRule ^berkas_guru(?:/|$) - [F,L,NC]
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+</IfModule>

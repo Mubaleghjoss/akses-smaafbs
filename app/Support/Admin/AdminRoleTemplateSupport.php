@@ -487,7 +487,7 @@ class AdminRoleTemplateSupport
             return [];
         }
 
-        if ($user->hasRole('admin')) {
+        if ($user->hasFullAdminAccess()) {
             return [];
         }
 
@@ -509,7 +509,7 @@ class AdminRoleTemplateSupport
             return [];
         }
 
-        if ($user->hasRole('admin')) {
+        if ($user->hasFullAdminAccess()) {
             return ['Admin Penuh'];
         }
 
@@ -530,7 +530,7 @@ class AdminRoleTemplateSupport
     {
         return implode(':', [
             (string) ($user->getKey() ?? 'guest'),
-            $user->hasRole('admin') ? 'admin' : 'user',
+            $user->hasFullAdminAccess() ? 'admin' : 'user',
             md5(json_encode($user->module_access_levels ?? [])),
         ]);
     }

@@ -1,6 +1,8 @@
 @php
     $children = collect($node->children ?? []);
-    $fotoUrl = filled($node->foto) ? asset('storage/'.$node->foto) : null;
+    $imageOptimizer = app(\App\Support\Media\PublicImageOptimizer::class);
+    $fotoUrl = filled($node->foto) ? $imageOptimizer->url($node->foto, 'thumbnail') : null;
+    $fotoDisplayUrl = filled($node->foto) ? $imageOptimizer->url($node->foto, 'display') : null;
     $depth = $depth ?? 0;
     $siblingCount = $siblingCount ?? 1;
     $renderChildren = $renderChildren ?? true;
@@ -40,12 +42,21 @@
                     type="button"
                     class="org-tree__avatar cursor-pointer border-0 bg-transparent p-0"
                     data-org-image-trigger
-                    data-org-image-src="{{ $fotoUrl }}"
+                    data-org-image-src="{{ $fotoDisplayUrl }}"
                     data-org-image-name="{{ $node->nama }}"
                     data-org-image-role="{{ $node->jabatan }}"
                     aria-label="Lihat foto {{ $node->nama }}"
                 >
-                    <img class="h-full w-full object-cover" src="{{ $fotoUrl }}" alt="Foto {{ $node->nama }}">
+                    <img
+                        class="h-full w-full object-cover"
+                        data-public-lazy-image
+                        data-src="{{ $fotoUrl }}"
+                        width="240"
+                        height="300"
+                        loading="lazy"
+                        decoding="async"
+                        alt="Foto {{ $node->nama }}"
+                    >
                 </button>
             @endif
 

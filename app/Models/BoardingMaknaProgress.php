@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class BoardingMaknaProgress extends Model
@@ -129,7 +130,85 @@ class BoardingMaknaProgress extends Model
             ];
         }
 
-        return $targets;
+        return static::appendMasterTargets($targets);
+    }
+
+    /**
+     * @param  array<int, array{target_key: string, target_group: string, target_name: string, urutan: int}>  $targets
+     * @return array<int, array{target_key: string, target_group: string, target_name: string, urutan: int}>
+     */
+    protected static function appendMasterTargets(array $targets): array
+    {
+        if (! Schema::hasTable('boarding_hafalan_points')) {
+            return $targets;
+        }
+
+        $existingNames = collect($targets)
+            ->groupBy('target_group')
+            ->map(fn ($rows) => collect($rows)
+                ->mapWithKeys(fn (array $target): array => [static::normalizeTargetName($target['target_name']) => true])
+                ->all())
+            ->all();
+
+        $query = BoardingHafalanPoint::query()
+            ->where('is_active', true)
+            ->whereIn('materi_key', [
+                BoardingHafalanPoint::MATERI_TAMBAHAN_MAKNA_QURAN_KEY,
+                BoardingHafalanPoint::MATERI_TAMBAHAN_MAKNA_HADITS_KEY,
+            ])
+            ->whereIn('jenis', ['makna_quran', 'makna_hadits']);
+
+        if (Schema::hasColumn('boarding_hafalan_points', 'materi_scope')) {
+            $query->where('materi_scope', 'boarding');
+        }
+
+        $masterTargets = $query
+            ->orderByRaw(BoardingHafalanPoint::materiOrderSql())
+            ->orderBy('urutan')
+            ->orderBy('id')
+            ->get(['id', 'materi_key', 'jenis', 'nama_point', 'urutan']);
+
+        foreach ($masterTargets as $point) {
+            $group = $point->jenis === 'makna_quran' ? 'quran' : 'hadits_materi';
+            $normalizedName = static::normalizeTargetName($point->nama_point);
+
+            if ((bool) ($existingNames[$group][$normalizedName] ?? false)) {
+                continue;
+            }
+
+            $targets[] = [
+                'target_key' => ($group === 'quran' ? 'quran_master_' : 'hadits_materi_master_').$point->getKey(),
+                'target_group' => $group,
+                'target_name' => $point->nama_point,
+                'urutan' => (int) $point->urutan,
+            ];
+
+            $existingNames[$group][$normalizedName] = true;
+        }
+
+        return collect($targets)
+            ->sortBy(fn (array $target): string => sprintf(
+                '%02d|%05d|%s',
+                $target['target_group'] === 'quran' ? 1 : 2,
+                (int) $target['urutan'],
+                $target['target_key'],
+            ))
+            ->values()
+            ->all();
+    }
+
+    protected static function normalizeTargetName(?string $name): string
+    {
+        $normalized = Str::of((string) $name)
+            ->lower()
+            ->squish()
+            ->toString();
+
+        return str_replace(
+            ["makna al-qur'an", 'makna al-quran'],
+            ["makna qur'an", 'makna quran'],
+            $normalized,
+        );
     }
 
     public static function defaultTargetCount(): int

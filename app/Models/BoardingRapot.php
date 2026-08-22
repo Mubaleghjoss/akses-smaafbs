@@ -14,10 +14,16 @@ class BoardingRapot extends Model
 {
     use BelongsToBoardingStudent;
 
+    public const STATUS_DRAFT = 'draft';
+
+    public const STATUS_REVIEW = 'review';
+
+    public const STATUS_READY_PRINT = 'siap_export';
+
     public const STATUS_OPTIONS = [
-        'draft' => 'Draft',
-        'review' => 'Review',
-        'siap_export' => 'Siap Export',
+        self::STATUS_DRAFT => 'Draft',
+        self::STATUS_REVIEW => 'Review',
+        self::STATUS_READY_PRINT => 'Siap Cetak',
     ];
 
     public const PREDIKAT_OPTIONS = [
@@ -30,13 +36,23 @@ class BoardingRapot extends Model
 
     public const SETTING_LOGO_PATH = 'boarding_rapot_logo_path';
 
+    public const SETTING_RIGHT_LOGO_PATH = 'boarding_rapot_right_logo_path';
+
+    public const SETTING_LOGO_SIZE = 'boarding_rapot_logo_size';
+
     public const SETTING_KOP_SITE_NAME = 'boarding_rapot_kop_site_name';
 
+    public const SETTING_KOP_SITE_NAME_FONT_SIZE = 'boarding_rapot_kop_site_name_font_size';
+
     public const SETTING_KOP_SUBTITLE = 'boarding_rapot_kop_subtitle';
+
+    public const SETTING_KOP_SUBTITLE_FONT_SIZE = 'boarding_rapot_kop_subtitle_font_size';
 
     public const SETTING_KOP_ADDRESS = 'boarding_rapot_kop_address';
 
     public const SETTING_KOP_CONTACT = 'boarding_rapot_kop_contact';
+
+    public const SETTING_KOP_INFO_FONT_SIZE = 'boarding_rapot_kop_info_font_size';
 
     public const SETTING_PROLOG = 'boarding_rapot_prolog';
 
@@ -54,6 +70,8 @@ class BoardingRapot extends Model
 
     public const SETTING_MUDIR_NAME = 'mudir_asrama_nama';
 
+    public const SETTING_SIGNATURE_NAME_GAP = 'boarding_rapot_signature_name_gap';
+
     public const DEFAULT_PROLOG = "Assalamu'alaikum warahmatullahi wabarakatuh.\n\nBersama ini kami sampaikan kepada Bapak/Ibu Orang Tua/Wali Santri laporan perkembangan hasil pembelajaran santri di Boarding SMA Al Furqon Boarding School. Kami berharap laporan ini dapat membantu Bapak/Ibu mengetahui perkembangan pembinaan santri selama mengikuti kegiatan boarding. Adapun uraian laporan tersebut adalah sebagai berikut:";
 
     public const BOARDING_CLASS_LABELS = [
@@ -63,7 +81,7 @@ class BoardingRapot extends Model
         'materi_tambahan_hafalan' => 'Kelas Materi Tambahan (Persiapan Saringan)',
     ];
 
-    protected static ?string $pamongOwnershipColumn = 'pamong_user_id';
+    protected static ?string $pamongOwnershipColumn = null;
 
     /**
      * @var array<string, string>|null
@@ -94,10 +112,6 @@ class BoardingRapot extends Model
         static::saving(function (self $record): void {
             if (blank($record->pamong_user_id) && auth()->user()?->isBoardingPamong()) {
                 $record->pamong_user_id = auth()->id();
-            }
-
-            if ($record->pamong_user_id && blank($record->wali_pamong_nama)) {
-                $record->wali_pamong_nama = User::query()->whereKey($record->pamong_user_id)->value('name');
             }
 
             if (Schema::hasColumn($record->getTable(), 'administrasi_rapot_items')) {
@@ -303,15 +317,31 @@ class BoardingRapot extends Model
         $signatureProfile = $this->resolveSignatureProfile();
         $kelasBoardingAutoKey = $this->resolveKelasBoardingKey($hafalanAssessments, $pencapaian);
         $kelasBoardingOverrideKey = static::normalizeBoardingClassKey($this->kelas_boarding_override ?? null);
-        $kelasBoardingKey = $kelasBoardingOverrideKey ?? $kelasBoardingAutoKey;
+        $kelasBoardingKey = $kelasBoardingOverrideKey;
+
+        if ($pencapaian) {
+            BoardingMaknaProgress::ensureDefaultsForPencapaian($pencapaian);
+            BoardingMateriProgress::ensureDefaultsForPencapaian($pencapaian);
+            BoardingMtProgress::ensureDefaultsForPencapaian($pencapaian);
+
+            $pencapaian->load([
+                'maknaProgresses.updatedByUser',
+                'mtProgresses.updatedByUser',
+                'materiProgresses.updatedByUser',
+            ]);
+
+            $maknaProgresses = $pencapaian->maknaProgresses ?? new Collection;
+            $mtProgresses = $pencapaian->mtProgresses ?? new Collection;
+            $materiProgresses = $pencapaian->materiProgresses ?? new Collection;
+        }
 
         return [
             'school' => [
                 'nama' => $settings[self::SETTING_KOP_SITE_NAME] ?: ($settings['nama_sekolah'] ?? 'SMA AFBS'),
                 'boarding_label' => $settings[self::SETTING_KOP_SUBTITLE] ?: ($settings['boarding_label'] ?? 'Boarding School'),
                 'alamat' => $settings[self::SETTING_KOP_ADDRESS] ?: ($settings['alamat_sekolah'] ?? null),
-                'kota' => static::normalizeSignatureText($settings[self::SETTING_KOTA] ?? null)
-                    ?? static::normalizeSignatureText($this->tempat_cetak)
+                'kota' => static::normalizeSignatureText($this->tempat_cetak)
+                    ?? static::normalizeSignatureText($settings[self::SETTING_KOTA] ?? null)
                     ?? 'Bogor',
             ],
             'document' => [
@@ -320,7 +350,7 @@ class BoardingRapot extends Model
             'siswa' => [
                 'nama' => $siswa?->nama,
                 'rombel' => $siswa?->rombel_saat_ini,
-                'jk' => $siswa?->jk,
+                'jk' => DataSiswa::jkLabel($siswa?->jk),
                 'status' => DataSiswa::statusLabel($siswa?->status),
             ],
             'rapot' => [
@@ -330,7 +360,7 @@ class BoardingRapot extends Model
                 'status_rapot' => self::STATUS_OPTIONS[$this->status_rapot] ?? $this->status_rapot,
                 'nomor_dokumen' => $this->nomor_dokumen,
                 'predikat_boarding' => self::PREDIKAT_OPTIONS[$this->predikat_boarding] ?? $this->predikat_boarding,
-                'kelas_boarding' => self::BOARDING_CLASS_LABELS[$kelasBoardingKey] ?? self::BOARDING_CLASS_LABELS['pegon_bacaan'],
+                'kelas_boarding' => $kelasBoardingKey ? (self::BOARDING_CLASS_LABELS[$kelasBoardingKey] ?? null) : 'Belum Diisi',
                 'kelas_boarding_key' => $kelasBoardingKey,
                 'kelas_boarding_auto' => self::BOARDING_CLASS_LABELS[$kelasBoardingAutoKey] ?? self::BOARDING_CLASS_LABELS['pegon_bacaan'],
                 'kelas_boarding_auto_key' => $kelasBoardingAutoKey,
@@ -471,9 +501,6 @@ class BoardingRapot extends Model
             'rekomendasi_tindak_lanjut' => $overwriteNarratives || blank($this->rekomendasi_tindak_lanjut)
                 ? implode(PHP_EOL, $rekomendasi)
                 : $this->rekomendasi_tindak_lanjut,
-            'wali_pamong_nama' => $this->wali_pamong_nama ?: $signatureProfile['wali_pamong_nama'],
-            'kepala_boarding_nama' => $this->kepala_boarding_nama ?: $signatureProfile['kepala_boarding_nama'],
-            'mudir_asrama_nama' => $this->mudir_asrama_nama ?: $signatureProfile['mudir_asrama_nama'],
             'tempat_cetak' => $this->tempat_cetak ?: ($payload['school']['kota'] ?? null),
         ])->saveQuietly();
     }
@@ -791,6 +818,7 @@ class BoardingRapot extends Model
             ->map(fn (BoardingBacaanAssessment $assessment): array => [
                 'tanggal' => optional($assessment->assessed_at)->format('d M Y'),
                 'nilai' => $this->formatBacaanGrades($assessment),
+                'kelas_bacaan' => BoardingBacaanAssessment::classLabel($assessment->kelas_bacaan),
                 'pp' => BoardingBacaanAssessment::gradeLabel($assessment->pp_grade),
                 'kl' => BoardingBacaanAssessment::gradeLabel($assessment->kl_grade),
                 'tj' => BoardingBacaanAssessment::gradeLabel($assessment->tj_grade),
@@ -859,27 +887,33 @@ class BoardingRapot extends Model
         $slot1Label = static::normalizeSignatureText($settings[self::SETTING_WALI_LABEL] ?? null) ?? 'Kepala Sekolah';
         $slot2Label = static::normalizeSignatureText($settings[self::SETTING_KEPALA_LABEL] ?? null) ?? 'Kepala Boarding';
         $slot3Label = static::normalizeSignatureText($settings[self::SETTING_MUDIR_LABEL] ?? null) ?? 'Pamong';
-        $pamongName = static::normalizeSignatureText($this->pamongUser?->name);
-        $legacyPamongName = static::normalizeSignatureText($this->wali_pamong_nama);
-        $slot1RecordName = static::recordSignatureFallback($this->wali_pamong_nama, $pamongName, $slot1Label);
+        $pamongName = static::normalizeSignatureText(
+            $this->pamong_user_id
+                ? User::query()->whereKey($this->pamong_user_id)->value('name')
+                : $this->pamongUser?->name
+        );
+        $slot1SettingName = static::normalizeSignatureText($settings[self::SETTING_WALI_NAME] ?? null);
+        $slot2SettingName = static::normalizeSignatureText($settings[self::SETTING_KEPALA_NAME] ?? null);
+        $slot3SettingName = static::normalizeSignatureText($settings[self::SETTING_MUDIR_NAME] ?? null);
         $slot2RecordName = static::normalizeSignatureText($this->kepala_boarding_nama);
-        $slot3RecordName = static::signatureLabelUsesPamongFallback($slot3Label)
-            ? ($pamongName ?? $legacyPamongName ?? static::normalizeSignatureText($this->mudir_asrama_nama))
-            : static::normalizeSignatureText($this->mudir_asrama_nama);
+        $slot3RecordName = static::normalizeSignatureText($this->mudir_asrama_nama);
+        $slot1Name = static::signatureLabelUsesPamongFallback($slot1Label)
+            ? ($slot1SettingName ?? $pamongName ?? static::normalizeSignatureText($this->wali_pamong_nama))
+            : $slot1SettingName;
+        $slot2Name = static::signatureLabelUsesPamongFallback($slot2Label)
+            ? ($slot2SettingName ?? $pamongName ?? $slot2RecordName)
+            : ($slot2SettingName ?? $slot2RecordName);
+        $slot3Name = static::signatureLabelUsesPamongFallback($slot3Label)
+            ? ($slot3SettingName ?? $pamongName ?? $slot3RecordName)
+            : ($slot3SettingName ?? $slot3RecordName);
 
         return [
             'wali_pamong_label' => $slot1Label,
             'kepala_boarding_label' => $slot2Label,
             'mudir_asrama_label' => $slot3Label,
-            'wali_pamong_nama' => static::normalizeSignatureText($settings[self::SETTING_WALI_NAME] ?? null)
-                ?? $slot1RecordName
-                ?? '-',
-            'kepala_boarding_nama' => static::normalizeSignatureText($settings[self::SETTING_KEPALA_NAME] ?? null)
-                ?? $slot2RecordName
-                ?? '-',
-            'mudir_asrama_nama' => static::normalizeSignatureText($settings[self::SETTING_MUDIR_NAME] ?? null)
-                ?? $slot3RecordName
-                ?? '-',
+            'wali_pamong_nama' => $slot1Name ?? '-',
+            'kepala_boarding_nama' => $slot2Name ?? '-',
+            'mudir_asrama_nama' => $slot3Name ?? '-',
         ];
     }
 
@@ -918,25 +952,6 @@ class BoardingRapot extends Model
             ->all();
     }
 
-    protected static function recordSignatureFallback(mixed $value, ?string $pamongName, string $label): ?string
-    {
-        $text = static::normalizeSignatureText($value);
-
-        if ($text === null) {
-            return static::signatureLabelUsesPamongFallback($label) ? $pamongName : null;
-        }
-
-        if (
-            ! static::signatureLabelUsesPamongFallback($label)
-            && $pamongName !== null
-            && strcasecmp($text, $pamongName) === 0
-        ) {
-            return null;
-        }
-
-        return $text;
-    }
-
     protected static function signatureLabelUsesPamongFallback(string $label): bool
     {
         $label = mb_strtolower($label);
@@ -967,10 +982,15 @@ class BoardingRapot extends Model
             'boarding_label' => 'Boarding School',
             'alamat_sekolah' => null,
             self::SETTING_LOGO_PATH => null,
+            self::SETTING_RIGHT_LOGO_PATH => null,
+            self::SETTING_LOGO_SIZE => '58',
             self::SETTING_KOP_SITE_NAME => null,
+            self::SETTING_KOP_SITE_NAME_FONT_SIZE => '18',
             self::SETTING_KOP_SUBTITLE => null,
+            self::SETTING_KOP_SUBTITLE_FONT_SIZE => '13',
             self::SETTING_KOP_ADDRESS => null,
             self::SETTING_KOP_CONTACT => null,
+            self::SETTING_KOP_INFO_FONT_SIZE => '10.5',
             self::SETTING_PROLOG => self::DEFAULT_PROLOG,
             self::SETTING_KOTA => 'Bogor',
             self::SETTING_WALI_LABEL => 'Kepala Sekolah',
@@ -979,6 +999,7 @@ class BoardingRapot extends Model
             self::SETTING_WALI_NAME => null,
             self::SETTING_KEPALA_NAME => null,
             self::SETTING_MUDIR_NAME => null,
+            self::SETTING_SIGNATURE_NAME_GAP => '42',
         ];
     }
 
@@ -1002,10 +1023,15 @@ class BoardingRapot extends Model
     {
         return [
             self::SETTING_LOGO_PATH,
+            self::SETTING_RIGHT_LOGO_PATH,
+            self::SETTING_LOGO_SIZE,
             self::SETTING_KOP_SITE_NAME,
+            self::SETTING_KOP_SITE_NAME_FONT_SIZE,
             self::SETTING_KOP_SUBTITLE,
+            self::SETTING_KOP_SUBTITLE_FONT_SIZE,
             self::SETTING_KOP_ADDRESS,
             self::SETTING_KOP_CONTACT,
+            self::SETTING_KOP_INFO_FONT_SIZE,
             self::SETTING_PROLOG,
             self::SETTING_KOTA,
             self::SETTING_WALI_LABEL,
@@ -1014,18 +1040,21 @@ class BoardingRapot extends Model
             self::SETTING_WALI_NAME,
             self::SETTING_KEPALA_NAME,
             self::SETTING_MUDIR_NAME,
+            self::SETTING_SIGNATURE_NAME_GAP,
         ];
     }
 
     protected function resolveOwnedPencapaian(?BoardingPencapaian $pencapaian): ?BoardingPencapaian
     {
-        if (! $pencapaian || blank($this->pamong_user_id)) {
+        if (! $pencapaian) {
             return $pencapaian;
         }
 
-        return (int) $pencapaian->pamong_user_id === (int) $this->pamong_user_id
-            ? $pencapaian
-            : null;
+        if ((int) $pencapaian->siswa_id === (int) $this->siswa_id) {
+            return $pencapaian;
+        }
+
+        return null;
     }
 
     /**

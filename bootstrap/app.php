@@ -1,9 +1,13 @@
 <?php
 
 use App\Http\Middleware\AdminAwareVerifyCsrfToken;
+use App\Http\Middleware\ApplySecurityHeaders;
+use App\Http\Middleware\AuthenticateTagihanStudentIntegration;
+use App\Http\Middleware\AuthenticateLiteracySchoolMonitor;
 use App\Http\Middleware\LogSlowAdminRequests;
 use App\Http\Middleware\PreventAdminResponseCaching;
 use App\Http\Middleware\TrustProxies;
+use App\Http\Middleware\VerifyStudentSyncSignature;
 use App\Support\Admin\AdminAccessDenied;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Application;
@@ -17,10 +21,21 @@ use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->redirectGuestsTo(
+            fn (Request $request): string => route('filament.admin.auth.login'),
+        );
+
+        $middleware->alias([
+            'tagihan.student.integration' => AuthenticateTagihanStudentIntegration::class,
+            'literacy.school.monitor' => AuthenticateLiteracySchoolMonitor::class,
+            'student.sync.signature' => VerifyStudentSyncSignature::class,
+        ]);
+
         $middleware->replace(
             Illuminate\Http\Middleware\TrustProxies::class,
             TrustProxies::class,
@@ -33,6 +48,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->append(PreventAdminResponseCaching::class);
         $middleware->append(LogSlowAdminRequests::class);
+        $middleware->append(ApplySecurityHeaders::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (AuthorizationException $exception, Request $request) {

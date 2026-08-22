@@ -29,6 +29,12 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
         'pamong_putri',
     ];
 
+    public const FULL_ADMIN_ROLES = [
+        'admin',
+        'guru_admin',
+        'super_admin',
+    ];
+
     public const NAVIGATION_GROUP_OPTIONS = [
         'Dashboard' => 'Dashboard',
         'Manajemen Sekolah' => 'Manajemen Sekolah',
@@ -173,6 +179,11 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
         return self::BOARDING_PAMONG_ROLES;
     }
 
+    public static function fullAdminRoleNames(): array
+    {
+        return self::FULL_ADMIN_ROLES;
+    }
+
     public static function permissionRelationsAreAvailable(): bool
     {
         if (static::$permissionRelationsAvailable !== null) {
@@ -247,7 +258,25 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
 
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->hasAnyRole(['admin', 'tu', 'bendahara', 'pamong_putra', 'pamong_putri', 'kepala_perpus', 'guru_uks', 'guru']);
+        return $this->hasAnyRole([
+            ...self::fullAdminRoleNames(),
+            'tu',
+            'bendahara',
+            'pamong_putra',
+            'pamong_putri',
+            'kepala_perpus',
+            'guru_uks',
+            'guru',
+            'kurikulum',
+            'guru_mapel',
+            'wali_kelas',
+            'kepala_sekolah',
+        ]);
+    }
+
+    public function hasFullAdminAccess(): bool
+    {
+        return $this->hasAnyRole(self::fullAdminRoleNames());
     }
 
     public function isBoardingPamong(): bool
@@ -257,7 +286,12 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
 
     public function isGuru(): bool
     {
-        return $this->hasRole('guru');
+        return $this->hasAnyRole(['guru', 'guru_admin', 'guru_mapel', 'wali_kelas']);
+    }
+
+    public function usesGuruPersonalScope(): bool
+    {
+        return $this->isGuru() && ! $this->hasFullAdminAccess();
     }
 
     public function shouldForceDefaultPasswordChange(): bool
@@ -305,7 +339,7 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
             return $this->resolvedNavigationGroupsCache;
         }
 
-        if ($this->hasRole('admin')) {
+        if ($this->hasFullAdminAccess()) {
             return $this->resolvedNavigationGroupsCache = array_keys(self::navigationGroupOptions());
         }
 
@@ -318,7 +352,7 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
             return $this->resolvedNavigationItemsCache;
         }
 
-        if ($this->hasRole('admin')) {
+        if ($this->hasFullAdminAccess()) {
             return $this->resolvedNavigationItemsCache = [];
         }
 

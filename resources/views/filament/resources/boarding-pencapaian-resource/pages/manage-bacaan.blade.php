@@ -21,7 +21,7 @@
         ])
 
         <section class="rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-gray-900">
-            <div class="grid divide-y divide-gray-200 text-sm dark:divide-white/10 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+            <div class="boarding-summary-grid-five grid divide-y divide-gray-200 text-sm dark:divide-white/10 sm:divide-x sm:divide-y-0">
                 <div class="p-3">
                     <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Total</div>
                     <div class="mt-1 text-lg font-semibold text-gray-950 dark:text-white">{{ number_format((int) ($summaryMetrics['total_sessions'] ?? 0), 0, ',', '.') }}</div>
@@ -29,6 +29,10 @@
                 <div class="p-3">
                     <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Terakhir</div>
                     <div class="mt-1 text-lg font-semibold text-gray-950 dark:text-white">{{ $summaryMetrics['latest_date'] ?? '-' }}</div>
+                </div>
+                <div class="p-3">
+                    <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Kelas</div>
+                    <div class="mt-1 font-semibold text-gray-950 dark:text-white">{{ $summaryMetrics['latest_class'] ?? 'Kelas A / B / C' }}</div>
                 </div>
                 <div class="p-3">
                     <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Nilai</div>

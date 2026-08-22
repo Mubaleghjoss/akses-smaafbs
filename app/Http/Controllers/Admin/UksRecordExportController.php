@@ -17,7 +17,7 @@ class UksRecordExportController extends Controller
         $user = auth()->user();
 
         abort_unless($user instanceof User, Response::HTTP_FORBIDDEN);
-        abort_unless($user->hasRole('admin') || $user->canViewModule('uks_records'), Response::HTTP_FORBIDDEN);
+        abort_unless($user->hasFullAdminAccess() || $user->canViewModule('uks_records'), Response::HTTP_FORBIDDEN);
         abort_unless(UksRecord::query()->exists(), Response::HTTP_NOT_FOUND);
 
         return Excel::download(new UksRecordExport, 'data-uks-records.xlsx');

@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Support\Media\PublicImageOptimizer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Schema as SchemaFacade;
+use Illuminate\Validation\ValidationException;
+use RuntimeException;
 use Throwable;
 
 class Berita extends Model
@@ -48,6 +51,31 @@ class Berita extends Model
         'tracker_progress_percent' => 'integer',
         'tracker_documentation_media' => 'array',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $record): void {
+            try {
+                if ($record->isDirty('gambar') && filled($record->gambar)) {
+                    $record->gambar = app(PublicImageOptimizer::class)
+                        ->optimizeUploadedPath((string) $record->gambar, 'content');
+                }
+
+                if ($record->isDirty('tracker_documentation_media')) {
+                    $record->tracker_documentation_media = collect($record->tracker_documentation_media ?? [])
+                        ->map(fn ($path) => app(PublicImageOptimizer::class)
+                            ->optimizeUploadedPath((string) $path, 'content'))
+                        ->filter()
+                        ->values()
+                        ->all();
+                }
+            } catch (RuntimeException $exception) {
+                throw ValidationException::withMessages([
+                    'gambar' => 'Gambar berita gagal dioptimalkan: '.$exception->getMessage(),
+                ]);
+            }
+        });
+    }
 
     public function updates(): HasMany
     {

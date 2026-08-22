@@ -18,7 +18,7 @@
         </div>
         <div>
             <span>Materi</span>
-            <strong>{{ $response->material?->title ?: '-' }}</strong>
+            <strong>{{ $response->material?->title ?: 'Materi tidak ditemukan' }}</strong>
         </div>
         <div>
             <span>Dikirim</span>
@@ -39,6 +39,11 @@
                     false => 'Salah',
                     default => 'Belum dinilai',
                 };
+                if ($answer->question && ! $answer->question->isEssay() && $answer->score_earned !== null) {
+                    $statusLabel = number_format((int) $answer->score_earned, 0, ',', '.')
+                        .'/'.number_format((int) ($answer->score_possible ?: $answer->question->objectiveItemCount()), 0, ',', '.')
+                        .' poin';
+                }
                 $statusClass = match ($answer->is_correct) {
                     true => 'is-correct',
                     false => 'is-wrong',
@@ -63,8 +68,15 @@
 
                     <dl>
                         <div>
-                            <dt>Jumlah Karakter</dt>
-                            <dd>{{ number_format((int) $answer->character_count, 0, ',', '.') }}</dd>
+                            <dt>{{ ($answer->question?->isEssay() ?? true) ? 'Jumlah Karakter' : 'Jenis / Poin' }}</dt>
+                            <dd>
+                                @if($answer->question && ! $answer->question->isEssay())
+                                    {{ \App\Models\PerpustakaanLiterasiQuestion::typeLabel($answer->question->question_type) }}
+                                    · {{ number_format((int) ($answer->score_earned ?? 0), 0, ',', '.') }}/{{ number_format((int) ($answer->score_possible ?? 0), 0, ',', '.') }}
+                                @else
+                                    {{ number_format((int) $answer->character_count, 0, ',', '.') }}
+                                @endif
+                            </dd>
                         </div>
                         <div>
                             <dt>Dinilai Oleh</dt>

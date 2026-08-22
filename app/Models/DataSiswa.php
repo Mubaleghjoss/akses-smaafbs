@@ -8,10 +8,17 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 class DataSiswa extends Model
 {
+    public const JK_OPTIONS = [
+        'L' => 'Laki-laki',
+        'P' => 'Perempuan',
+    ];
+
     public const STATUS_OPTIONS = [
         'aktif' => 'Aktif',
         'alumni' => 'Alumni',
@@ -40,18 +47,33 @@ class DataSiswa extends Model
     protected $casts = [
         'tanggal_lahir' => 'date',
         'tanggal_non_aktif' => 'date',
+        'spmb_source_updated_at' => 'datetime',
+        'spmb_synced_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
 
     protected static function booted(): void
     {
+        static::creating(function (self $record): void {
+            if (trim((string) $record->billing_code) === ''
+                && Schema::hasColumn($record->getTable(), 'billing_code')) {
+                $record->billing_code = static::generateUniqueBillingCode();
+            }
+        });
+
         static::saving(function (self $record): void {
             $rombel = Rombel::normalizeName($record->rombel_saat_ini);
             $record->rombel_saat_ini = $rombel !== '' ? $rombel : null;
 
+            $rombelRecord = null;
+
             if ($record->rombel_saat_ini !== null) {
-                Rombel::ensureFromName($record->rombel_saat_ini);
+                $rombelRecord = Rombel::ensureFromName($record->rombel_saat_ini);
+            }
+
+            if ($rombelRecord && ! $rombelRecord->is_active && strtolower((string) $record->status) === 'aktif') {
+                $record->forceFill(Rombel::nonActiveStudentAttributes($rombelRecord->nama));
             }
 
             foreach (['kepribadian', 'gaya_belajar', 'profiling', 'mbti'] as $attribute) {
@@ -86,6 +108,31 @@ class DataSiswa extends Model
     public static function statusOptions(): array
     {
         return self::STATUS_OPTIONS;
+    }
+
+    public static function generateUniqueBillingCode(): string
+    {
+        for ($attempt = 0; $attempt < 100; $attempt++) {
+            $code = Str::upper(Str::random(8));
+
+            if (! static::query()->where('billing_code', $code)->exists()) {
+                return $code;
+            }
+        }
+
+        throw new RuntimeException('Tidak dapat membuat billing code siswa yang unik.');
+    }
+
+    public static function jkOptions(): array
+    {
+        return self::JK_OPTIONS;
+    }
+
+    public static function jkLabel(?string $jk): string
+    {
+        $normalized = strtoupper(trim((string) $jk));
+
+        return self::JK_OPTIONS[$normalized] ?? ($jk ?: '-');
     }
 
     public static function nonActiveStatuses(): array

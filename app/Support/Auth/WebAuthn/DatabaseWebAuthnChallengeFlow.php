@@ -13,7 +13,28 @@ class DatabaseWebAuthnChallengeFlow implements WebAuthnChallengeFlow
 {
     public function __construct(
         private readonly WebAuthnCredentialDomain $credentials,
+        private readonly VerifiedWebAuthnCeremony $verifiedCeremony,
     ) {}
+
+    public function issueRegistrationChallenge(User $user, bool $browserSupported, array $context = []): WebAuthnChallengeIssueResult
+    {
+        return $this->verifiedCeremony->issueRegistration($user, $browserSupported, $context);
+    }
+
+    public function verifyRegistration(User $user, string $challengeId, array $payload, ?string $deviceName = null): WebAuthnCredential
+    {
+        return $this->verifiedCeremony->verifyRegistration($user, $challengeId, $payload, $deviceName);
+    }
+
+    public function issueDiscoverableAssertionChallenge(bool $browserSupported, array $context = []): WebAuthnChallengeIssueResult
+    {
+        return $this->verifiedCeremony->issueDiscoverableAssertion($browserSupported, $context);
+    }
+
+    public function verifyDiscoverableAssertion(string $challengeId, string $credentialId, array $payload): WebAuthnAssertionResult
+    {
+        return $this->verifiedCeremony->verifyDiscoverableAssertion($challengeId, $credentialId, $payload);
+    }
 
     public function issueAssertionChallenge(User $user, bool $browserSupported, array $context = []): WebAuthnChallengeIssueResult
     {

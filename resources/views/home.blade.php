@@ -285,19 +285,39 @@
                 <strong>{{ number_format($stats['rombel_count']) }}</strong>
                 <span>rombel / {{ number_format($rombelStudentTotal) }} siswa</span>
             </div>
+            <p class="text-pretty text-xs text-slate-500">Pilih rombel untuk melihat rincian siswa laki-laki dan perempuan.</p>
             <ul class="hero-mini-card__bars" data-home-mini-chart-visual="rombel-bars">
                 @forelse($rombelItems as $rombel)
                     @php
                         $barWidth = min(100, round(((int) $rombel['students'] / $rombelMaxStudents) * 100, 2));
                     @endphp
                     <li>
-                        <div class="hero-mini-card__bars-head">
-                            <span>{{ $rombel['name'] }}</span>
-                            <span>{{ number_format((int) $rombel['students']) }} siswa</span>
-                        </div>
-                        <div class="hero-mini-card__bars-track">
-                            <span class="hero-mini-card__bars-fill" style="width: {{ $barWidth }}%;"></span>
-                        </div>
+                        <button
+                            type="button"
+                            class="hero-mini-card__rombel-button"
+                            aria-haspopup="dialog"
+                            aria-controls="home-rombel-detail-dialog"
+                            aria-label="Lihat rincian rombel {{ $rombel['name'] }}"
+                            data-rombel-detail-trigger
+                            data-rombel-name="{{ $rombel['name'] }}"
+                            data-rombel-students="{{ (int) $rombel['students'] }}"
+                            data-rombel-male="{{ (int) $rombel['male'] }}"
+                            data-rombel-female="{{ (int) $rombel['female'] }}"
+                            data-rombel-unspecified="{{ (int) $rombel['unspecified'] }}"
+                        >
+                            <span class="hero-mini-card__bars-head">
+                                <span>{{ $rombel['name'] }}</span>
+                                <span class="inline-flex items-center gap-1.5 tabular-nums">
+                                    {{ number_format((int) $rombel['students']) }} siswa
+                                    <svg class="size-4 text-slate-400" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                                        <path d="m7.5 5 5 5-5 5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+                                    </svg>
+                                </span>
+                            </span>
+                            <span class="hero-mini-card__bars-track">
+                                <span class="hero-mini-card__bars-fill" style="width: {{ $barWidth }}%;"></span>
+                            </span>
+                        </button>
                     </li>
                 @empty
                     <li class="text-xs text-slate-500">Data rombel aktif belum tersedia.</li>
@@ -445,14 +465,21 @@
                         <div class="mt-4 grid grid-cols-3 gap-3">
                             @foreach($documentation as $imagePath)
                                 @php
+                                    $documentationStoragePath = str_contains((string) $imagePath, '/')
+                                        ? (string) $imagePath
+                                        : 'news/documentation/'.$imagePath;
                                     $documentationUrl = str_starts_with((string) $imagePath, 'http://') || str_starts_with((string) $imagePath, 'https://')
                                         ? $imagePath
-                                        : asset('storage/'.(str_contains((string) $imagePath, '/') ? $imagePath : 'news/documentation/'.$imagePath));
+                                        : app(\App\Support\Media\PublicImageOptimizer::class)->url($documentationStoragePath);
                                 @endphp
                                 <img
                                     class="h-24 w-full rounded-2xl border border-slate-100 object-cover"
                                     src="{{ $documentationUrl }}"
                                     alt="Dokumentasi {{ $news->judul }}"
+                                    width="320"
+                                    height="192"
+                                    loading="lazy"
+                                    decoding="async"
                                 />
                             @endforeach
                         </div>
@@ -470,6 +497,89 @@
             @endforelse
         </div>
     </section>
+
+    <dialog
+        id="home-rombel-detail-dialog"
+        class="home-rombel-dialog"
+        aria-labelledby="home-rombel-detail-title"
+        aria-describedby="home-rombel-detail-description"
+    >
+        <div class="home-rombel-dialog__panel">
+            <div class="flex items-start justify-between gap-4">
+                <div class="min-w-0">
+                    <p class="text-sm font-medium text-sky-700">Rincian siswa aktif</p>
+                    <h2 id="home-rombel-detail-title" class="mt-1 text-balance text-xl font-semibold text-slate-900">Rombel</h2>
+                    <p id="home-rombel-detail-description" class="mt-1 text-pretty text-sm text-slate-500">Komposisi siswa berdasarkan data jenis kelamin.</p>
+                </div>
+                <button
+                    id="home-rombel-detail-close"
+                    type="button"
+                    class="inline-flex size-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2"
+                    aria-label="Tutup rincian rombel"
+                >
+                    <svg class="size-5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                        <path d="m5 5 10 10M15 5 5 15" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div class="flex items-end justify-between gap-4">
+                    <div>
+                        <p class="text-sm text-slate-500">Total siswa aktif</p>
+                        <p id="home-rombel-detail-total" class="mt-1 text-3xl font-semibold tabular-nums text-slate-900">0</p>
+                    </div>
+                    <p id="home-rombel-detail-summary" class="text-right text-sm font-medium tabular-nums text-slate-600">0 L / 0 P</p>
+                </div>
+
+                <div
+                    id="home-rombel-detail-chart"
+                    class="home-rombel-dialog__chart mt-4"
+                    role="img"
+                    aria-label="Belum ada data siswa"
+                >
+                    <span id="home-rombel-detail-chart-male" class="bg-sky-500"></span>
+                    <span id="home-rombel-detail-chart-female" class="bg-orange-500"></span>
+                    <span id="home-rombel-detail-chart-unspecified" class="bg-slate-300"></span>
+                </div>
+            </div>
+
+            <div class="mt-4 grid grid-cols-2 gap-3">
+                <div class="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+                    <div class="flex items-center gap-2 text-sm font-medium text-sky-800">
+                        <span class="size-2.5 rounded-full bg-sky-500"></span>
+                        Laki-laki
+                    </div>
+                    <p id="home-rombel-detail-male" class="mt-3 text-2xl font-semibold tabular-nums text-sky-950">0</p>
+                    <p id="home-rombel-detail-male-percent" class="mt-1 text-sm tabular-nums text-sky-700">0%</p>
+                </div>
+                <div class="rounded-2xl border border-orange-200 bg-orange-50 p-4">
+                    <div class="flex items-center gap-2 text-sm font-medium text-orange-800">
+                        <span class="size-2.5 rounded-full bg-orange-500"></span>
+                        Perempuan
+                    </div>
+                    <p id="home-rombel-detail-female" class="mt-3 text-2xl font-semibold tabular-nums text-orange-950">0</p>
+                    <p id="home-rombel-detail-female-percent" class="mt-1 text-sm tabular-nums text-orange-700">0%</p>
+                </div>
+            </div>
+
+            <div id="home-rombel-detail-unspecified-card" class="mt-3 hidden rounded-2xl border border-slate-200 bg-white p-4">
+                <div class="flex items-center justify-between gap-4">
+                    <div>
+                        <p class="font-medium text-slate-800">Gender belum tercatat</p>
+                        <p class="mt-1 text-pretty text-sm text-slate-500">Data siswa ini perlu dilengkapi pada master siswa.</p>
+                    </div>
+                    <p id="home-rombel-detail-unspecified" class="text-2xl font-semibold tabular-nums text-slate-900">0</p>
+                </div>
+            </div>
+
+            <div id="home-rombel-detail-empty" class="mt-3 hidden rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-sm text-slate-600">
+                Belum ada siswa aktif pada rombel ini.
+            </div>
+
+            <button id="home-rombel-detail-done" type="button" class="btn btn-primary mt-5 w-full sm:w-auto">Selesai</button>
+        </div>
+    </dialog>
 
     <div id="org-photo-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" aria-hidden="true" role="dialog">
         <div class="absolute inset-0 bg-slate-900/70"></div>
@@ -667,6 +777,95 @@
             const photoName = document.getElementById('org-photo-name');
             const photoRole = document.getElementById('org-photo-role');
 
+            const rombelDialog = document.getElementById('home-rombel-detail-dialog');
+            const rombelDialogClose = document.getElementById('home-rombel-detail-close');
+            const rombelDialogDone = document.getElementById('home-rombel-detail-done');
+            const rombelTitle = document.getElementById('home-rombel-detail-title');
+            const rombelTotal = document.getElementById('home-rombel-detail-total');
+            const rombelSummary = document.getElementById('home-rombel-detail-summary');
+            const rombelMale = document.getElementById('home-rombel-detail-male');
+            const rombelFemale = document.getElementById('home-rombel-detail-female');
+            const rombelMalePercent = document.getElementById('home-rombel-detail-male-percent');
+            const rombelFemalePercent = document.getElementById('home-rombel-detail-female-percent');
+            const rombelUnspecified = document.getElementById('home-rombel-detail-unspecified');
+            const rombelUnspecifiedCard = document.getElementById('home-rombel-detail-unspecified-card');
+            const rombelEmpty = document.getElementById('home-rombel-detail-empty');
+            const rombelChart = document.getElementById('home-rombel-detail-chart');
+            const rombelChartMale = document.getElementById('home-rombel-detail-chart-male');
+            const rombelChartFemale = document.getElementById('home-rombel-detail-chart-female');
+            const rombelChartUnspecified = document.getElementById('home-rombel-detail-chart-unspecified');
+            let lastRombelTrigger = null;
+
+            const formatCount = new Intl.NumberFormat('id-ID');
+            const formatPercent = (count, total) => total > 0
+                ? `${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 }).format((count / total) * 100)}%`
+                : '0%';
+
+            const closeRombelDialog = () => {
+                if (rombelDialog?.open) {
+                    rombelDialog.close();
+                }
+            };
+
+            if (rombelDialog) {
+                document.querySelectorAll('[data-rombel-detail-trigger]').forEach((button) => {
+                    button.addEventListener('click', () => {
+                        const name = button.dataset.rombelName || 'Rombel';
+                        const students = Number.parseInt(button.dataset.rombelStudents || '0', 10);
+                        const male = Number.parseInt(button.dataset.rombelMale || '0', 10);
+                        const female = Number.parseInt(button.dataset.rombelFemale || '0', 10);
+                        const unspecified = Number.parseInt(button.dataset.rombelUnspecified || '0', 10);
+                        const hasStudents = students > 0;
+
+                        lastRombelTrigger = button;
+                        rombelTitle.textContent = `Rombel ${name}`;
+                        rombelTotal.textContent = formatCount.format(students);
+                        rombelSummary.textContent = `${formatCount.format(male)} L / ${formatCount.format(female)} P`;
+                        rombelMale.textContent = formatCount.format(male);
+                        rombelFemale.textContent = formatCount.format(female);
+                        rombelMalePercent.textContent = formatPercent(male, students);
+                        rombelFemalePercent.textContent = formatPercent(female, students);
+                        rombelUnspecified.textContent = formatCount.format(unspecified);
+                        rombelUnspecifiedCard.classList.toggle('hidden', unspecified === 0);
+                        rombelEmpty.classList.toggle('hidden', hasStudents);
+                        rombelChart.classList.toggle('hidden', !hasStudents);
+                        rombelChart.setAttribute(
+                            'aria-label',
+                            `${name}: ${formatCount.format(male)} laki-laki, ${formatCount.format(female)} perempuan${unspecified > 0 ? `, ${formatCount.format(unspecified)} belum tercatat` : ''}.`,
+                        );
+                        rombelChartMale.style.flexBasis = `${students > 0 ? (male / students) * 100 : 0}%`;
+                        rombelChartFemale.style.flexBasis = `${students > 0 ? (female / students) * 100 : 0}%`;
+                        rombelChartUnspecified.style.flexBasis = `${students > 0 ? (unspecified / students) * 100 : 0}%`;
+                        rombelDialog.showModal();
+                        rombelDialogClose?.focus();
+                    });
+                });
+
+                rombelDialogClose?.addEventListener('click', closeRombelDialog);
+                rombelDialogDone?.addEventListener('click', closeRombelDialog);
+                rombelDialog.addEventListener('click', (event) => {
+                    if (event.target === rombelDialog) {
+                        closeRombelDialog();
+                    }
+                });
+                rombelDialog.addEventListener('close', () => {
+                    lastRombelTrigger?.focus();
+                });
+            }
+
+            const loadVisibleDeferredImages = (root = document) => {
+                window.requestAnimationFrame(() => {
+                    root.querySelectorAll('img[data-public-lazy-image][data-src]').forEach((image) => {
+                        if (image.offsetParent === null || image.hasAttribute('src')) {
+                            return;
+                        }
+
+                        image.src = image.dataset.src;
+                        image.removeAttribute('data-src');
+                    });
+                });
+            };
+
             const profileTabsContainer = document.querySelector('[data-home-profile-tabs]');
             if (profileTabsContainer) {
                 const profileTabButtons = profileTabsContainer.querySelectorAll('[data-home-profile-tab-trigger]');
@@ -682,6 +881,14 @@
                     profileTabPanels.forEach((panel) => {
                         panel.hidden = panel.dataset.homeProfileTabPanel !== tabName;
                     });
+
+                    const activePanel = profileTabsContainer.querySelector(
+                        `[data-home-profile-tab-panel="${tabName}"]`,
+                    );
+
+                    if (activePanel) {
+                        loadVisibleDeferredImages(activePanel);
+                    }
                 };
 
                 profileTabButtons.forEach((button) => {
@@ -691,7 +898,29 @@
                 });
 
                 activateProfileTab('struktur');
+
+                let imageResizeTimer = null;
+                window.addEventListener('resize', () => {
+                    window.clearTimeout(imageResizeTimer);
+                    imageResizeTimer = window.setTimeout(() => {
+                        const activePanel = profileTabsContainer.querySelector(
+                            '[data-home-profile-tab-panel]:not([hidden])',
+                        );
+
+                        if (activePanel) {
+                            loadVisibleDeferredImages(activePanel);
+                        }
+                    }, 150);
+                });
             }
+
+            document.querySelectorAll('details').forEach((details) => {
+                details.addEventListener('toggle', () => {
+                    if (details.open) {
+                        loadVisibleDeferredImages(details);
+                    }
+                });
+            });
 
             document.querySelectorAll('[data-achievement-filter-root]').forEach((achievementRoot) => {
                 const filterButtons = achievementRoot.querySelectorAll('[data-achievement-filter-trigger]');

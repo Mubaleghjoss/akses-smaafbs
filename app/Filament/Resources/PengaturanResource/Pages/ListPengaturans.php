@@ -15,7 +15,9 @@ use App\Models\Prestasi;
 use App\Support\Admin\Dashboard\DashboardCacheSupport;
 use App\Support\GoogleDrive\GoogleDriveService;
 use App\Support\GoogleDrive\GoogleDriveSettings;
-use App\Support\Security\EndpointProtectionPolicy;
+use App\Support\ServerSync\ServerDataPuller;
+use App\Support\ServerSync\ServerSyncRunStore;
+use App\Support\ServerSync\ServerSyncSettings;
 use Filament\Actions\Action;
 use Filament\Forms;
 use Filament\Forms\Concerns\InteractsWithForms;
@@ -24,9 +26,11 @@ use App\Models\Pengaturan;
 use App\Support\SiteSettings\SiteSettingKeys;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Page;
+use Filament\Schemas\Components\Actions as SchemaActions;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\View as SchemaView;
 use Filament\Schemas\Schema;
 use Closure;
 use Illuminate\Contracts\Support\Htmlable;
@@ -35,6 +39,8 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Schema as SchemaFacade;
+use Illuminate\Support\Str;
+use Symfony\Component\Process\Process;
 use Throwable;
 use Livewire\Features\SupportFileUploads\WithFileUploads;
 
@@ -85,9 +91,28 @@ class ListPengaturans extends Page implements HasForms
 
     public mixed $favicon_upload = null;
 
-    public bool $showGoogleDriveMonitoring = true;
+    public bool $showGoogleDriveMonitoring = false;
 
-    public bool $showGoogleDriveMonitoringDetails = true;
+    public bool $showGoogleDriveMonitoringDetails = false;
+
+    public string $serverDataPullRunStatus = 'idle';
+
+    public ?string $serverDataPullRunOperation = null;
+
+    public ?string $serverDataPullRunStartedAt = null;
+
+    public ?string $serverDataPullRunFinishedAt = null;
+
+    public ?float $serverDataPullRunDuration = null;
+
+    public ?string $serverDataPullRunId = null;
+
+    public bool $serverDataPullRunNotified = false;
+
+    /**
+     * @var array<int, array{time: string, level: string, message: string}>
+     */
+    public array $serverDataPullLogs = [];
 
     /**
      * @var array<string, mixed>
@@ -115,10 +140,10 @@ class ListPengaturans extends Page implements HasForms
 
     public function mount(): void
     {
-        $shouldSkipExpensiveWidgets = EndpointProtectionPolicy::shouldSkipExpensiveAdminDashboardWidgets();
-        $this->showGoogleDriveMonitoring = ! $shouldSkipExpensiveWidgets;
-        $this->showGoogleDriveMonitoringDetails = ! $shouldSkipExpensiveWidgets;
+        $this->showGoogleDriveMonitoring = false;
+        $this->showGoogleDriveMonitoringDetails = false;
         $this->fillForm();
+        $this->restoreLatestServerDataRun();
     }
 
     public function getTitle(): string|Htmlable
@@ -133,14 +158,14 @@ class ListPengaturans extends Page implements HasForms
 
     public function getSubheading(): string|Htmlable|null
     {
-        return 'Kelola branding, metadata, PWA, dan integrasi Google Drive dari satu halaman admin.';
+        return 'Kelola branding, metadata, PWA, Google Drive, dan sumber sinkron data API dari satu halaman.';
     }
 
     protected function getHeaderActions(): array
     {
         return [
             Action::make('toggleGoogleDriveMonitoring')
-                ->label(fn (): string => $this->showGoogleDriveMonitoring ? 'Sembunyikan Monitor Drive' : 'Muat Monitor Drive')
+                ->label(fn (): string => $this->showGoogleDriveMonitoring ? 'Tutup Monitor Drive' : 'Buka Monitor Drive')
                 ->icon(fn (): string => $this->showGoogleDriveMonitoring ? 'heroicon-o-eye-slash' : 'heroicon-o-bolt')
                 ->color('gray')
                 ->action(function (): void {
@@ -153,7 +178,7 @@ class ListPengaturans extends Page implements HasForms
                     }
                 }),
             Action::make('toggleGoogleDriveMonitoringDetails')
-                ->label(fn (): string => $this->showGoogleDriveMonitoringDetails ? 'Sembunyikan Detail Monitor' : 'Muat Detail Monitor')
+                ->label(fn (): string => $this->showGoogleDriveMonitoringDetails ? 'Tutup Detail Drive' : 'Buka Detail Drive')
                 ->icon(fn (): string => $this->showGoogleDriveMonitoringDetails ? 'heroicon-o-eye-slash' : 'heroicon-o-list-bullet')
                 ->color('gray')
                 ->visible(fn (): bool => $this->showGoogleDriveMonitoring)
@@ -178,6 +203,9 @@ class ListPengaturans extends Page implements HasForms
                             ->description('Atur nama situs, topbar, dan aset utama yang tampil di frontend.')
                             ->columnSpan(['xl' => 2])
                             ->columns(['default' => 1, 'md' => 2])
+                            ->collapsible()
+                            ->collapsed()
+                            ->persistCollapsed()
                             ->schema([
                                 Forms\Components\TextInput::make('site_name')
                                     ->label('Nama Situs')
@@ -225,6 +253,9 @@ class ListPengaturans extends Page implements HasForms
                             ]),
                         Section::make('Ringkasan')
                             ->columnSpan(['xl' => 1])
+                            ->collapsible()
+                            ->collapsed()
+                            ->persistCollapsed()
                             ->schema([
                                 Forms\Components\Placeholder::make('summary_site_name')
                                     ->label('Nama Situs')
@@ -240,6 +271,9 @@ class ListPengaturans extends Page implements HasForms
                             ->description('Fokuskan metadata ke satu sumber. Judul dan deskripsi share otomatis memakai SEO default.')
                             ->columnSpan(['xl' => 2])
                             ->columns(['default' => 1, 'md' => 2])
+                            ->collapsible()
+                            ->collapsed()
+                            ->persistCollapsed()
                             ->schema([
                                 Forms\Components\TextInput::make('footer_primary_text')
                                     ->label('Footer Utama')
@@ -268,6 +302,9 @@ class ListPengaturans extends Page implements HasForms
                             ]),
                         Section::make('Mengikuti Otomatis')
                             ->columnSpan(['xl' => 1])
+                            ->collapsible()
+                            ->collapsed()
+                            ->persistCollapsed()
                             ->schema([
                                 Forms\Components\Placeholder::make('auto_og')
                                     ->label('Open Graph')
@@ -280,6 +317,9 @@ class ListPengaturans extends Page implements HasForms
                             ->description('Nama aplikasi mengikuti nama situs. Yang perlu dijaga manual hanya warna tema dan nama pendek.')
                             ->columnSpan(['xl' => 2])
                             ->columns(['default' => 1, 'md' => 2])
+                            ->collapsible()
+                            ->collapsed()
+                            ->persistCollapsed()
                             ->schema([
                                 Forms\Components\TextInput::make('theme_color')
                                     ->label('Theme Color')
@@ -295,11 +335,64 @@ class ListPengaturans extends Page implements HasForms
                                     ->helperText('Dipakai untuk ikon home screen dan manifest.')
                                     ->live(onBlur: true),
                             ]),
-                        Section::make('Integrasi Google Drive')
-                            ->description('Dokumen komite, berkas siswa, berkas guru, identitas sekolah, dan lampiran prestasi tetap disimpan lokal terlebih dahulu. Jika sinkron otomatis aktif, file masuk antrean background. Jika tidak, admin tetap bisa memakai tombol Upload Sekarang secara manual.')
-                            ->columnSpan(['xl' => 2])
+                        Section::make('Sinkron Data API')
+                            ->description('UI dibuat ringkas: cukup aktifkan sinkron data API dan isi domain server sumber.')
+                            ->columnSpanFull()
                             ->columns(['default' => 1, 'md' => 2])
+                            ->collapsible()
+                            ->collapsed()
+                            ->persistCollapsed()
                             ->schema([
+                                Forms\Components\Toggle::make('server_sync_api_enabled')
+                                    ->label('Sinkronkan data API')
+                                    ->helperText('Jika aktif, domain server ini menjadi sumber sinkronisasi data.'),
+                                Forms\Components\TextInput::make('server_sync_domain')
+                                    ->label('Nama Domain Server')
+                                    ->required()
+                                    ->maxLength(255)
+                                    ->default('https://app.smaafbs.sch.id')
+                                    ->placeholder('https://app.smaafbs.sch.id')
+                                    ->helperText('Isi domain utama server. Contoh: https://app.smaafbs.sch.id'),
+                                Forms\Components\Placeholder::make('server_sync_pull_status')
+                                    ->label('Kesiapan tarik data')
+                                    ->content(fn (): string => $this->serverDataPullReadinessLabel())
+                                    ->columnSpanFull(),
+                                SchemaActions::make([
+                                    Action::make('testServerDataConnection')
+                                        ->label('Uji Koneksi Server')
+                                        ->icon('heroicon-o-signal')
+                                        ->color('gray')
+                                        ->action(fn (): mixed => $this->testServerDataConnection()),
+                                    Action::make('pullServerData')
+                                        ->label('Tarik Data Server')
+                                        ->icon('heroicon-o-cloud-arrow-down')
+                                        ->color('danger')
+                                        ->requiresConfirmation()
+                                        ->modalHeading('Tarik dan timpa seluruh data lokal?')
+                                        ->modalDescription(fn (): string => $this->serverDataPullModalDescription())
+                                        ->modalSubmitActionLabel('Tarik dan Timpa Data Lokal')
+                                        ->disabled(fn (): bool => ! $this->canPullServerData())
+                                        ->tooltip(fn (): string => $this->canPullServerData()
+                                            ? 'Ambil database dan seluruh folder storage yang dikonfigurasi dari server.'
+                                            : $this->serverDataPullReadinessLabel())
+                                        ->action(fn (): mixed => $this->pullServerDataFromServer()),
+                                ])
+                                    ->columnSpanFull(),
+                                SchemaView::make('filament.resources.pengaturan-resource.pages.partials.server-sync-log')
+                                    ->viewData(fn (): array => ['page' => $this])
+                                    ->columnSpanFull(),
+                            ]),
+                        Section::make('Google Drive')
+                            ->description('Konfigurasi, status, shortcut upload, dan monitor sinkron berada di satu container. Default tertutup agar halaman tetap ringan.')
+                            ->columnSpanFull()
+                            ->columns(['default' => 1, 'md' => 2])
+                            ->collapsible()
+                            ->collapsed()
+                            ->persistCollapsed()
+                            ->schema([
+                                SchemaView::make('filament.resources.pengaturan-resource.pages.partials.google-drive-panel')
+                                    ->viewData(fn (): array => ['page' => $this])
+                                    ->columnSpanFull(),
                                 Forms\Components\Toggle::make('google_drive_enabled')
                                     ->label('Aktifkan Google Drive')
                                     ->live(),
@@ -342,14 +435,31 @@ class ListPengaturans extends Page implements HasForms
                                     ->visible(fn (Get $get): bool => (bool) ($get('google_drive_enabled') ?? false)),
                                 Forms\Components\Textarea::make('google_drive_service_account_json')
                                     ->label('Service Account JSON')
-                                    ->rows(10)
+                                    ->rows(8)
                                     ->placeholder("{\n  \"type\": \"service_account\",\n  \"client_email\": \"...\",\n  \"private_key\": \"-----BEGIN PRIVATE KEY-----...\"\n}")
                                     ->helperText('Tempel full JSON credential service account Google Cloud. Kunci ini dipakai server untuk upload otomatis.')
                                     ->columnSpanFull()
                                     ->visible(fn (Get $get): bool => (bool) ($get('google_drive_enabled') ?? false)),
+                                Forms\Components\Placeholder::make('google_drive_ready_status')
+                                    ->label('Kesiapan')
+                                    ->content(fn (Get $get): string => $this->googleDrivePreviewFromState($this->formStateForGoogleDrivePreview($get))->readinessLabel())
+                                    ->visible(fn (Get $get): bool => (bool) ($get('google_drive_enabled') ?? false)),
+                                Forms\Components\Placeholder::make('google_drive_account_preview')
+                                    ->label('Service Account')
+                                    ->content(fn (Get $get): string => $this->googleDrivePreviewFromState($this->formStateForGoogleDrivePreview($get))->serviceAccountEmail() ?: '-')
+                                    ->visible(fn (Get $get): bool => (bool) ($get('google_drive_enabled') ?? false)),
+                                Forms\Components\Placeholder::make('google_drive_target_preview')
+                                    ->label('Folder Tujuan')
+                                    ->content(fn (Get $get): string => $this->googleDrivePreviewFromState($this->formStateForGoogleDrivePreview($get))->rootFolderId ?: '-')
+                                    ->visible(fn (Get $get): bool => (bool) ($get('google_drive_enabled') ?? false)),
+                                Forms\Components\Placeholder::make('google_drive_queue_preview')
+                                    ->label('Mode Upload')
+                                    ->content('Otomatis lewat queue worker untuk dokumen komite, berkas siswa, berkas guru, identitas sekolah, dan prestasi. Manual tetap tersedia lewat tombol Upload Sekarang.')
+                                    ->columnSpanFull()
+                                    ->visible(fn (Get $get): bool => (bool) ($get('google_drive_enabled') ?? false)),
                                 Forms\Components\Placeholder::make('google_drive_folder_pattern')
                                     ->label('Struktur Folder Otomatis')
-                                    ->content('Google Drive akan menyusun folder: Dokumen Komite = Arsip Tahun -> Jenis Dokumen -> Dokumen-{ID}. Berkas Siswa/Guru = Modul -> Pemilik Dokumen -> Berkas-{ID}. Prestasi = Prestasi Siswa -> Pemilik Dokumen -> Prestasi-{ID}.')
+                                    ->content('Dokumen Komite = Arsip Tahun -> Jenis Dokumen -> Dokumen-{ID}. Berkas Siswa/Guru = Modul -> Pemilik Dokumen -> Berkas-{ID}. Prestasi = Prestasi Siswa -> Pemilik Dokumen -> Prestasi-{ID}.')
                                     ->columnSpanFull()
                                     ->visible(fn (Get $get): bool => (bool) ($get('google_drive_enabled') ?? false)),
                                 Forms\Components\Placeholder::make('google_drive_steps')
@@ -357,22 +467,6 @@ class ListPengaturans extends Page implements HasForms
                                     ->content(new HtmlString('<ol style="margin-left: 1rem; list-style: decimal; line-height: 1.6;"><li>Aktifkan Google Drive API di Google Cloud.</li><li>Buat service account dan unduh JSON credential.</li><li>Share folder Drive tujuan ke email service account sebagai Editor.</li><li>Tempel JSON dan Folder ID di sini, lalu uji koneksi.</li></ol>'))
                                     ->columnSpanFull()
                                     ->visible(fn (Get $get): bool => (bool) ($get('google_drive_enabled') ?? false)),
-                            ]),
-                        Section::make('Status Google Drive')
-                            ->columnSpan(['xl' => 1])
-                            ->schema([
-                                Forms\Components\Placeholder::make('google_drive_ready_status')
-                                    ->label('Kesiapan')
-                                    ->content(fn (Get $get): string => $this->googleDrivePreviewFromState($this->formStateForGoogleDrivePreview($get))->readinessLabel()),
-                                Forms\Components\Placeholder::make('google_drive_account_preview')
-                                    ->label('Service Account')
-                                    ->content(fn (Get $get): string => $this->googleDrivePreviewFromState($this->formStateForGoogleDrivePreview($get))->serviceAccountEmail() ?: '-'),
-                                Forms\Components\Placeholder::make('google_drive_target_preview')
-                                    ->label('Folder Tujuan')
-                                    ->content(fn (Get $get): string => $this->googleDrivePreviewFromState($this->formStateForGoogleDrivePreview($get))->rootFolderId ?: '-'),
-                                Forms\Components\Placeholder::make('google_drive_queue_preview')
-                                    ->label('Mode Upload')
-                                    ->content('Mode 1: otomatis lewat queue worker untuk dokumen komite, berkas siswa, berkas guru, identitas sekolah, dan prestasi. Mode 2: manual lewat tombol Upload Sekarang di masing-masing resource atau panel monitor.'),
                             ]),
                     ]),
             ]);
@@ -385,6 +479,18 @@ class ListPengaturans extends Page implements HasForms
             $this->legacyFieldStateOverrides(),
         );
         $googleDriveSettings = GoogleDriveSettings::fromFormData($data);
+
+        try {
+            app(ServerSyncSettings::class)->saveFromForm($data);
+        } catch (Throwable $exception) {
+            Notification::make()
+                ->title('Konfigurasi tarik data server gagal disimpan')
+                ->body(trim($exception->getMessage()))
+                ->danger()
+                ->send();
+
+            return;
+        }
 
         if ($logoPath = $this->storeLegacyBrandUpload($this->logo_upload, 'site-branding/logo')) {
             $data['logo_path'] = $logoPath;
@@ -469,6 +575,8 @@ class ListPengaturans extends Page implements HasForms
             'google_drive_service_account_json' => $storedSettings[SiteSettingKeys::GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON] ?? null,
         ];
 
+        $state = array_merge($state, app(ServerSyncSettings::class)->formState());
+
         $this->form->fill($state);
         $this->fillLegacyFieldAliases($state);
     }
@@ -510,6 +618,244 @@ class ListPengaturans extends Page implements HasForms
         $this->showGoogleDriveMonitoring = true;
         $this->showGoogleDriveMonitoringDetails = true;
         $this->clearGoogleDriveMonitoringMemo();
+        DashboardCacheSupport::forgetModule('google_drive_monitor');
+    }
+
+    public function canPullServerData(): bool
+    {
+        return app(ServerDataPuller::class)->isReady();
+    }
+
+    /**
+     * @return array{
+     *     ready: bool,
+     *     api_ready: bool,
+     *     pull_ready: bool,
+     *     label: string,
+     *     color: string,
+     *     errors: array<int, string>,
+     *     pull_errors: array<int, string>,
+     *     domain: string
+     * }
+     */
+    public function serverDataPullStatus(): array
+    {
+        $enabled = (bool) config('server_sync.api.enabled', true);
+        $domain = (string) config('server_sync.api.domain', 'https://app.smaafbs.sch.id');
+        $apiErrors = [];
+
+        if (! $enabled) {
+            $apiErrors[] = 'Sinkron data API belum aktif.';
+        }
+
+        if (blank($domain)) {
+            $apiErrors[] = 'Nama domain server belum diisi.';
+        }
+
+        $pullErrors = app(ServerDataPuller::class)->readinessErrors();
+        $apiReady = $apiErrors === [];
+        $pullReady = $pullErrors === [];
+        $isLocal = app()->environment('local');
+
+        return [
+            'ready' => $apiReady && $pullReady,
+            'api_ready' => $apiReady,
+            'pull_ready' => $pullReady,
+            'label' => $pullReady
+                ? 'Siap tarik data'
+                : ($isLocal ? 'Konfigurasi lokal belum lengkap' : 'Tarik data hanya dari lokal'),
+            'color' => $pullReady ? 'success' : ($apiReady ? 'warning' : 'gray'),
+            'errors' => [...$apiErrors, ...$pullErrors],
+            'pull_errors' => $pullErrors,
+            'domain' => $domain ?: '-',
+        ];
+    }
+
+    public function serverDataPullReadinessLabel(): string
+    {
+        $status = $this->serverDataPullStatus();
+
+        if ($status['pull_ready']) {
+            return 'Siap. Database dan storage server dapat ditarik untuk menimpa data lokal.';
+        }
+
+        return 'Belum siap: '.($status['pull_errors'][0] ?? $status['errors'][0] ?? 'Konfigurasi lokal belum lengkap.');
+    }
+
+    public function serverDataPullModalDescription(): string
+    {
+        $status = $this->serverDataPullStatus();
+
+        if (! $status['pull_ready']) {
+            return 'Konfigurasi server belum lengkap: '.implode(' ', $status['errors']);
+        }
+
+        return 'Sistem menguji SSH, folder server, dan database terlebih dahulu. Jika lolos, database serta storage lokal akan dibackup lalu ditimpa data server.';
+    }
+
+    public function testServerDataConnection(): void
+    {
+        $this->queueServerDataOperation('test');
+    }
+
+    public function pullServerDataFromServer(): void
+    {
+        $this->queueServerDataOperation('pull');
+    }
+
+    public function clearServerDataPullLogs(): void
+    {
+        if (in_array($this->serverDataPullRunStatus, ['queued', 'running'], true)) {
+            return;
+        }
+
+        $this->serverDataPullRunStatus = 'idle';
+        $this->serverDataPullRunOperation = null;
+        $this->serverDataPullRunStartedAt = null;
+        $this->serverDataPullRunFinishedAt = null;
+        $this->serverDataPullRunDuration = null;
+        $this->serverDataPullRunId = null;
+        $this->serverDataPullRunNotified = false;
+        $this->serverDataPullLogs = [];
+    }
+
+    public function refreshServerDataPullRun(): void
+    {
+        if (! filled($this->serverDataPullRunId)) {
+            return;
+        }
+
+        $run = app(ServerSyncRunStore::class)->get($this->serverDataPullRunId);
+
+        if (! is_array($run)) {
+            return;
+        }
+
+        $this->applyServerDataRunState($run);
+
+        if (
+            ! $this->serverDataPullRunNotified
+            && in_array($this->serverDataPullRunStatus, ['success', 'error'], true)
+        ) {
+            $this->serverDataPullRunNotified = true;
+
+            if ($this->serverDataPullRunStatus === 'success') {
+                if (($run['operation'] ?? null) === 'pull') {
+                    $this->settingsSnapshot = null;
+                    $this->googleDrivePreviewSnapshot = null;
+                    $this->googleDrivePreviewSnapshotKey = null;
+                    $this->clearGoogleDriveMonitoringMemo();
+                    $this->fillForm();
+                }
+
+                Notification::make()
+                    ->title(($run['operation'] ?? null) === 'pull'
+                        ? 'Data server berhasil ditarik'
+                        : 'Koneksi server berhasil')
+                    ->success()
+                    ->send();
+
+                return;
+            }
+
+            Notification::make()
+                ->title(($run['operation'] ?? null) === 'pull'
+                    ? 'Tarik data server gagal'
+                    : 'Koneksi server gagal')
+                ->body((string) data_get(collect($run['logs'] ?? [])->last(), 'message', 'Lihat log proses.'))
+                ->danger()
+                ->send();
+        }
+    }
+
+    protected function restoreLatestServerDataRun(): void
+    {
+        $run = app(ServerSyncRunStore::class)->latest();
+
+        if (! is_array($run)) {
+            return;
+        }
+
+        $this->serverDataPullRunId = (string) $run['id'];
+        $this->serverDataPullRunNotified = in_array(
+            (string) ($run['status'] ?? ''),
+            ['success', 'error'],
+            true,
+        );
+        $this->applyServerDataRunState($run);
+    }
+
+    protected function queueServerDataOperation(string $operation): void
+    {
+        if (in_array($this->serverDataPullRunStatus, ['queued', 'running'], true)) {
+            return;
+        }
+
+        $runId = (string) Str::uuid();
+        $store = app(ServerSyncRunStore::class);
+        $run = $store->queue($runId, $operation);
+
+        $this->serverDataPullRunId = $runId;
+        $this->serverDataPullRunNotified = false;
+        $this->applyServerDataRunState($run);
+
+        if (app()->runningUnitTests()) {
+            \Illuminate\Support\Facades\Artisan::call('server-sync:run', [
+                'operation' => $operation,
+                '--request-id' => $runId,
+            ]);
+            $this->refreshServerDataPullRun();
+
+            return;
+        }
+
+        try {
+            $process = new Process([
+                (string) config('server_sync.binaries.schtasks', 'schtasks.exe'),
+                '/Run',
+                '/TN',
+                (string) config('server_sync.runner.task_name', 'Akses2ServerSyncRunner'),
+            ], base_path());
+            $process->setTimeout(30);
+            $process->run();
+
+            if ($process->isSuccessful()) {
+                $this->refreshServerDataPullRun();
+
+                return;
+            }
+
+            $message = trim($process->getErrorOutput())
+                ?: trim($process->getOutput())
+                ?: 'Task runner sinkron tidak dapat dijalankan.';
+            $store->append($runId, 'error', $message);
+            $store->finish($runId, 'error');
+        } catch (Throwable $exception) {
+            $store->append($runId, 'error', 'Task runner gagal dijalankan: '.$exception->getMessage());
+            $store->finish($runId, 'error');
+        }
+
+        $this->refreshServerDataPullRun();
+    }
+
+    /**
+     * @param  array<string, mixed>  $run
+     */
+    protected function applyServerDataRunState(array $run): void
+    {
+        $operation = (string) ($run['operation'] ?? 'test');
+        $this->serverDataPullRunStatus = (string) ($run['status'] ?? 'idle');
+        $this->serverDataPullRunOperation = $operation === 'pull' ? 'Tarik data server' : 'Uji koneksi server';
+        $this->serverDataPullRunStartedAt = filled($run['started_at'] ?? null)
+            ? \Illuminate\Support\Carbon::parse($run['started_at'])->format('d-m-Y H:i:s')
+            : null;
+        $this->serverDataPullRunFinishedAt = filled($run['finished_at'] ?? null)
+            ? \Illuminate\Support\Carbon::parse($run['finished_at'])->format('d-m-Y H:i:s')
+            : null;
+        $this->serverDataPullRunDuration = isset($run['duration_seconds'])
+            ? (float) $run['duration_seconds']
+            : null;
+        $this->serverDataPullLogs = array_values((array) ($run['logs'] ?? []));
     }
 
     public function uploadGoogleDriveNow(int|string $source, int|string|null $recordId = null): void

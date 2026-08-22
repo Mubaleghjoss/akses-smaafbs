@@ -61,7 +61,7 @@ class BoardingPencapaian extends Model
         'tuntas' => 'Tuntas',
     ];
 
-    protected static ?string $pamongOwnershipColumn = 'pamong_user_id';
+    protected static ?string $pamongOwnershipColumn = null;
 
     protected static array $syncedUserIds = [];
 
@@ -492,14 +492,6 @@ class BoardingPencapaian extends Model
 
         $rapots = BoardingRapot::query()
             ->where('siswa_id', $this->siswa_id)
-            ->when(
-                filled($this->pamong_user_id),
-                fn (Builder $query): Builder => $query->where(function (Builder $ownerQuery): void {
-                    $ownerQuery
-                        ->whereNull('pamong_user_id')
-                        ->orWhere('pamong_user_id', $this->pamong_user_id);
-                })
-            )
             ->get();
 
         $rapots->each(fn (BoardingRapot $rapot) => $rapot->syncFromSources(

@@ -137,7 +137,7 @@ class AdminAccessChangeLogResource extends Resource
 
     public static function canViewAny(): bool
     {
-        return auth()->user()?->hasRole('admin') ?? false;
+        return auth()->user()?->hasFullAdminAccess() ?? false;
     }
 
     public static function canCreate(): bool

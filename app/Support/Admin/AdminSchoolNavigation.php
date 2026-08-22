@@ -2,9 +2,18 @@
 
 namespace App\Support\Admin;
 
+use App\Filament\Pages\Assessment\AsasHub;
+use App\Filament\Pages\Assessment\AssessmentDashboard;
+use App\Filament\Pages\Assessment\AstsHub;
+use App\Filament\Pages\BuatAkunSiswa;
 use App\Filament\Pages\DashboardProker;
+use App\Filament\Pages\HotspotSettings;
+use App\Filament\Pages\Monitor;
 use App\Filament\Pages\SarprasStickerSettings;
+use App\Filament\Resources\AccountCategoryResource;
 use App\Filament\Resources\BeritaResource;
+use App\Filament\Resources\BelajarIdAccountResource;
+use App\Filament\Resources\BelajarIdGuruResource;
 use App\Filament\Resources\BerkasGuruResource;
 use App\Filament\Resources\BerkasSiswaResource;
 use App\Filament\Resources\CalendarEventResource;
@@ -14,15 +23,17 @@ use App\Filament\Resources\DokumenKomiteResource;
 use App\Filament\Resources\EventTimelineResource;
 use App\Filament\Resources\GaleriResource;
 use App\Filament\Resources\GuruTendikResource;
+use App\Filament\Resources\HotspotUserResource;
+use App\Filament\Resources\BlockedDomainResource;
 use App\Filament\Resources\JenisBerkasResource;
-use App\Filament\Resources\PrestasiResource;
-use App\Filament\Resources\ProfilSekolahResource;
-use App\Filament\Resources\ProkerBidangResource;
-use App\Filament\Resources\ProkerResource;
 use App\Filament\Resources\PerpustakaanBukuResource;
 use App\Filament\Resources\PerpustakaanKategoriResource;
 use App\Filament\Resources\PerpustakaanLemariResource;
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource;
+use App\Filament\Resources\PrestasiResource;
+use App\Filament\Resources\ProfilSekolahResource;
+use App\Filament\Resources\ProkerBidangResource;
+use App\Filament\Resources\ProkerResource;
 use App\Filament\Resources\RombelResource;
 use App\Filament\Resources\SarprasActivityResource;
 use App\Filament\Resources\SarprasBospInventoryResource;
@@ -33,6 +44,8 @@ use App\Filament\Resources\StrukturOrganisasiResource;
 use App\Filament\Resources\SurveiResource;
 use App\Filament\Resources\UksRecordResource;
 use App\Filament\Resources\VisiMisiResource;
+use App\Filament\Resources\WifiAccountResource;
+use App\Filament\Resources\WifiGuruResource;
 use Filament\Navigation\NavigationItem;
 
 class AdminSchoolNavigation
@@ -40,7 +53,7 @@ class AdminSchoolNavigation
     public const GROUP = 'Manajemen Sekolah';
 
     /**
-     * @var array<string, array{icon:string,sort:int}>
+     * @var array<string, array{icon:string,sort:int,group?:string}>
      */
     protected const PARENT_DEFINITIONS = [
         'Sarpras' => ['icon' => 'heroicon-o-wrench-screwdriver', 'sort' => 100],
@@ -55,6 +68,8 @@ class AdminSchoolNavigation
         'Agenda' => ['icon' => 'heroicon-o-calendar-days', 'sort' => 190],
         'Konten' => ['icon' => 'heroicon-o-newspaper', 'sort' => 200],
         'Perpustakaan' => ['icon' => 'heroicon-o-book-open', 'sort' => 210],
+        'Penilaian' => ['icon' => 'heroicon-o-academic-cap', 'sort' => 115],
+        'IT SMA AFBS' => ['icon' => 'heroicon-o-server', 'sort' => 220],
     ];
 
     /**
@@ -81,9 +96,20 @@ class AdminSchoolNavigation
         RombelResource::class => 'Siswa',
         BerkasSiswaResource::class => 'Siswa',
         PrestasiResource::class => 'Siswa',
+        WifiAccountResource::class => 'Siswa',
+        BelajarIdAccountResource::class => 'Siswa',
         GuruTendikResource::class => 'Guru',
         BerkasGuruResource::class => 'Guru',
         JenisBerkasResource::class => 'Guru',
+        WifiGuruResource::class => 'Guru',
+        BelajarIdGuruResource::class => 'Guru',
+        AccountCategoryResource::class => 'Guru',
+        // Menu "IT SMA AFBS" dipensiunkan: monitoring/pengelolaan MikroTik sudah
+        // dipindah & lebih stabil di aplikasi terpisah (mikrotik.smaafbs.sch.id).
+        // Komponen router (Monitor/HotspotSettings/HotspotUser/BlockedDomain)
+        // disembunyikan dari navigasi via shouldRegisterNavigation() di masing-masing
+        // kelas; kode & route tetap ada (reversibel).
+        BuatAkunSiswa::class => 'IT SMA AFBS',
         CalendarEventResource::class => 'Agenda',
         EventTimelineResource::class => 'Agenda',
         BeritaResource::class => 'Konten',
@@ -92,16 +118,42 @@ class AdminSchoolNavigation
         PerpustakaanKategoriResource::class => 'Perpustakaan',
         PerpustakaanLemariResource::class => 'Perpustakaan',
         PerpustakaanLiterasiMaterialResource::class => 'Perpustakaan',
+        AssessmentDashboard::class => 'Penilaian',
+        AstsHub::class => 'Penilaian',
+        AsasHub::class => 'Penilaian',
+    ];
+
+    /**
+     * @var array<class-string, string>
+     */
+    protected const CLASS_GROUP_MAP = [
+        AssessmentDashboard::class => self::GROUP,
+        AstsHub::class => self::GROUP,
+        AsasHub::class => self::GROUP,
     ];
 
     public static function shouldClassify(string $class): bool
     {
-        return array_key_exists($class, self::CLASS_PARENT_MAP);
+        return array_key_exists($class, self::CLASS_PARENT_MAP)
+            || array_key_exists($class, self::CLASS_GROUP_MAP);
+    }
+
+    public static function shouldRegisterAssessmentClass(string $class): bool
+    {
+        return in_array($class, [
+            AssessmentDashboard::class,
+            AstsHub::class,
+            AsasHub::class,
+        ], true);
     }
 
     public static function effectiveGroupForClass(string $class): string|\UnitEnum|null
     {
-        if (self::shouldClassify($class)) {
+        if (array_key_exists($class, self::CLASS_GROUP_MAP)) {
+            return self::CLASS_GROUP_MAP[$class];
+        }
+
+        if (array_key_exists($class, self::CLASS_PARENT_MAP)) {
             return self::GROUP;
         }
 
@@ -126,12 +178,15 @@ class AdminSchoolNavigation
         $group = self::effectiveGroupForClass($class);
         $parent = self::parentItemForClass($class);
 
-        return array_map(
-            fn (NavigationItem $item): NavigationItem => $item
-                ->group($group)
-                ->parentItem($parent),
-            $items,
-        );
+        return array_map(function (NavigationItem $item) use ($group, $parent): NavigationItem {
+            $item->group($group);
+
+            if (filled($parent)) {
+                $item->parentItem($parent);
+            }
+
+            return $item;
+        }, $items);
     }
 
     /**
@@ -148,7 +203,7 @@ class AdminSchoolNavigation
                 $definition = self::PARENT_DEFINITIONS[$label];
 
                 return NavigationItem::make($label)
-                    ->group(self::GROUP)
+                    ->group($definition['group'] ?? self::GROUP)
                     ->icon($definition['icon'])
                     ->sort($definition['sort']);
             })

@@ -1,5 +1,21 @@
 <?php
 
+$publicStorageRoot = env('FILESYSTEM_PUBLIC_ROOT');
+
+$resolvePublicStorageRoot = static function (?string $root): string {
+    if ($root === null || trim($root) === '') {
+        return public_path('storage');
+    }
+
+    $root = rtrim(trim($root), '/\\');
+
+    if (preg_match('/^(?:[A-Za-z]:[\/\\\\]|[\/\\\\])/', $root) === 1) {
+        return $root;
+    }
+
+    return base_path($root);
+};
+
 return [
 
     /*
@@ -40,7 +56,7 @@ return [
 
         'public' => [
             'driver' => 'local',
-            'root' => public_path('storage'),
+            'root' => $resolvePublicStorageRoot($publicStorageRoot),
 
             // Default-nya biarkan relative (/storage/...) supaya mengikuti host+port yang sedang aktif.
             // Kalau butuh absolute URL di hosting, set FILESYSTEM_PUBLIC_URL di .env.

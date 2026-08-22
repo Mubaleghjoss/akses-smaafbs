@@ -49,6 +49,7 @@ class AdminPanelProvider extends PanelProvider
             ->brandLogo(fn (): ?string => app(SiteSettingsAccessor::class)->logoPath())
             ->darkModeBrandLogo(fn (): ?string => app(SiteSettingsAccessor::class)->logoPath())
             ->brandLogoHeight('2.5rem')
+            ->sidebarFullyCollapsibleOnDesktop()
             ->login(Login::class)
             ->profile(EditAccountProfile::class, false)
             ->colors([
@@ -72,12 +73,24 @@ class AdminPanelProvider extends PanelProvider
                     $authCssPath = public_path('css/filament-admin-auth.css');
                     $authCssVersion = is_file($authCssPath) ? (string) filemtime($authCssPath) : '1';
                     $fallbackJsPath = public_path('js/filament-admin-fallback.js');
-                    $fallbackJsVersion = is_file($fallbackJsPath) ? (string) filemtime($fallbackJsPath) : '1';
+                    $fallbackJsVersion = is_file($fallbackJsPath)
+                        ? substr((string) hash_file('sha256', $fallbackJsPath), 0, 12)
+                        : '1';
+                    $pwaRegistrarPath = public_path('js/pwa-registration.js');
+                    $pwaRegistrarVersion = is_file($pwaRegistrarPath)
+                        ? substr((string) hash_file('sha256', $pwaRegistrarPath), 0, 12)
+                        : '1';
+                    $passkeyJsPath = public_path('js/filament-admin-passkeys.js');
+                    $passkeyJsVersion = is_file($passkeyJsPath)
+                        ? substr((string) hash_file('sha256', $passkeyJsPath), 0, 12)
+                        : '1';
 
                     $headSnippets = [
                         '<link rel="stylesheet" href="'.asset('css/filament-admin-responsive.css').'?v='.e($responsiveCssVersion).'" data-navigate-track="reload">',
                         '<link rel="stylesheet" href="'.asset('css/filament-admin-auth.css').'?v='.e($authCssVersion).'" data-navigate-track="reload">',
                         '<script src="'.asset('js/filament-admin-fallback.js').'?v='.e($fallbackJsVersion).'" data-navigate-once></script>',
+                        '<script src="'.asset('js/pwa-registration.js').'?v='.e($pwaRegistrarVersion).'" data-navigate-once></script>',
+                        '<script src="'.asset('js/filament-admin-passkeys.js').'?v='.e($passkeyJsVersion).'" data-navigate-once></script>',
                         '<link rel="manifest" href="'.e(url('/manifest.webmanifest')).'">',
                         '<meta name="theme-color" content="'.e($themeColor).'">',
                         '<link rel="icon" href="'.e((string) $faviconUrl).'">',
@@ -101,18 +114,30 @@ class AdminPanelProvider extends PanelProvider
                 fn (): string => view('filament.components.force-guru-password-change-modal')->render()
             )
             ->renderHook(
+                PanelsRenderHook::SIDEBAR_LOGO_AFTER,
+                fn (): string => '<span class="admin-sidebar-menu-label" x-show="$store.sidebar.isOpen">Menu</span>'
+            )
+            ->renderHook(
+                PanelsRenderHook::TOPBAR_LOGO_AFTER,
+                fn (): string => '<span class="admin-topbar-menu-label">Menu</span>'
+            )
+            ->renderHook(
                 PanelsRenderHook::AUTH_LOGIN_FORM_BEFORE,
-                fn (): string => ''
+                fn (): string => view('filament.components.auth.login-before')->render()
             )
             ->renderHook(
                 PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
-                fn (): string => ''
+                fn (): string => view('filament.components.auth.login-after')->render()
+            )
+            ->renderHook(
+                PanelsRenderHook::PAGE_START,
+                fn (): string => view('filament.components.passkey-onboarding')->render()
             );
 
         $userMenuItems = [
             MenuItem::make()
-                ->label('Kelola Passkey')
-                ->icon('heroicon-o-key')
+                ->label('Passkey & Sidik Jari')
+                ->icon('heroicon-o-finger-print')
                 ->url(fn (): string => ManagePasskeys::getUrl())
                 ->sort(5),
         ];
@@ -135,7 +160,7 @@ class AdminPanelProvider extends PanelProvider
                 $builder = new NavigationBuilder;
                 $user = auth()->user();
 
-                if ($user instanceof User && ! $user->hasRole('admin')) {
+                if ($user instanceof User) {
                     $user->loadMissing('roles');
                 }
 

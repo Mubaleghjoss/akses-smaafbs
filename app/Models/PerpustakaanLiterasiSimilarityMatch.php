@@ -4,9 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PerpustakaanLiterasiSimilarityMatch extends Model
 {
+    use SoftDeletes;
+
     public const REVIEW_SUSPECTED = 'suspected';
 
     public const REVIEW_CLEARED = 'cleared';
@@ -24,6 +27,7 @@ class PerpustakaanLiterasiSimilarityMatch extends Model
         'reviewed_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
 
     public static function reviewStatusOptions(): array
@@ -51,32 +55,32 @@ class PerpustakaanLiterasiSimilarityMatch extends Model
 
     public function material(): BelongsTo
     {
-        return $this->belongsTo(PerpustakaanLiterasiMaterial::class, 'material_id');
+        return $this->belongsTo(PerpustakaanLiterasiMaterial::class, 'material_id')->withTrashed();
     }
 
     public function question(): BelongsTo
     {
-        return $this->belongsTo(PerpustakaanLiterasiQuestion::class, 'question_id');
+        return $this->belongsTo(PerpustakaanLiterasiQuestion::class, 'question_id')->withTrashed();
     }
 
     public function laterResponse(): BelongsTo
     {
-        return $this->belongsTo(PerpustakaanLiterasiResponse::class, 'later_response_id');
+        return $this->belongsTo(PerpustakaanLiterasiResponse::class, 'later_response_id')->withTrashed();
     }
 
     public function matchedResponse(): BelongsTo
     {
-        return $this->belongsTo(PerpustakaanLiterasiResponse::class, 'matched_response_id');
+        return $this->belongsTo(PerpustakaanLiterasiResponse::class, 'matched_response_id')->withTrashed();
     }
 
     public function laterAnswer(): BelongsTo
     {
-        return $this->belongsTo(PerpustakaanLiterasiAnswer::class, 'later_answer_id');
+        return $this->belongsTo(PerpustakaanLiterasiAnswer::class, 'later_answer_id')->withTrashed();
     }
 
     public function matchedAnswer(): BelongsTo
     {
-        return $this->belongsTo(PerpustakaanLiterasiAnswer::class, 'matched_answer_id');
+        return $this->belongsTo(PerpustakaanLiterasiAnswer::class, 'matched_answer_id')->withTrashed();
     }
 
     public function reviewedBy(): BelongsTo

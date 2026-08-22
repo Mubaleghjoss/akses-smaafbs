@@ -5,6 +5,12 @@
 
     RewriteEngine On
 
+    # Domain produksi wajib memakai HTTPS. Dibatasi ke host produksi agar
+    # instalasi lokal/XAMPP tidak diarahkan ke website online.
+    RewriteCond %{HTTP_HOST} ^app\.smaafbs\.sch\.id$ [NC]
+    RewriteCond %{HTTPS} !=on
+    RewriteRule ^ https://app.smaafbs.sch.id%{REQUEST_URI} [R=301,L,NE]
+
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
@@ -22,4 +28,49 @@
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header always unset X-Powered-By
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(self), payment=(), usb=()"
+
+    <FilesMatch "\.(?:css|js|mjs|woff2?)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+
+    <FilesMatch "\.(?:avif|gif|ico|jpe?g|png|svg|webp)$">
+        Header set Cache-Control "public, max-age=2592000, immutable"
+    </FilesMatch>
+
+    <IfModule mod_setenvif.c>
+        SetEnvIf Request_URI "^/build/" akses_build_asset=1
+    </IfModule>
+    Header set Cache-Control "public, max-age=31536000, immutable" env=akses_build_asset
+
+    <FilesMatch "(?:favicon|pwa-192|pwa-512)\.png$">
+        Header set Cache-Control "public, max-age=86400"
+    </FilesMatch>
+
+    <Files "service-worker.js">
+        Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+    </Files>
+</IfModule>
+
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 1 year"
+    ExpiresByType application/javascript "access plus 1 year"
+    ExpiresByType text/javascript "access plus 1 year"
+    ExpiresByType font/woff2 "access plus 1 year"
+    ExpiresByType image/avif "access plus 1 month"
+    ExpiresByType image/gif "access plus 1 month"
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType image/svg+xml "access plus 1 month"
+    ExpiresByType image/webp "access plus 1 month"
 </IfModule>

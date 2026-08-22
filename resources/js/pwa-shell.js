@@ -1,5 +1,3 @@
-const SW_PATH = '/service-worker.js';
-
 const isStandaloneDisplay = () => {
     return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 };
@@ -10,9 +8,7 @@ const registerServiceWorker = () => {
     }
 
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register(SW_PATH, { scope: '/' }).catch(() => {
-            // Ignore registration failures to keep unsupported/blocked browsers graceful.
-        });
+        window.AksesPwa?.register();
     });
 };
 

@@ -218,6 +218,8 @@ class BoardingMateriProgress extends Model
     {
         $pencapaianId = $pencapaian instanceof BoardingPencapaian ? $pencapaian->getKey() : (int) $pencapaian;
 
+        BoardingMaknaProgress::ensureDefaultsForPencapaian($pencapaianId);
+
         /** @var Collection<int, BoardingMaknaProgress> $rows */
         $rows = BoardingMaknaProgress::query()
             ->where('boarding_pencapaian_id', $pencapaianId)
@@ -259,36 +261,12 @@ class BoardingMateriProgress extends Model
             'summary_label' => $count > 0
                 ? "{$count} simakan, terakhir ".($latest?->assessed_at ? Carbon::parse($latest->assessed_at)->translatedFormat('d M Y') : '-')
                 : 'Belum ada riwayat bacaan',
-            'class_label' => $latest ? self::bacaanClassLabel($latest) : 'Kelas A / B / C',
+            'class_label' => BoardingBacaanAssessment::classLabel($latest?->kelas_bacaan),
             'latest_grades' => $latest
                 ? 'PP '.$latest->pp_grade.' | KL '.$latest->kl_grade.' | TJ '.$latest->tj_grade.' | MJ '.$latest->mj_grade
                 : '-',
             'latest_reviewer' => $latest?->reviewerUser?->name ?: ($latest?->reviewer_name ?: '-'),
         ];
-    }
-
-    protected static function bacaanClassLabel(BoardingBacaanAssessment $assessment): string
-    {
-        $values = collect([
-            $assessment->pp_grade,
-            $assessment->kl_grade,
-            $assessment->tj_grade,
-            $assessment->mj_grade,
-        ])
-            ->map(fn (?string $grade): int => match ($grade) {
-                'A' => 4,
-                'B' => 3,
-                'C' => 2,
-                default => 1,
-            });
-
-        $average = $values->avg() ?: 0;
-
-        return match (true) {
-            $average >= 3.5 => 'Kelas A',
-            $average >= 2.5 => 'Kelas B',
-            default => 'Kelas C',
-        };
     }
 
     public function pencapaian(): BelongsTo

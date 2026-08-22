@@ -2,150 +2,124 @@
 
 namespace Tests\Feature;
 
-use App\Contracts\Auth\WebAuthnCredentialDomain;
+use App\Contracts\Auth\WebAuthnChallengeFlow;
 use App\Filament\Pages\Auth\Login;
-use App\Models\User;
+use App\Support\Auth\WebAuthn\WebAuthnChallengeIssueResult;
 use Filament\Facades\Filament;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
-use Spatie\Permission\Models\Role;
-use Tests\Feature\Concerns\BootstrapsUserAndPermissionTables;
+use Mockery;
 use Tests\TestCase;
 
 class AdminPasskeyFallbackTest extends TestCase
 {
-    use BootstrapsUserAndPermissionTables;
-
     protected function setUp(): void
     {
         parent::setUp();
-
-        $this->bootstrapUserAndPermissionTables();
         $this->runWebAuthnMigrations();
         Filament::setCurrentPanel(Filament::getPanel('admin'));
-        Role::findOrCreate('admin', 'web');
     }
 
-    public function test_unenrolled_user_gets_safe_password_fallback_message(): void
+    public function test_disabled_feature_keeps_password_fallback_available(): void
     {
-        $user = User::query()->create([
-            'name' => 'Admin Tanpa Passkey',
-            'username' => 'admin.tanpa.passkey',
-            'password' => Hash::make('password-aman'),
-        ]);
-        $user->assignRole('admin');
+        config(['webauthn.enabled' => false]);
 
         Livewire::test(Login::class)
-            ->set('data.username', $user->username)
-            ->call('beginPasskeyLogin')
-            ->assertSet('passkeyStatus', 'unenrolled')
+            ->call('beginPasskeyLogin', true)
+            ->assertSet('passkeyStatus', WebAuthnChallengeIssueResult::DISABLED)
             ->assertSet('passkeyCanFallbackToPassword', true);
     }
 
-    public function test_unsupported_browser_flow_degrades_to_password_guidance(): void
+    public function test_unsupported_browser_gets_clear_password_guidance(): void
     {
-        $user = User::query()->create([
-            'name' => 'Admin Unsupported Browser',
-            'username' => 'admin.unsupported.browser',
-            'password' => Hash::make('password-aman'),
-        ]);
-        $user->assignRole('admin');
-
-        app(WebAuthnCredentialDomain::class)->enroll($user, [
-            'credential_id' => 'cred-unsupported-1',
-            'public_key' => 'public-key-unsupported-1',
-        ]);
+        config(['webauthn.enabled' => true]);
 
         Livewire::test(Login::class)
-            ->set('data.username', $user->username)
             ->call('beginPasskeyLogin', false)
-            ->assertSet('passkeyStatus', 'unsupported_browser')
+            ->assertSet('passkeyStatus', WebAuthnChallengeIssueResult::UNSUPPORTED_BROWSER)
             ->assertSet('passkeyCanFallbackToPassword', true);
     }
 
-    public function test_revoked_credential_flow_stays_on_password_fallback_path(): void
+    public function test_invalid_payload_never_authenticates_a_user(): void
     {
-        $user = User::query()->create([
-            'name' => 'Admin Revoked',
-            'username' => 'admin.revoked',
-            'password' => Hash::make('password-aman'),
-        ]);
-        $user->assignRole('admin');
-
-        $domain = app(WebAuthnCredentialDomain::class);
-        $domain->enroll($user, [
-            'credential_id' => 'cred-revoked-fallback-1',
-            'public_key' => 'public-key-revoked-fallback-1',
-        ]);
-        $domain->revoke($user, 'cred-revoked-fallback-1');
+        config(['webauthn.enabled' => true]);
 
         Livewire::test(Login::class)
-            ->set('data.username', $user->username)
-            ->call('beginPasskeyLogin')
-            ->assertSet('passkeyStatus', 'credential_revoked')
-            ->assertSet('passkeyCanFallbackToPassword', true);
+            ->call('completePasskeyLogin', 'unknown', null, [])
+            ->assertSet('passkeyStatus', 'invalid_challenge');
 
         $this->assertGuest();
     }
 
-    public function test_cancelled_passkey_ceremony_degrades_cleanly_to_password_path(): void
+    public function test_starting_a_new_passkey_login_cancels_the_previous_pending_challenge(): void
     {
-        $user = User::query()->create([
-            'name' => 'Admin Cancel Flow',
-            'username' => 'admin.cancel.flow',
-            'password' => Hash::make('password-aman'),
-        ]);
-        $user->assignRole('admin');
+        config(['webauthn.enabled' => true]);
 
-        app(WebAuthnCredentialDomain::class)->enroll($user, [
-            'credential_id' => 'cred-cancel-1',
-            'public_key' => 'public-key-cancel-1',
-        ]);
+        $flow = Mockery::mock(WebAuthnChallengeFlow::class);
+        $flow->shouldReceive('issueDiscoverableAssertionChallenge')->twice()->andReturn(
+            new WebAuthnChallengeIssueResult(
+                WebAuthnChallengeIssueResult::ISSUED,
+                '11111111-1111-4111-8111-111111111111',
+                'challenge-one',
+                true,
+                ['challenge' => 'Y2hhbGxlbmdlLTE'],
+            ),
+            new WebAuthnChallengeIssueResult(
+                WebAuthnChallengeIssueResult::ISSUED,
+                '22222222-2222-4222-8222-222222222222',
+                'challenge-two',
+                true,
+                ['challenge' => 'Y2hhbGxlbmdlLTI'],
+            ),
+        );
+        $flow->shouldReceive('cancel')
+            ->once()
+            ->with('11111111-1111-4111-8111-111111111111', 'superseded_by_new_challenge');
+        $this->app->instance(WebAuthnChallengeFlow::class, $flow);
 
         Livewire::test(Login::class)
-            ->set('data.username', $user->username)
-            ->call('beginPasskeyLogin')
-            ->call('cancelPasskeyLogin')
-            ->assertSet('passkeyStatus', 'ceremony_cancelled')
-            ->assertSet('passkeyCanFallbackToPassword', true);
+            ->call('beginPasskeyLogin', true)
+            ->call('beginPasskeyLogin', true)
+            ->assertSet('pendingPasskeyChallengeId', '22222222-2222-4222-8222-222222222222');
     }
 
-    public function test_synthetic_credential_only_submission_is_rejected_as_invalid_challenge(): void
+    public function test_client_credential_manager_failure_only_cancels_the_session_pending_challenge(): void
     {
-        $user = User::query()->create([
-            'name' => 'Admin Synthetic Submission',
-            'username' => 'admin.synthetic.only',
-            'password' => Hash::make('password-aman'),
-        ]);
-        $user->assignRole('admin');
+        config(['webauthn.enabled' => true]);
 
-        app(WebAuthnCredentialDomain::class)->enroll($user, [
-            'credential_id' => 'cred-synthetic-only-1',
-            'public_key' => 'public-key-synthetic-only-1',
-            'sign_count' => 5,
-        ]);
+        $flow = Mockery::mock(WebAuthnChallengeFlow::class);
+        $flow->shouldReceive('issueDiscoverableAssertionChallenge')->once()->andReturn(
+            new WebAuthnChallengeIssueResult(
+                WebAuthnChallengeIssueResult::ISSUED,
+                '33333333-3333-4333-8333-333333333333',
+                'challenge',
+                true,
+                ['challenge' => 'Y2hhbGxlbmdl'],
+            ),
+        );
+        $flow->shouldReceive('cancel')
+            ->once()
+            ->with('33333333-3333-4333-8333-333333333333', 'client_credential_manager_unknown');
+        $this->app->instance(WebAuthnChallengeFlow::class, $flow);
 
         Livewire::test(Login::class)
-            ->set('data.username', $user->username)
-            ->call('beginPasskeyLogin')
-            ->call('completePasskeyLogin', 'cred-synthetic-only-1', 6)
-            ->assertSet('passkeyStatus', 'invalid_challenge')
-            ->assertSet('passkeyCanFallbackToPassword', true);
-
-        $this->assertGuest();
+            ->call('beginPasskeyLogin', true)
+            ->call('reportPasskeyClientFailure', 'not-the-pending-challenge', 'client_credential_manager_unknown')
+            ->assertSet('pendingPasskeyChallengeId', '33333333-3333-4333-8333-333333333333')
+            ->call('reportPasskeyClientFailure', '33333333-3333-4333-8333-333333333333', 'client_credential_manager_unknown')
+            ->assertSet('pendingPasskeyChallengeId', null);
     }
 
-    protected function runWebAuthnMigrations(): void
+    private function runWebAuthnMigrations(): void
     {
         if (! Schema::hasTable('webauthn_credentials')) {
-            $credentialsMigration = require database_path('migrations/2026_03_31_230000_create_webauthn_credentials_table.php');
-            $credentialsMigration->up();
+            (require database_path('migrations/2026_03_31_230000_create_webauthn_credentials_table.php'))->up();
         }
-
         if (! Schema::hasTable('webauthn_challenges')) {
-            $challengeMigration = require database_path('migrations/2026_03_31_230100_create_webauthn_challenges_table.php');
-            $challengeMigration->up();
+            (require database_path('migrations/2026_03_31_230100_create_webauthn_challenges_table.php'))->up();
+        }
+        if (! Schema::hasColumn('webauthn_credentials', 'credential_public_key')) {
+            (require database_path('migrations/2026_08_11_120000_upgrade_webauthn_credentials_for_verified_passkeys.php'))->up();
         }
     }
 }

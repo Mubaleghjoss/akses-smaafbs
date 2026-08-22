@@ -46,6 +46,9 @@ class AdminLoginTest extends TestCase
             });
         }
 
+        $this->runPermissionMigration();
+        config(['webauthn.enabled' => true]);
+
         Filament::setCurrentPanel(Filament::getPanel('admin'));
     }
 
@@ -55,15 +58,15 @@ class AdminLoginTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertSee('Masuk Admin')
-            ->assertSee('Gunakan akun admin untuk melanjutkan.')
-            ->assertSee('Login sidik jari / passkey')
+            ->assertSee('Selamat Datang')
+            ->assertSee('Masuk ke Panel Admin SMA AFBS.')
+            ->assertSee('Login dengan Sidik Jari / Passkey')
             ->assertDontSee('dukungan PWA dan opsi autentikasi biometrik');
     }
 
     public function test_admin_login_page_uses_site_setting_icon_for_panel_head(): void
     {
-        Pengaturan::query()->create([
+        \Illuminate\Support\Facades\DB::table('pengaturan')->insert([
             'nama_pengaturan' => SiteSettingKeys::FAVICON_PATH,
             'nilai_pengaturan' => 'site-branding/favicon/admin-icon.png',
         ]);

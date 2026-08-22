@@ -127,6 +127,9 @@ class BoardingPencapaianHafalanTest extends TestCase
 
         $pengetesanMaknaPointMigration = require database_path('migrations/2026_05_31_090000_add_boarding_pengetesan_makna_material_point.php');
         $pengetesanMaknaPointMigration->up();
+
+        $kelasBacaanMigration = require database_path('migrations/2026_06_03_080000_add_kelas_bacaan_to_boarding_bacaan_assessments.php');
+        $kelasBacaanMigration->up();
     }
 
     protected function runBoardingMaknaAndBacaanMigration(): void
@@ -137,6 +140,9 @@ class BoardingPencapaianHafalanTest extends TestCase
 
         $migration = require database_path('migrations/2026_04_03_220000_create_boarding_makna_and_bacaan_tables.php');
         $migration->up();
+
+        $kelasBacaanMigration = require database_path('migrations/2026_06_03_080000_add_kelas_bacaan_to_boarding_bacaan_assessments.php');
+        $kelasBacaanMigration->up();
     }
 
     protected function makePencapaianRecord(): BoardingPencapaian
@@ -221,18 +227,14 @@ class BoardingPencapaianHafalanTest extends TestCase
             ->call('loadTable')
             ->assertTableSelectColumnHasOptions('materi_rapot_scope', BoardingPencapaian::materiRapotScopeOptions(), $record)
             ->assertSee('Ketercapaian')
-            ->assertSee('Target Materi Boarding')
-            ->assertSee('Hafalan 2%')
-            ->assertSee('Makna 3%')
-            ->assertSee('Bacaan 25%')
+            ->assertSee('Materi Boarding')
+            ->assertSee('10%')
             ->assertSee('2 / 90 materi')
-            ->assertSee('1. Kelas Pegon Bacaan : Materi Hafalan: 1 / 24 materi')
-            ->assertSee('2. Kelas Lambatan : Materi Hafalan: 0 / 24 materi')
-            ->assertSee('3. Kelas Cepatan : Materi Hafalan: 1 / 23 materi')
-            ->assertSee('4. Kelas Materi Tambahan : Materi Hafalan: 0 / 19 materi')
             ->assertSee('2/56 materi')
-            ->assertSee('Khatam: 1 | Sebagian: 1 | Belum diisi: 54')
-            ->assertSee('1 simakan');
+            ->assertSee('1 simakan')
+            ->assertDontSee('Target Materi Boarding')
+            ->assertDontSee('1. Kelas Pegon Bacaan : Materi Hafalan: 1 / 24 materi')
+            ->assertDontSee('Khatam: 1 | Sebagian: 1 | Belum diisi: 54');
 
         Livewire::actingAs($admin)
             ->test(ManageBoardingPencapaians::class)
@@ -380,6 +382,60 @@ class BoardingPencapaianHafalanTest extends TestCase
             });
     }
 
+    public function test_new_makna_hadits_master_rows_become_student_targets(): void
+    {
+        $record = $this->makePencapaianRecord();
+
+        $point = BoardingHafalanPoint::query()->create([
+            'materi_scope' => 'boarding',
+            'materi_key' => BoardingHafalanPoint::MATERI_TAMBAHAN_MAKNA_HADITS_KEY,
+            'jenis' => 'makna_hadits',
+            'nama_point' => 'K. Toharoh',
+            'is_active' => true,
+        ]);
+
+        BoardingMaknaProgress::ensureDefaultsForPencapaian($record);
+
+        $this->assertDatabaseHas('boarding_makna_progresses', [
+            'boarding_pencapaian_id' => $record->getKey(),
+            'target_key' => 'hadits_materi_master_'.$point->getKey(),
+            'target_group' => 'hadits_materi',
+            'target_name' => 'K. Toharoh',
+        ]);
+
+        $summary = BoardingMateriProgress::maknaGroupSummary($record, 'hadits_materi');
+
+        $this->assertSame(27, $summary['total']);
+    }
+
+    public function test_bacaan_quran_class_is_manual_not_derived_from_grades(): void
+    {
+        $admin = User::query()->create([
+            'name' => 'Admin Bacaan Manual',
+            'username' => 'admin-bacaan-manual',
+            'password' => 'secret123',
+        ]);
+        $admin->assignRole('admin');
+
+        $record = $this->makePencapaianRecord();
+
+        BoardingBacaanAssessment::query()->create([
+            'boarding_pencapaian_id' => $record->getKey(),
+            'assessed_at' => now()->toDateString(),
+            'kelas_bacaan' => 'C',
+            'pp_grade' => 'A',
+            'kl_grade' => 'A',
+            'tj_grade' => 'A',
+            'mj_grade' => 'A',
+            'reviewer_user_id' => $admin->id,
+        ]);
+
+        $summary = BoardingMateriProgress::bacaanSummary($record);
+
+        $this->assertSame('Kelas C', $summary['class_label']);
+        $this->assertSame('PP A | KL A | TJ A | MJ A', $summary['latest_grades']);
+    }
+
     public function test_materi_boarding_table_can_be_edited_inline_like_a_simple_sheet(): void
     {
         $admin = User::query()->create([
@@ -485,7 +541,6 @@ class BoardingPencapaianHafalanTest extends TestCase
             ->call('updateTableColumnState', 'materi_key', (string) $point->getKey(), 'lambatan')
             ->call('updateTableColumnState', 'jenis', (string) $point->getKey(), 'doa')
             ->call('updateTableColumnState', 'nama_point', (string) $point->getKey(), 'Materi Inline Test')
-            ->call('updateTableColumnState', 'urutan', (string) $point->getKey(), 99)
             ->call('updateTableColumnState', 'is_active', (string) $point->getKey(), false);
 
         $point->refresh();
@@ -493,7 +548,7 @@ class BoardingPencapaianHafalanTest extends TestCase
         $this->assertSame('lambatan', $point->materi_key);
         $this->assertSame('doa', $point->jenis);
         $this->assertSame('Materi Inline Test', $point->nama_point);
-        $this->assertSame(99, (int) $point->urutan);
+        $this->assertGreaterThan(0, (int) $point->urutan);
         $this->assertFalse($point->is_active);
     }
 

@@ -2,8 +2,26 @@
 
 namespace App\Support\Admin;
 
+use App\Filament\Pages\Assessment\AsasHomeroomRecap;
+use App\Filament\Pages\Assessment\AsasHub;
+use App\Filament\Pages\Assessment\AsasInputScores;
+use App\Filament\Pages\Assessment\AsasReports;
+use App\Filament\Pages\Assessment\AsasSubmissionStatus;
+use App\Filament\Pages\Assessment\AssessmentDashboard;
+use App\Filament\Pages\Assessment\AssessmentMasterImport;
+use App\Filament\Pages\Assessment\AstsHomeroomRecap;
+use App\Filament\Pages\Assessment\AstsHub;
+use App\Filament\Pages\Assessment\AstsInputScores;
+use App\Filament\Pages\Assessment\AstsReports;
+use App\Filament\Pages\Assessment\AstsSubmissionStatus;
 use App\Filament\Pages\DashboardProker;
 use App\Filament\Pages\SarprasStickerSettings;
+use App\Filament\Resources\AssessmentAuditLogResource;
+use App\Filament\Resources\AssessmentPeriodResource;
+use App\Filament\Resources\AssessmentReportTemplateResource;
+use App\Filament\Resources\AssessmentSchemeResource;
+use App\Filament\Resources\AssessmentSubjectCategoryResource;
+use App\Filament\Resources\AssessmentSubjectResource;
 use App\Filament\Resources\BeritaResource;
 use App\Filament\Resources\BerkasGuruResource;
 use App\Filament\Resources\BerkasSiswaResource;
@@ -89,6 +107,35 @@ class AdminModuleAccess
         'sarpras_room_inventory' => SarprasRoomInventoryResource::class,
         'sarpras_activity' => SarprasActivityResource::class,
         'sarpras_monthly_agenda' => SarprasMonthlyAgendaResource::class,
+        'penilaian' => AssessmentDashboard::class,
+    ];
+
+    /**
+     * Satu pengaturan akses modul Penilaian membuka seluruh halaman di dalam
+     * grupnya. Policy record dan permission granular tetap menjadi pagar aksi.
+     *
+     * @var array<string, array<int, class-string>>
+     */
+    protected const ADDITIONAL_MODULE_CLASSES = [
+        'penilaian' => [
+            AstsHub::class,
+            AsasHub::class,
+            AstsInputScores::class,
+            AstsSubmissionStatus::class,
+            AstsHomeroomRecap::class,
+            AstsReports::class,
+            AsasInputScores::class,
+            AsasSubmissionStatus::class,
+            AsasHomeroomRecap::class,
+            AsasReports::class,
+            AssessmentPeriodResource::class,
+            AssessmentSchemeResource::class,
+            AssessmentSubjectCategoryResource::class,
+            AssessmentSubjectResource::class,
+            AssessmentReportTemplateResource::class,
+            AssessmentAuditLogResource::class,
+            AssessmentMasterImport::class,
+        ],
     ];
 
     /**
@@ -124,12 +171,13 @@ class AdminModuleAccess
         'event_timelines' => 'Kelola timeline kegiatan dan tahapan acara.',
         'berita' => 'Kelola berita sekolah dan update perkembangannya.',
         'galeri' => 'Kelola galeri foto kegiatan sekolah.',
-        'perpustakaan_literasi' => 'Kelola materi, pertanyaan, jawaban, dan analisa Literacy Habituation Program.',
+        'perpustakaan_literasi' => 'Kelola materi, pertanyaan, jawaban, dan analisa Literasi Numerasi.',
         'sarpras_bosp_inventory' => 'Kelola daftar inventaris barang yang dibeli dari BOSP.',
         'sarpras_sticker_settings' => 'Atur logo, ukuran, dan teks stiker inventaris sarpras.',
         'sarpras_room_inventory' => 'Kelola inventaris barang per ruang atau gedung.',
         'sarpras_activity' => 'Kelola dokumentasi pekerjaan dan perbaikan sarpras.',
         'sarpras_monthly_agenda' => 'Kelola agenda bulanan tindak lanjut sarpras.',
+        'penilaian' => 'Akses ASTS, ASAS, nilai, rekap, rapor, dan pengaturan Penilaian.',
     ];
 
     public static function levelOptions(): array
@@ -194,7 +242,7 @@ class AdminModuleAccess
 
     public static function resolveEffectiveLevel(User $user, string $prefix): string
     {
-        if ($user->hasRole('admin')) {
+        if ($user->hasFullAdminAccess()) {
             return self::MANAGE;
         }
 
@@ -224,7 +272,7 @@ class AdminModuleAccess
      */
     public static function effectiveLevels(User $user): array
     {
-        if ($user->hasRole('admin')) {
+        if ($user->hasFullAdminAccess()) {
             return array_fill_keys(self::prefixes(), self::MANAGE);
         }
 
@@ -321,7 +369,10 @@ class AdminModuleAccess
         $classes = collect($normalizedLevels)
             ->filter(fn (string $level): bool => $level !== self::NONE)
             ->keys()
-            ->map(fn (string $prefix): string => self::RESOURCE_MAP[$prefix])
+            ->flatMap(fn (string $prefix): array => [
+                self::RESOURCE_MAP[$prefix],
+                ...(self::ADDITIONAL_MODULE_CLASSES[$prefix] ?? []),
+            ])
             ->values();
 
         if (($normalizedLevels['sarpras_bosp_inventory'] ?? self::NONE) === self::MANAGE) {
@@ -354,21 +405,19 @@ class AdminModuleAccess
      */
     public static function deriveNavigationGroups(array $itemClasses): array
     {
-        $definitionGroups = self::definitions()
-            ->keyBy('class')
-            ->map(fn (array $definition): string => $definition['group']);
-
-        $extraGroups = collect(AdminNavigationSupport::definitions())
-            ->keyBy('class')
-            ->map(fn (array $definition): string => $definition['group']);
-
         return collect($itemClasses)
-            ->map(function (string $class) use ($definitionGroups, $extraGroups): ?string {
+            ->map(function (string $class): ?string {
                 if ($class === Dashboard::class) {
                     return 'Dashboard';
                 }
 
-                return $definitionGroups[$class] ?? $extraGroups[$class] ?? null;
+                if (! class_exists($class)) {
+                    return null;
+                }
+
+                return User::normalizeNavigationGroupKey(
+                    AdminSchoolNavigation::effectiveGroupForClass($class),
+                );
             })
             ->filter()
             ->unique()
@@ -381,12 +430,16 @@ class AdminModuleAccess
      */
     public static function advancedNavigationItemOptions(): array
     {
-        $moduleClasses = array_values(self::RESOURCE_MAP);
+        $moduleClasses = collect(self::RESOURCE_MAP)
+            ->flatMap(fn (string $class, string $prefix): array => [
+                $class,
+                ...(self::ADDITIONAL_MODULE_CLASSES[$prefix] ?? []),
+            ])
+            ->values()
+            ->all();
 
         return collect(AdminNavigationSupport::availableNavigationItemOptions())
             ->reject(fn (string $label, string $class): bool => in_array($class, $moduleClasses, true) || $class === Dashboard::class)
             ->all();
     }
 }
-
-

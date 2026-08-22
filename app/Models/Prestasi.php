@@ -4,12 +4,15 @@ namespace App\Models;
 
 use App\Models\Concerns\HasGoogleDriveSyncState;
 use App\Support\Admin\Dashboard\DashboardCacheSupport;
+use App\Support\Media\PublicImageOptimizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 class Prestasi extends Model
 {
@@ -38,6 +41,27 @@ class Prestasi extends Model
 
     protected static function booted(): void
     {
+        static::saving(function (self $prestasi): void {
+            try {
+                foreach (['dokumentasi', 'sertifikat_files'] as $attribute) {
+                    if (! $prestasi->isDirty($attribute)) {
+                        continue;
+                    }
+
+                    $prestasi->{$attribute} = collect($prestasi->{$attribute} ?? [])
+                        ->map(fn ($path) => app(PublicImageOptimizer::class)
+                            ->optimizeUploadedPath((string) $path, 'content'))
+                        ->filter()
+                        ->values()
+                        ->all();
+                }
+            } catch (RuntimeException $exception) {
+                throw ValidationException::withMessages([
+                    'dokumentasi' => 'Lampiran gambar prestasi gagal dioptimalkan: '.$exception->getMessage(),
+                ]);
+            }
+        });
+
         static::creating(function (self $prestasi): void {
             $prestasi->created_by ??= auth()->id();
             $prestasi->updated_by ??= auth()->id();
@@ -68,7 +92,7 @@ class Prestasi extends Model
 
     public function scopeVisibleToUser(Builder $query, mixed $user): Builder
     {
-        if (! $user instanceof User || (! $user->isBoardingPamong() && ! $user->isGuru())) {
+        if (! $user instanceof User || $user->hasFullAdminAccess() || (! $user->isBoardingPamong() && ! $user->isGuru())) {
             return $query;
         }
 

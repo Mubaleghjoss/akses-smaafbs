@@ -22,7 +22,11 @@ use Filament\Actions\EditAction;
 use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Fieldset;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -271,34 +275,99 @@ class UserResource extends Resource
     {
         $defaultLevels = static::defaultModuleAccessLevelsSnapshot();
 
-        return static::moduleAccessDefinitionsSnapshot()
-            ->groupBy(fn (array $definition): string => implode('||', [
-                $definition['group_label'],
-                $definition['parent_label'] ?? '',
-            ]))
-            ->map(function (Collection $definitions, string $sectionKey) use ($defaultLevels): Section {
-                [$groupLabel, $parentLabel] = array_pad(explode('||', $sectionKey, 2), 2, '');
+        return [
+            Section::make('Hak Akses Menu Admin')
+                ->description('Atur menu yang muncul di sidebar admin. Setiap menu bisa disembunyikan, hanya dilihat, atau dikelola penuh.')
+                ->compact()
+                ->schema([
+                    Forms\Components\Placeholder::make('module_access_summary')
+                        ->label('Ringkasan')
+                        ->content(fn (Get $get): string => static::moduleAccessSummary($get))
+                        ->columnSpanFull(),
+                    Tabs::make('Grup Menu')
+                        ->contained(false)
+                        ->persistTabInQueryString('akses-menu')
+                        ->tabs(
+                            static::moduleAccessDefinitionsSnapshot()
+                                ->groupBy(fn (array $definition): string => $definition['group_label'])
+                                ->map(fn (Collection $definitions, string $groupLabel): Tab => static::moduleAccessTab(
+                                    $groupLabel,
+                                    $definitions,
+                                    $defaultLevels,
+                                ))
+                                ->values()
+                                ->all(),
+                        )
+                        ->columnSpanFull(),
+                ]),
+        ];
+    }
 
-                $title = collect(['Akses Modul', $groupLabel, filled($parentLabel) ? $parentLabel : null])
-                    ->filter()
-                    ->implode(' · ');
+    protected static function moduleAccessTab(string $groupLabel, Collection $definitions, array $defaultLevels): Tab
+    {
+        $blocks = $definitions
+            ->groupBy(fn (array $definition): string => filled($definition['parent_label'] ?? '') ? $definition['parent_label'] : '__root')
+            ->map(function (Collection $groupedDefinitions, string $parentLabel) use ($defaultLevels): Fieldset|Grid {
+                $fields = $groupedDefinitions
+                    ->map(fn (array $definition): Forms\Components\Select => static::moduleAccessSelect($definition, $defaultLevels))
+                    ->values()
+                    ->all();
 
-                return Section::make($title)
-                    ->description('Pilih apakah modul disembunyikan, hanya bisa dilihat, atau boleh dikelola penuh. Menu sidebar untuk modul CRUD akan mengikuti pilihan ini secara otomatis.')
-                    ->columns(['default' => 1, 'md' => 2])
-                    ->schema([
-                        ...$definitions->map(function (array $definition): Forms\Components\Select {
-                            return Forms\Components\Select::make('module_access_levels.'.$definition['prefix'])
-                                ->label($definition['label'])
-                                ->options(AdminModuleAccess::levelOptions())
-                                ->default($defaultLevels[$definition['prefix']] ?? AdminModuleAccess::NONE)
-                                ->native(false)
-                                ->helperText($definition['description']);
-                        })->all(),
-                    ]);
+                $columns = ['default' => 1, 'md' => 2, '2xl' => 3];
+
+                if ($parentLabel === '__root') {
+                    return Grid::make($columns)
+                        ->schema($fields)
+                        ->columnSpanFull();
+                }
+
+                return Fieldset::make($parentLabel)
+                    ->columns($columns)
+                    ->schema($fields)
+                    ->columnSpanFull();
             })
             ->values()
             ->all();
+
+        return Tab::make($groupLabel)
+            ->badge((string) $definitions->count())
+            ->schema($blocks);
+    }
+
+    protected static function moduleAccessSelect(array $definition, array $defaultLevels): Forms\Components\Select
+    {
+        return Forms\Components\Select::make('module_access_levels.'.$definition['prefix'])
+            ->label($definition['label'])
+            ->options(AdminModuleAccess::levelOptions())
+            ->default($defaultLevels[$definition['prefix']] ?? AdminModuleAccess::NONE)
+            ->native(false)
+            ->live()
+            ->helperText($definition['description']);
+    }
+
+    protected static function moduleAccessSummary(Get $get): string
+    {
+        $levels = AdminModuleAccess::normalizeLevels($get('module_access_levels') ?? static::defaultModuleAccessLevelsSnapshot());
+        $definitions = static::moduleAccessDefinitionsSnapshot();
+
+        $managed = $definitions->filter(fn (array $definition): bool => ($levels[$definition['prefix']] ?? AdminModuleAccess::NONE) === AdminModuleAccess::MANAGE);
+        $viewOnly = $definitions->filter(fn (array $definition): bool => ($levels[$definition['prefix']] ?? AdminModuleAccess::NONE) === AdminModuleAccess::VIEW);
+        $hidden = max(0, $definitions->count() - $managed->count() - $viewOnly->count());
+
+        $activeGroups = $definitions
+            ->filter(fn (array $definition): bool => in_array($levels[$definition['prefix']] ?? AdminModuleAccess::NONE, [
+                AdminModuleAccess::VIEW,
+                AdminModuleAccess::MANAGE,
+            ], true))
+            ->pluck('group_label')
+            ->unique()
+            ->values();
+
+        $groupSummary = $activeGroups->isEmpty()
+            ? 'Belum ada grup menu aktif.'
+            : 'Grup aktif: '.$activeGroups->implode(', ').'.';
+
+        return "{$managed->count()} kelola penuh, {$viewOnly->count()} lihat saja, {$hidden} disembunyikan. {$groupSummary}";
     }
 
     protected static function advancedAccessSection(): Section
@@ -422,7 +491,7 @@ class UserResource extends Resource
                 Tables\Columns\TextColumn::make('allowed_navigation_groups')
                     ->label('Menu')
                     ->state(function (User $record): string {
-                        if ($record->hasRole('admin')) {
+                        if ($record->hasFullAdminAccess()) {
                             return 'Semua Menu';
                         }
 
@@ -434,7 +503,7 @@ class UserResource extends Resource
                 Tables\Columns\TextColumn::make('allowed_navigation_items')
                     ->label('Sub Menu')
                     ->state(function (User $record): string {
-                        if ($record->hasRole('admin')) {
+                        if ($record->hasFullAdminAccess()) {
                             return 'Semua Sub Menu';
                         }
 
@@ -528,7 +597,7 @@ class UserResource extends Resource
                     ->label('Copy Akses Guru')
                     ->icon('heroicon-o-document-duplicate')
                     ->color('info')
-                    ->visible(fn (User $record): bool => auth()->user()?->hasRole('admin') && $record->hasRole('guru'))
+                    ->visible(fn (User $record): bool => auth()->user()?->hasFullAdminAccess() && $record->isGuru())
                     ->schema([
                         Forms\Components\Select::make('target_user_id')
                             ->label('Salin ke akun guru')
@@ -559,7 +628,7 @@ class UserResource extends Resource
                     ->label('Tugas Tambahan')
                     ->icon('heroicon-o-briefcase')
                     ->color('warning')
-                    ->visible(fn (User $record): bool => auth()->user()?->hasRole('admin') && $record->hasRole('guru'))
+                    ->visible(fn (User $record): bool => auth()->user()?->hasFullAdminAccess() && $record->isGuru())
                     ->schema([
                         Forms\Components\CheckboxList::make('template_keys')
                             ->label('Tambahkan akses divisi')
@@ -581,7 +650,7 @@ class UserResource extends Resource
                     ->label('Cabut Divisi')
                     ->icon('heroicon-o-no-symbol')
                     ->color('danger')
-                    ->visible(fn (User $record): bool => auth()->user()?->hasRole('admin') && $record->hasRole('guru'))
+                    ->visible(fn (User $record): bool => auth()->user()?->hasFullAdminAccess() && $record->isGuru())
                     ->fillForm(fn (User $record): array => [
                         'template_keys' => AdminRoleTemplateSupport::matchedTemplateKeysForUser($record),
                     ])
@@ -606,7 +675,7 @@ class UserResource extends Resource
                     ->label('Reset Password')
                     ->icon('heroicon-o-key')
                     ->color('warning')
-                    ->visible(fn (User $record): bool => auth()->user()?->hasRole('admin') && (int) $record->getKey() !== (int) auth()->id())
+                    ->visible(fn (User $record): bool => auth()->user()?->hasFullAdminAccess() && (int) $record->getKey() !== (int) auth()->id())
                     ->requiresConfirmation()
                     ->modalHeading('Reset password default akun ini?')
                     ->modalDescription('Sistem akan membuat password default baru lalu menampilkan username dan password baru untuk dibagikan.')
@@ -644,7 +713,7 @@ class UserResource extends Resource
                         ->label('Tambah Divisi')
                         ->icon('heroicon-o-briefcase')
                         ->color('warning')
-                        ->visible(fn (): bool => auth()->user()?->hasRole('admin'))
+                        ->visible(fn (): bool => auth()->user()?->hasFullAdminAccess())
                         ->schema([
                             Forms\Components\CheckboxList::make('template_keys')
                                 ->label('Tambahkan akses divisi')
@@ -683,7 +752,7 @@ class UserResource extends Resource
                         ->label('Cabut Divisi')
                         ->icon('heroicon-o-no-symbol')
                         ->color('danger')
-                        ->visible(fn (): bool => auth()->user()?->hasRole('admin'))
+                        ->visible(fn (): bool => auth()->user()?->hasFullAdminAccess())
                         ->schema([
                             Forms\Components\CheckboxList::make('template_keys')
                                 ->label('Cabut akses divisi')
@@ -722,7 +791,7 @@ class UserResource extends Resource
                         ->label('Reset Password')
                         ->icon('heroicon-o-key')
                         ->color('warning')
-                        ->visible(fn (): bool => auth()->user()?->hasRole('admin'))
+                        ->visible(fn (): bool => auth()->user()?->hasFullAdminAccess())
                         ->requiresConfirmation()
                         ->modalHeading('Reset password default akun terpilih?')
                         ->modalDescription('Sistem akan membuat password default baru untuk semua akun terpilih, lalu menampilkan username dan password baru masing-masing akun.')

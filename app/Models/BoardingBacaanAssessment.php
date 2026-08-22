@@ -14,6 +14,12 @@ class BoardingBacaanAssessment extends Model
         'D' => 'D - Kurang',
     ];
 
+    public const CLASS_OPTIONS = [
+        'A' => 'Kelas A',
+        'B' => 'Kelas B',
+        'C' => 'Kelas C',
+    ];
+
     protected $table = 'boarding_bacaan_assessments';
 
     protected $guarded = [];
@@ -57,6 +63,16 @@ class BoardingBacaanAssessment extends Model
     public static function gradeLabel(?string $grade): string
     {
         return self::gradeOptions()[$grade ?? ''] ?? ($grade ?: '-');
+    }
+
+    public static function classOptions(): array
+    {
+        return self::CLASS_OPTIONS;
+    }
+
+    public static function classLabel(?string $class): string
+    {
+        return self::classOptions()[$class ?? ''] ?? 'Kelas A / B / C';
     }
 
     public function pencapaian(): BelongsTo

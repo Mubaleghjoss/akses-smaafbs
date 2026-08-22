@@ -3,7 +3,6 @@
 namespace App\Filament\Pages\Auth;
 
 use App\Contracts\Auth\WebAuthnChallengeFlow;
-use App\Contracts\Auth\WebAuthnCredentialDomain;
 use App\Contracts\SiteSettingsAccessor;
 use App\Models\User;
 use App\Support\Auth\WebAuthn\WebAuthnAssertionResult;
@@ -14,12 +13,12 @@ use Filament\Auth\Http\Responses\Contracts\LoginResponse;
 use Filament\Auth\Pages\Login as BaseLogin;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Checkbox;
-use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Utilities\Set;
+use Filament\Schemas\Components\View as SchemaView;
 use Filament\Schemas\Schema;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Cookie;
@@ -32,22 +31,17 @@ class Login extends BaseLogin
 
     public array $rememberedUsernames = [];
 
-    public ?string $pendingPasskeyUsername = null;
-
     public ?string $pendingPasskeyChallengeId = null;
 
-    public ?string $pendingPasskeyChallenge = null;
-
-    /**
-     * @var array<int, string>
-     */
-    public array $pendingPasskeyAllowCredentialIds = [];
+    public array $pendingPasskeyPublicKeyOptions = [];
 
     public ?string $passkeyStatus = null;
 
     public ?string $passkeyMessage = null;
 
     public bool $passkeyCanFallbackToPassword = true;
+
+    public ?string $loginErrorMessage = null;
 
     public function mount(): void
     {
@@ -59,6 +53,8 @@ class Login extends BaseLogin
 
     public function authenticate(): ?LoginResponse
     {
+        $this->loginErrorMessage = null;
+
         try {
             $this->rateLimit(
                 EndpointProtectionPolicy::adminLoginAttempts(),
@@ -100,90 +96,69 @@ class Login extends BaseLogin
         return app(LoginResponse::class);
     }
 
-    /**
-     * @return array{status: string, challengeId: ?string, challenge: ?string, allowCredentialIds: array<int, string>, canFallbackToPassword: bool}
-     */
+    /** @return array{status: string, challengeId: ?string, publicKeyOptions: array<string, mixed>, canFallbackToPassword: bool} */
     public function beginPasskeyLogin(?bool $browserSupported = null): array
     {
-        $data = $this->data ?? [];
-        $user = $this->getUserFromFormData($data);
-
-        if (! $user) {
+        try {
+            $this->rateLimit(12, 60);
+        } catch (TooManyRequestsException $exception) {
             $this->setPasskeyFeedback(
-                status: 'unenrolled',
-                message: 'Username belum dikenali atau belum memiliki passkey. Gunakan login password untuk melanjutkan.',
+                status: 'rate_limited',
+                message: 'Terlalu banyak percobaan pada sesi ini. Tunggu sebentar atau gunakan password.',
                 canFallbackToPassword: true,
             );
 
             return $this->passkeyPayload();
         }
 
-        $credentials = app(WebAuthnCredentialDomain::class)->listForUser($user, includeRevoked: true);
-        $hasActivePasskey = $credentials->contains(fn ($credential): bool => $credential->revoked_at === null);
+        $this->cancelPendingPasskeyChallenge('superseded_by_new_challenge');
 
-        if (! $hasActivePasskey && $credentials->isNotEmpty()) {
-            $this->setPasskeyFeedback(
-                status: WebAuthnAssertionResult::CREDENTIAL_REVOKED,
-                message: 'Passkey untuk akun ini sudah dinonaktifkan. Gunakan login password lalu daftarkan passkey baru.',
-                canFallbackToPassword: true,
-            );
-
-            return $this->passkeyPayload();
-        }
-
-        if ($credentials->isEmpty()) {
-            $this->setPasskeyFeedback(
-                status: 'unenrolled',
-                message: 'Akun ini belum memiliki passkey aktif. Login dengan password lalu daftarkan passkey dari menu akun.',
-                canFallbackToPassword: true,
-            );
-
-            return $this->passkeyPayload();
-        }
-
-        $allowCredentialIds = $credentials
-            ->filter(fn ($credential): bool => $credential->revoked_at === null)
-            ->pluck('credential_id')
-            ->map(fn ($credentialId): string => trim((string) $credentialId))
-            ->filter()
-            ->values()
-            ->all();
-
-        $issue = app(WebAuthnChallengeFlow::class)->issueAssertionChallenge(
-            user: $user,
+        $issue = app(WebAuthnChallengeFlow::class)->issueDiscoverableAssertionChallenge(
             browserSupported: $browserSupported ?? true,
             context: ['origin' => 'admin_login'],
         );
 
-        $this->pendingPasskeyUsername = (string) $user->username;
-        $this->pendingPasskeyChallengeId = $issue->challengeId;
-        $this->pendingPasskeyChallenge = $issue->challenge;
-        $this->pendingPasskeyAllowCredentialIds = $allowCredentialIds;
-
-        if ($issue->status === WebAuthnChallengeIssueResult::ISSUED) {
-            $this->setPasskeyFeedback(
-                status: $issue->status,
-                message: 'Challenge passkey dibuat. Lanjutkan verifikasi passkey pada perangkat Anda.',
-                canFallbackToPassword: $issue->canFallbackToPassword,
-            );
-
-            return $this->passkeyPayload();
-        }
+        $this->pendingPasskeyChallengeId = $issue->challengeId !== '' ? $issue->challengeId : null;
+        $this->pendingPasskeyPublicKeyOptions = $issue->publicKeyOptions ?? [];
 
         $this->setPasskeyFeedback(
             status: $issue->status,
-            message: 'Browser tidak mendukung passkey. Gunakan login password untuk melanjutkan.',
-            canFallbackToPassword: $issue->canFallbackToPassword,
+            message: match ($issue->status) {
+                WebAuthnChallengeIssueResult::ISSUED => 'Pilih akun passkey lalu verifikasi dengan sidik jari, PIN, atau pengunci layar perangkat.',
+                WebAuthnChallengeIssueResult::DISABLED => 'Login passkey sedang dinonaktifkan. Gunakan username dan password.',
+                default => 'Browser ini belum mendukung passkey. Gunakan username dan password.',
+            },
+            canFallbackToPassword: true,
         );
 
         return $this->passkeyPayload();
     }
 
+    public function reportPasskeyClientFailure(?string $challengeId, string $errorCode): void
+    {
+        $challengeId = trim((string) $challengeId);
+        $pendingChallengeId = trim((string) ($this->pendingPasskeyChallengeId ?? ''));
+        $allowedCodes = [
+            'client_credential_manager_unknown',
+            'client_credential_manager_unavailable',
+        ];
+
+        if (
+            $challengeId === '' ||
+            $pendingChallengeId === '' ||
+            ! hash_equals($pendingChallengeId, $challengeId) ||
+            ! in_array($errorCode, $allowedCodes, true)
+        ) {
+            return;
+        }
+
+        app(WebAuthnChallengeFlow::class)->cancel($challengeId, $errorCode);
+        $this->resetPasskeyFlow();
+    }
+
     public function completePasskeyLogin(
         string $credentialId,
-        ?int $signCount = null,
         ?string $challengeId = null,
-        ?string $clientChallenge = null,
         array $assertionPayload = [],
     ): ?LoginResponse {
         try {
@@ -197,12 +172,10 @@ class Login extends BaseLogin
             return null;
         }
 
-        $data = $this->data ?? [];
         $challengeId = trim((string) ($challengeId ?? $this->pendingPasskeyChallengeId ?? ''));
-        $clientChallenge = trim((string) ($clientChallenge ?? $this->pendingPasskeyChallenge ?? ''));
         $credentialId = trim($credentialId);
 
-        if ($challengeId === '' || $clientChallenge === '' || $credentialId === '') {
+        if ($challengeId === '' || $credentialId === '') {
             $this->setPasskeyFeedback(
                 status: WebAuthnAssertionResult::INVALID_CHALLENGE,
                 message: 'Flow passkey belum lengkap. Mulai lagi passkey login, atau gunakan password.',
@@ -213,10 +186,6 @@ class Login extends BaseLogin
         }
 
         $payload = [];
-
-        if ($signCount !== null) {
-            $payload['sign_count'] = $signCount;
-        }
 
         foreach (['credential_id', 'raw_id', 'client_data_json', 'authenticator_data', 'signature', 'user_handle'] as $key) {
             if (! array_key_exists($key, $assertionPayload)) {
@@ -240,9 +209,17 @@ class Login extends BaseLogin
 
         $payload['credential_id'] = trim($credentialId);
 
-        $result = app(WebAuthnChallengeFlow::class)->verifyAssertion(
+        $payload = validator($payload, [
+            'credential_id' => ['required', 'string', 'max:1024'],
+            'raw_id' => ['nullable', 'string', 'max:2048'],
+            'client_data_json' => ['required', 'string', 'max:65535'],
+            'authenticator_data' => ['required', 'string', 'max:65535'],
+            'signature' => ['required', 'string', 'max:65535'],
+            'user_handle' => ['required', 'string', 'max:2048'],
+        ])->validate();
+
+        $result = app(WebAuthnChallengeFlow::class)->verifyDiscoverableAssertion(
             challengeId: $challengeId,
-            clientChallenge: $clientChallenge,
             credentialId: $credentialId,
             payload: $payload,
         );
@@ -257,9 +234,7 @@ class Login extends BaseLogin
             return null;
         }
 
-        $user = $this->pendingPasskeyUsername
-            ? User::query()->where('username', $this->pendingPasskeyUsername)->first()
-            : null;
+        $user = $result->user;
 
         if (! $user) {
             $this->setPasskeyFeedback(
@@ -271,7 +246,7 @@ class Login extends BaseLogin
             return null;
         }
 
-        Filament::auth()->login($user, $data['remember'] ?? false);
+        Filament::auth()->login($user, true);
 
         if (
             ($user instanceof FilamentUser) &&
@@ -283,23 +258,10 @@ class Login extends BaseLogin
         }
 
         $this->clearRateLimiter();
-        $this->persistRememberedUsernameOnDevice((string) $user->username, (bool) ($data['remember_username'] ?? false));
         $this->resetPasskeyFlow();
         session()->regenerate();
 
         return app(LoginResponse::class);
-    }
-
-    public function authenticateWithPasskey(): ?LoginResponse
-    {
-        $credentialId = trim((string) data_get($this->data ?? [], 'passkey_credential_id'));
-        $signCount = data_get($this->data ?? [], 'passkey_sign_count');
-
-        return $this->completePasskeyLogin(
-            credentialId: $credentialId,
-            signCount: is_numeric($signCount) ? (int) $signCount : null,
-            assertionPayload: [],
-        );
     }
 
     public function cancelPasskeyLogin(): void
@@ -338,9 +300,12 @@ class Login extends BaseLogin
     {
         $method ??= debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, limit: 2)[1]['function'];
         $component ??= static::class;
+        $isPasskeyMethod = str_contains(strtolower((string) $method), 'passkey');
 
         return EndpointProtectionPolicy::adminLoginRateLimitKey(
-            username: (string) data_get($this->data ?? [], 'username'),
+            username: $isPasskeyMethod
+                ? 'passkey-session-'.hash('sha256', (string) session()->getId())
+                : (string) data_get($this->data ?? [], 'username'),
             ip: (string) request()->ip(),
             component: (string) $component,
             method: (string) $method,
@@ -355,6 +320,10 @@ class Login extends BaseLogin
     protected function throwUsernameValidationException(
         string $message = 'Username tidak ditemukan.'
     ): never {
+        $this->loginErrorMessage = $message === 'Akun ini tidak memiliki akses ke panel admin.'
+            ? $message
+            : 'Username atau password tidak sesuai. Periksa kembali lalu coba login.';
+
         throw ValidationException::withMessages([
             'data.username' => $message,
         ]);
@@ -362,6 +331,8 @@ class Login extends BaseLogin
 
     protected function throwPasswordValidationException(): never
     {
+        $this->loginErrorMessage = 'Username atau password tidak sesuai. Periksa kembali lalu coba login.';
+
         throw ValidationException::withMessages([
             'data.password' => 'Password yang Anda masukkan salah.',
         ]);
@@ -382,6 +353,8 @@ class Login extends BaseLogin
     {
         return $schema
             ->components([
+                SchemaView::make('filament.components.auth.login-alert')
+                    ->visible(fn (): bool => filled($this->loginErrorMessage)),
                 Select::make('remembered_username')
                     ->label('Username tersimpan')
                     ->options(fn (): array => collect($this->rememberedUsernames)
@@ -399,8 +372,6 @@ class Login extends BaseLogin
                 $this->getPasswordFormComponent(),
                 Checkbox::make('remember_username')
                     ->label('Ingat username di perangkat ini'),
-                Hidden::make('passkey_credential_id'),
-                Hidden::make('passkey_sign_count'),
                 $this->getRememberFormComponent(),
             ]);
     }
@@ -462,24 +433,30 @@ class Login extends BaseLogin
 
     private function resetPasskeyFlow(): void
     {
-        $this->pendingPasskeyUsername = null;
         $this->pendingPasskeyChallengeId = null;
-        $this->pendingPasskeyChallenge = null;
-        $this->pendingPasskeyAllowCredentialIds = [];
-        $this->data['passkey_credential_id'] = null;
-        $this->data['passkey_sign_count'] = null;
+        $this->pendingPasskeyPublicKeyOptions = [];
+    }
+
+    private function cancelPendingPasskeyChallenge(string $reason): void
+    {
+        $challengeId = trim((string) ($this->pendingPasskeyChallengeId ?? ''));
+
+        if ($challengeId !== '') {
+            app(WebAuthnChallengeFlow::class)->cancel($challengeId, $reason);
+        }
+
+        $this->resetPasskeyFlow();
     }
 
     /**
-     * @return array{status: string, challengeId: ?string, challenge: ?string, allowCredentialIds: array<int, string>, canFallbackToPassword: bool}
+     * @return array{status: string, challengeId: ?string, publicKeyOptions: array<string, mixed>, canFallbackToPassword: bool}
      */
     private function passkeyPayload(): array
     {
         return [
             'status' => (string) ($this->passkeyStatus ?? ''),
             'challengeId' => $this->pendingPasskeyChallengeId,
-            'challenge' => $this->pendingPasskeyChallenge,
-            'allowCredentialIds' => $this->pendingPasskeyAllowCredentialIds,
+            'publicKeyOptions' => $this->pendingPasskeyPublicKeyOptions,
             'canFallbackToPassword' => $this->passkeyCanFallbackToPassword,
         ];
     }
@@ -548,7 +525,13 @@ class Login extends BaseLogin
             WebAuthnAssertionResult::CEREMONY_CANCELLED => 'Verifikasi passkey dibatalkan. Gunakan login password bila diperlukan.',
             WebAuthnAssertionResult::INVALID_CHALLENGE => 'Sesi verifikasi passkey sudah tidak valid atau kedaluwarsa. Mulai ulang passkey login, atau gunakan password.',
             WebAuthnAssertionResult::CREDENTIAL_REVOKED => 'Passkey ini sudah dinonaktifkan. Login dengan password lalu daftarkan passkey baru.',
-            WebAuthnAssertionResult::CREDENTIAL_NOT_FOUND => 'Passkey tidak ditemukan untuk akun ini. Gunakan login password.',
+            WebAuthnAssertionResult::CREDENTIAL_NOT_FOUND => 'Passkey tidak dikenali. Login dengan password lalu buka Passkey & Sidik Jari.',
+            WebAuthnChallengeIssueResult::DISABLED => 'Login passkey sedang dinonaktifkan. Gunakan username dan password.',
+            WebAuthnAssertionResult::SIGN_COUNT_REGRESSION => 'Passkey ini perlu didaftarkan ulang demi keamanan. Gunakan password untuk masuk.',
+            'legacy_credential' => 'Passkey lama perlu didaftarkan ulang. Login dengan password lalu buka Passkey & Sidik Jari.',
+            'invalid_origin' => 'Alamat aplikasi tidak sesuai untuk passkey. Buka https://app.smaafbs.sch.id lalu coba lagi.',
+            'invalid_signature', 'verification_failed' => 'Sidik jari/passkey tidak dapat diverifikasi. Silakan coba lagi atau gunakan password.',
+            'rate_limited' => 'Terlalu banyak percobaan pada sesi ini. Tunggu sebentar atau gunakan password.',
             default => 'Passkey gagal diverifikasi. Anda tetap bisa login menggunakan password.',
         };
     }

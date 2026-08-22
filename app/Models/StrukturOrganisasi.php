@@ -2,14 +2,18 @@
 
 namespace App\Models;
 
+use App\Support\Media\PublicImageOptimizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema as SchemaFacade;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use LogicException;
+use RuntimeException;
 
 class StrukturOrganisasi extends Model
 {
@@ -51,6 +55,17 @@ class StrukturOrganisasi extends Model
     protected static function booted(): void
     {
         static::saving(function (self $record): void {
+            if ($record->isDirty('foto') && filled($record->foto)) {
+                try {
+                    $record->foto = app(PublicImageOptimizer::class)
+                        ->optimizeUploadedPath((string) $record->foto, 'structure');
+                } catch (RuntimeException $exception) {
+                    throw ValidationException::withMessages([
+                        'foto' => 'Foto struktur gagal dioptimalkan: '.$exception->getMessage(),
+                    ]);
+                }
+            }
+
             $record->flushLevelCacheForBranch();
             $record->rememberPreviousParentBeforeSave();
             $record->ensureCategoryDefault();
@@ -61,6 +76,7 @@ class StrukturOrganisasi extends Model
         });
 
         static::saved(function (self $record): void {
+            Cache::forget('public-home:profile-branches:v1');
             $record->flushLevelCacheForBranch();
 
             if ($record->shouldResequenceAfterSave()) {
@@ -75,6 +91,8 @@ class StrukturOrganisasi extends Model
         });
 
         static::deleted(function (self $record): void {
+            Cache::forget('public-home:profile-branches:v1');
+            app(PublicImageOptimizer::class)->removeAll($record->foto);
             $record->flushLevelCacheForBranch();
             static::resequenceSiblings(
                 $record->parent_id !== null ? (int) $record->parent_id : null,

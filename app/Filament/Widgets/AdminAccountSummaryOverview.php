@@ -82,12 +82,12 @@ class AdminAccountSummaryOverview extends StatsOverviewWidget
     {
         $items = [];
         $groupsCount = count($user->resolvedNavigationGroups());
-        $navigationItemsCount = $user->hasRole('admin') ? null : count($user->resolvedNavigationItems());
+        $navigationItemsCount = $user->hasFullAdminAccess() ? null : count($user->resolvedNavigationItems());
 
         $items[] = [
             'label' => 'Grup Menu',
             'value' => $this->formatNumber($groupsCount),
-            'description' => $user->hasRole('admin')
+            'description' => $user->hasFullAdminAccess()
                 ? 'Akun admin dapat membuka semua grup navigasi.'
                 : $this->formatNumber($navigationItemsCount ?? 0).' menu aktif sesuai akses akun.',
             'color' => 'primary',
@@ -170,7 +170,7 @@ class AdminAccountSummaryOverview extends StatsOverviewWidget
 
     protected function canViewModule(User $user, string $prefix): bool
     {
-        return $user->hasRole('admin') || $user->canViewModule($prefix);
+        return $user->hasFullAdminAccess() || $user->canViewModule($prefix);
     }
 
     protected function canViewProker(User $user): bool

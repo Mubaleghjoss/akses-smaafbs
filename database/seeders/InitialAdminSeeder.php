@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Console\Commands\InstallAssessmentDefaults;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -18,7 +19,7 @@ class InitialAdminSeeder extends Seeder
     {
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        $permissions = [
+        $permissions = array_values(array_unique([
             'users.view',
             'users.manage',
             'data_siswa.view',
@@ -51,7 +52,8 @@ class InitialAdminSeeder extends Seeder
             'catatan_bk.manage',
             'perpustakaan_literasi.view',
             'perpustakaan_literasi.manage',
-        ];
+            ...InstallAssessmentDefaults::PERMISSIONS,
+        ]));
 
         foreach ($permissions as $permissionName) {
             Permission::findOrCreate($permissionName, 'web');
@@ -59,6 +61,7 @@ class InitialAdminSeeder extends Seeder
 
         $rolePermissions = [
             'admin' => $permissions,
+            'guru_admin' => $permissions,
             'tu' => [
                 'data_siswa.view',
                 'data_siswa.manage',
@@ -120,6 +123,9 @@ class InitialAdminSeeder extends Seeder
                 'guru_tendik.manage',
                 'berkas_guru.view',
                 'berkas_guru.manage',
+                'penilaian.view',
+                'penilaian.input',
+                'penilaian.submit',
             ],
             'kepala_perpus' => [
                 'perpustakaan_literasi.view',
@@ -138,7 +144,9 @@ class InitialAdminSeeder extends Seeder
                 'guard_name' => 'web',
             ]);
 
-            $role->syncPermissions($mappedPermissions);
+            // Seeder harus tetap aditif agar permission modul yang dipasang
+            // command lain tidak terhapus saat seeder ini dijalankan ulang.
+            $role->givePermissionTo($mappedPermissions);
         }
 
         $username = (string) env('INITIAL_ADMIN_USERNAME', 'putra');

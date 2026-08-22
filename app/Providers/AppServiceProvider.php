@@ -7,14 +7,19 @@ use App\Contracts\Auth\WebAuthnCredentialDomain;
 use App\Contracts\SiteSettingsAccessor;
 use App\Support\Auth\WebAuthn\DatabaseWebAuthnChallengeFlow;
 use App\Support\Auth\WebAuthn\DatabaseWebAuthnCredentialDomain;
+use App\Support\Perpustakaan\LiteracySubmissionEventRecorder;
 use App\Support\Security\EndpointProtectionPolicy;
 use App\Support\SiteSettings\PengaturanSiteSettingsAccessor;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
 use Illuminate\View\View as BladeView;
 
 class AppServiceProvider extends ServiceProvider
@@ -35,6 +40,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         EndpointProtectionPolicy::registerNamedLimiters();
+        $this->registerLiteracyRateLimiters();
+        $this->registerStudentSyncRateLimiter();
         $this->registerSlowAdminQueryLogger();
 
         View::composer('layouts.app', function (BladeView $view): void {
@@ -95,6 +102,11 @@ class AppServiceProvider extends ServiceProvider
                 'og_title' => $ogTitle,
                 'og_description' => $ogDescription,
                 'og_image' => $ogImage,
+                'og_image_secure_url' => $metaOverrides['og_image_secure_url'] ?? $ogImage,
+                'og_image_type' => $metaOverrides['og_image_type'] ?? null,
+                'og_image_width' => $metaOverrides['og_image_width'] ?? null,
+                'og_image_height' => $metaOverrides['og_image_height'] ?? null,
+                'og_image_alt' => $metaOverrides['og_image_alt'] ?? null,
                 'og_url' => (string) ($metaOverrides['og_url'] ?? request()->fullUrl()),
                 'twitter_card' => $twitterCard,
                 'twitter_title' => (string) ($metaOverrides['twitter_title'] ?? $ogTitle),
@@ -115,6 +127,114 @@ class AppServiceProvider extends ServiceProvider
 
         config(['app.url' => $rootUrl]);
         URL::forceRootUrl($rootUrl);
+    }
+
+    protected function registerLiteracyRateLimiters(): void
+    {
+        RateLimiter::for('literacy_queue_ticket', fn (Request $request): array => [
+            $this->literacyLimit(30, 'ticket_session', 'literacy-ticket-session|'.$this->literacySessionKey($request)),
+            $this->literacyLimit(1200, 'ticket_ip', 'literacy-ticket-ip|'.$request->ip()),
+        ]);
+
+        RateLimiter::for('literacy_queue_status', fn (Request $request): array => [
+            $this->literacyLimit(120, 'status_session', 'literacy-status-session|'.$this->literacySessionKey($request)),
+            $this->literacyLimit(3000, 'status_ip', 'literacy-status-ip|'.$request->ip()),
+        ]);
+
+        RateLimiter::for('literacy_submit', fn (Request $request): array => [
+            $this->literacyLimit(4, 'submit_request', 'literacy-submit-request|'.$this->literacySubmissionKey($request)),
+            $this->literacyLimit(30, 'submit_session', 'literacy-submit-session|'.$this->literacySessionKey($request)),
+            $this->literacyLimit(1200, 'submit_ip', 'literacy-submit-ip|'.$request->ip()),
+        ]);
+
+        RateLimiter::for('literacy_integrity', fn (Request $request): array => [
+            Limit::perMinute(60)->by('literacy-integrity-session|'.$this->literacySessionKey($request)),
+            Limit::perMinute(1200)->by('literacy-integrity-ip|'.$request->ip()),
+        ]);
+
+        RateLimiter::for('literacy_events', fn (Request $request): array => [
+            Limit::perMinute(30)->by('literacy-events-session|'.$this->literacySessionKey($request)),
+            Limit::perMinute(600)->by('literacy-events-ip|'.$request->ip()),
+        ]);
+
+        RateLimiter::for('literacy_school_monitor', fn (Request $request): array => [
+            Limit::perMinute(30)->by('literacy-school-monitor|'.$request->ip()),
+        ]);
+
+        RateLimiter::for('public_connectivity', function (Request $request): array {
+            $clientId = $request->string('client_id')->toString();
+            $clientKey = $clientId !== '' ? hash('sha256', $clientId) : (string) $request->ip();
+
+            return [
+                Limit::perMinute(30)->by('public-connectivity-client|'.$clientKey),
+                Limit::perMinute(1200)->by('public-connectivity-ip|'.$request->ip()),
+            ];
+        });
+    }
+
+    protected function registerStudentSyncRateLimiter(): void
+    {
+        RateLimiter::for('student_sync_receiver', function (Request $request): array {
+            $clientId = (string) $request->header('X-Student-Sync-Client', '');
+
+            return [
+                Limit::perMinute(20)->by('student-sync-receiver-client|'.hash('sha256', $clientId)),
+                Limit::perMinute(20)->by('student-sync-receiver-ip|'.$request->ip()),
+            ];
+        });
+    }
+
+    protected function literacySessionKey(Request $request): string
+    {
+        return $request->hasSession() && $request->session()->getId() !== ''
+            ? $request->session()->getId()
+            : (string) $request->ip();
+    }
+
+    protected function literacySubmissionKey(Request $request): string
+    {
+        $value = $request->string('submission_ticket')->toString()
+            ?: $request->string('submission_request_id')->toString()
+            ?: $this->literacySessionKey($request);
+
+        return hash('sha256', $value);
+    }
+
+    protected function literacyLimit(int $attempts, string $scope, string $key): Limit
+    {
+        return Limit::perMinute($attempts)
+            ->by($key)
+            ->response(fn (Request $request, array $headers) => $this->literacyThrottleResponse($request, $headers, $scope));
+    }
+
+    protected function literacyThrottleResponse(Request $request, array $headers, string $scope)
+    {
+        $traceId = $request->string('submission_request_id')->toString();
+
+        if (! Str::isUuid($traceId)) {
+            $traceId = (string) Str::uuid();
+        }
+
+        app(LiteracySubmissionEventRecorder::class)->record('throttled', [
+            'http_status' => 429,
+            'context' => [
+                'operation' => str_contains($scope, 'submit') ? 'submit' : 'queue',
+                'reason' => 'application_rate_limit',
+                'limiter_scope' => $scope,
+                'trace_id' => $traceId,
+            ],
+        ]);
+
+        return response()->json([
+            'status' => 'throttled',
+            'message' => 'Permintaan sedang dijeda singkat oleh aplikasi. Jawaban tidak perlu dikirim berulang.',
+            'retry_after_seconds' => (int) ($headers['Retry-After'] ?? 5),
+        ], 429, $headers + [
+            'Cache-Control' => 'no-store',
+            'X-Literacy-Protocol' => '2',
+            'X-Literacy-Trace-Id' => $traceId,
+            'X-Literacy-Throttle' => $scope,
+        ]);
     }
 
     protected function registerSlowAdminQueryLogger(): void

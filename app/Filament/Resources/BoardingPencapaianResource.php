@@ -12,6 +12,7 @@ use App\Models\BoardingMaknaProgress;
 use App\Models\BoardingPencapaian;
 use App\Models\DataSiswa;
 use App\Models\User;
+use App\Support\DataSiswa\DataSiswaSupport;
 use Filament\Actions\Action;
 use Filament\Forms;
 use Filament\Resources\Resource;
@@ -313,7 +314,6 @@ class BoardingPencapaianResource extends Resource
                 Tables\Columns\TextColumn::make('siswa.nama')
                     ->label('Murid')
                     ->searchable()
-                    ->description(fn (BoardingPencapaian $record): string => static::resolveMobileRecordSummary($record))
                     ->wrap(),
                 Tables\Columns\SelectColumn::make('materi_rapot_scope')
                     ->label('Target Rapot')
@@ -328,31 +328,57 @@ class BoardingPencapaianResource extends Resource
                     ->badge()
                     ->state(fn (BoardingPencapaian $record): string => static::resolveOverallAchievementPercentage($record).'%')
                     ->color(fn (BoardingPencapaian $record): string => static::resolveOverallAchievementColor($record))
-                    ->description(fn (BoardingPencapaian $record): string => static::resolveOverallAchievementSummary($record))
                     ->wrap()
                     ->visibleFrom('md'),
                 Tables\Columns\TextColumn::make('hafalan_ringkas')
                     ->label('Hafalan')
                     ->state(fn (BoardingPencapaian $record): string => static::resolveHafalanSummary($record))
-                    ->description(fn (BoardingPencapaian $record): string => static::resolveHafalanMateriBreakdown($record))
                     ->wrap()
                     ->visibleFrom('lg'),
                 Tables\Columns\TextColumn::make('makna_ringkas')
                     ->label('Makna')
                     ->state(fn (BoardingPencapaian $record): string => static::resolveMaknaSummary($record))
-                    ->description(fn (BoardingPencapaian $record): string => static::resolveMaknaDetail($record))
                     ->wrap()
                     ->visibleFrom('lg')
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('bacaan_ringkas')
                     ->label('Bacaan')
                     ->state(fn (BoardingPencapaian $record): string => static::resolveBacaanSummary($record))
-                    ->description(fn (BoardingPencapaian $record): string => static::resolveBacaanDetail($record))
                     ->wrap()
                     ->visibleFrom('xl')
                     ->toggleable(),
             ])
             ->filters([
+                Tables\Filters\SelectFilter::make('siswa_rombel')
+                    ->label('Kelas')
+                    ->placeholder('Semua kelas')
+                    ->native(false)
+                    ->searchable()
+                    ->options(fn (): array => DataSiswaSupport::rombelOptions(auth()->user()))
+                    ->query(function (Builder $query, array $data): Builder {
+                        if (! filled($data['value'] ?? null)) {
+                            return $query;
+                        }
+
+                        return $query->whereHas('siswa', fn (Builder $siswaQuery): Builder => $siswaQuery
+                            ->where('rombel_saat_ini', $data['value']));
+                    }),
+                Tables\Filters\SelectFilter::make('siswa_jk')
+                    ->label('Jenis Kelamin')
+                    ->placeholder('Semua JK')
+                    ->native(false)
+                    ->options([
+                        'L' => 'Laki-laki',
+                        'P' => 'Perempuan',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        if (! filled($data['value'] ?? null)) {
+                            return $query;
+                        }
+
+                        return $query->whereHas('siswa', fn (Builder $siswaQuery): Builder => $siswaQuery
+                            ->where('jk', $data['value']));
+                    }),
                 Tables\Filters\SelectFilter::make('materi_rapot_scope')
                     ->label('Target Rapot')
                     ->options(BoardingPencapaian::materiRapotScopeOptions())

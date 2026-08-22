@@ -17,8 +17,8 @@ return new class extends Migration
                 $table->string('image_path')->nullable();
                 $table->string('google_drive_url', 1000)->nullable();
                 $table->boolean('is_active')->default(true)->index();
-                $table->date('opens_at')->nullable()->index();
-                $table->date('closes_at')->nullable()->index();
+                $table->dateTime('opens_at')->nullable()->index();
+                $table->dateTime('closes_at')->nullable()->index();
                 $table->unsignedBigInteger('created_by')->nullable()->index();
                 $table->unsignedBigInteger('updated_by')->nullable()->index();
                 $table->timestamps();

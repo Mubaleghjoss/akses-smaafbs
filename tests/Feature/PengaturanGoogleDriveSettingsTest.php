@@ -11,6 +11,7 @@ use App\Support\SiteSettings\SiteSettingKeys;
 use Filament\Facades\Filament;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 use Tests\Feature\Concerns\BootstrapsUserAndPermissionTables;
@@ -26,6 +27,7 @@ class PengaturanGoogleDriveSettingsTest extends TestCase
 
         $this->bootstrapUserAndPermissionTables();
         $this->recreatePengaturanTable();
+        File::delete(config('server_sync.env_path'));
     }
 
     public function test_admin_can_manage_google_drive_settings_from_pengaturan_page(): void
@@ -41,7 +43,7 @@ class PengaturanGoogleDriveSettingsTest extends TestCase
 
         Livewire::actingAs($admin)
             ->test(ListPengaturans::class)
-            ->assertSee('Integrasi Google Drive')
+            ->assertSee('Google Drive')
             ->set('data.google_drive_enabled', true)
             ->set('data.google_drive_auto_sync_komite_documents', true)
             ->set('data.google_drive_auto_sync_berkas_siswa', true)
@@ -117,6 +119,32 @@ class PengaturanGoogleDriveSettingsTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_update_server_sync_env_from_pengaturan_page(): void
+    {
+        $admin = User::query()->create([
+            'name' => 'Admin Tarik Server',
+            'username' => 'admin-tarik-server',
+            'password' => bcrypt('password'),
+        ]);
+        $admin->assignRole('admin');
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::actingAs($admin)
+            ->test(ListPengaturans::class)
+            ->assertSee('Sinkronkan data API')
+            ->set('data.server_sync_api_enabled', true)
+            ->set('data.server_sync_domain', 'app.smaafbs.sch.id')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $contents = File::get(config('server_sync.env_path'));
+
+        $this->assertStringContainsString('SERVER_SYNC_API_ENABLED=true', $contents);
+        $this->assertStringContainsString('SERVER_SYNC_DOMAIN=https://app.smaafbs.sch.id', $contents);
+        $this->assertStringNotContainsString('SERVER_SYNC_SSH_HOST=', $contents);
+    }
+
     public function test_pengaturan_page_shows_google_drive_document_monitoring_lists(): void
     {
         $this->ensureKomiteDocumentsTable();
@@ -164,10 +192,13 @@ class PengaturanGoogleDriveSettingsTest extends TestCase
 
         Livewire::actingAs($admin)
             ->test(ListPengaturans::class)
-            ->assertSee('Monitoring sinkron file')
+            ->assertSee('Google Drive')
+            ->assertSee('Monitor Google Drive diminimalkan otomatis')
+            ->call('mountAction', 'toggleGoogleDriveMonitoring')
+            ->call('mountAction', 'toggleGoogleDriveMonitoringDetails')
             ->assertSee('Cakupan modul')
             ->assertSee('Mode sinkron terakhir')
-            ->assertSee('Antrean & proses aktif')
+            ->assertSee('Antrean dan proses aktif')
             ->assertSee('Belum terkirim / perlu tindakan')
             ->assertSee('Sudah tersinkron terakhir')
             ->assertSee('SK Menunggu Antrean')
@@ -178,8 +209,7 @@ class PengaturanGoogleDriveSettingsTest extends TestCase
             ->assertSee('Tersinkron')
             ->assertSee('Baru')
             ->assertSee('Diganti')
-            ->assertSee('Dipulihkan')
-            ->assertSee('Upload Sekarang');
+            ->assertSee('Dipulihkan');
     }
 
     public function test_pengaturan_page_shows_berkas_siswa_and_berkas_guru_sync_history(): void
@@ -245,12 +275,14 @@ class PengaturanGoogleDriveSettingsTest extends TestCase
 
         Livewire::actingAs($admin)
             ->test(ListPengaturans::class)
+            ->call('mountAction', 'toggleGoogleDriveMonitoring')
+            ->call('mountAction', 'toggleGoogleDriveMonitoringDetails')
             ->assertSee('Buka Berkas Siswa')
             ->assertSee('Buka Berkas Guru')
             ->assertSee('Berkas Siswa')
             ->assertSee('Berkas Guru')
-            ->assertSee('kk-siswa.pdf')
-            ->assertSee('sk-guru.pdf')
+            ->assertSee('Kartu Keluarga - Siswa Sinkron - XI IPA 1.pdf')
+            ->assertSee('SK Tugas - Guru Sinkron.pdf')
             ->assertSee('Siswa Sinkron')
             ->assertSee('Guru Sinkron')
             ->assertSee('Kartu Keluarga')
@@ -311,6 +343,8 @@ class PengaturanGoogleDriveSettingsTest extends TestCase
 
         Livewire::actingAs($admin)
             ->test(ListPengaturans::class)
+            ->call('mountAction', 'toggleGoogleDriveMonitoring')
+            ->call('mountAction', 'toggleGoogleDriveMonitoringDetails')
             ->assertSee('Buka Prestasi')
             ->assertSee('Tambah Prestasi')
             ->assertSee('Prestasi')

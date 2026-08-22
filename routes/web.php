@@ -1,16 +1,19 @@
 <?php
 
 use App\Contracts\SiteSettingsAccessor;
-use App\Http\Controllers\Admin\BerkasGuruDocumentController;
-use App\Http\Controllers\Admin\BoardingRapotDocumentController;
 use App\Http\Controllers\Admin\AdminUserCredentialDocumentController;
+use App\Http\Controllers\Admin\AssessmentMasterTemplateController;
+use App\Http\Controllers\Admin\BerkasGuruDocumentController;
+use App\Http\Controllers\Admin\BoardingBacaanAssessmentExportController;
+use App\Http\Controllers\Admin\BoardingRapotDocumentController;
 use App\Http\Controllers\Admin\DataSiswaExportController;
-use App\Http\Controllers\Admin\DataSiswaProfileExportController;
 use App\Http\Controllers\Admin\DataSiswaImportReviewExportController;
 use App\Http\Controllers\Admin\DataSiswaImportTemplateController;
+use App\Http\Controllers\Admin\DataSiswaProfileExportController;
 use App\Http\Controllers\Admin\ForceGuruPasswordChangeController;
 use App\Http\Controllers\Admin\GuruTendikExportController;
 use App\Http\Controllers\Admin\GuruTendikImportTemplateController;
+use App\Http\Controllers\Admin\PerpustakaanLiterasiDispensationController;
 use App\Http\Controllers\Admin\ProkerExportController;
 use App\Http\Controllers\Admin\ProkerImportTemplateController;
 use App\Http\Controllers\Admin\SarprasActivityDocumentController;
@@ -20,6 +23,7 @@ use App\Http\Controllers\Admin\SarprasRoomInventoryDocumentController;
 use App\Http\Controllers\Admin\UksRecordExportController;
 use App\Http\Controllers\Admin\UksRecordImportTemplateController;
 use App\Http\Controllers\AgendaController;
+use App\Http\Controllers\AssessmentReportController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\GuruTendikProfileController;
 use App\Http\Controllers\HomeController;
@@ -29,8 +33,11 @@ use App\Http\Controllers\PerpustakaanLiteracyProgramController;
 use App\Http\Controllers\SarprasBospInventoryPublicController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\SurveiPublicController;
+use App\Http\Middleware\AdminAwareVerifyCsrfToken;
+use App\Support\Media\PublicImageOptimizer;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Http\Request;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
@@ -50,6 +57,53 @@ Route::middleware('auth')->get(
     '/admin/prokers/import-template',
     ProkerImportTemplateController::class
 )->name('admin.prokers.import-template');
+
+Route::middleware('auth')->group(function (): void {
+    Route::get(
+        '/admin/penilaian/master/template',
+        AssessmentMasterTemplateController::class,
+    )->name('admin.assessment.master-template');
+
+    Route::get(
+        '/admin/penilaian/rapor/siswa/{reportSnapshot}/download',
+        [AssessmentReportController::class, 'downloadSnapshot'],
+    )->name('assessment.reports.snapshot.download');
+
+    Route::get(
+        '/admin/penilaian/rapor/siswa/{reportSnapshot}/preview',
+        [AssessmentReportController::class, 'preview'],
+    )
+        ->middleware('throttle:10,1')
+        ->name('assessment.reports.preview');
+
+    Route::get(
+        '/admin/penilaian/rapor/pratinjau/{assessmentPeriod}/{reportTemplate}/{periodStudent}',
+        [AssessmentReportController::class, 'livePreview'],
+    )
+        ->middleware('throttle:10,1')
+        ->name('assessment.reports.live-preview');
+
+    Route::get(
+        '/admin/penilaian/rapor/kelas/{classReportArtifact}/download',
+        [AssessmentReportController::class, 'downloadClass'],
+    )->name('assessment.reports.class.download');
+});
+
+Route::get(
+    '/rapor/penilaian/{token}',
+    [AssessmentReportController::class, 'downloadShared'],
+)
+    ->middleware('throttle:'.max(1, (int) config('assessment.share_links.rate_limit_per_minute', 30)).',1')
+    ->name('assessment.reports.shared.download');
+
+Route::middleware('auth')
+    ->prefix('/admin/perpustakaan-literasi-materials/{material}/dispensations/{student}')
+    ->group(function (): void {
+        Route::post('/', [PerpustakaanLiterasiDispensationController::class, 'store'])
+            ->name('admin.perpustakaan-literasi.dispensations.store');
+        Route::delete('/', [PerpustakaanLiterasiDispensationController::class, 'destroy'])
+            ->name('admin.perpustakaan-literasi.dispensations.destroy');
+    });
 
 Route::middleware('auth')->get(
     '/admin/prokers/export/{periode_tahun}',
@@ -82,6 +136,16 @@ Route::middleware('auth')->get(
 )->name('admin.guru-tendiks.import-template');
 
 Route::middleware('auth')->get(
+    '/admin/belajar-id/import-template',
+    \App\Http\Controllers\Admin\BelajarIdImportTemplateController::class
+)->name('admin.belajar-id.import-template');
+
+Route::middleware('auth')->get(
+    '/admin/wifi-accounts/import-template',
+    \App\Http\Controllers\Admin\WifiAccountImportTemplateController::class
+)->name('admin.wifi-accounts.import-template');
+
+Route::middleware('auth')->get(
     '/admin/guru-tendiks/export',
     GuruTendikExportController::class
 )->name('admin.guru-tendiks.export');
@@ -96,11 +160,17 @@ Route::middleware('auth')->get(
     UksRecordExportController::class
 )->name('admin.uks-records.export');
 
+Route::middleware('auth')->get(
+    '/admin/boarding-pencapaians/{boardingPencapaian}/bacaan/export',
+    BoardingBacaanAssessmentExportController::class
+)->name('admin.boarding-pencapaians.bacaan.export');
+
+Route::middleware('auth')->get(
+    '/admin/boarding-rapots/print-all',
+    [BoardingRapotDocumentController::class, 'printAllReady']
+)->name('admin.boarding-rapots.print-all');
+
 Route::middleware('auth')->prefix('/admin/boarding-rapots/{boardingRapot}')->group(function (): void {
-    Route::get('/manual-edit', [BoardingRapotDocumentController::class, 'editManual'])
-        ->name('admin.boarding-rapots.manual-edit');
-    Route::post('/manual-update', [BoardingRapotDocumentController::class, 'updateManual'])
-        ->name('admin.boarding-rapots.manual-update');
     Route::get('/preview', [BoardingRapotDocumentController::class, 'preview'])
         ->name('admin.boarding-rapots.preview');
     Route::get('/rekap', [BoardingRapotDocumentController::class, 'rekap'])
@@ -114,6 +184,8 @@ Route::middleware('auth')->prefix('/admin/boarding-rapots/{boardingRapot}')->gro
 Route::middleware('auth')->prefix('/admin/berkas-gurus/{berkasGuru}')->group(function (): void {
     Route::get('/preview', [BerkasGuruDocumentController::class, 'preview'])
         ->name('admin.berkas-gurus.preview');
+    Route::get('/content', [BerkasGuruDocumentController::class, 'content'])
+        ->name('admin.berkas-gurus.content');
     Route::get('/download', [BerkasGuruDocumentController::class, 'download'])
         ->name('admin.berkas-gurus.download');
 });
@@ -178,10 +250,13 @@ Route::get('/manifest.webmanifest', function () {
     /** @var SiteSettingsAccessor $settings */
     $settings = app(SiteSettingsAccessor::class);
     $siteSettings = $settings->all();
+    $imageOptimizer = app(PublicImageOptimizer::class);
 
     $iconUrl = $siteSettings['favicon_path']
         ?? $siteSettings['logo_path']
         ?? asset('favicon.ico');
+    $icon192Url = $imageOptimizer->pwaIconUrl($iconUrl, 192) ?? $iconUrl;
+    $icon512Url = $imageOptimizer->pwaIconUrl($iconUrl, 512) ?? $iconUrl;
 
     return response()->json([
         'name' => $siteSettings['pwa_app_name'],
@@ -194,26 +269,38 @@ Route::get('/manifest.webmanifest', function () {
         'theme_color' => $siteSettings['theme_color'],
         'icons' => [
             [
-                'src' => $iconUrl,
+                'src' => $icon192Url,
                 'sizes' => '192x192',
                 'type' => 'image/png',
             ],
             [
-                'src' => $iconUrl,
+                'src' => $icon512Url,
                 'sizes' => '512x512',
                 'type' => 'image/png',
             ],
         ],
-    ])->header('Content-Type', 'application/manifest+json');
-})->name('manifest.webmanifest');
+    ])->withHeaders([
+        'Content-Type' => 'application/manifest+json',
+        'Cache-Control' => 'public, max-age=86400',
+    ]);
+})->withoutMiddleware([
+    EncryptCookies::class,
+    AddQueuedCookiesToResponse::class,
+    StartSession::class,
+    ShareErrorsFromSession::class,
+    AdminAwareVerifyCsrfToken::class,
+    ValidateCsrfToken::class,
+])->name('manifest.webmanifest');
 
 Route::get('/service-worker.js', function () {
     $script = <<<'JS'
-const CACHE_NAME = 'akses-public-shell-v3';
-const NETWORK_ONLY_PREFIXES = [
+const CACHE_NAME = 'akses-public-shell-v7';
+const SERVICE_WORKER_VERSION = 'public-shell-v7';
+const PASSTHROUGH_PREFIXES = [
     '/admin',
     '/livewire',
     '/storage',
+    '/build',
     '/login',
     '/logout',
     '/register',
@@ -224,9 +311,7 @@ const NETWORK_ONLY_PREFIXES = [
     '/tagihan',
 ];
 
-const AUTH_POST_PATHS = ['/login', '/logout', '/register', '/password', '/forgot-password', '/reset-password'];
-
-const shouldBypassCache = (request, url) => {
+const shouldPassThrough = (request, url) => {
     if (request.method !== 'GET') {
         return true;
     }
@@ -235,37 +320,58 @@ const shouldBypassCache = (request, url) => {
         return true;
     }
 
-    if (NETWORK_ONLY_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) {
-        return true;
-    }
-
-    if (AUTH_POST_PATHS.some((prefix) => url.pathname.startsWith(prefix))) {
+    if (PASSTHROUGH_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) {
         return true;
     }
 
     return false;
 };
 
-const fetchNetworkOnly = (request) => {
-    if (request.method === 'GET') {
-        return fetch(request, { cache: 'no-store' });
-    }
+const offlineResponse = (kind = 'network_error', httpStatus = 0) => {
+    const serverUnavailable = kind === 'server_unavailable';
+    const title = serverUnavailable ? 'Server sedang tidak tersedia' : 'Koneksi jaringan terputus';
+    const message = serverUnavailable
+        ? 'Server memberi respons sementara tidak tersedia. Jawaban tidak dikirim dari halaman ini.'
+        : 'Browser tidak memperoleh respons jaringan. Periksa Wi-Fi, access point, atau koneksi internet.';
+    const eventType = serverUnavailable
+        ? 'navigation_server_unavailable'
+        : 'navigation_network_error';
+    const html = `<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0f766e"><title>${title}</title>
+<style>body{margin:0;background:#f8fafc;color:#0f172a;font-family:system-ui,sans-serif}.wrap{max-width:38rem;margin:8vh auto;padding:1rem}.card{border:1px solid #cbd5e1;border-radius:1rem;background:#fff;padding:1.25rem;box-shadow:0 1px 2px rgba(15,23,42,.06)}h1{margin:0;font-size:1.3rem;line-height:1.3}p{margin:.75rem 0 0;line-height:1.6}.status{margin-top:1rem;border-radius:.75rem;background:#f1f5f9;padding:.75rem;font-size:.92rem}.actions{display:flex;flex-wrap:wrap;gap:.65rem;margin-top:1rem}button{min-height:44px;border:1px solid #0f766e;border-radius:.75rem;background:#fff;color:#0f766e;padding:.7rem 1rem;font-weight:700;cursor:pointer}button.primary{background:#0f766e;color:#fff}.hint{font-size:.85rem;color:#475569}@media(max-width:520px){.wrap{margin:4vh auto}.actions button{width:100%}}</style></head>
+<body><main class="wrap"><section class="card"><h1>${title}</h1><p>${message}</p><p class="hint">Isian pada form sebelumnya belum dinyatakan tersimpan. Jangan menekan Kirim berulang.</p><div class="status" aria-live="polite"><strong id="connection-label">Status: belum diperiksa</strong><br><span id="connection-meta"></span></div><div class="actions"><button class="primary" id="probe-button" type="button">Periksa Koneksi Server</button><button id="reload-button" type="button">Muat Ulang Halaman</button></div></section></main>
+<script>(function(){
+var clientKey='akses:connectivity:client-id:v1';var queueKey='akses:connectivity:events:v1';
+var eventType=${JSON.stringify(eventType)};var httpStatus=${Number(httpStatus) || 0};var workerVersion=${JSON.stringify(SERVICE_WORKER_VERSION)};
+function uuid(){if(window.crypto&&window.crypto.randomUUID){return window.crypto.randomUUID();}return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.floor(Math.random()*16);var v=c==='x'?r:(r&3)|8;return v.toString(16);});}
+function group(path){if(path==='/'){return 'home';}if(path==='/admin/login'||path==='/login'){return 'login';}if(path==='/perpustakaan/program-literasi-numerasi'){return 'literacy_list';}if(path.indexOf('/perpustakaan/program-literasi-numerasi/')===0){return 'literacy_material';}return 'other_public';}
+try{var client=localStorage.getItem(clientKey);if(!client){client=uuid();localStorage.setItem(clientKey,client);}var queue=JSON.parse(localStorage.getItem(queueKey)||'[]');if(!Array.isArray(queue)){queue=[];}queue.push({event_uuid:uuid(),event_type:eventType,route_group:group(location.pathname),http_status:httpStatus,service_worker_version:workerVersion,occurred_at:new Date().toISOString(),recovered_at:null});localStorage.setItem(queueKey,JSON.stringify(queue.slice(-20)));}catch(e){}
+var label=document.getElementById('connection-label');var meta=document.getElementById('connection-meta');var probe=document.getElementById('probe-button');
+function updateBrowserStatus(){meta.textContent='Browser '+(navigator.onLine?'mendeteksi jaringan aktif':'sedang offline')+' · '+new Date().toLocaleString('id-ID');}updateBrowserStatus();
+probe.addEventListener('click',async function(){probe.disabled=true;label.textContent='Status: memeriksa server...';var controller=new AbortController();var timeout=setTimeout(function(){controller.abort();},8000);try{var response=await fetch('/up?connectivity_probe='+Date.now(),{cache:'no-store',signal:controller.signal});if(response.ok){label.textContent='Status: server dapat dijangkau';meta.textContent='Koneksi sudah pulih. Tekan Muat Ulang Halaman.';}else{label.textContent='Status: server merespons '+response.status;updateBrowserStatus();}}catch(e){label.textContent='Status: server belum dapat dijangkau';updateBrowserStatus();}finally{clearTimeout(timeout);probe.disabled=false;}});
+document.getElementById('reload-button').addEventListener('click',function(){location.reload();});window.addEventListener('online',updateBrowserStatus);window.addEventListener('offline',updateBrowserStatus);
+})();</script></body></html>`;
 
-    return fetch(request);
+    return new Response(html, {
+        status: 503,
+        statusText: 'Service Unavailable',
+        headers: {
+            'Cache-Control': 'no-store',
+            'Content-Type': 'text/html; charset=UTF-8',
+        },
+    });
 };
 
 self.addEventListener('install', (event) => {
     self.skipWaiting();
-
-    event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => cache.addAll(['/']))
-    );
 });
 
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((keys) => Promise.all(
-            keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+            keys
+                .filter((key) => key.startsWith('akses-public-shell-') && key !== CACHE_NAME)
+                .map((key) => caches.delete(key))
         )).then(() => self.clients.claim())
     );
 });
@@ -278,26 +384,23 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    if (shouldBypassCache(request, url)) {
-        event.respondWith(fetchNetworkOnly(request));
-
+    // Admin, Livewire, uploaded files, and hashed build assets use the browser's
+    // native HTTP cache. Returning here is important: no forced no-store fetch.
+    if (shouldPassThrough(request, url)) {
         return;
     }
 
-    event.respondWith(
-        fetch(request)
-            .then((response) => {
-                if (!response || response.status !== 200 || response.type !== 'basic') {
-                    return response;
-                }
-
-                const responseClone = response.clone();
-                caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
-
-                return response;
-            })
-            .catch(() => caches.match(request).then((cached) => cached || caches.match('/')))
-    );
+    // Dynamic HTML (including literacy forms and CSRF tokens) is never cached.
+    // Only provide a diagnostic explanation when a public navigation fails.
+    if (request.mode === 'navigate') {
+        event.respondWith(
+            fetch(request, { cache: 'no-store' })
+                .then((response) => [503, 504].includes(response.status)
+                    ? offlineResponse('server_unavailable', response.status)
+                    : response)
+                .catch(() => offlineResponse('network_error', 0))
+        );
+    }
 });
 JS;
 
@@ -305,7 +408,14 @@ JS;
         ->header('Content-Type', 'application/javascript; charset=UTF-8')
         ->header('Service-Worker-Allowed', '/')
         ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-})->name('service-worker');
+})->withoutMiddleware([
+    EncryptCookies::class,
+    AddQueuedCookiesToResponse::class,
+    StartSession::class,
+    ShareErrorsFromSession::class,
+    AdminAwareVerifyCsrfToken::class,
+    ValidateCsrfToken::class,
+])->name('service-worker');
 
 Route::get('/', HomeController::class)->name('home');
 Route::get('/student-search', [HomeController::class, 'studentSearch'])
@@ -314,7 +424,8 @@ Route::get('/student-search', [HomeController::class, 'studentSearch'])
         AddQueuedCookiesToResponse::class,
         StartSession::class,
         ShareErrorsFromSession::class,
-        \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+        AdminAwareVerifyCsrfToken::class,
+        ValidateCsrfToken::class,
     ])
     ->middleware('throttle:30,1')
     ->name('home.student-search');
@@ -358,21 +469,61 @@ Route::redirect('/perpus/index.php', '/perpustakaan/aktivitas-literasi/form');
 Route::redirect('/perpus/cari_buku.php', '/perpustakaan');
 Route::redirect('/perpus/hasil_literasi.php', '/perpustakaan/hasil-literasi');
 Route::get('/perpustakaan', [LibraryController::class, 'index'])->name('library.index');
-Route::get('/perpustakaan/literacy-habituation-program', [PerpustakaanLiteracyProgramController::class, 'index'])
+Route::redirect('/literasi', '/perpustakaan/program-literasi-numerasi')
+    ->name('library.literacy.shortcut');
+Route::redirect('/perpustakaan/literacy-habituation-program', '/perpustakaan/program-literasi-numerasi');
+Route::get('/perpustakaan/literacy-habituation-program/edit/{code}', function (string $code) {
+    return redirect()->route('library.literacy.edit', ['code' => $code], 301);
+})->where('code', '[A-Za-z0-9-]+');
+Route::redirect('/perpustakaan/literacy-habituation-program/edit', '/perpustakaan/program-literasi-numerasi/edit');
+Route::get('/perpustakaan/literacy-habituation-program/{slug}', function (string $slug) {
+    return redirect()->route('library.literacy.show', ['slug' => $slug], 301);
+});
+Route::get('/perpustakaan/program-literasi-numerasi', [PerpustakaanLiteracyProgramController::class, 'index'])
     ->name('library.literacy.index');
-Route::get('/perpustakaan/literacy-habituation-program/edit', [PerpustakaanLiteracyProgramController::class, 'editLookup'])
+Route::get('/perpustakaan/program-literasi-numerasi/edit', [PerpustakaanLiteracyProgramController::class, 'editLookup'])
     ->name('library.literacy.edit.lookup');
-Route::get('/perpustakaan/literacy-habituation-program/edit/{code}', [PerpustakaanLiteracyProgramController::class, 'edit'])
+Route::post('/perpustakaan/program-literasi-numerasi/edit/{code}/integrity', [PerpustakaanLiteracyProgramController::class, 'recordIntegrity'])
+    ->middleware('throttle:literacy_integrity')
+    ->where('code', '[A-Za-z0-9-]+')
+    ->name('library.literacy.integrity');
+Route::get('/perpustakaan/program-literasi-numerasi/edit/{code}', [PerpustakaanLiteracyProgramController::class, 'edit'])
     ->where('code', '[A-Za-z0-9-]+')
     ->name('library.literacy.edit');
-Route::post('/perpustakaan/literacy-habituation-program/edit/{code}', [PerpustakaanLiteracyProgramController::class, 'update'])
-    ->middleware('throttle:30,1')
+Route::get('/perpustakaan/program-literasi-numerasi/selesai', [PerpustakaanLiteracyProgramController::class, 'completed'])
+    ->name('library.literacy.completed');
+Route::get('/perpustakaan/program-literasi-numerasi/{slug}/social-thumbnail.jpg', [PerpustakaanLiteracyProgramController::class, 'socialThumbnail'])
+    ->name('library.literacy.social-thumbnail');
+Route::post('/perpustakaan/program-literasi-numerasi/edit/{code}', [PerpustakaanLiteracyProgramController::class, 'update'])
+    ->middleware('throttle:literacy_submit')
     ->where('code', '[A-Za-z0-9-]+')
     ->name('library.literacy.update');
-Route::get('/perpustakaan/literacy-habituation-program/{slug}', [PerpustakaanLiteracyProgramController::class, 'show'])
+Route::post('/perpustakaan/program-literasi-numerasi/{slug}/submission-event', [PerpustakaanLiteracyProgramController::class, 'recordSubmissionEvent'])
+    ->middleware('throttle:literacy_events')
+    ->name('library.literacy.submission-event');
+Route::get('/perpustakaan/program-literasi-numerasi/{slug}', [PerpustakaanLiteracyProgramController::class, 'show'])
     ->name('library.literacy.show');
-Route::post('/perpustakaan/literacy-habituation-program/{slug}', [PerpustakaanLiteracyProgramController::class, 'store'])
-    ->middleware('throttle:30,1')
+Route::post('/perpustakaan/program-literasi-numerasi/{slug}/submission-ticket', [PerpustakaanLiteracyProgramController::class, 'requestStoreTicket'])
+    ->middleware('throttle:literacy_queue_ticket')
+    ->name('library.literacy.queue.store');
+Route::post('/perpustakaan/program-literasi-numerasi/edit/{code}/submission-ticket', [PerpustakaanLiteracyProgramController::class, 'requestUpdateTicket'])
+    ->middleware('throttle:literacy_queue_ticket')
+    ->where('code', '[A-Za-z0-9-]+')
+    ->name('library.literacy.queue.update');
+Route::get('/perpustakaan/program-literasi-numerasi/submission-queue/{token}', [PerpustakaanLiteracyProgramController::class, 'submissionTicketStatus'])
+    ->middleware('throttle:literacy_queue_status')
+    ->where('token', '[A-Za-z0-9]{64}')
+    ->name('library.literacy.queue.status');
+Route::post('/perpustakaan/program-literasi-numerasi/submission-queue/{token}/receipt', [PerpustakaanLiteracyProgramController::class, 'recoverSubmissionReceipt'])
+    ->middleware('throttle:literacy_queue_status')
+    ->where('token', '[A-Za-z0-9]{64}')
+    ->name('library.literacy.queue.receipt');
+Route::delete('/perpustakaan/program-literasi-numerasi/submission-queue/{token}', [PerpustakaanLiteracyProgramController::class, 'cancelSubmissionTicket'])
+    ->middleware('throttle:literacy_queue_status')
+    ->where('token', '[A-Za-z0-9]{64}')
+    ->name('library.literacy.queue.cancel');
+Route::post('/perpustakaan/program-literasi-numerasi/{slug}', [PerpustakaanLiteracyProgramController::class, 'store'])
+    ->middleware('throttle:literacy_submit')
     ->name('library.literacy.store');
 Route::get('/perpustakaan/aktivitas-literasi', [LibraryController::class, 'activities'])->name('library.activities');
 Route::get('/perpustakaan/aktivitas-literasi/export', [LibraryController::class, 'exportActivities'])->name('library.activities.export');

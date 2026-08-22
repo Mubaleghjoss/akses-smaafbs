@@ -30,7 +30,20 @@ class ManageBoardingHafalanPoints extends ManageRecords
     protected function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make(),
+            Actions\CreateAction::make()
+                ->fillForm(fn (): array => [
+                    'materi_scope' => $this->getActiveMateriScope(),
+                ])
+                ->mutateFormDataUsing(function (array $data): array {
+                    $data['materi_scope'] = $data['materi_scope'] ?? $this->getActiveMateriScope();
+
+                    return $data;
+                }),
         ];
+    }
+
+    protected function getActiveMateriScope(): string
+    {
+        return data_get($this, 'activeTab') === 'mt' ? 'mt' : 'boarding';
     }
 }

@@ -9,11 +9,13 @@ use App\Filament\Resources\DataSiswaResource\Pages;
 use App\Models\DataSiswa;
 use App\Models\Rombel;
 use App\Support\DataSiswa\DataSiswaSupport;
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
@@ -23,8 +25,9 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Schema as DatabaseSchema;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema as DatabaseSchema;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -232,7 +235,7 @@ class DataSiswaResource extends Resource
                 Tables\Columns\TextColumn::make('rombel_saat_ini')->label('Rombel')->searchable()->visibleFrom('md'),
                 Tables\Columns\TextColumn::make('angkatan_label')
                     ->label('Angkatan')
-                    ->state(fn (DataSiswa $record): string => DataSiswaSupport::extractAngkatan($record->rombel_saat_ini) ?? '-')
+                    ->state(fn (DataSiswa $record): string => DataSiswaSupport::angkatanLabelForRombel($record->rombel_saat_ini) ?? '-')
                     ->visibleFrom('md')
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('jk')->label('JK')->badge()->visibleFrom('md'),
@@ -271,7 +274,20 @@ class DataSiswaResource extends Resource
             ->filters([
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Status')
-                    ->options(DataSiswa::statusOptions()),
+                    ->options([
+                        '__blank' => 'Belum Ada Status (SPMB)',
+                    ] + DataSiswa::statusOptions())
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+
+                        if ($value === null || $value === '') {
+                            return $query;
+                        }
+
+                        return $value === '__blank'
+                            ? $query->where(fn (Builder $subQuery): Builder => $subQuery->whereNull('status')->orWhere('status', ''))
+                            : $query->where('status', $value);
+                    }),
                 Tables\Filters\SelectFilter::make('jk')
                     ->label('JK')
                     ->options([
@@ -290,11 +306,31 @@ class DataSiswaResource extends Resource
                             return $query;
                         }
 
-                        return $query->where('rombel_saat_ini', 'like', '%'.$data['value'].'%');
+                        $value = Rombel::normalizeName($data['value'] ?? null);
+                        $rombelNames = DataSiswaSupport::rombelNamesForAngkatan($value, auth()->user());
+
+                        if ($rombelNames !== []) {
+                            return $query->whereIn('rombel_saat_ini', $rombelNames);
+                        }
+
+                        return $query->where('rombel_saat_ini', 'like', '%'.$value.'%');
                     }),
                 Tables\Filters\SelectFilter::make('rombel_saat_ini')
                     ->label('Rombel')
-                    ->options(fn (): array => DataSiswaSupport::rombelOptions(auth()->user())),
+                    ->options(fn (): array => [
+                        '__blank' => 'Belum Ada Rombel/Kelas',
+                    ] + DataSiswaSupport::rombelFilterOptions(auth()->user()))
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+
+                        if ($value === null || $value === '') {
+                            return $query;
+                        }
+
+                        return $value === '__blank'
+                            ? $query->where(fn (Builder $subQuery): Builder => $subQuery->whereNull('rombel_saat_ini')->orWhere('rombel_saat_ini', ''))
+                            : $query->where('rombel_saat_ini', $value);
+                    }),
                 Tables\Filters\SelectFilter::make('kategori_non_aktif')
                     ->label('Kategori Non Aktif')
                     ->options(DataSiswa::nonActiveCategoryOptions()),
@@ -338,6 +374,145 @@ class DataSiswaResource extends Resource
             ])
             ->bulkActions([
                 BulkActionGroup::make([
+                    BulkAction::make('moveSelectedToRombel')
+                        ->label('Pindah Rombel Terpilih')
+                        ->icon('heroicon-o-arrow-right-circle')
+                        ->color('info')
+                        ->visible(fn (): bool => static::canCreate())
+                        ->form([
+                            Forms\Components\Select::make('rombel_saat_ini')
+                                ->label('Pindah ke rombel')
+                                ->searchable()
+                                ->preload()
+                                ->options(fn (): array => DataSiswaSupport::rombelOptions(Auth::user()))
+                                ->createOptionForm([
+                                    Forms\Components\TextInput::make('nama')
+                                        ->label('Nama Rombel Baru')
+                                        ->required()
+                                        ->dehydrateStateUsing(fn ($state): string => Rombel::normalizeName($state))
+                                        ->maxLength(50),
+                                ])
+                                ->createOptionUsing(function (array $data): string {
+                                    return Rombel::ensureFromName($data['nama'] ?? null)?->nama ?? trim((string) ($data['nama'] ?? ''));
+                                })
+                                ->helperText('Rombel ini akan diterapkan ke semua siswa yang sedang dipilih.')
+                                ->required()
+                                ->native(false),
+                        ])
+                        ->modalHeading('Pindah rombel siswa terpilih')
+                        ->modalDescription('Pastikan jumlah dan nama siswa yang dipilih sudah benar sebelum menyimpan.')
+                        ->modalSubmitActionLabel('Pindah Rombel')
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (iterable $records, array $data): void {
+                            $rombel = Rombel::ensureFromName($data['rombel_saat_ini'] ?? null)?->nama;
+
+                            if ($rombel === null) {
+                                Notification::make()
+                                    ->title('Rombel tujuan belum valid.')
+                                    ->body('Pilih atau buat rombel tujuan terlebih dahulu.')
+                                    ->danger()
+                                    ->send();
+
+                                return;
+                            }
+
+                            $updated = 0;
+
+                            foreach ($records as $record) {
+                                if (! $record instanceof DataSiswa) {
+                                    continue;
+                                }
+
+                                $record->forceFill([
+                                    'rombel_saat_ini' => $rombel,
+                                ])->save();
+
+                                $updated++;
+                            }
+
+                            Notification::make()
+                                ->title('Rombel siswa terpilih diperbarui.')
+                                ->body(number_format($updated, 0, ',', '.').' siswa dipindahkan ke '.$rombel.'.')
+                                ->success()
+                                ->send();
+                        }),
+                    BulkAction::make('setSelectedStatus')
+                        ->label('Ubah Status Terpilih')
+                        ->icon('heroicon-o-check-badge')
+                        ->color('warning')
+                        ->visible(fn (): bool => static::canCreate())
+                        ->form([
+                            Forms\Components\Select::make('status')
+                                ->label('Status baru')
+                                ->options(DataSiswa::statusOptions())
+                                ->live()
+                                ->required()
+                                ->native(false)
+                                ->afterStateUpdated(function (Set $set, ?string $state): void {
+                                    if (! DataSiswa::isNonActiveStatus($state)) {
+                                        $set('kategori_non_aktif', null);
+                                        $set('alasan_non_aktif', null);
+                                        $set('tanggal_non_aktif', null);
+                                    }
+                                }),
+                            Forms\Components\Select::make('kategori_non_aktif')
+                                ->label('Kategori Non Aktif')
+                                ->options(DataSiswa::nonActiveCategoryOptions())
+                                ->visible(fn (Get $get): bool => DataSiswa::isNonActiveStatus($get('status')))
+                                ->required(fn (Get $get): bool => DataSiswa::isNonActiveStatus($get('status')))
+                                ->native(false),
+                            Forms\Components\Textarea::make('alasan_non_aktif')
+                                ->label('Alasan Non Aktif')
+                                ->rows(4)
+                                ->maxLength(1000)
+                                ->visible(fn (Get $get): bool => DataSiswa::isNonActiveStatus($get('status')))
+                                ->required(fn (Get $get): bool => DataSiswa::isNonActiveStatus($get('status'))),
+                            Forms\Components\DatePicker::make('tanggal_non_aktif')
+                                ->label('Tanggal Non Aktif')
+                                ->visible(fn (Get $get): bool => DataSiswa::isNonActiveStatus($get('status')))
+                                ->required(fn (Get $get): bool => DataSiswa::isNonActiveStatus($get('status'))),
+                        ])
+                        ->modalHeading('Ubah status siswa terpilih')
+                        ->modalDescription('Status baru akan diterapkan ke semua siswa yang sedang dipilih.')
+                        ->modalSubmitActionLabel('Ubah Status')
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (iterable $records, array $data): void {
+                            $status = strtolower((string) ($data['status'] ?? ''));
+
+                            if (! array_key_exists($status, DataSiswa::statusOptions())) {
+                                Notification::make()
+                                    ->title('Status belum valid.')
+                                    ->body('Pilih status baru terlebih dahulu.')
+                                    ->danger()
+                                    ->send();
+
+                                return;
+                            }
+
+                            $isNonActive = DataSiswa::isNonActiveStatus($status);
+                            $updated = 0;
+
+                            foreach ($records as $record) {
+                                if (! $record instanceof DataSiswa) {
+                                    continue;
+                                }
+
+                                $record->forceFill([
+                                    'status' => $status,
+                                    'kategori_non_aktif' => $isNonActive ? DataSiswa::resolveNonActiveCategory($status, $data['kategori_non_aktif'] ?? null) : null,
+                                    'alasan_non_aktif' => $isNonActive ? trim((string) ($data['alasan_non_aktif'] ?? '')) : null,
+                                    'tanggal_non_aktif' => $isNonActive ? ($data['tanggal_non_aktif'] ?? null) : null,
+                                ])->save();
+
+                                $updated++;
+                            }
+
+                            Notification::make()
+                                ->title('Status siswa terpilih diperbarui.')
+                                ->body(number_format($updated, 0, ',', '.').' siswa diubah menjadi '.DataSiswa::statusLabel($status).'.')
+                                ->success()
+                                ->send();
+                        }),
                     static::makeDeleteBulkTableAction(),
                 ]),
             ]);
@@ -427,7 +602,7 @@ class DataSiswaResource extends Resource
                             ->placeholder('-'),
                         TextEntry::make('angkatan')
                             ->label('Angkatan')
-                            ->state(fn (DataSiswa $record): string => DataSiswaSupport::extractAngkatan($record->rombel_saat_ini) ?? '-')
+                            ->state(fn (DataSiswa $record): string => DataSiswaSupport::angkatanLabelForRombel($record->rombel_saat_ini) ?? '-')
                             ->placeholder('-'),
                     ]),
                 Section::make('Identitas & Kontak')
@@ -598,7 +773,7 @@ class DataSiswaResource extends Resource
         if ($record->relationLoaded($relation)) {
             $loadedRelation = $record->getRelation($relation);
 
-            if ($loadedRelation instanceof \Illuminate\Support\Collection) {
+            if ($loadedRelation instanceof Collection) {
                 return $loadedRelation->isNotEmpty();
             }
 
@@ -616,6 +791,8 @@ class DataSiswaResource extends Resource
     {
         return [
             'index' => Pages\ManageDataSiswas::route('/'),
+            'spmb-sync' => Pages\SyncSpmbStudents::route('/sync-spmb'),
+            'push-server' => Pages\PushDataSiswasToServer::route('/push-server'),
             'view' => Pages\ViewDataSiswa::route('/{record}'),
         ];
     }

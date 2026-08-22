@@ -42,6 +42,10 @@ class Rombel extends Model
                     ->update(['rombel_saat_ini' => $record->nama]);
             }
 
+            if ($record->wasChanged('is_active') && ! $record->is_active) {
+                $record->markActiveStudentsAsNonActive();
+            }
+
             $invalidateCaches();
         });
         static::deleted($invalidateCaches);
@@ -89,6 +93,52 @@ class Rombel extends Model
         }
 
         $record->delete();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function nonActiveStudentAttributes(?string $rombelName): array
+    {
+        $name = Str::upper(static::normalizeName($rombelName));
+        [$status, $category] = match (true) {
+            Str::contains($name, 'ALUMNI') => ['alumni', 'lulus'],
+            Str::contains($name, 'MUTASI') => ['pindah', 'mutasi'],
+            Str::contains($name, 'MENGUNDURKAN') => ['keluar', 'mengundurkan_diri'],
+            Str::contains($name, 'WAFAT') => ['keluar', 'wafat'],
+            default => ['keluar', 'lainnya'],
+        };
+
+        $attributes = ['status' => $status];
+
+        if (Schema::hasColumn('data_siswa', 'kategori_non_aktif')) {
+            $attributes['kategori_non_aktif'] = $category;
+        }
+
+        if (Schema::hasColumn('data_siswa', 'alasan_non_aktif')) {
+            $attributes['alasan_non_aktif'] = 'Otomatis nonaktif karena rombel '.static::normalizeName($rombelName).' dinonaktifkan.';
+        }
+
+        if (Schema::hasColumn('data_siswa', 'tanggal_non_aktif')) {
+            $attributes['tanggal_non_aktif'] = now()->toDateString();
+        }
+
+        if (Schema::hasColumn('data_siswa', 'updated_at')) {
+            $attributes['updated_at'] = now();
+        }
+
+        return $attributes;
+    }
+
+    public function markActiveStudentsAsNonActive(): int
+    {
+        if ($this->is_active || ! Schema::hasTable('data_siswa')) {
+            return 0;
+        }
+
+        return $this->activeStudents()->update(
+            static::nonActiveStudentAttributes($this->nama),
+        );
     }
 
     public function students(): HasMany

@@ -9,6 +9,7 @@ __pycache__/
 *.pyc
 .playwright-mcp/
 .sisyphus/
+.worktrees/
 docs/
 DATA_SISWA.xlsx
 __test_gdrive_key
@@ -28,9 +29,12 @@ bot-telegram/credentials.json
 /.zed
 /auth.json
 /node_modules
-/public/build
 /public/hot
-/public/storage
+/public/storage/*
+!/public/storage/boarding-rapot/
+!/public/storage/boarding-rapot/**
+!/public/storage/site-branding/
+!/public/storage/site-branding/**
 /storage/*.key
 /storage/pail
 /vendor

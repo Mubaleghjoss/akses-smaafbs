@@ -158,6 +158,10 @@ class HomeLandingPageTest extends TestCase
         $response
             ->assertOk()
             ->assertSee('Identitas sekolah untuk orang tua, siswa, dan masyarakat.')
+            ->assertSee('Literasi Numerasi')
+            ->assertSee('Akses Perpus')
+            ->assertSee('/perpustakaan/program-literasi-numerasi', false)
+            ->assertSee('/perpustakaan', false)
             ->assertSee('data-home-profile-tab-trigger="identitas-sekolah"', false)
             ->assertSee('data-home-profile-tab-trigger="komite"', false)
             ->assertSee('data-home-profile-tab-trigger="prestasi-siswa"', false)
@@ -208,6 +212,10 @@ class HomeLandingPageTest extends TestCase
         $this->assertStringContainsString('data-home-mini-chart-card="rombel"', $html);
         $this->assertStringContainsString('data-home-mini-chart-card="proker-status"', $html);
         $this->assertStringContainsString('data-home-mini-chart-visual="rombel-bars"', $html);
+        preg_match_all('/<button[^>]*data-rombel-detail-trigger/s', $html, $rombelDetailTriggers);
+        $this->assertCount(2, $rombelDetailTriggers[0]);
+        $this->assertStringContainsString('id="home-rombel-detail-dialog"', $html);
+        $this->assertStringContainsString('aria-labelledby="home-rombel-detail-title"', $html);
         $this->assertStringContainsString('data-home-mini-chart-visual="donut-segments"', $html);
         $this->assertMatchesRegularExpression('/id="home-profile-panel-prestasi-siswa"[^>]*data-home-profile-tab-panel="prestasi-siswa"[^>]*hidden/s', $html);
         $this->assertStringContainsString('--mini-chart-fill: 50%;', $html);
@@ -232,6 +240,99 @@ class HomeLandingPageTest extends TestCase
             ->assertDontSee('Abdullah Karim');
     }
 
+    public function test_homepage_active_student_and_rombel_stats_follow_active_rombel_settings(): void
+    {
+        $this->ensureRombelTable();
+
+        DataSiswa::query()->create([
+            'nama' => 'Siswa Rombel Aktif',
+            'nisn' => '1122334401',
+            'status' => 'aktif',
+            'jk' => 'L',
+            'rombel_saat_ini' => 'X Aktif',
+            'tanggal_lahir' => '2010-02-03',
+        ]);
+
+        DataSiswa::query()->create([
+            'nama' => 'Siswa Rombel Nonaktif',
+            'nisn' => '1122334402',
+            'status' => 'aktif',
+            'jk' => 'P',
+            'rombel_saat_ini' => 'X Nonaktif',
+            'tanggal_lahir' => '2010-04-11',
+        ]);
+
+        DB::table('rombels')
+            ->where('nama', 'X Nonaktif')
+            ->update(['is_active' => false]);
+
+        $response = $this->get(route('home'));
+        $stats = $response->viewData('stats');
+
+        $response
+            ->assertOk()
+            ->assertSee('X Aktif')
+            ->assertDontSee('X Nonaktif');
+
+        $this->assertSame(1, $stats['active_students']);
+        $this->assertSame(1, $stats['student_active_male']);
+        $this->assertSame(0, $stats['student_active_female']);
+        $this->assertSame(1, $stats['rombel_count']);
+        $this->assertSame([
+            [
+                'name' => 'X Aktif',
+                'students' => 1,
+                'male' => 1,
+                'female' => 0,
+                'unspecified' => 0,
+            ],
+        ], $stats['rombel_items']);
+    }
+
+    public function test_homepage_rombel_detail_counts_gender_and_unspecified_students(): void
+    {
+        $this->ensureRombelTable();
+
+        DB::table('rombels')->insert([
+            'nama' => 'X Detail',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        foreach ([
+            ['nama' => 'Putra Detail', 'nisn' => '9911000001', 'jk' => 'L'],
+            ['nama' => 'Putri Detail', 'nisn' => '9911000002', 'jk' => 'P'],
+            ['nama' => 'Belum Lengkap', 'nisn' => '9911000003', 'jk' => null],
+        ] as $student) {
+            DataSiswa::query()->create($student + [
+                'status' => 'aktif',
+                'rombel_saat_ini' => 'X Detail',
+                'tanggal_lahir' => '2010-02-03',
+            ]);
+        }
+
+        $response = $this->get(route('home'));
+        $rombel = collect($response->viewData('stats')['rombel_items'])
+            ->firstWhere('name', 'X Detail');
+
+        $response
+            ->assertOk()
+            ->assertSee('data-rombel-name="X Detail"', false)
+            ->assertSee('data-rombel-students="3"', false)
+            ->assertSee('data-rombel-male="1"', false)
+            ->assertSee('data-rombel-female="1"', false)
+            ->assertSee('data-rombel-unspecified="1"', false);
+
+        $this->assertSame([
+            'name' => 'X Detail',
+            'students' => 3,
+            'male' => 1,
+            'female' => 1,
+            'unspecified' => 1,
+        ], $rombel);
+    }
+
     public function test_home_landing_page_student_search_matches_partial_keyword(): void
     {
         DataSiswa::query()->create([
@@ -252,6 +353,24 @@ class HomeLandingPageTest extends TestCase
             ->assertOk()
             ->assertSee('Abdullah Karim')
             ->assertDontSee('Karina Putri');
+    }
+
+    public function test_student_search_endpoint_returns_json_without_session_middleware(): void
+    {
+        DataSiswa::query()->create([
+            'nama' => 'Abdullah Karim',
+            'nisn' => '1122334455',
+            'status' => 'aktif',
+            'jk' => 'L',
+            'tanggal_lahir' => '2010-02-03',
+        ]);
+
+        $this->getJson(route('home.student-search', ['q' => 'abd']))
+            ->assertOk()
+            ->assertJsonPath('query', 'abd')
+            ->assertJsonPath('results.0.nama', 'Abdullah Karim')
+            ->assertJsonPath('results.0.nisn', '1122334455')
+            ->assertJsonPath('results.0.status', 'aktif');
     }
 
     public function test_home_landing_page_degrades_safely_when_data_siswa_table_is_missing(): void
@@ -558,6 +677,22 @@ class HomeLandingPageTest extends TestCase
             $table->string('gaya_belajar', 100)->nullable();
             $table->string('profiling', 150)->nullable();
             $table->string('mbti', 20)->nullable();
+            $table->timestamps();
+        });
+    }
+
+    protected function ensureRombelTable(): void
+    {
+        if (Schema::hasTable('rombels')) {
+            return;
+        }
+
+        Schema::create('rombels', function (Blueprint $table): void {
+            $table->id();
+            $table->string('nama', 50)->unique();
+            $table->string('angkatan', 20)->nullable()->index();
+            $table->boolean('is_active')->default(true)->index();
+            $table->text('catatan')->nullable();
             $table->timestamps();
         });
     }

@@ -64,7 +64,9 @@ Catatan:
 
 - Kalau `git commit` menulis `nothing to commit`, artinya belum ada perubahan baru.
 - Kalau `git push` gagal login, login dulu ke GitHub dari Git Credential Manager atau gunakan token GitHub.
-- File `.env`, `vendor`, `node_modules`, dan `public/build` memang tidak ikut GitHub.
+- File `.env`, `vendor`, dan `node_modules` memang tidak ikut GitHub.
+- `public/build` bisa ikut GitHub untuk alur deploy FTP/GitHub agar server tidak perlu menjalankan `npm run build`.
+- `public/storage` tetap harus diperlakukan sebagai data upload. Repo hanya membuka aset logo/branding yang di-whitelist; dokumen siswa/guru tetap dibackup atau diupload terpisah.
 
 ## 4. Setup pertama di cPanel
 
@@ -151,7 +153,29 @@ CACHE_STORE=database
 CACHE_LIMITER_STORE=database
 QUEUE_CONNECTION=database
 FILESYSTEM_DISK=public
+
+SPMB_SYNC_BASE_URL=https://seleksi.smaafbs.sch.id
+SPMB_SYNC_TOKEN=ISI_TOKEN_RAHASIA_YANG_SAMA_DENGAN_SERVER_SPMB
+SPMB_SYNC_TIMEOUT=30
 ```
+
+`SPMB_SYNC_TOKEN` harus sama dengan `AKSES_SYNC_TOKEN` pada `.env` aplikasi SPMB.
+Gunakan token acak panjang dan jangan menyimpannya di GitHub.
+
+Jika document root hosting bukan folder `public` di repo ini, atau URL `/storage/...` sebenarnya dibaca dari folder lain seperti:
+
+```text
+/home/CPANEL_USER/public_html/web/app/storage
+```
+
+tambahkan root upload publik di `.env` server:
+
+```env
+FILESYSTEM_PUBLIC_ROOT=/home/CPANEL_USER/public_html/web/app/storage
+FILESYSTEM_PUBLIC_URL=/storage
+```
+
+Setelah mengubah nilai ini, jalankan `php artisan optimize:clear`. Tanpa itu, Laravel bisa tetap memakai konfigurasi cache lama dan upload tersimpan ke folder yang berbeda dari folder yang dibaca browser.
 
 Simpan di nano:
 
@@ -179,6 +203,20 @@ Install dan build asset:
 ```bash
 npm ci
 npm run build
+```
+
+Pada update produksi normal, aset `public/build` yang sudah dikomit digunakan
+langsung sehingga server tidak menjalankan npm dan cache hosting tidak terus
+bertambah. Build di server hanya untuk keadaan khusus:
+
+```bash
+BUILD_ASSETS_ON_SERVER=true bash scripts/cpanel-update.sh NAMA_BRANCH
+```
+
+Audit cache hosting selalu dimulai dari dry-run:
+
+```bash
+bash scripts/cpanel-storage-audit.sh --dry-run
 ```
 
 Jika `npm` tidak dikenali, aktifkan Node.js dari cPanel. Pilih Node.js 22 jika tersedia.
@@ -286,8 +324,15 @@ Script itu akan menjalankan:
 - pull kode terbaru dari GitHub,
 - install/update Composer dependency,
 - install/build asset frontend,
+- menyalin `public/build` dan `public/css/filament-admin-responsive.css` ke document root publik jika document root memakai `/home/CPANEL_USER/public_html/web/app`,
 - migrate database,
 - refresh cache Laravel.
+
+Jika document root server berbeda, set variabel ini saat menjalankan script:
+
+```bash
+PUBLIC_WEB_ROOT=/home/CPANEL_USER/path/document-root bash scripts/cpanel-update.sh
+```
 
 ## 13. Kalau update gagal
 

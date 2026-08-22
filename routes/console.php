@@ -7,12 +7,16 @@ use App\Models\BerkasGuru;
 use App\Models\BerkasSiswa;
 use App\Models\User;
 use App\Support\Admin\AdminModuleAccess;
+use App\Support\Assessment\Reporting\AssessmentReportQueueGate;
+use App\Support\Perpustakaan\LiteracySubmissionQueue;
+use App\Support\ServerSync\ServerDataPuller;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schedule;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 Artisan::command('inspire', function () {
@@ -132,11 +136,136 @@ Artisan::command('app:admin-performance-report {--limit=10 : Jumlah baris terata
     return 0;
 })->purpose('Ringkas log request dan query lambat admin');
 
-Schedule::command('queue:work --queue=default --stop-when-empty --tries=3 --sleep=3 --timeout=120')
+Schedule::call(function (): void {
+    $updateWorkerState = function (array $values): void {
+        if (! Schema::hasTable('perpustakaan_literasi_submission_queue_states')) {
+            return;
+        }
+
+        $availableValues = collect($values)
+            ->filter(fn (mixed $value, string $column): bool => Schema::hasColumn(
+                'perpustakaan_literasi_submission_queue_states',
+                $column,
+            ))
+            ->all();
+
+        if ($availableValues !== []) {
+            DB::table('perpustakaan_literasi_submission_queue_states')
+                ->where('scope', LiteracySubmissionQueue::SCOPE)
+                ->update($availableValues + ['updated_at' => now()]);
+        }
+    };
+
+    $updateWorkerState(['scheduler_heartbeat_at' => now()]);
+
+    if (app(LiteracySubmissionQueue::class)->analysisShouldWait()) {
+        $updateWorkerState(['worker_status' => 'paused_for_submissions']);
+
+        return;
+    }
+
+    $updateWorkerState([
+        'worker_started_at' => now(),
+        'worker_status' => 'running',
+    ]);
+
+    try {
+        $literacyQueue = (string) config('literacy.similarity_queue', 'literacy-analysis');
+
+        Artisan::call('queue:work', [
+            '--queue' => implode(',', array_values(array_unique([$literacyQueue, 'default']))),
+            '--stop-when-empty' => true,
+            '--max-jobs' => 3,
+            '--max-time' => 20,
+            '--tries' => 3,
+            '--sleep' => 1,
+            '--timeout' => 120,
+            '--no-interaction' => true,
+        ]);
+
+        $updateWorkerState(['worker_status' => 'idle']);
+    } catch (Throwable $exception) {
+        $updateWorkerState(['worker_status' => 'error']);
+
+        throw $exception;
+    } finally {
+        $updateWorkerState(['worker_finished_at' => now()]);
+    }
+})
     ->everyMinute()
-    ->withoutOverlapping()
-    ->runInBackground()
-    ->name('queue-google-drive-worker');
+    ->name('queue-controlled-worker')
+    ->withoutOverlapping(10);
+
+Schedule::call(function (): void {
+    if (! app(AssessmentReportQueueGate::class)->shouldRun()) {
+        return;
+    }
+
+    Artisan::call('queue:work', [
+        '--queue' => (string) config('assessment.reports.queue', 'assessment-reports'),
+        '--stop-when-empty' => true,
+        // Shared hosting selalu memproses tepat satu PDF pada setiap putaran.
+        '--max-jobs' => 1,
+        '--max-time' => max(10, (int) config('assessment.reports.worker.max_time', 50)),
+        '--tries' => 3,
+        '--sleep' => 1,
+        '--timeout' => max(60, (int) config('assessment.reports.worker.timeout', 180)),
+        '--no-interaction' => true,
+    ]);
+})
+    ->everyMinute()
+    ->name('assessment-report-worker')
+    ->withoutOverlapping(10);
+
+Schedule::call(function (): void {
+    if (Schema::hasTable('perpustakaan_literasi_submission_events')) {
+        DB::table('perpustakaan_literasi_submission_events')
+            ->where('occurred_at', '<', now()->subDays(30))
+            ->delete();
+    }
+
+    if (Schema::hasTable('perpustakaan_literasi_network_checks')) {
+        DB::table('perpustakaan_literasi_network_checks')
+            ->where('checked_at', '<', now()->subDays(30))
+            ->delete();
+    }
+
+    if (Schema::hasTable('public_connectivity_events')) {
+        DB::table('public_connectivity_events')
+            ->where('occurred_at', '<', now()->subDays(30))
+            ->delete();
+    }
+
+    if (Schema::hasTable('webauthn_challenges')) {
+        DB::table('webauthn_challenges')
+            ->where('updated_at', '<', now()->subDays(7))
+            ->where(function ($query): void {
+                $query
+                    ->whereNotNull('used_at')
+                    ->orWhereNotNull('cancelled_at')
+                    ->orWhere('challenge_expires_at', '<', now()->subDays(7));
+            })
+            ->delete();
+    }
+})
+    ->dailyAt('02:15')
+    ->name('literacy-operational-log-cleanup')
+    ->withoutOverlapping();
+
+Schedule::call(fn (): int => Artisan::call('assessment:cleanup-report-cache', ['--apply' => true]))
+    ->hourly()
+    ->name('assessment-report-cache-cleanup')
+    ->withoutOverlapping();
+
+Schedule::call(fn (): int => Artisan::call('app:storage-maintain', ['--apply' => true]))
+    ->dailyAt('02:40')
+    ->name('application-storage-maintenance')
+    ->withoutOverlapping();
+
+Schedule::call(fn (): int => Artisan::call('app:storage-audit'))
+    ->dailyAt('03:00')
+    ->name('hosting-storage-audit')
+    ->withoutOverlapping();
 
 Artisan::command('app:backfill-module-access-levels {--dry-run : Tampilkan perubahan tanpa menyimpan} {--force : Paksa tulis ulang user yang sudah punya module_access_levels}', function () {
     $panel = Filament::getPanel('admin');
@@ -409,3 +538,35 @@ Artisan::command('app:reset-data {--force : Wajib untuk menjalankan reset}', fun
 
     return 0;
 })->purpose('Reset seluruh data (LOCAL ONLY)');
+
+Artisan::command('app:pull-server-data {--force : Wajib untuk menimpa database dan storage lokal}', function () {
+    $puller = app(ServerDataPuller::class);
+
+    if (! $this->option('force')) {
+        $this->error('Tambahkan flag --force untuk menarik data server dan menimpa data lokal.');
+
+        return 1;
+    }
+
+    $errors = $puller->readinessErrors();
+
+    if ($errors !== []) {
+        foreach ($errors as $error) {
+            $this->error($error);
+        }
+
+        return 1;
+    }
+
+    $result = $puller->pull(function (string $line): void {
+        $this->line($line);
+    });
+
+    $this->newLine();
+    $this->info('Tarik data server selesai.');
+    $this->line('Backup lokal: '.($result['backup_path'] ?: 'dinonaktifkan'));
+    $this->line('Dump server: '.$result['dump_path']);
+    $this->line('Storage tersinkron: '.(implode(', ', $result['storage_paths']) ?: '-'));
+
+    return 0;
+})->purpose('Tarik database dan file storage server ke lokal lalu timpa data lokal (LOCAL ONLY)');

@@ -36,11 +36,13 @@ trait BootstrapsStudentAndTeacherTables
             Schema::create('data_siswa', function (Blueprint $table): void {
                 $table->id();
                 $table->string('nama');
+                $table->string('nisn')->nullable();
                 $table->string('kepribadian')->nullable();
                 $table->string('gaya_belajar')->nullable();
                 $table->string('profiling')->nullable();
                 $table->string('mbti')->nullable();
                 $table->string('rombel_saat_ini')->nullable();
+                $table->date('tanggal_lahir')->nullable();
                 $table->string('jk', 2)->nullable();
                 $table->string('status')->nullable();
                 $table->string('kategori_non_aktif')->nullable();
@@ -51,7 +53,7 @@ trait BootstrapsStudentAndTeacherTables
             return;
         }
 
-        $missingProfileColumns = collect(['kepribadian', 'gaya_belajar', 'profiling', 'mbti'])
+        $missingProfileColumns = collect(['nisn', 'kepribadian', 'gaya_belajar', 'profiling', 'mbti'])
             ->reject(fn (string $column): bool => Schema::hasColumn('data_siswa', $column))
             ->values();
 
@@ -60,6 +62,12 @@ trait BootstrapsStudentAndTeacherTables
                 foreach ($missingProfileColumns as $column) {
                     $table->string($column)->nullable();
                 }
+            });
+        }
+
+        if (! Schema::hasColumn('data_siswa', 'tanggal_lahir')) {
+            Schema::table('data_siswa', function (Blueprint $table): void {
+                $table->date('tanggal_lahir')->nullable();
             });
         }
     }

@@ -27,6 +27,18 @@
                 <strong>{{ number_format((int) ($summaryMetrics['responses'] ?? 0), 0, ',', '.') }}</strong>
             </article>
             <article>
+                <span>History Terhapus</span>
+                <strong>{{ number_format((int) ($summaryMetrics['deleted_responses'] ?? 0), 0, ',', '.') }}</strong>
+            </article>
+            <article>
+                <span>History Tanpa Materi</span>
+                <strong>{{ number_format((int) ($summaryMetrics['orphaned_responses'] ?? 0), 0, ',', '.') }}</strong>
+            </article>
+            <article>
+                <span>Materi Terhapus</span>
+                <strong>{{ number_format((int) ($summaryMetrics['deleted_materials'] ?? 0), 0, ',', '.') }}</strong>
+            </article>
+            <article>
                 <span>Pengiriman Dinilai Lengkap</span>
                 <strong>{{ number_format((int) ($summaryMetrics['graded_responses'] ?? 0), 0, ',', '.') }}</strong>
             </article>

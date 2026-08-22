@@ -68,7 +68,7 @@ trait HasModulePermissions
 
         $prefix = static::modulePermissionPrefix();
 
-        if ($user->hasRole('admin')) {
+        if ($user->hasFullAdminAccess()) {
             return true;
         }
 

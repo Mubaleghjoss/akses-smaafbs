@@ -2,28 +2,87 @@
 
 namespace App\Models;
 
+use App\Support\Media\PublicImageOptimizer;
+use Filament\Forms\Components\RichEditor\Models\Concerns\InteractsWithRichContent;
+use Filament\Forms\Components\RichEditor\Models\Contracts\HasRichContent;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
-class PerpustakaanLiterasiMaterial extends Model
+class PerpustakaanLiterasiMaterial extends Model implements HasRichContent
 {
+    use InteractsWithRichContent;
+    use SoftDeletes;
+
+    public const CATEGORY_LITERACY_HABITUATION = 'literacy_habituation';
+
+    public const CATEGORY_NUMERACY_EXCELLENCE = 'numeracy_excellence';
+
+    public const CATEGORY_SIGAP_29_KARAKTER = 'sigap_29_karakter';
+
+    public const GLOBAL_INSTRUCTIONS_SETTING_KEY = 'perpustakaan_literasi_default_instructions';
+
+    public const DEFAULT_INSTRUCTIONS = "Kerjakan soal secara mandiri, jujur, dan sesuai kemampuan sendiri.\nJangan menyalin jawaban teman, membuka jawaban dari sumber lain tanpa memahami, atau meminta orang lain mengerjakan.\nJika perlu membuka layanan perpus, gunakan menu Akses Perpus di header sebelum mulai mengisi jawaban.";
+
     protected $table = 'perpustakaan_literasi_materials';
 
     protected $guarded = [];
 
     protected $casts = [
         'is_active' => 'boolean',
-        'opens_at' => 'date',
-        'closes_at' => 'date',
+        'student_verification_enabled' => 'boolean',
+        'opens_at' => 'datetime',
+        'closes_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
 
     protected static function booted(): void
     {
+        static::saving(function (self $material): void {
+            if ($material->isDirty('image_path') && filled($material->image_path)) {
+                try {
+                    $material->image_path = app(PublicImageOptimizer::class)
+                        ->optimizeUploadedPath((string) $material->image_path, 'material');
+                } catch (RuntimeException $exception) {
+                    throw ValidationException::withMessages([
+                        'image_path' => 'Gambar materi gagal dioptimalkan: '.$exception->getMessage(),
+                    ]);
+                }
+            }
+
+            if ($material->isDirty('reading_content') && filled($material->reading_content)) {
+                try {
+                    $material->reading_content = app(PublicImageOptimizer::class)
+                        ->optimizeEmbeddedPaths(
+                            (string) $material->reading_content,
+                            'literasi/materials/reading',
+                        );
+                } catch (RuntimeException $exception) {
+                    throw ValidationException::withMessages([
+                        'reading_content' => 'Gambar isi bacaan gagal dioptimalkan: '.$exception->getMessage(),
+                    ]);
+                }
+            }
+
+            $category = trim((string) $material->program_category);
+
+            if (! array_key_exists($category, static::programCategoryOptions())) {
+                throw ValidationException::withMessages([
+                    'program_category' => 'Kategori soal wajib dipilih sebelum materi dapat disimpan.',
+                ]);
+            }
+
+            $material->program_category = $category;
+        });
+
         static::creating(function (self $material): void {
             $material->slug = static::uniqueSlug($material->title, $material->slug);
             $material->created_by ??= auth()->id();
@@ -37,6 +96,56 @@ class PerpustakaanLiterasiMaterial extends Model
 
             $material->updated_by = auth()->id() ?: $material->updated_by;
         });
+
+        static::saved(fn () => static::forgetPublicListCache());
+
+        static::deleting(function (self $material): void {
+            if ($material->isForceDeleting()) {
+                app(PublicImageOptimizer::class)->removeAll($material->image_path);
+
+                if (Schema::hasTable('perpustakaan_literasi_dispensations')) {
+                    $material->dispensations()->withTrashed()->forceDelete();
+                }
+
+                return;
+            }
+
+            $material->questions()->get()->each->delete();
+            $material->responses()->get()->each->delete();
+            $material->similarityMatches()->get()->each->delete();
+
+            if (Schema::hasTable('perpustakaan_literasi_dispensations')) {
+                $material->dispensations()->get()->each->delete();
+            }
+        });
+
+        static::restoring(function (self $material): void {
+            $material->questions()->withTrashed()->get()->each->restore();
+            $material->responses()->withTrashed()->get()->each->restore();
+            $material->similarityMatches()->withTrashed()->get()->each->restore();
+
+            if (Schema::hasTable('perpustakaan_literasi_dispensations')) {
+                $material->dispensations()->withTrashed()->get()->each->restore();
+            }
+        });
+
+        static::deleted(fn () => static::forgetPublicListCache());
+        static::restored(fn () => static::forgetPublicListCache());
+    }
+
+    protected static function forgetPublicListCache(): void
+    {
+        foreach (range(1, 20) as $page) {
+            Cache::forget('literacy:public-materials:page-'.$page);
+        }
+    }
+
+    protected function setUpRichContent(): void
+    {
+        $this->registerRichContent('reading_content')
+            ->fileAttachmentsDisk('public')
+            ->fileAttachmentsVisibility('public')
+            ->customTextColors();
     }
 
     public function questions(): HasMany
@@ -56,16 +165,37 @@ class PerpustakaanLiterasiMaterial extends Model
             ->latest();
     }
 
+    public function dispensations(): HasMany
+    {
+        return $this->hasMany(PerpustakaanLiterasiDispensation::class, 'material_id')
+            ->latest('confirmed_at');
+    }
+
     public function scopeAvailableForPublic(Builder $query): Builder
     {
         return $query
             ->where('is_active', true)
             ->where(function (Builder $inner): void {
-                $inner->whereNull('opens_at')->orWhereDate('opens_at', '<=', now()->toDateString());
+                $inner->whereNull('opens_at')->orWhere('opens_at', '<=', now());
             })
             ->where(function (Builder $inner): void {
-                $inner->whereNull('closes_at')->orWhereDate('closes_at', '>=', now()->toDateString());
+                $inner->whereNull('closes_at')->orWhere('closes_at', '>=', now());
             });
+    }
+
+    public function hasOpened(): bool
+    {
+        return $this->opens_at === null || $this->opens_at->lte(now());
+    }
+
+    public function isClosed(): bool
+    {
+        return $this->closes_at !== null && $this->closes_at->lt(now());
+    }
+
+    public function isListedPublicly(): bool
+    {
+        return (bool) $this->is_active && $this->hasOpened() && ! $this->isClosed();
     }
 
     public function hasResponses(): bool
@@ -73,16 +203,308 @@ class PerpustakaanLiterasiMaterial extends Model
         return $this->responses()->exists();
     }
 
-    public function imageUrl(): ?string
+    public function imageUrl(string $variant = 'display'): ?string
     {
-        $path = trim((string) $this->image_path);
+        $path = static::normalizeImagePath($this->image_path, 'literasi/materials');
 
-        return $path !== '' ? Storage::disk('public')->url($path) : null;
+        if ($path === null) {
+            return null;
+        }
+
+        return app(PublicImageOptimizer::class)->url(
+            $path,
+            $variant === 'thumbnail' ? 'thumbnail' : 'display',
+        );
     }
 
     public function publicUrl(): string
     {
         return route('library.literacy.show', $this->slug);
+    }
+
+    public function socialThumbnailUrl(): string
+    {
+        return app(\App\Support\Perpustakaan\LiteracySocialThumbnail::class)->url($this);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function programCategoryOptions(): array
+    {
+        return [
+            self::CATEGORY_LITERACY_HABITUATION => 'Literacy Habituation Programme',
+            self::CATEGORY_NUMERACY_EXCELLENCE => 'Numeracy Excellence Programme',
+            self::CATEGORY_SIGAP_29_KARAKTER => 'Sigap 29 Karakter',
+        ];
+    }
+
+    public static function uncategorizedProgramLabel(): string
+    {
+        return 'Belum Berkategori';
+    }
+
+    public function programCategoryLabel(): string
+    {
+        $category = trim((string) $this->program_category);
+
+        if ($category === '') {
+            return self::uncategorizedProgramLabel();
+        }
+
+        return self::programCategoryOptions()[$category] ?? Str::headline($category);
+    }
+
+    public function programCategoryColor(): string
+    {
+        return match ($this->program_category) {
+            self::CATEGORY_LITERACY_HABITUATION => 'info',
+            self::CATEGORY_NUMERACY_EXCELLENCE => 'success',
+            self::CATEGORY_SIGAP_29_KARAKTER => 'warning',
+            default => 'gray',
+        };
+    }
+
+    public function programCategoryBadgeClasses(): string
+    {
+        return match ($this->program_category) {
+            self::CATEGORY_LITERACY_HABITUATION => 'border-sky-200 bg-sky-50 text-sky-700',
+            self::CATEGORY_NUMERACY_EXCELLENCE => 'border-emerald-200 bg-emerald-50 text-emerald-700',
+            self::CATEGORY_SIGAP_29_KARAKTER => 'border-amber-200 bg-amber-50 text-amber-700',
+            default => 'border-slate-200 bg-slate-50 text-slate-600',
+        };
+    }
+
+    public function editCodePrefix(): string
+    {
+        return self::editCodePrefixForCategory($this->program_category);
+    }
+
+    public static function editCodePrefixForCategory(?string $category): string
+    {
+        return match (trim((string) $category)) {
+            self::CATEGORY_NUMERACY_EXCELLENCE => 'NEP',
+            self::CATEGORY_SIGAP_29_KARAKTER => 'SIGAP',
+            self::CATEGORY_LITERACY_HABITUATION => 'LHP',
+            default => 'LHP',
+        };
+    }
+
+    public function videoEmbedUrl(): ?string
+    {
+        $url = trim((string) $this->video_url);
+
+        if ($url === '') {
+            return null;
+        }
+
+        $youtubeId = static::extractYoutubeVideoId($url);
+
+        if ($youtubeId !== null) {
+            return 'https://www.youtube.com/embed/'.$youtubeId;
+        }
+
+        $driveId = static::extractGoogleDriveFileId($url);
+
+        if ($driveId !== null) {
+            return 'https://drive.google.com/file/d/'.$driveId.'/preview';
+        }
+
+        if (Str::startsWith($url, ['https://www.youtube.com/embed/', 'https://drive.google.com/file/d/'])) {
+            return $url;
+        }
+
+        return null;
+    }
+
+    public function instructionsText(): string
+    {
+        $instructions = trim((string) $this->instructions);
+
+        if ($instructions === '') {
+            return self::defaultInstructionsText();
+        }
+
+        return $instructions;
+    }
+
+    public function instructionsHtml(): string
+    {
+        return self::instructionsTextToHtml($this->instructionsText());
+    }
+
+    public static function defaultInstructionsText(): string
+    {
+        return trim((string) Pengaturan::value(self::GLOBAL_INSTRUCTIONS_SETTING_KEY, self::DEFAULT_INSTRUCTIONS))
+            ?: self::DEFAULT_INSTRUCTIONS;
+    }
+
+    public static function defaultInstructionsHtml(): string
+    {
+        return self::instructionsTextToHtml(self::defaultInstructionsText());
+    }
+
+    public static function saveDefaultInstructions(string $instructions): void
+    {
+        Pengaturan::query()->updateOrCreate(
+            ['nama_pengaturan' => self::GLOBAL_INSTRUCTIONS_SETTING_KEY],
+            ['nilai_pengaturan' => trim($instructions) ?: self::DEFAULT_INSTRUCTIONS]
+        );
+    }
+
+    protected static function instructionsTextToHtml(string $instructions): string
+    {
+        return collect(preg_split('/\R{2,}|\R/', $instructions) ?: [])
+            ->map(fn (string $line): string => trim($line))
+            ->filter()
+            ->map(fn (string $line): string => '<p>'.e($line).'</p>')
+            ->implode('');
+    }
+
+    public function readingContentHtml(): string
+    {
+        $content = trim((string) $this->reading_content);
+
+        if ($content === '') {
+            return '';
+        }
+
+        $html = $this->renderRichContent('reading_content');
+
+        if (blank(strip_tags($html)) && ! Str::contains($html, '<img')) {
+            return nl2br(e($content));
+        }
+
+        return preg_replace_callback('/<img\b([^>]*)>/i', static function (array $matches): string {
+            $attributes = $matches[1];
+
+            if (! preg_match('/\bloading\s*=/i', $attributes)) {
+                $attributes .= ' loading="lazy"';
+            }
+
+            if (! preg_match('/\bdecoding\s*=/i', $attributes)) {
+                $attributes .= ' decoding="async"';
+            }
+
+            return '<img'.$attributes.'>';
+        }, $html) ?? $html;
+    }
+
+    public function readingContentPreview(int $limit = 180): string
+    {
+        $content = trim((string) $this->reading_content);
+
+        if ($content === '') {
+            return '';
+        }
+
+        $html = preg_replace(
+            '/<\s*\/?(?:p|div|h[1-6]|li|br|tr|td|th|blockquote)[^>]*>/i',
+            ' ',
+            $this->readingContentHtml(),
+        ) ?? $this->readingContentHtml();
+
+        $text = Str::of(strip_tags($html))
+            ->squish()
+            ->toString();
+
+        if ($text === '') {
+            $text = Str::of(strip_tags($content))->squish()->toString();
+        }
+
+        return Str::limit($text, $limit);
+    }
+
+    public function containsLatex(): bool
+    {
+        if (Str::contains((string) $this->reading_content, ['\\(', '\\[', '$$'])) {
+            return true;
+        }
+
+        if (! $this->relationLoaded('questions')) {
+            return false;
+        }
+
+        return $this->questions->contains(
+            fn (PerpustakaanLiterasiQuestion $question): bool => Str::contains(
+                (string) $question->prompt,
+                ['\\(', '\\[', '$$'],
+            ),
+        );
+    }
+
+    public static function normalizeImagePath(mixed $value, string $defaultDirectory): ?string
+    {
+        $path = trim((string) $value);
+
+        if ($path === '') {
+            return null;
+        }
+
+        if (Str::startsWith($path, ['http://', 'https://', '/storage/', 'storage/'])) {
+            return $path;
+        }
+
+        $path = ltrim($path, '/');
+
+        foreach (['public/storage/', 'storage/'] as $prefix) {
+            if (Str::startsWith($path, $prefix)) {
+                $path = Str::after($path, $prefix);
+            }
+        }
+
+        if (! str_contains($path, '/') && $defaultDirectory !== '') {
+            $path = trim($defaultDirectory, '/').'/'.$path;
+        }
+
+        return $path;
+    }
+
+    protected static function extractYoutubeVideoId(string $url): ?string
+    {
+        $host = parse_url($url, PHP_URL_HOST);
+        $path = trim((string) parse_url($url, PHP_URL_PATH), '/');
+        $query = [];
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+
+        if ($host !== null && Str::contains($host, 'youtu.be')) {
+            return $path !== '' ? Str::before($path, '/') : null;
+        }
+
+        if ($host !== null && Str::contains($host, 'youtube.com')) {
+            if (filled($query['v'] ?? null)) {
+                return preg_replace('/[^A-Za-z0-9_-]/', '', (string) $query['v']) ?: null;
+            }
+
+            if (Str::startsWith($path, 'embed/')) {
+                return Str::after($path, 'embed/');
+            }
+
+            if (Str::startsWith($path, 'shorts/')) {
+                return Str::after($path, 'shorts/');
+            }
+        }
+
+        return null;
+    }
+
+    protected static function extractGoogleDriveFileId(string $url): ?string
+    {
+        $host = parse_url($url, PHP_URL_HOST);
+
+        if ($host === null || ! Str::contains($host, 'drive.google.com')) {
+            return null;
+        }
+
+        $path = (string) parse_url($url, PHP_URL_PATH);
+        if (preg_match('~/file/d/([^/]+)~', $path, $matches) === 1) {
+            return $matches[1];
+        }
+
+        $query = [];
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+
+        return filled($query['id'] ?? null) ? (string) $query['id'] : null;
     }
 
     public static function uniqueSlug(?string $title, ?string $currentSlug = null, ?int $ignoreId = null): string

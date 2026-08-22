@@ -21,15 +21,15 @@
     $backUrl = \App\Filament\Resources\BoardingPencapaianResource::getUrl('index');
 @endphp
 
-<div class="flex flex-col gap-2 md:items-end">
-    <div class="text-xs font-medium text-gray-600 dark:text-gray-300">
-        Target rapot aktif:
-        <span class="font-semibold text-gray-950 dark:text-white">
+<div class="boarding-target-nav">
+    <div class="boarding-target-nav__scope">
+        <span>Target rapot aktif</span>
+        <strong>
             {{ \App\Models\BoardingPencapaian::materiRapotScopeLabel($materiRapotScope) }}
-        </span>
+        </strong>
     </div>
 
-    <div class="flex flex-wrap gap-2 md:justify-end">
+    <div class="boarding-target-nav__actions">
         @foreach ($links as $key => $link)
             @php
                 $isActive = $active === $key || ($key === 'materi' && in_array($active, ['hafalan', 'makna', 'bacaan'], true));
@@ -38,9 +38,8 @@
             <a
                 href="{{ $link['url'] }}"
                 @class([
-                    'inline-flex min-h-9 items-center justify-center rounded-lg border bg-white px-3 py-1.5 text-sm font-semibold text-green-700 shadow-sm transition hover:border-green-300 hover:bg-green-50 hover:text-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:bg-white dark:text-green-700 dark:hover:bg-green-50',
-                    'border-green-500 ring-2 ring-green-500 ring-offset-1' => $isActive,
-                    'border-gray-200 dark:border-white/20' => ! $isActive,
+                    'boarding-target-nav__button',
+                    'boarding-target-nav__button--active' => $isActive,
                 ])
                 @if ($isActive) aria-current="page" @endif
             >
@@ -50,7 +49,7 @@
 
         <a
             href="{{ $backUrl }}"
-            class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-green-700 shadow-sm transition hover:border-green-300 hover:bg-green-50 hover:text-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:border-white/20 dark:bg-white dark:text-green-700 dark:hover:bg-green-50"
+            class="boarding-target-nav__button boarding-target-nav__button--back"
         >
             <span aria-hidden="true">&larr;</span>
             Kembali

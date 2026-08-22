@@ -91,9 +91,14 @@
                         <article class="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/70">
                             @if(filled($facility['foto']))
                                 <img
-                                    src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($facility['foto']) }}"
+                                    data-public-lazy-image
+                                    data-src="{{ app(\App\Support\Media\PublicImageOptimizer::class)->url($facility['foto']) }}"
                                     alt="{{ $facility['nama'] ?: 'Fasilitas sekolah' }}"
                                     class="h-48 w-full object-cover"
+                                    width="640"
+                                    height="360"
+                                    loading="lazy"
+                                    decoding="async"
                                 >
                             @endif
                             <div class="p-4">

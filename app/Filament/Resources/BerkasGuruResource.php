@@ -64,8 +64,8 @@ class BerkasGuruResource extends Resource
                             ->searchable()
                             ->placeholder('Pilih guru / tendik')
                             ->searchPrompt('Ketik nama, NIY, atau NIK')
-                            ->default(fn (): ?int => request()->integer('guru_id') ?: (auth()->user()?->isGuru() ? auth()->user()?->guru_tendik_id : null))
-                            ->disabled(fn (): bool => (bool) auth()->user()?->isGuru())
+                            ->default(fn (): ?int => request()->integer('guru_id') ?: (auth()->user()?->usesGuruPersonalScope() ? auth()->user()?->guru_tendik_id : null))
+                            ->disabled(fn (): bool => (bool) auth()->user()?->usesGuruPersonalScope())
                             ->dehydrated()
                             ->options(fn (): array => GuruTendik::query()
                                 ->visibleToUser(auth()->user())
@@ -431,7 +431,7 @@ class BerkasGuruResource extends Resource
         $user = auth()->user();
 
         return static::userCanModule('manage')
-            && (! $user?->isGuru() || filled($user?->guru_tendik_id));
+            && (! $user?->usesGuruPersonalScope() || filled($user?->guru_tendik_id));
     }
 
     public static function getEloquentQuery(): Builder
