@@ -62,11 +62,27 @@ class StudentSyncPreviewService
                 $fieldSummary[$field] = ($fieldSummary[$field] ?? 0) + 1;
             }
 
+            // Rincian nilai lama -> baru per field yang berubah (hanya field data_siswa
+            // yang di-preview). "before" diambil dari record server saat ini; "after"
+            // dari patch. Disimpan di snapshot terenkripsi; ditampilkan hanya ke
+            // pengguna berwenang di halaman push. Tidak memuat kredensial/secret.
+            $changes = [];
+            if ($patch !== [] && $match->status === StudentSyncMatchResult::MATCHED) {
+                $currentAttributes = $match->matched->getAttributes();
+                foreach ($patch as $field => $newValue) {
+                    $changes[$field] = [
+                        'before' => array_key_exists($field, $currentAttributes) ? $currentAttributes[$field] : null,
+                        'after' => $newValue,
+                    ];
+                }
+            }
+
             $items[] = [
                 'status' => $status,
                 'source_id' => $sourceId,
                 'target_id' => $targetId,
                 'changed_fields' => $changedFields,
+                'changes' => $changes,
                 'reason' => $match->reason,
                 'identity' => $student['identity'],
                 'fields' => $student['fields'],
@@ -129,6 +145,7 @@ class StudentSyncPreviewService
                 'source_id' => $item['source_id'],
                 'target_id' => $item['target_id'],
                 'changed_fields' => $item['changed_fields'],
+                'changes' => $item['changes'],
                 'reason' => $item['reason'],
             ], $items),
         ];

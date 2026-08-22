@@ -268,6 +268,7 @@ class PushDataSiswasToServer extends Page
                         is_array($item['changed_fields'] ?? null) ? $item['changed_fields'] : [],
                         static fn (mixed $field): bool => is_string($field) && isset($allowedFields[$field]),
                     )),
+                    'changes' => $this->safeChanges($item['changes'] ?? null, $allowedFields),
                     'reason' => is_string($item['reason'] ?? null) ? ($reasons[$item['reason']] ?? null) : null,
                 ];
             })
@@ -282,6 +283,55 @@ class PushDataSiswasToServer extends Page
         $denied = [...config('student_sync.denied_fields', []), 'id'];
 
         return array_values(array_diff(Schema::getColumnListing('data_siswa'), $denied));
+    }
+
+    /**
+     * Proyeksikan nilai lama->baru hanya untuk field yang di-allowlist. Nilai
+     * discalarkan & dipotong agar tampilan aman; struktur asing/kredensial dibuang.
+     *
+     * @param  array<string, string>  $allowedFields
+     * @return array<int, array{field: string, before: ?string, after: ?string}>
+     */
+    private function safeChanges(mixed $changes, array $allowedFields): array
+    {
+        if (! is_array($changes)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($changes as $field => $pair) {
+            if (! is_string($field) || ! isset($allowedFields[$field]) || ! is_array($pair)) {
+                continue;
+            }
+            $out[] = [
+                'field' => $field,
+                'before' => $this->safeScalarValue($pair['before'] ?? null),
+                'after' => $this->safeScalarValue($pair['after'] ?? null),
+            ];
+        }
+
+        usort($out, static fn (array $a, array $b): int => strcmp($a['field'], $b['field']));
+
+        return $out;
+    }
+
+    /** Ubah nilai jadi string aman untuk ditampilkan (null tetap null; array/objek ditolak). */
+    private function safeScalarValue(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+        if (is_int($value) || is_float($value) || is_string($value)) {
+            $str = (string) $value;
+
+            return mb_substr($str, 0, 200);
+        }
+
+        // Struktur tak terduga (array/objek) tidak ditampilkan.
+        return null;
     }
 
     private function safeId(mixed $id): ?int

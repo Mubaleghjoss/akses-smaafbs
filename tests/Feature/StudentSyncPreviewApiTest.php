@@ -81,7 +81,7 @@ class StudentSyncPreviewApiTest extends TestCase
                 'counts' => ['total', 'update', 'unchanged', 'conflict', 'not_found'],
                 'field_summary',
                 'items' => [
-                    '*' => ['status', 'source_id', 'target_id', 'changed_fields', 'reason'],
+                    '*' => ['status', 'source_id', 'target_id', 'changed_fields', 'changes', 'reason'],
                 ],
             ])
             ->assertJsonPath('counts', [
@@ -96,6 +96,8 @@ class StudentSyncPreviewApiTest extends TestCase
             ->assertJsonPath('items.0.source_id', 10)
             ->assertJsonPath('items.0.target_id', 10)
             ->assertJsonPath('items.0.changed_fields', ['nama'])
+            ->assertJsonPath('items.0.changes.nama.before', 'Old Personal Name')
+            ->assertJsonPath('items.0.changes.nama.after', 'New Personal Name')
             ->assertJsonPath('items.1.status', 'unchanged')
             ->assertJsonPath('items.2.status', 'conflict')
             ->assertJsonPath('items.3.status', 'not_found');
@@ -104,11 +106,13 @@ class StudentSyncPreviewApiTest extends TestCase
         $this->assertSame('aktif', DB::table('data_siswa')->where('id', 10)->value('status'));
 
         $json = $response->getContent();
-        $this->assertStringNotContainsString('Old Personal Name', $json);
-        $this->assertStringNotContainsString('New Personal Name', $json);
+        // Kontrak preview kini menampilkan nilai lama -> baru untuk field yang di-preview.
+        $this->assertStringContainsString('New Personal Name', $json);
+        $this->assertStringContainsString('Old Personal Name', $json);
+        // Field yang tidak diizinkan / di luar patch tetap TIDAK bocor.
         $this->assertStringNotContainsString('must not enter patch', $json);
-        $this->assertStringNotContainsString('before', $json);
-        $this->assertStringNotContainsString('after', $json);
+        // Nilai unchanged item (tidak berubah) tidak masuk daftar changes.
+        $this->assertSame([], $response->json('items.1.changes'));
 
         $preview = StudentSyncPreview::query()->sole();
         $this->assertSame($response->json('preview_token'), $preview->getKey());

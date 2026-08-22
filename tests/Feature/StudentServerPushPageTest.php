@@ -211,6 +211,11 @@ class StudentServerPushPageTest extends TestCase
             'items' => [[
                 'status' => 'update', 'source_id' => 10, 'target_id' => 20,
                 'changed_fields' => ['nama', 'raw_payload_secret'],
+                'changes' => [
+                    'nama' => ['before' => 'Lama Aman', 'after' => 'Baru Aman'],
+                    'raw_payload_secret' => ['before' => 'SENSITIVE', 'after' => 'secret-value'],
+                    'nested_secret' => ['before' => ['deep' => 'secret-value'], 'after' => 'secret-value'],
+                ],
                 'reason' => 'before: SENSITIVE before after: SECRET secret-value',
                 'payload' => ['secret' => 'secret-value'],
             ], [
@@ -224,6 +229,7 @@ class StudentServerPushPageTest extends TestCase
             ->assertSet('previewToken', 'safe-preview-token')
             ->assertSee('Update')
             ->assertSee('nama')
+            ->assertSee('Baru Aman')
             ->assertDontSee('payload-secret-value')
             ->assertDontSee('raw_payload_secret')
             ->assertDontSee('before_after_secret')
@@ -233,7 +239,11 @@ class StudentServerPushPageTest extends TestCase
             ->assertSet('fieldSummary', ['nama' => 2])
             ->assertSet('items.0', [
                 'status' => 'update', 'source_id' => 10, 'target_id' => 20,
-                'changed_fields' => ['nama'], 'reason' => null,
+                'changed_fields' => ['nama'],
+                'changes' => [
+                    ['field' => 'nama', 'before' => 'Lama Aman', 'after' => 'Baru Aman'],
+                ],
+                'reason' => null,
             ]);
     }
 
