@@ -141,6 +141,11 @@ Route::middleware('auth')->get(
 )->name('admin.belajar-id.import-template');
 
 Route::middleware('auth')->get(
+    '/admin/wifi-accounts/import-template',
+    \App\Http\Controllers\Admin\WifiAccountImportTemplateController::class
+)->name('admin.wifi-accounts.import-template');
+
+Route::middleware('auth')->get(
     '/admin/guru-tendiks/export',
     GuruTendikExportController::class
 )->name('admin.guru-tendiks.export');

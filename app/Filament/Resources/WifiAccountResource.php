@@ -6,13 +6,18 @@ use App\Filament\Resources\WifiAccountResource\Pages;
 use App\Models\AccountCategory;
 use App\Models\HotspotUser;
 use App\Support\Hotspot\HotspotAccessible;
+use App\Support\WifiAccount\WifiAccountSyncClient;
+use App\Support\WifiAccount\WifiAccountWorkbookImporter;
 use Filament\Actions;
 use Filament\Forms;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class WifiAccountResource extends Resource
 {
@@ -151,6 +156,94 @@ class WifiAccountResource extends Resource
                 Tables\Filters\SelectFilter::make('input_mode')
                     ->label('Sumber')
                     ->options(['manual' => 'Manual', 'otomatis' => 'Otomatis']),
+            ])
+            ->headerActions([
+                Actions\Action::make('downloadTemplateWifi')
+                    ->label('Download Template')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->color('gray')
+                    ->url(route('admin.wifi-accounts.import-template', absolute: false))
+                    ->openUrlInNewTab(),
+                Actions\Action::make('importWifiExcel')
+                    ->label('Import Excel')
+                    ->icon('heroicon-o-arrow-up-tray')
+                    ->color('primary')
+                    ->modalHeading('Import Akun WiFi (jembatan)')
+                    ->modalSubmitActionLabel('Proses Import')
+                    ->visible(fn (): bool => self::hotspotAccessGranted())
+                    ->form([
+                        Forms\Components\FileUpload::make('berkas')
+                            ->label('File Excel (USERNAME, PASSWORD, PROFIL, KELAS, ROLE)')
+                            ->disk('public')
+                            ->directory('wifi/imports')
+                            ->acceptedFileTypes([
+                                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                'application/vnd.ms-excel',
+                            ])
+                            ->required(),
+                    ])
+                    ->action(function (array $data): void {
+                        $disk = Storage::disk('public');
+                        $path = $data['berkas'] ?? null;
+                        if (! $path || ! $disk->exists($path)) {
+                            Notification::make()->title('File import tidak ditemukan.')->danger()->send();
+
+                            return;
+                        }
+                        try {
+                            $result = app(WifiAccountWorkbookImporter::class)->import($disk->path($path));
+                        } catch (Throwable $e) {
+                            report($e);
+                            Notification::make()
+                                ->title('Import gagal.')
+                                ->body(filled($e->getMessage()) ? $e->getMessage() : 'Gagal membaca file Excel.')
+                                ->danger()
+                                ->send();
+
+                            return;
+                        } finally {
+                            if ($disk->exists($path)) {
+                                $disk->delete($path);
+                            }
+                        }
+
+                        Notification::make()
+                            ->title('Import akun WiFi selesai.')
+                            ->body("{$result['created']} baru, {$result['updated']} diperbarui, {$result['skipped']} dilewati (siswa: {$result['siswa']}, guru: {$result['guru']}).")
+                            ->success()
+                            ->send();
+                    }),
+                Actions\Action::make('sinkronApi')
+                    ->label('Sinkron dari MikroTik')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('info')
+                    ->visible(fn (): bool => self::hotspotAccessGranted() && (bool) config('wifi_sync.enabled'))
+                    ->requiresConfirmation()
+                    ->modalHeading('Sinkron akun WiFi dari aplikasi MikroTik')
+                    ->modalDescription('Menarik daftar akun hotspot (read-only), lalu memperbarui data lokal. Tidak menghapus akun.')
+                    ->action(function (): void {
+                        $client = app(WifiAccountSyncClient::class);
+                        try {
+                            $accounts = $client->fetchAccounts();
+                            $preview = $client->diffPreview($accounts);
+                            $applied = $client->apply($accounts);
+                        } catch (Throwable $e) {
+                            report($e);
+                            Notification::make()
+                                ->title('Sinkron gagal.')
+                                ->body(filled($e->getMessage()) ? $e->getMessage() : 'Tidak dapat menghubungi sumber.')
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
+
+                        Notification::make()
+                            ->title('Sinkron akun WiFi selesai.')
+                            ->body("{$applied['created']} baru, {$applied['updated']} diperbarui (preview: {$preview['baru']} baru, {$preview['berubah']} berubah, {$preview['sama']} sama).")
+                            ->success()
+                            ->send();
+                    }),
             ])
             ->actions([
                 Actions\EditAction::make(),
