@@ -83,4 +83,8 @@
     .signature-space { height: 43px; }
     .signature-name { font-weight: 700; text-decoration: underline; }
     .footer-note { margin-top: 8px; color: #6b7280; font-size: 7.5px; text-align: right; }
+    /* Penanda rapor SEMENTARA: ada mapel yang nilainya belum diisi guru.
+       Sengaja mencolok agar tidak terbaca sebagai dokumen final. */
+    .report-provisional { margin: 6px 0; padding: 5px 7px; border: 1px solid #b91c1c; border-left: 3px solid #b91c1c; background: #fef2f2; color: #7f1d1d; font-size: 8.5px; line-height: 1.35; page-break-inside: avoid; }
+    .report-provisional strong { letter-spacing: .03em; }
 </style>
