@@ -1427,10 +1427,23 @@ class AssessmentReportingTest extends TestCase
         $this->assertTrue($asas->is_active);
         $this->assertSame('Kepala Sekolah', data_get($asas->settings, 'principal_name'));
         $this->assertTrue(app(AssessmentReportLayout::class)->requiresSemesterStatus($asas->settings));
+
+        // Setiap jenis yang PUNYA template harus punya tepat satu template utama.
+        // ASAT sengaja belum punya template sendiri — memakai template ASAS
+        // (keputusan sekolah: bentuk rapornya sama), lihat
+        // AssessmentType::templateTypeCandidates(). Karena itu jenis tanpa
+        // template dilewati, bukan dianggap gagal.
         foreach (AssessmentType::cases() as $type) {
+            $jumlahTemplate = ReportTemplate::query()->where('type', $type->value)->count();
+
+            if ($jumlahTemplate === 0) {
+                continue;
+            }
+
             $this->assertSame(
                 1,
                 ReportTemplate::query()->where('type', $type->value)->where('is_active', true)->count(),
+                "Jenis {$type->value} harus punya tepat satu template utama.",
             );
         }
         $this->assertSame('cancelled', ReportGenerationRun::query()->where('revision', 1)->firstOrFail()->status->value);

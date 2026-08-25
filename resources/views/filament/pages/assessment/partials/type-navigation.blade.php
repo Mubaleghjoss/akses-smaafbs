@@ -5,6 +5,33 @@
 @endphp
 
 <div class="assessment-context-stack">
+    {{-- Pemilih JENIS penilaian. Satu tempat, bukan tiga cabang menu:
+         berpindah jenis MEMPERTAHANKAN halaman yang sedang dibuka
+         (Status ASTS -> Status ASAS), bukan kembali ke beranda. --}}
+    <div class="asmt-typebar" role="tablist" aria-label="Jenis Penilaian">
+        <span class="asmt-typebar__label">Jenis</span>
+        <div class="asmt-typebar__tabs">
+            @foreach ($assessmentNavigation['type_tabs'] as $tab)
+                @if ($tab['url'])
+                    <a
+                        href="{{ $tab['url'] }}"
+                        wire:navigate
+                        role="tab"
+                        title="{{ $tab['long_label'] }}"
+                        @class(['asmt-typebar__tab', 'is-active' => $tab['active']])
+                        @if ($tab['active']) aria-selected="true" @endif
+                    >{{ $tab['label'] }}</a>
+                @else
+                    <span
+                        class="asmt-typebar__tab is-disabled"
+                        title="Tidak tersedia untuk akun ini"
+                    >{{ $tab['label'] }}</span>
+                @endif
+            @endforeach
+        </div>
+        <span class="asmt-typebar__hint">{{ $assessmentNavigation['type_long_label'] }}</span>
+    </div>
+
     <nav class="assessment-context-nav" aria-label="Navigasi Penilaian">
         <div class="assessment-context-nav__crumbs">
             <a href="{{ $assessmentNavigation['is_hub'] ? $assessmentNavigation['dashboard_url'] : $assessmentNavigation['hub_url'] }}" wire:navigate>

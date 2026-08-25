@@ -207,7 +207,15 @@ abstract class AssessmentReportsPage extends AssessmentPage
             ->orderByDesc('version')
             ->orderByDesc('id')
             ->get()
-            ->sortBy(fn (ReportTemplate $template): int => $prioritas[(string) $template->type] ?? 99)
+            // ReportTemplate::$type di-cast menjadi enum AssessmentType, jadi
+            // TIDAK boleh langsung di-string-kan. Ambil ->value bila enum.
+            ->sortBy(function (ReportTemplate $template) use ($prioritas): int {
+                $tipe = $template->type instanceof AssessmentType
+                    ? $template->type->value
+                    : (string) $template->type;
+
+                return $prioritas[$tipe] ?? 99;
+            })
             ->values()
             ->mapWithKeys(fn (ReportTemplate $template): array => [
                 $template->getKey() => "{$template->name} · v{$template->version}"

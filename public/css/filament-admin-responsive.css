@@ -8374,3 +8374,34 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
     .asmt-group__items li { flex-direction:column; gap:.1rem; }
     .asmt-count { margin-left:0; }
 }
+
+/* ============================================================
+   PEMILIH JENIS PENILAIAN (ASTS / ASAS / ASAT)
+   Satu baris tab, bukan tiga cabang menu terpisah.
+   ============================================================ */
+.asmt-typebar { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; padding:.6rem .85rem; border:1px solid #dbe4ee; border-radius:.9rem; background:#f8fafc; }
+.dark .asmt-typebar { border-color:rgba(255,255,255,.1); background:#0f172a; }
+
+.asmt-typebar__label { font-size:.7rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#64748b; }
+.dark .asmt-typebar__label { color:#94a3b8; }
+
+.asmt-typebar__tabs { display:inline-flex; gap:.25rem; padding:.2rem; border-radius:.7rem; background:#e2e8f0; }
+.dark .asmt-typebar__tabs { background:#1e293b; }
+
+.asmt-typebar__tab { display:inline-flex; align-items:center; min-height:2.1rem; padding:0 .85rem; border-radius:.55rem; font-size:.8rem; font-weight:800; color:#475569; text-decoration:none; transition:background .15s,color .15s; }
+.asmt-typebar__tab:hover { background:rgb(255 255 255 / .6); color:#0f172a; }
+.dark .asmt-typebar__tab { color:#cbd5e1; }
+.dark .asmt-typebar__tab:hover { background:rgb(255 255 255 / .08); color:#f8fafc; }
+
+.asmt-typebar__tab.is-active { background:#0f5132; color:#fff !important; box-shadow:0 1px 2px rgb(15 23 42 / .12); }
+.asmt-typebar__tab.is-disabled { opacity:.4; cursor:not-allowed; }
+
+.asmt-typebar__hint { margin-left:auto; font-size:.75rem; color:#64748b; }
+.dark .asmt-typebar__hint { color:#94a3b8; }
+
+@media (max-width:640px) {
+    .asmt-typebar { gap:.5rem; }
+    .asmt-typebar__tabs { width:100%; }
+    .asmt-typebar__tab { flex:1; justify-content:center; padding:0 .5rem; }
+    .asmt-typebar__hint { width:100%; margin-left:0; }
+}
