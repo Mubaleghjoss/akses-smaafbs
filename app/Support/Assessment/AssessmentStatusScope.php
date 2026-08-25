@@ -98,4 +98,50 @@ final class AssessmentStatusScope
             || $user->can('penilaian.verify')
             || $user->hasRole('kepala_sekolah');
     }
+
+    /**
+     * Bolehkah pengguna mencetak rapor rombel tertentu pada satu periode?
+     *
+     * Kebijakan sekolah:
+     *   - Admin / kurikulum / kepala sekolah  -> seluruh rombel.
+     *   - Wali kelas                          -> HANYA rombel yang ia ampu.
+     *   - Guru mapel                          -> tidak boleh mencetak.
+     *
+     * Pembatasan "hanya kelas sendiri" tidak dapat diwakili oleh izin, karena
+     * izin tidak mengenal rombel. Karena itu diperiksa di sini — satu tempat —
+     * bukan disebar di view atau di setiap halaman rapor.
+     */
+    public function bolehCetakRapor(User $user, int $periodId, int $rombelId): bool
+    {
+        if (! $user->can('penilaian.report.generate')) {
+            return false;
+        }
+
+        // Pemegang akses menyeluruh tidak dibatasi rombel.
+        if ($this->canViewAll($user)) {
+            return true;
+        }
+
+        // Sisanya (wali kelas) hanya rombel yang benar-benar ia ampu pada
+        // periode ini — dibuktikan baris assessment_period_homerooms, bukan
+        // label peran pada akun.
+        return in_array($rombelId, $this->homeroomRombelIds($user, $periodId), true);
+    }
+
+    /**
+     * Daftar rombel yang boleh dicetak pengguna pada satu periode.
+     * Mengembalikan null bila tidak dibatasi (seluruh rombel).
+     *
+     * @return array<int, int>|null
+     */
+    public function rombelBolehCetak(User $user, int $periodId): ?array
+    {
+        if (! $user->can('penilaian.report.generate')) {
+            return [];
+        }
+
+        return $this->canViewAll($user)
+            ? null
+            : $this->homeroomRombelIds($user, $periodId);
+    }
 }
