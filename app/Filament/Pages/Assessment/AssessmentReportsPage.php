@@ -11,6 +11,7 @@ use App\Filament\Resources\AssessmentSubjectResource;
 use App\Filament\Resources\GuruTendikResource;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodHomeroom;
+use App\Models\Assessment\AssessmentPeriodRombel;
 use App\Models\Assessment\ClassReportArtifact;
 use App\Models\Assessment\ReportGenerationRun;
 use App\Models\Assessment\ReportShareLink;
@@ -18,6 +19,7 @@ use App\Models\Assessment\ReportSnapshot;
 use App\Models\Assessment\ReportTemplate;
 use App\Models\User;
 use App\Support\Assessment\AssessmentActionFailureNotification;
+use App\Support\Assessment\Reporting\AssessmentReportCompleteness;
 use App\Support\Assessment\Reporting\AssessmentReportShareService;
 use App\Support\Assessment\Reporting\CreateReportSnapshotsAction;
 use App\Support\Assessment\Reporting\AssessmentReportPreflight;
@@ -98,9 +100,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
 
     public function getTitle(): string|Htmlable
     {
-        return static::$assessmentType === AssessmentType::ASTS
-            ? 'Cetak Rapor ASTS'
-            : 'Cetak Rapor Semester';
+        return 'Cetak Rapor '.static::$assessmentType->label();
     }
 
     public function canGenerateReports(): bool
@@ -119,6 +119,68 @@ abstract class AssessmentReportsPage extends AssessmentPage
             && ($user->hasFullAdminAccess() || $user->can('penilaian.publish'));
     }
 
+    /**
+     * Kelengkapan nilai kelas terpilih — dipakai popup sebelum cetak.
+     *
+     * Membedakan mapel yang BELUM DIISI (tagih guru, rapor jadi SEMENTARA)
+     * dari yang belum diverifikasi (tagih kurikulum, isi rapor sudah utuh).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function getKelengkapanKelasTerpilih(): array
+    {
+        if (! $this->periodId) {
+            return [];
+        }
+
+        $pemeriksa = app(AssessmentReportCompleteness::class);
+        $terpilih = collect($this->selectedClassIds)
+            ->map(fn (mixed $id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique();
+
+        if ($terpilih->isEmpty()) {
+            return [];
+        }
+
+        $namaRombel = AssessmentPeriodRombel::query()
+            ->whereIn('id', $terpilih->all())
+            ->pluck('rombel_name_snapshot', 'id');
+
+        return $terpilih
+            ->map(function (int $rombelId) use ($pemeriksa, $namaRombel): array {
+                $hasil = $pemeriksa->untukRombel((int) $this->periodId, $rombelId);
+
+                return [
+                    ...$hasil,
+                    'rombel_id' => $rombelId,
+                    'rombel' => (string) ($namaRombel[$rombelId] ?? ('Kelas #'.$rombelId)),
+                ];
+            })
+            ->sortBy('rombel')
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Ringkasan satu baris untuk tombol cetak: apakah ada yang belum diisi?
+     *
+     * @return array{ada_sementara: bool, jumlah_kelas: int, kelas_sementara: int, total_mapel_kosong: int}
+     */
+    public function getRingkasanKelengkapan(): array
+    {
+        $rows = $this->getKelengkapanKelasTerpilih();
+
+        $sementara = collect($rows)->where('sementara', true);
+
+        return [
+            'ada_sementara' => $sementara->isNotEmpty(),
+            'jumlah_kelas' => count($rows),
+            'kelas_sementara' => $sementara->count(),
+            'total_mapel_kosong' => (int) $sementara->sum('jumlah_belum_diisi'),
+        ];
+    }
+
     public function getPeriodOptions(): array
     {
         return $this->scopePeriods(AssessmentPeriod::query())
@@ -130,12 +192,23 @@ abstract class AssessmentReportsPage extends AssessmentPage
 
     public function getTemplateOptions(): array
     {
+        // Urutan pencarian template mengikuti jenis penilaian: jenis sendiri
+        // lebih dulu, lalu cadangan. ASAT memakai template ASAS sampai
+        // template 'asat' dibuat — begitu ada, otomatis dipakai.
+        //
+        // Pengurutan dilakukan di PHP, BUKAN dengan FIELD() milik MySQL,
+        // agar tetap jalan di SQLite (dipakai pengujian).
+        $kandidat = static::$assessmentType->templateTypeCandidates();
+        $prioritas = array_flip($kandidat);
+
         return ReportTemplate::query()
-            ->where('type', static::$assessmentType->value)
+            ->whereIn('type', $kandidat)
             ->orderByDesc('is_active')
             ->orderByDesc('version')
             ->orderByDesc('id')
             ->get()
+            ->sortBy(fn (ReportTemplate $template): int => $prioritas[(string) $template->type] ?? 99)
+            ->values()
             ->mapWithKeys(fn (ReportTemplate $template): array => [
                 $template->getKey() => "{$template->name} · v{$template->version}"
                     .($template->is_active ? ' · UTAMA' : ' · arsip')
@@ -224,12 +297,32 @@ abstract class AssessmentReportsPage extends AssessmentPage
                 null,
             );
             $this->selectDefaultClassAndPreview();
+
+            // Beri tahu bila ada mapel yang nilainya masih kosong: rapornya
+            // tetap dibuat, tetapi berstatus SEMENTARA. Peringatan disampaikan
+            // SETELAH revisi dibuat agar tidak menghalangi pekerjaan, namun
+            // pengguna tidak mengira rapornya sudah final.
+            $ringkas = $this->getRingkasanKelengkapan();
+
             Notification::make()
                 ->title('Revisi rapor sudah disiapkan')
                 ->body($snapshots->count().' snapshot dibekukan dan PDF siswa siap dirender saat diunduh. PDF kelas dapat dijadwalkan sebagai cache 24 jam.')
                 ->success()
                 ->duration(12000)
                 ->send();
+
+            if ($ringkas['ada_sementara']) {
+                Notification::make()
+                    ->title('Sebagian rapor berstatus SEMENTARA')
+                    ->body(sprintf(
+                        '%d kelas masih punya mapel tanpa nilai (%d mapel). Nilai yang kosong tercetak sebagai "(belum diisi)". Periksa rincian di kartu Kelengkapan Nilai.',
+                        $ringkas['kelas_sementara'],
+                        $ringkas['total_mapel_kosong'],
+                    ))
+                    ->warning()
+                    ->persistent()
+                    ->send();
+            }
         } catch (Throwable $exception) {
             report($exception);
             AssessmentActionFailureNotification::send($exception, 'Siapkan Revisi', $period);
