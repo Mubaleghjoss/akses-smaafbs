@@ -9,9 +9,9 @@ use App\Enums\Assessment\AssignmentStatus;
 use App\Filament\Pages\Assessment\Concerns\HasAssessmentTypeNavigation;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodAssignment;
-use App\Models\Assessment\AssessmentPeriodHomeroom;
 use App\Models\User;
 use App\Support\Assessment\AssessmentActionFailureNotification;
+use App\Support\Assessment\AssessmentStatusScope;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
@@ -38,6 +38,9 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
     #[Url(as: 'status')]
     public string $statusFilter = 'all';
 
+    #[Url(as: 'rombel')]
+    public ?int $activeRombelId = null;
+
     /** @var array<int, int|string> */
     public array $selectedAssignmentIds = [];
 
@@ -52,6 +55,8 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
         if (! $this->periodId || ! in_array($this->periodId, $ids, true)) {
             $this->periodId = $ids[0] ?? null;
         }
+
+        $this->normalizeActiveRombel();
     }
 
     public function getTitle(): string|Htmlable
@@ -76,11 +81,129 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
     public function updatedPeriodId(): void
     {
         $this->selectedAssignmentIds = [];
+        // null = "Semua Kelas". Kelas TIDAK dipilih otomatis supaya daftar &
+        // aksi massal tetap mencakup seluruh kelas dalam cakupan pengguna.
+        $this->activeRombelId = null;
+        $this->normalizeActiveRombel();
     }
 
     public function updatedStatusFilter(): void
     {
         $this->selectedAssignmentIds = [];
+    }
+
+    public function selectRombel(int $rombelId): void
+    {
+        $accessibleIds = collect($this->getClassTabs())
+            ->pluck('id')
+            ->map(fn (mixed $id): int => (int) $id);
+
+        if (! $accessibleIds->contains($rombelId)) {
+            return;
+        }
+
+        $this->activeRombelId = $rombelId;
+        $this->selectedAssignmentIds = [];
+    }
+
+    /**
+     * Kembali ke tampilan seluruh kelas dalam cakupan pengguna.
+     */
+    public function showAllRombels(): void
+    {
+        $this->activeRombelId = null;
+        $this->selectedAssignmentIds = [];
+    }
+
+    public function showAllStatuses(): void
+    {
+        $this->statusFilter = 'all';
+        $this->selectedAssignmentIds = [];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function getClassTabs(): array
+    {
+        if (! $this->periodId) {
+            return [];
+        }
+
+        $period = AssessmentPeriod::query()->find($this->periodId);
+        if (! $period || ($period->type instanceof AssessmentType ? $period->type : AssessmentType::from($period->type)) !== static::$assessmentType) {
+            return [];
+        }
+
+        return $this->scopeAssignments($period->assignments()->getQuery())
+            ->select(['assessment_period_rombel_id', 'rombel_name_snapshot'])
+            ->selectRaw('COUNT(*) as total_count')
+            ->selectRaw(
+                'SUM(CASE WHEN status IN (?, ?) THEN 1 ELSE 0 END) as pending_count',
+                [AssignmentStatus::DRAFT->value, AssignmentStatus::RETURNED->value],
+            )
+            ->selectRaw(
+                'SUM(CASE WHEN status IN (?, ?, ?) THEN 1 ELSE 0 END) as completed_count',
+                [AssignmentStatus::SUBMITTED->value, AssignmentStatus::VERIFIED->value, AssignmentStatus::LOCKED->value],
+            )
+            ->groupBy('assessment_period_rombel_id', 'rombel_name_snapshot')
+            ->orderBy('rombel_name_snapshot')
+            ->get()
+            ->map(fn (AssessmentPeriodAssignment $assignment): array => [
+                'id' => (int) $assignment->assessment_period_rombel_id,
+                'name' => (string) $assignment->rombel_name_snapshot,
+                'total' => (int) $assignment->total_count,
+                'pending' => (int) $assignment->pending_count,
+                'completed' => (int) $assignment->completed_count,
+            ])
+            ->all();
+    }
+
+    /**
+     * @return array{mode: string, title: string, description: string, classes: string}
+     */
+    public function getScopeCard(): array
+    {
+        $user = auth()->user();
+        $classNames = collect($this->getClassTabs())->pluck('name')->implode(', ');
+
+        if (! $user instanceof User || ! $this->periodId) {
+            return [
+                'mode' => 'none',
+                'title' => 'Belum Ada Cakupan',
+                'description' => 'Pilih periode yang tersedia untuk melihat status pengumpulan.',
+                'classes' => '-',
+            ];
+        }
+
+        $mode = app(AssessmentStatusScope::class)->mode($user, $this->periodId);
+
+        return match ($mode) {
+            'all' => [
+                'mode' => $mode,
+                'title' => 'Seluruh Kelas',
+                'description' => 'Anda dapat memantau status seluruh mapel pada periode ini sesuai hak akses pengelola.',
+                'classes' => $classNames ?: 'Belum ada kelas',
+            ],
+            'homeroom' => [
+                'mode' => $mode,
+                'title' => 'Cakupan Wali Kelas',
+                'description' => 'Status hanya memuat seluruh mapel pada kelas wali Anda. Mapel yang Anda ampu di kelas lain tetap tersedia di Input Nilai Saya.',
+                'classes' => $classNames ?: 'Belum ada kelas wali',
+            ],
+            'teacher' => [
+                'mode' => $mode,
+                'title' => 'Cakupan Mapel Saya',
+                'description' => 'Status hanya memuat mapel dan kelas yang tercatat di bawah penugasan Anda.',
+                'classes' => $classNames ?: 'Belum ada kelas mengajar',
+            ],
+            default => [
+                'mode' => 'none',
+                'title' => 'Belum Ada Cakupan',
+                'description' => 'Akun ini belum mempunyai penugasan guru atau wali kelas pada periode terpilih.',
+                'classes' => '-',
+            ],
+        };
     }
 
     public function selectAllFilteredAssignments(): void
@@ -213,6 +336,10 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
             return [];
         }
 
+        // Kelas aktif hanya MEMPERSEMPIT tampilan. Bila belum dipilih
+        // (null = Semua Kelas), seluruh kelas dalam cakupan pengguna ditampilkan.
+        $activeRombelId = $this->resolvedActiveRombelId();
+
         $studentCounts = $period->students()
             ->selectRaw('assessment_period_rombel_id, COUNT(*) as aggregate')
             ->where('is_active', true)
@@ -224,6 +351,10 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
                 'results as completed_results_count' => fn (Builder $builder): Builder => $builder->whereNotNull('final_score'),
             ]),
         );
+
+        if ($activeRombelId) {
+            $query->where('assessment_period_rombel_id', $activeRombelId);
+        }
 
         if ($this->statusFilter !== 'all' && array_key_exists($this->statusFilter, AssignmentStatus::options())) {
             $query->where('status', $this->statusFilter);
@@ -297,11 +428,15 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
 
     protected function scopedAssignment(int $id): AssessmentPeriodAssignment
     {
+        // Pembatasan yang menentukan adalah CAKUPAN HAK AKSES (scopeAssignments),
+        // bukan kelas aktif. Kelas aktif hanya alat bantu tampilan; membuka satu
+        // penugasan di luar kelas aktif tetap sah selama masih dalam cakupan.
         return $this->scopeAssignments(
             AssessmentPeriodAssignment::query()
                 ->where('assessment_period_id', $this->periodId)
                 ->whereHas('period', fn (Builder $query): Builder => $query->where('type', static::$assessmentType->value)),
-        )->findOrFail($id);
+        )
+            ->findOrFail($id);
     }
 
     protected function selectedScopedAssignments()
@@ -318,6 +453,9 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
             ]);
         }
 
+        // Aksi massal TIDAK dibatasi kelas aktif: admin harus bisa memverifikasi
+        // atau mengembalikan penugasan lintas kelas dalam satu langkah. Yang
+        // membatasi tetap cakupan hak akses (scopeAssignments).
         $assignments = $this->scopeAssignments(
             AssessmentPeriodAssignment::query()
                 ->where('assessment_period_id', $this->periodId)
@@ -351,30 +489,11 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
             return $query->whereRaw('1 = 0');
         }
 
-        if ($user->hasFullAdminAccess() || $user->can('penilaian.verify') || $user->hasRole('kepala_sekolah')) {
-            return $query;
-        }
-
-        if (! $user->guru_tendik_id) {
-            return $query->whereRaw('1 = 0');
-        }
-
-        $periodId = (int) ($this->periodId ?? 0);
-        $homeroomRombelIds = $periodId > 0
-            ? AssessmentPeriodHomeroom::query()
-                ->where('assessment_period_id', $periodId)
-                ->where('teacher_id', $user->guru_tendik_id)
-                ->pluck('assessment_period_rombel_id')
-                ->all()
-            : [];
-
-        return $query->where(function (Builder $assignments) use ($user, $homeroomRombelIds): void {
-            $assignments->where('teacher_id', $user->guru_tendik_id);
-
-            if ($homeroomRombelIds !== []) {
-                $assignments->orWhereIn('assessment_period_rombel_id', $homeroomRombelIds);
-            }
-        });
+        return app(AssessmentStatusScope::class)->apply(
+            $query,
+            $user,
+            (int) ($this->periodId ?? 0),
+        );
     }
 
     protected function scopePeriods(Builder $query): Builder
@@ -417,5 +536,32 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
             'assignment' => $assignment->getKey(),
             'mode' => 'review',
         ]);
+    }
+
+    protected function normalizeActiveRombel(): void
+    {
+        $ids = collect($this->getClassTabs())
+            ->pluck('id')
+            ->map(fn (mixed $id): int => (int) $id);
+
+        // activeRombelId null berarti "Semua Kelas" — biarkan apa adanya.
+        // Hanya nilai yang TIDAK VALID (kelas di luar cakupan) yang dibuang.
+        if ($this->activeRombelId && ! $ids->contains($this->activeRombelId)) {
+            $this->activeRombelId = null;
+        }
+    }
+
+    /**
+     * Kelas aktif bila dipilih & masih dalam cakupan; null = seluruh kelas.
+     */
+    protected function resolvedActiveRombelId(): ?int
+    {
+        $ids = collect($this->getClassTabs())
+            ->pluck('id')
+            ->map(fn (mixed $id): int => (int) $id);
+
+        return ($this->activeRombelId && $ids->contains($this->activeRombelId))
+            ? $this->activeRombelId
+            : null;
     }
 }
