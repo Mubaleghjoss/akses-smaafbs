@@ -91,7 +91,7 @@ class SyncSpmbStudents extends Page
                 ->visible(fn (): bool => $this->rows !== [])
                 ->requiresConfirmation()
                 ->modalHeading('Terapkan data terpilih?')
-                ->modalDescription('Data sumber akan diambil ulang sebelum disimpan. NIPD, billing, rombel, status, dan data operasional lokal tetap dipertahankan.')
+                ->modalDescription('Data sumber akan diambil ulang sebelum disimpan. NIPD, billing, status, dan data operasional lokal tetap dipertahankan. Rombel hanya berubah bila Anda memilihnya pada baris yang bersangkutan.')
                 ->action(fn (): mixed => $this->applySync()),
         ];
     }
