@@ -18,6 +18,7 @@ use App\Models\Assessment\AssessmentPeriodAssignment;
 use App\Models\Assessment\Semester;
 use App\Models\Rombel;
 use App\Support\Assessment\AssessmentActionFailureNotification;
+use App\Support\Assessment\SemesterKind;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -98,18 +99,46 @@ class AssessmentPeriodResource extends Resource
                             ->pluck('name', 'id')
                             ->all())
                         ->searchable()
+                        ->live()
                         ->required(),
                     Forms\Components\Select::make('type')
                         ->label('Jenis')
-                        ->options(AssessmentType::options())
+                        // ASAT hanya boleh di semester GENAP: pilihan disaring
+                        // mengikuti semester terpilih. Penyaringan di form
+                        // memudahkan, tetapi TIDAK menjamin — validasi sisi
+                        // server di bawah yang menegakkan aturannya.
+                        ->options(fn (Get $get): array => app(SemesterKind::class)
+                            ->jenisUntukSemester(Semester::find($get('assessment_semester_id'))))
                         ->default(AssessmentType::ASTS->value)
                         ->live()
                         ->afterStateUpdated(function (Set $set, mixed $state): void {
                             $set(
                                 'settings.collect_promotion_status',
-                                $state === AssessmentType::ASAS->value,
+                                in_array($state, [
+                                    AssessmentType::ASAS->value,
+                                    AssessmentType::ASAT->value,
+                                ], true),
                             );
                         })
+                        ->helperText(fn (Get $get): ?string => filled($get('assessment_semester_id'))
+                            ? 'ASAT hanya tersedia pada semester genap.'
+                            : 'Pilih semester lebih dulu agar jenis yang tersedia sesuai.')
+                        ->rules([
+                            fn (Get $get): \Closure => function (string $attribute, mixed $value, \Closure $fail) use ($get): void {
+                                $jenis = AssessmentType::tryFrom((string) $value);
+                                $semester = Semester::find($get('assessment_semester_id'));
+
+                                if (! $jenis) {
+                                    return;
+                                }
+
+                                $alasan = app(SemesterKind::class)->alasanTidakCocok($jenis, $semester);
+
+                                if ($alasan !== null) {
+                                    $fail($alasan);
+                                }
+                            },
+                        ])
                         ->required()
                         ->native(false),
                     Forms\Components\TextInput::make('code')
