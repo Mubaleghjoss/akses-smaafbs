@@ -433,6 +433,21 @@
                                             <span class="spmb-sync-chip">NISN: {{ $row['nisn'] ?: '-' }}</span>
                                             <span class="spmb-sync-chip">JK: {{ $row['jk'] ?: '-' }}</span>
                                         </div>
+                                        {{-- Jalur & kelas tujuan dari SPMB (api 1.1) --}}
+                                        <div class="spmb-sync-meta" style="margin-top:.25rem">
+                                            <span class="spmb-sync-chip"
+                                                  style="{{ ($row['masuk_rombel_berjalan'] ?? false)
+                                                      ? 'background:#dbeafe;color:#1e40af;border-color:#bfdbfe'
+                                                      : 'background:#dcfce7;color:#166534;border-color:#bbf7d0' }}">
+                                                {{ $row['jenis_pendaftaran_label'] ?? 'Siswa Baru' }}
+                                            </span>
+                                            @if(!empty($row['kelas_tujuan']))
+                                                <span class="spmb-sync-chip">{{ $row['kelas_tujuan_label'] ?: 'Kelas '.$row['kelas_tujuan'] }}</span>
+                                            @endif
+                                            @if(!empty($row['tahun_ajaran']))
+                                                <span class="spmb-sync-chip">{{ $row['tahun_ajaran'] }}</span>
+                                            @endif
+                                        </div>
                                     </td>
                                     <td>
                                         <span class="spmb-sync-badge {{ $statusClass }}">{{ $statusLabel }}</span>
@@ -447,6 +462,33 @@
                                             </div>
                                         @else
                                             <span class="spmb-sync-muted">Belum ada pasangan</span>
+                                        @endif
+
+                                        {{-- Penempatan kelas: daftar rombel dari app (bukan SPMB) --}}
+                                        @if($row['status'] !== 'tidak_berubah' && !$row['errors'])
+                                            <div style="margin-top:.5rem">
+                                                <label class="spmb-sync-muted" style="display:block;font-size:.7rem;margin-bottom:.15rem">
+                                                    Masuk ke kelas
+                                                    @if($row['masuk_rombel_berjalan'] ?? false)
+                                                        <span style="color:#1e40af">(pindahan — kelas berjalan)</span>
+                                                    @endif
+                                                </label>
+                                                <select
+                                                    class="spmb-sync-select"
+                                                    wire:model="rombelPilihan.{{ $row['source_id'] }}"
+                                                    aria-label="Rombel untuk {{ $row['nama'] }}"
+                                                >
+                                                    <option value="">— Belum ditentukan —</option>
+                                                    @foreach(($rombelOptions ?? []) as $nilai => $label)
+                                                        <option value="{{ $nilai }}">{{ $label }}</option>
+                                                    @endforeach
+                                                </select>
+                                                @if(empty($rombelOptions))
+                                                    <div class="spmb-sync-muted" style="font-size:.68rem;margin-top:.2rem">
+                                                        Belum ada rombel aktif. Buat rombel dulu di Data Siswa.
+                                                    </div>
+                                                @endif
+                                            </div>
                                         @endif
                                     </td>
                                     <td>

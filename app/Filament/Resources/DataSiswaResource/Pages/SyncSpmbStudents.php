@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\DataSiswaResource\Pages;
 
 use App\Filament\Resources\DataSiswaResource;
+use App\Models\Rombel;
 use App\Models\SpmbSyncRun;
 use App\Support\SpmbSync\SpmbApiClient;
 use App\Support\SpmbSync\SpmbStudentSyncService;
@@ -47,6 +48,16 @@ class SyncSpmbStudents extends Page
      * @var array<string, string>
      */
     public array $resolutions = [];
+
+    /**
+     * Pilihan rombel per baris: source_id => nama rombel.
+     * Siswa baru diarahkan ke rombel angkatan baru, siswa pindahan ke rombel
+     * yang sedang berjalan — daftar rombel diambil dari data lokal (app),
+     * BUKAN dari SPMB, karena app yang memegang informasi rombel.
+     *
+     * @var array<string, string>
+     */
+    public array $rombelPilihan = [];
 
     public ?string $lastFetchedAt = null;
 
@@ -117,6 +128,16 @@ class SyncSpmbStudents extends Page
                 ->where('status', 'konflik')
                 ->mapWithKeys(fn (array $row): array => [(string) $row['source_id'] => 'skip'])
                 ->all();
+
+            // Pertahankan pilihan rombel yang sudah dibuat admin agar tidak
+            // hilang setiap kali preview dimuat ulang.
+            $this->rombelPilihan = collect($this->rows)
+                ->mapWithKeys(fn (array $row): array => [
+                    (string) $row['source_id'] => $this->rombelPilihan[(string) $row['source_id']]
+                        ?? (string) ($row['target']['rombel'] ?? ''),
+                ])
+                ->all();
+
             $this->lastFetchedAt = now()->format('d M Y H:i:s');
 
             Notification::make()
@@ -147,6 +168,7 @@ class SyncSpmbStudents extends Page
                 $this->selected,
                 $this->resolutions,
                 auth()->id(),
+                $this->rombelPilihan,
             );
 
             Notification::make()
@@ -171,7 +193,28 @@ class SyncSpmbStudents extends Page
             'recentRuns' => Schema::hasTable('spmb_sync_runs')
                 ? SpmbSyncRun::query()->with('user:id,name,email')->latest('id')->limit(10)->get()
                 : collect(),
+            // Daftar rombel dari data LOKAL (app), dipisah aktif / non-aktif.
+            // Dipakai admin untuk menentukan siswa masuk kelas mana.
+            'rombelOptions' => $this->rombelOptions(),
         ];
+    }
+
+    /**
+     * Rombel yang tersedia untuk penempatan.
+     *
+     * @return array<string, string>
+     */
+    private function rombelOptions(): array
+    {
+        if (! Schema::hasTable('rombels')) {
+            return [];
+        }
+
+        return Rombel::query()
+            ->where('is_active', true)
+            ->orderBy('nama')
+            ->pluck('nama', 'nama')
+            ->all();
     }
 
     private function notifyFailure(string $title, Throwable $exception): void
