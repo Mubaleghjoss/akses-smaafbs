@@ -175,8 +175,41 @@ class AssessmentFoundationTest extends TestCase
         $this->assertTrue(
             Role::findByName('kurikulum', 'web')->hasPermissionTo('penilaian.period.manage'),
         );
-        $this->assertFalse(
+
+        // Kebijakan sekolah (2026-08): kurikulum dapat melakukan SEMUA aksi guru
+        // dan wali kelas, sebab kurikulum yang menggantikan mengisi saat guru
+        // berhalangan. Sebelumnya kurikulum sengaja TIDAK diberi input/submit.
+        $this->assertTrue(
             Role::findByName('kurikulum', 'web')->hasPermissionTo('penilaian.input'),
+        );
+        $this->assertTrue(
+            Role::findByName('kurikulum', 'web')->hasPermissionTo('penilaian.submit'),
+        );
+        $this->assertTrue(
+            Role::findByName('kurikulum', 'web')->hasPermissionTo('penilaian.homeroom'),
+        );
+
+        // Wali kelas & kepala sekolah boleh MENCETAK rapor, tetapi tidak boleh
+        // memverifikasi maupun menerbitkan.
+        $this->assertTrue(
+            Role::findByName('wali_kelas', 'web')->hasPermissionTo('penilaian.report.generate'),
+        );
+        $this->assertFalse(
+            Role::findByName('wali_kelas', 'web')->hasPermissionTo('penilaian.verify'),
+        );
+        $this->assertFalse(
+            Role::findByName('wali_kelas', 'web')->hasPermissionTo('penilaian.publish'),
+        );
+        $this->assertTrue(
+            Role::findByName('kepala_sekolah', 'web')->hasPermissionTo('penilaian.report.generate'),
+        );
+        $this->assertFalse(
+            Role::findByName('kepala_sekolah', 'web')->hasPermissionTo('penilaian.publish'),
+        );
+
+        // Guru mapel tetap tidak boleh mencetak rapor.
+        $this->assertFalse(
+            Role::findByName('guru_mapel', 'web')->hasPermissionTo('penilaian.report.generate'),
         );
     }
 
