@@ -44,6 +44,16 @@ class SpmbStudentMapper
             'pekerjaan_ibu' => data_get($source, 'orang_tua.pekerjaan_ibu'),
             'sekolah_asal' => data_get($source, 'sekolah_asal.nama'),
             'alamat_sekolah' => data_get($source, 'sekolah_asal.alamat'),
+            // Kontak siswa: SPMB mengirim nomor siswa & telepon rumah.
+            // wa_ortu tetap memakai nomor orang tua (lihat di atas).
+            'hp' => data_get($source, 'biodata.telepon'),
+            'telepon' => $this->firstFilled([
+                $this->bersih(data_get($source, 'biodata.telepon_rumah')),
+                data_get($source, 'biodata.telepon'),
+            ]),
+            // Data keluarga & wilayah (api 1.2)
+            'jml_saudara_kandung' => data_get($source, 'biodata.jumlah_saudara'),
+            'dusun' => data_get($source, 'biodata.desa'),
             'tinggi_badan' => data_get($source, 'fisik.tinggi_badan'),
             'berat_badan' => data_get($source, 'fisik.berat_badan'),
             'lingkar_kepala' => data_get($source, 'fisik.lingkar_kepala'),
@@ -73,5 +83,22 @@ class SpmbStudentMapper
     private function upper(mixed $value): ?string
     {
         return filled($value) ? Str::upper(trim((string) $value)) : null;
+    }
+
+    /**
+     * Buang nilai placeholder dari formulir SPMB ('-', 'n/a', '0', dsb) supaya
+     * tidak tersimpan sebagai data palsu di app.
+     */
+    private function bersih(mixed $value): mixed
+    {
+        if (! filled($value)) {
+            return null;
+        }
+
+        $bersih = trim((string) $value);
+
+        return in_array(Str::lower($bersih), ['-', '--', 'n/a', 'na', 'tidak ada', '0'], true)
+            ? null
+            : $bersih;
     }
 }

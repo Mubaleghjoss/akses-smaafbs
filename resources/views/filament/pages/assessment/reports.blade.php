@@ -195,6 +195,10 @@
             </section>
         @endif
 
+        {{-- Kelengkapan nilai: tampil sebelum daftar kelas agar terlihat
+             LEBIH DULU daripada tombol cetak, bukan setelah rapor jadi. --}}
+        @include('filament.pages.assessment.partials.kelengkapan-nilai')
+
         @php($classRows = $this->getClassRows())
         <section
             class="assessment-report-card is-step"

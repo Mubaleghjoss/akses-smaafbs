@@ -42,6 +42,9 @@ class SpmbStudentSyncService
      * @param  array<int, array<string, mixed>>  $sources
      * @param  array<int|string, mixed>  $selectedSourceIds
      * @param  array<int|string, mixed>  $resolutions
+     * @param  array<string, string>  $rombelPilihan  source_id => nama rombel;
+     *         penempatan kelas ditentukan di app (bukan SPMB), karena app yang
+     *         memegang daftar rombel. Kosong = biarkan tanpa rombel.
      * @return array<string, int>
      */
     public function apply(
@@ -49,6 +52,7 @@ class SpmbStudentSyncService
         array $selectedSourceIds,
         array $resolutions,
         ?int $userId,
+        array $rombelPilihan = [],
     ): array {
         $preview = $this->preview($sources);
         $selected = collect($selectedSourceIds)->map(fn ($value): string => (string) $value)->all();
@@ -74,6 +78,7 @@ class SpmbStudentSyncService
                 $preview,
                 $selected,
                 $resolutions,
+                $rombelPilihan,
                 &$result,
             ): void {
                 foreach ($preview['rows'] as $row) {
@@ -127,8 +132,19 @@ class SpmbStudentSyncService
                         'spmb_checksum' => $row['checksum'],
                     ];
 
+                    // Rombel ditentukan admin di app. Untuk siswa yang sudah ada,
+                    // rombel hanya ditimpa bila admin memilih nilai baru — supaya
+                    // rombel berjalan tidak terhapus tanpa sengaja.
+                    $rombel = trim((string) ($rombelPilihan[$sourceId] ?? ''));
+
                     if ($target) {
-                        $target->fill([...$payload, ...$syncMetadata]);
+                        $atribut = [...$payload, ...$syncMetadata];
+
+                        if ($rombel !== '') {
+                            $atribut['rombel_saat_ini'] = $rombel;
+                        }
+
+                        $target->fill($atribut);
                         $target->save();
                         $result['updated']++;
 
@@ -139,7 +155,7 @@ class SpmbStudentSyncService
                         ...$payload,
                         ...$syncMetadata,
                         'status' => 'aktif',
-                        'rombel_saat_ini' => null,
+                        'rombel_saat_ini' => $rombel !== '' ? $rombel : null,
                     ]);
                     $result['created']++;
                 }
@@ -212,6 +228,16 @@ class SpmbStudentSyncService
             'nisn' => $payload['nisn'] ?? null,
             'jk' => $payload['jk'] ?? null,
             'tanggal_lahir' => $payload['tanggal_lahir'] ?? null,
+            // Jalur & kelas tujuan dari SPMB (api 1.1). Dipakai untuk memilih
+            // rombel yang tepat: pindahan masuk rombel yang sedang berjalan,
+            // siswa baru masuk rombel angkatan baru.
+            'jenis_pendaftaran' => data_get($source, 'pendaftaran.jenis_pendaftaran'),
+            'jenis_pendaftaran_label' => data_get($source, 'pendaftaran.jenis_pendaftaran_label')
+                ?: (data_get($source, 'pendaftaran.jenis_pendaftaran') === 'pindahan' ? 'Siswa Pindahan' : 'Siswa Baru'),
+            'kelas_tujuan' => data_get($source, 'pendaftaran.kelas_tujuan'),
+            'kelas_tujuan_label' => data_get($source, 'pendaftaran.kelas_tujuan_label'),
+            'masuk_rombel_berjalan' => (bool) data_get($source, 'pendaftaran.masuk_rombel_berjalan', false),
+            'tahun_ajaran' => data_get($source, 'pendaftaran.tahun_ajaran'),
             'status' => $status,
             'payload' => $payload,
             'target_id' => $target?->getKey(),

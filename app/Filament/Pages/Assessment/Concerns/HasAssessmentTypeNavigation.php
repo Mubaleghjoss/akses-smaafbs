@@ -8,6 +8,11 @@ use App\Filament\Pages\Assessment\AsasHub;
 use App\Filament\Pages\Assessment\AsasInputScores;
 use App\Filament\Pages\Assessment\AsasReports;
 use App\Filament\Pages\Assessment\AsasSubmissionStatus;
+use App\Filament\Pages\Assessment\AsatHomeroomRecap;
+use App\Filament\Pages\Assessment\AsatHub;
+use App\Filament\Pages\Assessment\AsatInputScores;
+use App\Filament\Pages\Assessment\AsatReports;
+use App\Filament\Pages\Assessment\AsatSubmissionStatus;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Assessment\AstsHomeroomRecap;
 use App\Filament\Pages\Assessment\AstsHub;
@@ -22,20 +27,65 @@ use App\Models\User;
 trait HasAssessmentTypeNavigation
 {
     /**
+     * PETA halaman per jenis penilaian — satu tempat, bukan if/else bercabang.
+     *
+     * Sebelumnya navigasi memakai `$isAsts ? A : B`, yang berarti setiap jenis
+     * baru harus menyunting logika navigasi dan mudah terlewat. Dengan peta ini,
+     * menambah jenis cukup menambah satu baris.
+     *
+     * @return array<string, array<string, class-string>>
+     */
+    protected static function assessmentPageMap(): array
+    {
+        return [
+            AssessmentType::ASTS->value => [
+                'hub' => AstsHub::class,
+                'input' => AstsInputScores::class,
+                'status' => AstsSubmissionStatus::class,
+                'recap' => AstsHomeroomRecap::class,
+                'reports' => AstsReports::class,
+            ],
+            AssessmentType::ASAS->value => [
+                'hub' => AsasHub::class,
+                'input' => AsasInputScores::class,
+                'status' => AsasSubmissionStatus::class,
+                'recap' => AsasHomeroomRecap::class,
+                'reports' => AsasReports::class,
+            ],
+            AssessmentType::ASAT->value => [
+                'hub' => AsatHub::class,
+                'input' => AsatInputScores::class,
+                'status' => AsatSubmissionStatus::class,
+                'recap' => AsatHomeroomRecap::class,
+                'reports' => AsatReports::class,
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, class-string>
+     */
+    protected static function assessmentPagesFor(AssessmentType $type): array
+    {
+        return static::assessmentPageMap()[$type->value]
+            ?? static::assessmentPageMap()[AssessmentType::ASTS->value];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function getAssessmentNavigationData(): array
     {
-        $isAsts = static::$assessmentType === AssessmentType::ASTS;
-        $hubPage = $isAsts ? AstsHub::class : AsasHub::class;
+        $pages = static::assessmentPagesFor(static::$assessmentType);
+        $hubPage = $pages['hub'];
         $periodParameters = $this->periodId ? ['period' => $this->periodId] : [];
 
         $items = [
             ['label' => 'Beranda', 'icon' => 'heroicon-o-home', 'page' => $hubPage],
-            ['label' => 'Input Nilai', 'icon' => 'heroicon-o-pencil-square', 'page' => $isAsts ? AstsInputScores::class : AsasInputScores::class],
-            ['label' => 'Status', 'icon' => 'heroicon-o-clipboard-document-check', 'page' => $isAsts ? AstsSubmissionStatus::class : AsasSubmissionStatus::class],
-            ['label' => 'Rekap Wali', 'icon' => 'heroicon-o-user-group', 'page' => $isAsts ? AstsHomeroomRecap::class : AsasHomeroomRecap::class],
-            ['label' => 'Rapor', 'icon' => 'heroicon-o-printer', 'page' => $isAsts ? AstsReports::class : AsasReports::class],
+            ['label' => 'Input Nilai', 'icon' => 'heroicon-o-pencil-square', 'page' => $pages['input']],
+            ['label' => 'Status', 'icon' => 'heroicon-o-clipboard-document-check', 'page' => $pages['status']],
+            ['label' => 'Rekap Wali', 'icon' => 'heroicon-o-user-group', 'page' => $pages['recap']],
+            ['label' => 'Rapor', 'icon' => 'heroicon-o-printer', 'page' => $pages['reports']],
         ];
 
         return [
@@ -43,6 +93,8 @@ trait HasAssessmentTypeNavigation
             'hub_url' => $hubPage::getUrl($periodParameters),
             'is_hub' => static::class === $hubPage,
             'type_label' => static::$assessmentType->label(),
+            'type_long_label' => static::$assessmentType->namaPanjang(),
+            'type_tabs' => $this->getAssessmentTypeTabs(),
             'items' => collect($items)
                 ->map(fn (array $item): array => [
                     ...$item,
@@ -53,6 +105,51 @@ trait HasAssessmentTypeNavigation
                 ])
                 ->all(),
         ];
+    }
+
+    /**
+     * Tab pemilih JENIS penilaian (ASTS · ASAS · ASAT).
+     *
+     * Berpindah jenis mempertahankan HALAMAN yang sedang dibuka: dari Status
+     * ASTS ke Status ASAS, bukan kembali ke beranda. Periode TIDAK dibawa
+     * karena periode terikat pada satu jenis.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function getAssessmentTypeTabs(): array
+    {
+        $bagian = $this->currentAssessmentSection();
+
+        return collect(AssessmentType::cases())
+            ->map(function (AssessmentType $type) use ($bagian): array {
+                $pages = static::assessmentPagesFor($type);
+                $target = $pages[$bagian] ?? $pages['hub'];
+
+                return [
+                    'value' => $type->value,
+                    'label' => $type->label(),
+                    'long_label' => $type->namaPanjang(),
+                    'active' => $type === static::$assessmentType,
+                    'url' => $target::canAccess() ? $target::getUrl() : null,
+                ];
+            })
+            ->all();
+    }
+
+    /**
+     * Bagian halaman yang sedang dibuka (hub/input/status/recap/reports).
+     */
+    protected function currentAssessmentSection(): string
+    {
+        $pages = static::assessmentPagesFor(static::$assessmentType);
+
+        foreach ($pages as $bagian => $kelas) {
+            if (static::class === $kelas) {
+                return $bagian;
+            }
+        }
+
+        return 'hub';
     }
 
     /**

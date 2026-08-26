@@ -2,6 +2,7 @@
 
 namespace App\Support\SpmbSync;
 
+use App\Models\DataSiswa;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -55,6 +56,71 @@ class SpmbApiClient
         } while ($page <= $lastPage);
 
         return $rows;
+    }
+
+    /**
+     * Ringkasan cepat siswa lulus yang BELUM ada / berubah di app.
+     * Dipakai untuk popup pemberitahuan tanpa menarik seluruh data:
+     * memanfaatkan checksum yang sudah dikirim SPMB.
+     *
+     * @return array{total:int, baru:int, berubah:int, siswa_baru:int, pindahan:int, daftar:array<int, array<string, mixed>>}
+     */
+    public function ringkasanPerubahan(): array
+    {
+        $rows = $this->fetchAll();
+
+        // Peta lokal: nomor pendaftaran => checksum terakhir yang disinkron.
+        $lokal = DataSiswa::query()
+            ->whereNotNull('spmb_nomor_pendaftaran')
+            ->pluck('spmb_checksum', 'spmb_nomor_pendaftaran');
+
+        $baru = 0;
+        $berubah = 0;
+        $siswaBaru = 0;
+        $pindahan = 0;
+        $daftar = [];
+
+        foreach ($rows as $row) {
+            $nomor = (string) ($row['nomor_pendaftaran'] ?? '');
+            if ($nomor === '') {
+                continue;
+            }
+
+            $adaLokal = $lokal->has($nomor);
+            $checksumSama = $adaLokal && (string) $lokal->get($nomor) === (string) ($row['checksum'] ?? '');
+
+            if ($checksumSama) {
+                continue;
+            }
+
+            $isPindahan = (bool) data_get($row, 'pendaftaran.masuk_rombel_berjalan', false);
+
+            if ($adaLokal) {
+                $berubah++;
+            } else {
+                $baru++;
+                $isPindahan ? $pindahan++ : $siswaBaru++;
+            }
+
+            if (count($daftar) < 10) {
+                $daftar[] = [
+                    'nama' => data_get($row, 'biodata.nama') ?: '-',
+                    'nomor_pendaftaran' => $nomor,
+                    'jalur' => data_get($row, 'pendaftaran.jenis_pendaftaran_label') ?: 'Siswa Baru',
+                    'kelas_tujuan' => data_get($row, 'pendaftaran.kelas_tujuan'),
+                    'status' => $adaLokal ? 'berubah' : 'baru',
+                ];
+            }
+        }
+
+        return [
+            'total' => $baru + $berubah,
+            'baru' => $baru,
+            'berubah' => $berubah,
+            'siswa_baru' => $siswaBaru,
+            'pindahan' => $pindahan,
+            'daftar' => $daftar,
+        ];
     }
 
     private function request(): PendingRequest

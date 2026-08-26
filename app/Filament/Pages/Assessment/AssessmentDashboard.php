@@ -15,7 +15,6 @@ use App\Filament\Resources\DataSiswaResource;
 use App\Filament\Resources\GuruTendikResource;
 use App\Models\Assessment\AcademicYear;
 use App\Models\Assessment\AssessmentPeriod;
-use App\Models\Assessment\AssessmentPeriodHomeroom;
 use App\Models\Assessment\AssessmentScheme;
 use App\Models\Assessment\AuditLog;
 use App\Models\Assessment\HomeroomAssignment;
@@ -28,6 +27,7 @@ use App\Models\DataSiswa;
 use App\Models\GuruTendik;
 use App\Models\Rombel;
 use App\Models\User;
+use App\Support\Assessment\AssessmentStatusScope;
 use App\Support\Storage\HostingStorageAudit;
 use Filament\Actions\Action;
 use Illuminate\Contracts\Support\Htmlable;
@@ -679,28 +679,8 @@ class AssessmentDashboard extends AssessmentPage
             return $query->whereRaw('1 = 0');
         }
 
-        if ($user->hasFullAdminAccess() || $user->can('penilaian.verify') || $user->hasRole('kepala_sekolah')) {
-            return $query;
-        }
-
-        if (! $user->guru_tendik_id) {
-            return $query->whereRaw('1 = 0');
-        }
-
-        $homeroomRombelIds = $user->can('penilaian.homeroom')
-            ? AssessmentPeriodHomeroom::query()
-                ->where('assessment_period_id', $periodId)
-                ->where('teacher_id', $user->guru_tendik_id)
-                ->pluck('assessment_period_rombel_id')
-                ->all()
-            : [];
-
-        return $query->where(function (Builder $assignments) use ($user, $homeroomRombelIds): void {
-            $assignments->where('teacher_id', $user->guru_tendik_id);
-
-            if ($homeroomRombelIds !== []) {
-                $assignments->orWhereIn('assessment_period_rombel_id', $homeroomRombelIds);
-            }
-        });
+        // Dashboard menerapkan syarat izin 'penilaian.homeroom' untuk kelas wali
+        // (perilaku asli dashboard, berbeda dari halaman status pengiriman).
+        return app(AssessmentStatusScope::class)->apply($query, $user, $periodId, butuhIzinWaliKelas: true);
     }
 }

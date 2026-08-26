@@ -105,6 +105,30 @@
 
                 @case('subject_summary')
                     <p class="section-title">{{ $sectionTitle }}</p>
+                    @php
+                        // Rapor SEMENTARA: ada mapel yang nilainya belum diisi
+                        // guru. Ditandai agar pembaca tidak menganggap dokumen
+                        // ini final. Dihitung dari data snapshot itu sendiri,
+                        // sehingga tetap benar untuk rapor yang sudah dibekukan.
+                        $mapelBelumDiisi = collect($subjectGroups)
+                            ->flatten(1)
+                            ->filter(function ($s): bool {
+                                $n = data_get($s, 'final_score');
+
+                                return $n === null || $n === '';
+                            })
+                            ->map(fn ($s): string => (string) data_get($s, 'name', '-'))
+                            ->values();
+                    @endphp
+
+                    @if ($mapelBelumDiisi->isNotEmpty())
+                        <p class="report-provisional">
+                            <strong>RAPOR SEMENTARA</strong> —
+                            {{ $mapelBelumDiisi->count() }} mata pelajaran belum ada nilainya:
+                            {{ $mapelBelumDiisi->implode(', ') }}.
+                        </p>
+                    @endif
+
                     <table class="scores">
                         <thead>
                             <tr><th class="scores__number">No.</th><th>Mata Pelajaran</th><th class="scores__score">{{ $scoreLabel }}</th>@if($showPredicate)<th class="scores__predicate">{{ $predicateLabel }}</th>@endif</tr>
@@ -116,7 +140,7 @@
                                     <tr>
                                         <td class="scores__number">{{ $loop->iteration }}</td>
                                         <td>{{ data_get($subject, 'name', '-') }}</td>
-                                        <td class="scores__score">{{ \App\Support\Assessment\AssessmentNumberFormatter::score(data_get($subject, 'final_score')) }}</td>
+                                        <td class="scores__score">{{ \App\Support\Assessment\AssessmentNumberFormatter::scoreRapor(data_get($subject, 'final_score')) }}</td>
                                         @if($showPredicate)<td class="scores__predicate">{{ data_get($subject, 'predicate', '-') ?: '-' }}</td>@endif
                                     </tr>
                                 @endforeach
@@ -138,7 +162,7 @@
                                     <tr>
                                         <td class="scores__number">{{ $loop->iteration }}</td>
                                         <td>{{ data_get($subject, 'name', '-') }}</td>
-                                        <td class="scores__score">{{ \App\Support\Assessment\AssessmentNumberFormatter::score(data_get($subject, 'final_score')) }}</td>
+                                        <td class="scores__score">{{ \App\Support\Assessment\AssessmentNumberFormatter::scoreRapor(data_get($subject, 'final_score')) }}</td>
                                         <td class="scores__description">{{ data_get($subject, 'description', '-') ?: '-' }}</td>
                                     </tr>
                                 @endforeach

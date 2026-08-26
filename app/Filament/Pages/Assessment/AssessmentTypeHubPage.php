@@ -6,8 +6,8 @@ use App\Enums\Assessment\AssessmentType;
 use App\Enums\Assessment\AssignmentStatus;
 use App\Filament\Pages\Assessment\Concerns\HasAssessmentTypeNavigation;
 use App\Models\Assessment\AssessmentPeriod;
-use App\Models\Assessment\AssessmentPeriodHomeroom;
 use App\Models\User;
+use App\Support\Assessment\AssessmentStatusScope;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Url;
@@ -249,27 +249,7 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
             return $query->whereRaw('1 = 0');
         }
 
-        if ($user->hasFullAdminAccess() || $user->can('penilaian.verify') || $user->hasRole('kepala_sekolah')) {
-            return $query;
-        }
-
-        if (! $user->guru_tendik_id) {
-            return $query->whereRaw('1 = 0');
-        }
-
-        $homeroomRombelIds = AssessmentPeriodHomeroom::query()
-            ->where('assessment_period_id', $periodId)
-            ->where('teacher_id', $user->guru_tendik_id)
-            ->pluck('assessment_period_rombel_id')
-            ->all();
-
-        return $query->where(function (Builder $assignments) use ($user, $homeroomRombelIds): void {
-            $assignments->where('teacher_id', $user->guru_tendik_id);
-
-            if ($homeroomRombelIds !== []) {
-                $assignments->orWhereIn('assessment_period_rombel_id', $homeroomRombelIds);
-            }
-        });
+        return app(AssessmentStatusScope::class)->apply($query, $user, $periodId);
     }
 
     protected function scopeInputAssignments(Builder $query): Builder

@@ -41,9 +41,16 @@ class InstallAssessmentDefaults extends Command
         'super_admin' => self::PERMISSIONS,
         'admin' => self::PERMISSIONS,
         'guru_admin' => self::PERMISSIONS,
+
+        // Kurikulum dapat melakukan SEMUA aksi guru & wali kelas (kebijakan
+        // sekolah): saat guru berhalangan, kurikulum yang menggantikan mengisi.
+        // Penggantian seperti itu WAJIB tercatat di log audit.
         'kurikulum' => [
             'penilaian.view',
             'penilaian.manage',
+            'penilaian.input',
+            'penilaian.submit',
+            'penilaian.homeroom',
             'penilaian.verify',
             'penilaian.period.manage',
             'penilaian.report.generate',
@@ -60,12 +67,23 @@ class InstallAssessmentDefaults extends Command
             'penilaian.input',
             'penilaian.submit',
         ],
+
+        // Wali kelas: mengisi rekap wali kelas + MENCETAK rapor. Pembatasan
+        // "hanya kelas sendiri" tidak bisa diwakili izin (izin tidak mengenal
+        // rombel) — ditegakkan AssessmentStatusScope::bolehCetakRapor().
+        // Sengaja TIDAK diberi 'verify' (yang memverifikasi kurikulum/admin,
+        // kalau tidak gerbang verifikasi kehilangan makna) dan TIDAK diberi
+        // 'publish' (mencetak berbeda dari menerbitkan).
         'wali_kelas' => [
             'penilaian.view',
             'penilaian.homeroom',
+            'penilaian.report.generate',
         ],
+
+        // Kepala sekolah: melihat & mencetak, tanpa mengubah/verifikasi/publikasi.
         'kepala_sekolah' => [
             'penilaian.view',
+            'penilaian.report.generate',
             'penilaian.audit.view',
         ],
     ];
