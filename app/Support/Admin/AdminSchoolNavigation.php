@@ -5,10 +5,7 @@ namespace App\Support\Admin;
 use App\Filament\Pages\Assessment\AsasHub;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Assessment\AstsHub;
-use App\Filament\Pages\BuatAkunSiswa;
 use App\Filament\Pages\DashboardProker;
-use App\Filament\Pages\HotspotSettings;
-use App\Filament\Pages\Monitor;
 use App\Filament\Pages\SarprasStickerSettings;
 use App\Filament\Resources\AccountCategoryResource;
 use App\Filament\Resources\BeritaResource;
@@ -23,8 +20,6 @@ use App\Filament\Resources\DokumenKomiteResource;
 use App\Filament\Resources\EventTimelineResource;
 use App\Filament\Resources\GaleriResource;
 use App\Filament\Resources\GuruTendikResource;
-use App\Filament\Resources\HotspotUserResource;
-use App\Filament\Resources\BlockedDomainResource;
 use App\Filament\Resources\JenisBerkasResource;
 use App\Filament\Resources\PerpustakaanBukuResource;
 use App\Filament\Resources\PerpustakaanKategoriResource;
@@ -69,7 +64,12 @@ class AdminSchoolNavigation
         'Konten' => ['icon' => 'heroicon-o-newspaper', 'sort' => 200],
         'Perpustakaan' => ['icon' => 'heroicon-o-book-open', 'sort' => 210],
         'Penilaian' => ['icon' => 'heroicon-o-academic-cap', 'sort' => 115],
-        'IT SMA AFBS' => ['icon' => 'heroicon-o-server', 'sort' => 220],
+        // Grup "IT SMA AFBS" DIPENSIUNKAN seluruhnya: seluruh komponen MikroTik
+        // (Monitor, HotspotSettings, HotspotUser, BlockedDomain, BuatAkunSiswa)
+        // sudah pindah ke aplikasi terpisah mikrotik.smaafbs.sch.id.
+        // Definisi grup dihapus agar grupnya tidak lagi muncul di menu; kode &
+        // route tiap halaman tetap ada (reversibel) dan masing-masing sudah
+        // mengembalikan shouldRegisterNavigation() = false.
     ];
 
     /**
@@ -104,12 +104,13 @@ class AdminSchoolNavigation
         WifiGuruResource::class => 'Guru',
         BelajarIdGuruResource::class => 'Guru',
         AccountCategoryResource::class => 'Guru',
-        // Menu "IT SMA AFBS" dipensiunkan: monitoring/pengelolaan MikroTik sudah
-        // dipindah & lebih stabil di aplikasi terpisah (mikrotik.smaafbs.sch.id).
-        // Komponen router (Monitor/HotspotSettings/HotspotUser/BlockedDomain)
-        // disembunyikan dari navigasi via shouldRegisterNavigation() di masing-masing
-        // kelas; kode & route tetap ada (reversibel).
-        BuatAkunSiswa::class => 'IT SMA AFBS',
+        // Menu "IT SMA AFBS" dipensiunkan SELURUHNYA: monitoring/pengelolaan
+        // MikroTik sudah dipindah & lebih stabil di aplikasi terpisah
+        // (mikrotik.smaafbs.sch.id). Komponen router — Monitor, HotspotSettings,
+        // HotspotUserResource, BlockedDomainResource, BuatAkunSiswa —
+        // disembunyikan dari navigasi via shouldRegisterNavigation() = false di
+        // masing-masing kelas, dan definisi grupnya dihapus dari PARENT_GROUPS.
+        // Kode & route tetap ada (reversibel).
         CalendarEventResource::class => 'Agenda',
         EventTimelineResource::class => 'Agenda',
         BeritaResource::class => 'Konten',

@@ -36,6 +36,15 @@ class BuatAkunSiswa extends Page implements HasForms
         return self::hotspotAccessGranted();
     }
 
+    // Dipensiunkan dari navigasi: pembuatan akun hotspot siswa pindah ke
+    // aplikasi terpisah (mikrotik.smaafbs.sch.id) bersama komponen MikroTik
+    // lainnya. Halaman & route tetap ada (reversibel) agar akun yang sudah
+    // dibuat tetap dapat ditelusuri bila dibutuhkan.
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
     protected function getFormStatePath(): ?string
     {
         return 'data';
