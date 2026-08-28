@@ -67,9 +67,9 @@ class AdminRoleTemplateSupport
             ],
             'bk' => [
                 'label' => 'BK',
-                'description' => 'Operator bimbingan konseling dengan akses penuh ke catatan BK dan akses baca data siswa pendukung.',
+                'description' => 'Operator bimbingan konseling dengan akses penuh ke catatan BK, laporan SIGAP, dan akses baca data siswa pendukung.',
                 'roles' => ['tu'],
-                'manage' => ['catatan_bk'],
+                'manage' => ['catatan_bk', 'bk_kasus'],
                 'view' => ['data_siswa', 'rombel', 'prestasi', 'berkas_siswa'],
             ],
             'kurikulum' => [
@@ -155,6 +155,7 @@ class AdminRoleTemplateSupport
                     'boarding_keuangan',
                     'boarding_perizinan',
                     'catatan_bk',
+                    'bk_kasus',
                 ],
                 'view' => ['boarding_arsip'],
             ],
@@ -169,6 +170,7 @@ class AdminRoleTemplateSupport
                     'boarding_keuangan',
                     'boarding_perizinan',
                     'catatan_bk',
+                    'bk_kasus',
                 ],
                 'view' => ['boarding_arsip'],
             ],

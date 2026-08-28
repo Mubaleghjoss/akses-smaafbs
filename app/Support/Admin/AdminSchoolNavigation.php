@@ -5,6 +5,7 @@ namespace App\Support\Admin;
 use App\Filament\Pages\Assessment\AsasHub;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Assessment\AstsHub;
+use App\Filament\Pages\Bk\RekapSigapPage;
 use App\Filament\Pages\DashboardProker;
 use App\Filament\Pages\SarprasStickerSettings;
 use App\Filament\Resources\AccountCategoryResource;
@@ -13,6 +14,7 @@ use App\Filament\Resources\BelajarIdAccountResource;
 use App\Filament\Resources\BelajarIdGuruResource;
 use App\Filament\Resources\BerkasGuruResource;
 use App\Filament\Resources\BerkasSiswaResource;
+use App\Filament\Resources\BkKasusResource;
 use App\Filament\Resources\CalendarEventResource;
 use App\Filament\Resources\CatatanBkResource;
 use App\Filament\Resources\DataSiswaResource;
@@ -82,6 +84,8 @@ class AdminSchoolNavigation
         SarprasMonthlyAgendaResource::class => 'Sarpras',
         SarprasStickerSettings::class => 'Sarpras',
         CatatanBkResource::class => 'BK',
+        BkKasusResource::class => 'BK',
+        RekapSigapPage::class => 'BK',
         VisiMisiResource::class => 'Kurikulum',
         SurveiResource::class => 'Kesiswaan',
         DashboardProker::class => 'Proker',

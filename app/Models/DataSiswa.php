@@ -6,6 +6,7 @@ use App\Support\Admin\Dashboard\DashboardCacheSupport;
 use App\Support\DataSiswa\DataSiswaSupport;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Schema;
@@ -224,6 +225,13 @@ class DataSiswa extends Model
     public function catatanBks(): HasMany
     {
         return $this->hasMany(CatatanBk::class, 'siswa_id');
+    }
+
+    public function bkKasus(): BelongsToMany
+    {
+        return $this->belongsToMany(BkKasus::class, 'bk_kasus_siswa', 'siswa_id', 'bk_kasus_id')
+            ->withPivot(['rombel_snapshot'])
+            ->withTimestamps();
     }
 
     public function boardingKeuanganSiswa(): HasOne

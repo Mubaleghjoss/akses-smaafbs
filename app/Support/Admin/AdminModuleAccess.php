@@ -25,6 +25,7 @@ use App\Filament\Resources\AssessmentSubjectResource;
 use App\Filament\Resources\BeritaResource;
 use App\Filament\Resources\BerkasGuruResource;
 use App\Filament\Resources\BerkasSiswaResource;
+use App\Filament\Resources\BkKasusResource;
 use App\Filament\Resources\BoardingArsipMtResource;
 use App\Filament\Resources\BoardingKeuanganSiswaResource;
 use App\Filament\Resources\BoardingKonselingMtResource;
@@ -88,6 +89,7 @@ class AdminModuleAccess
         'boarding_arsip' => BoardingArsipMtResource::class,
         'boarding_perizinan' => BoardingPerizinanSiswaResource::class,
         'catatan_bk' => CatatanBkResource::class,
+        'bk_kasus' => BkKasusResource::class,
         'survei' => SurveiResource::class,
         'proker_dashboard' => DashboardProker::class,
         'proker_bidang' => ProkerBidangResource::class,
@@ -158,6 +160,7 @@ class AdminModuleAccess
         'boarding_arsip' => 'Akses arsip dan dokumen boarding.',
         'boarding_perizinan' => 'Kelola perizinan keluar dan data kepulangan siswa boarding.',
         'catatan_bk' => 'Kelola catatan bimbingan konseling siswa.',
+        'bk_kasus' => 'Kelola laporan SIGAP: kasus multi-siswa, tindak lanjut, dan rekap per kelas.',
         'survei' => 'Kelola survei sekolah, target responden, dan monitoring hasil pengisian.',
         'proker_dashboard' => 'Lihat dashboard ringkasan proker dan aksi cepat monitoring.',
         'proker_bidang' => 'Kelola master bidang proker dan penanggung jawabnya.',
