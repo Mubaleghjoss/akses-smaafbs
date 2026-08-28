@@ -24,15 +24,110 @@ class StrukturOrganisasiOrderingActionsTest extends TestCase
         $this->ensureStrukturOrganisasiTable();
     }
 
-    public function test_admin_can_move_sibling_up_without_affecting_other_branch(): void
+    public function test_admin_can_indent_item_under_previous_sibling_from_the_table(): void
     {
-        $admin = User::query()->create([
-            'name' => 'Admin Struktur',
-            'username' => 'admin-struktur-order-up',
-            'password' => bcrypt('password'),
-        ]);
-        $admin->assignRole('admin');
+        $admin = $this->createAdmin('admin-struktur-indent');
 
+        $root = StrukturOrganisasi::query()->create([
+            'jabatan' => 'Root A',
+            'nama' => 'Ketua A',
+            'foto' => 'struktur-organisasi/root-a.jpg',
+            'urutan' => 1,
+        ]);
+
+        $wakilA1 = StrukturOrganisasi::query()->create([
+            'parent_id' => $root->id,
+            'jabatan' => 'Wakil A1',
+            'nama' => 'Pengurus A1',
+            'foto' => 'struktur-organisasi/wakil-a1.jpg',
+            'urutan' => 1,
+        ]);
+
+        $wakilA2 = StrukturOrganisasi::query()->create([
+            'parent_id' => $root->id,
+            'jabatan' => 'Wakil A2',
+            'nama' => 'Pengurus A2',
+            'foto' => 'struktur-organisasi/wakil-a2.jpg',
+            'urutan' => 2,
+        ]);
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::actingAs($admin)
+            ->test(ListStrukturOrganisasis::class)
+            ->callTableAction('indent', $wakilA2)
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame(
+            (int) $wakilA1->id,
+            (int) $wakilA2->fresh()->parent_id,
+            'Item yang di-indent harus menjadi anak dari item sejajar di atasnya.'
+        );
+
+        $this->assertSame(
+            ['Wakil A1'],
+            StrukturOrganisasi::query()->forParent($root->id)->ordered()->pluck('jabatan')->all()
+        );
+
+        $this->assertSame(
+            [1],
+            StrukturOrganisasi::query()->forParent($wakilA1->id)->ordered()->pluck('urutan')->all()
+        );
+    }
+
+    public function test_admin_can_outdent_item_back_to_parent_level_from_the_table(): void
+    {
+        $admin = $this->createAdmin('admin-struktur-outdent');
+
+        $root = StrukturOrganisasi::query()->create([
+            'jabatan' => 'Kepala Sekolah',
+            'nama' => 'Ibu Kepala',
+            'foto' => 'struktur-organisasi/root-outdent.jpg',
+            'urutan' => 1,
+        ]);
+
+        $wakil = StrukturOrganisasi::query()->create([
+            'parent_id' => $root->id,
+            'jabatan' => 'Wakil Kurikulum',
+            'nama' => 'Ibu Kurikulum',
+            'foto' => 'struktur-organisasi/wakil-outdent.jpg',
+            'urutan' => 1,
+        ]);
+
+        $staf = StrukturOrganisasi::query()->create([
+            'parent_id' => $wakil->id,
+            'jabatan' => 'Staf Kurikulum',
+            'nama' => 'Bapak Staf',
+            'foto' => 'struktur-organisasi/staf-outdent.jpg',
+            'urutan' => 1,
+        ]);
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::actingAs($admin)
+            ->test(ListStrukturOrganisasis::class)
+            ->callTableAction('outdent', $staf)
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame(
+            (int) $root->id,
+            (int) $staf->fresh()->parent_id,
+            'Item yang di-outdent harus sejajar dengan atasannya yang lama.'
+        );
+
+        $this->assertSame(
+            ['Wakil Kurikulum', 'Staf Kurikulum'],
+            StrukturOrganisasi::query()->forParent($root->id)->ordered()->pluck('jabatan')->all()
+        );
+
+        $this->assertSame(
+            [1, 2],
+            StrukturOrganisasi::query()->forParent($root->id)->ordered()->pluck('urutan')->all()
+        );
+    }
+
+    public function test_move_sibling_up_does_not_affect_other_branch(): void
+    {
         $rootA = StrukturOrganisasi::query()->create([
             'jabatan' => 'Root A',
             'nama' => 'Ketua A',
@@ -47,7 +142,7 @@ class StrukturOrganisasiOrderingActionsTest extends TestCase
             'urutan' => 2,
         ]);
 
-        $wakilA1 = StrukturOrganisasi::query()->create([
+        StrukturOrganisasi::query()->create([
             'parent_id' => $rootA->id,
             'jabatan' => 'Wakil A1',
             'nama' => 'Pengurus A1',
@@ -71,12 +166,8 @@ class StrukturOrganisasiOrderingActionsTest extends TestCase
             'urutan' => 1,
         ]);
 
-        Filament::setCurrentPanel(Filament::getPanel('admin'));
-
-        Livewire::actingAs($admin)
-            ->test(ListStrukturOrganisasis::class)
-            ->callTableAction('move_up', $wakilA2)
-            ->assertHasNoTableActionErrors();
+        $this->assertTrue($wakilA2->canMoveUpWithinSiblings());
+        $this->assertTrue($wakilA2->moveUpWithinSiblings());
 
         $this->assertSame([
             'Wakil A2',
@@ -94,15 +185,8 @@ class StrukturOrganisasiOrderingActionsTest extends TestCase
         );
     }
 
-    public function test_admin_can_move_sibling_down_and_order_remains_sequential(): void
+    public function test_move_sibling_down_keeps_order_sequential(): void
     {
-        $admin = User::query()->create([
-            'name' => 'Admin Struktur',
-            'username' => 'admin-struktur-order-down',
-            'password' => bcrypt('password'),
-        ]);
-        $admin->assignRole('admin');
-
         $root = StrukturOrganisasi::query()->create([
             'jabatan' => 'Kepala Sekolah',
             'nama' => 'Ibu Kepala',
@@ -134,12 +218,8 @@ class StrukturOrganisasiOrderingActionsTest extends TestCase
             'urutan' => 3,
         ]);
 
-        Filament::setCurrentPanel(Filament::getPanel('admin'));
-
-        Livewire::actingAs($admin)
-            ->test(ListStrukturOrganisasis::class)
-            ->callTableAction('move_down', $wakil1)
-            ->assertHasNoTableActionErrors();
+        $this->assertTrue($wakil1->canMoveDownWithinSiblings());
+        $this->assertTrue($wakil1->moveDownWithinSiblings());
 
         $this->assertSame(
             ['Wakil Kesiswaan', 'Wakil Kurikulum', 'Wakil Sarpras'],
@@ -154,12 +234,7 @@ class StrukturOrganisasiOrderingActionsTest extends TestCase
 
     public function test_admin_can_see_direct_parent_options_from_the_table(): void
     {
-        $admin = User::query()->create([
-            'name' => 'Admin Struktur Parent Options',
-            'username' => 'admin-struktur-parent-options',
-            'password' => bcrypt('password'),
-        ]);
-        $admin->assignRole('admin');
+        $admin = $this->createAdmin('admin-struktur-parent-options');
 
         $root = StrukturOrganisasi::query()->create([
             'jabatan' => 'Kepala Sekolah',
@@ -178,11 +253,27 @@ class StrukturOrganisasiOrderingActionsTest extends TestCase
 
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
+        // Label opsi memakai format "jabatan - nama" (lihat
+        // StrukturOrganisasiResource::structureOptionsForRecord). Diri sendiri
+        // dan seluruh turunannya tidak boleh muncul sebagai calon atasan.
         Livewire::actingAs($admin)
             ->test(ListStrukturOrganisasis::class)
             ->assertTableSelectColumnHasOptions('parent_id', [
-                $root->id => 'Kepala Sekolah — Ibu Kepala',
+                $root->id => 'Kepala Sekolah - Ibu Kepala',
             ], $child);
+    }
+
+    protected function createAdmin(string $username): User
+    {
+        $admin = User::query()->create([
+            'name' => 'Admin Struktur',
+            'username' => $username,
+            'password' => bcrypt('password'),
+        ]);
+
+        $admin->assignRole('admin');
+
+        return $admin;
     }
 
     protected function ensureStrukturOrganisasiTable(): void

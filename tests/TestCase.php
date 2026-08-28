@@ -2,6 +2,7 @@
 
 namespace Tests;
 
+use App\Filament\Resources\StrukturOrganisasiResource;
 use App\Models\StrukturOrganisasi;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\File;
@@ -40,23 +41,42 @@ abstract class TestCase extends BaseTestCase
      * Reset dilakukan lewat Reflection dari sisi test, BUKAN dengan menambah
      * method publik pada model: kode produksi tidak perlu berubah hanya untuk
      * kepentingan pengujian.
+     *
+     * Alasan yang sama berlaku untuk cache statis pada
+     * StrukturOrganisasiResource: `$scopedStructureRecordsCache` menyimpan
+     * daftar record hasil query sekali per proses, sehingga opsi kolom Select
+     * pada test berikutnya masih memuat baris milik test sebelumnya.
      */
     protected function resetSchemaAwareStaticCaches(): void
     {
-        $properties = [
+        $modelProperties = [
             'periodColumnAvailableCache' => null,
             'categoryColumnAvailableCache' => null,
             'levelCache' => [],
         ];
 
-        foreach ($properties as $name => $nilaiAwal) {
-            if (! property_exists(StrukturOrganisasi::class, $name)) {
-                continue;
-            }
-
-            $property = new ReflectionProperty(StrukturOrganisasi::class, $name);
-            $property->setAccessible(true);
-            $property->setValue(null, $nilaiAwal);
+        foreach ($modelProperties as $name => $nilaiAwal) {
+            $this->resetStaticProperty(StrukturOrganisasi::class, $name, $nilaiAwal);
         }
+
+        $resourceProperties = [
+            'scopedStructureRecordsCache' => [],
+            'scopedStructureDescendantMapCache' => [],
+        ];
+
+        foreach ($resourceProperties as $name => $nilaiAwal) {
+            $this->resetStaticProperty(StrukturOrganisasiResource::class, $name, $nilaiAwal);
+        }
+    }
+
+    protected function resetStaticProperty(string $class, string $name, mixed $nilaiAwal): void
+    {
+        if (! property_exists($class, $name)) {
+            return;
+        }
+
+        $property = new ReflectionProperty($class, $name);
+        $property->setAccessible(true);
+        $property->setValue(null, $nilaiAwal);
     }
 }
