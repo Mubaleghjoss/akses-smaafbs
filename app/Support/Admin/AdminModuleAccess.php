@@ -16,6 +16,8 @@ use App\Filament\Pages\Assessment\AstsReports;
 use App\Filament\Pages\Assessment\AstsSubmissionStatus;
 use App\Filament\Pages\Bk\RekapSigapPage;
 use App\Filament\Pages\DashboardProker;
+use App\Filament\Pages\Perpustakaan\AnalisisLiterasiPage;
+use App\Filament\Pages\Perpustakaan\KelolaDispensasiPage;
 use App\Filament\Pages\SarprasStickerSettings;
 use App\Filament\Resources\AssessmentAuditLogResource;
 use App\Filament\Resources\AssessmentPeriodResource;
@@ -122,6 +124,10 @@ class AdminModuleAccess
     protected const ADDITIONAL_MODULE_CLASSES = [
         'bk_kasus' => [
             RekapSigapPage::class,
+        ],
+        'perpustakaan_literasi' => [
+            AnalisisLiterasiPage::class,
+            KelolaDispensasiPage::class,
         ],
         'penilaian' => [
             AstsHub::class,

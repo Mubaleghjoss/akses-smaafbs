@@ -37,9 +37,17 @@ class LiterasiAnalytics
             ->all();
     }
 
-    public static function monthlyShare(?string $programCategory = null): array
-    {
-        [$monthStart, $monthEnd] = static::monthRange();
+    /**
+     * @param  Carbon|null  $start  Rentang khusus; null = bulan berjalan.
+     */
+    public static function monthlyShare(
+        ?string $programCategory = null,
+        ?Carbon $start = null,
+        ?Carbon $end = null,
+    ): array {
+        [$monthStart, $monthEnd] = $start !== null && $end !== null
+            ? [$start, $end]
+            : static::monthRange();
         $grading = static::gradingSummary(null, $monthStart, $monthEnd, $programCategory);
         $classParticipation = static::leastClassResponseRanking(null, $monthStart, $monthEnd, null, $programCategory);
         $mostClassParticipation = collect($classParticipation)
@@ -358,7 +366,13 @@ class LiterasiAnalytics
         ?string $programCategory = null,
         ?array $classes = null,
     ): Collection {
-        $base = static::respondentBase($material, $start, $end, $programCategory, $classes);
+        // Ranking dan aktivitas selalu terikat rentang: jawaban di luar rentang
+        // tidak boleh ikut terhitung meskipun materinya sama.
+        $materialIds = $material !== null
+            ? [(int) $material->getKey()]
+            : LiteracyRespondentBase::materialIdsInScope($programCategory, $start, $end);
+
+        $base = LiteracyRespondentBase::forMaterialIds($materialIds, $classes, $start, $end);
 
         return collect($base['classes'])->map(fn (array $row): array => [
             'class' => $row['class'],
@@ -613,6 +627,7 @@ class LiterasiAnalytics
                 // Responden = yang benar-benar mengisi. Dispensasi TIDAK ditambahkan.
                 'responses' => (int) $responses,
                 'response_records' => (int) $responses,
+                'dispensations' => (int) $base['excluded_total'],
                 'respondent_base' => (int) $base['respondent_base'],
                 'excluded_total' => (int) $base['excluded_total'],
                 'excluded_by_reason' => $base['excluded_by_reason'],
@@ -644,6 +659,8 @@ class LiterasiAnalytics
             // Responden = yang benar-benar mengisi. Dispensasi TIDAK ditambahkan.
             'responses' => (int) $responses,
             'response_records' => (int) $responses,
+            // Dipertahankan sebagai informasi terpisah, bukan bagian pembilang.
+            'dispensations' => (int) $base['excluded_total'],
             'respondent_base' => (int) $base['respondent_base'],
             'excluded_total' => (int) $base['excluded_total'],
             'excluded_by_reason' => $base['excluded_by_reason'],
@@ -678,7 +695,11 @@ class LiterasiAnalytics
             ? [(int) $material->getKey()]
             : LiteracyRespondentBase::materialIdsInScope($programCategory, $start, $end);
 
-        return LiteracyRespondentBase::forMaterialIds($materialIds, $classes);
+        // Untuk satu materi, rekap "seluruh waktu" tetap dipakai (panel materi).
+        // Untuk lingkup kategori, jawaban dibatasi ke rentang yang diminta.
+        return $material !== null
+            ? LiteracyRespondentBase::forMaterialIds($materialIds, $classes)
+            : LiteracyRespondentBase::forMaterialIds($materialIds, $classes, $start, $end);
     }
 
     protected static function confirmedPlagiarismCount(

@@ -3088,7 +3088,8 @@ class LibraryLiteracyProgramTest extends TestCase
         $allAnalytics = LiterasiAnalytics::monthlyShare();
         $summary = $literacyAnalytics['grading_summary'];
 
-        $this->assertSame(5, $summary['responses']);
+        // 4 jawaban nyata; dispensasi tidak lagi ditambahkan ke jumlah responden.
+        $this->assertSame(4, $summary['responses']);
         $this->assertSame(4, $summary['response_records']);
         $this->assertSame(1, $summary['dispensations']);
         $this->assertSame(5, $summary['unique_students']);
@@ -3097,7 +3098,15 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->assertSame(1, $summary['confirmed_plagiarism_students']);
         $this->assertSame(1, $summary['pending_similarity_students']);
         $this->assertSame(5, $allAnalytics['grading_summary']['response_records']);
-        $this->assertSame('XI 2', collect($literacyAnalytics['class_participation'])->firstWhere('total', 0)['class']);
+        // XI 1 hanya berisi siswa dispensasi, jadi basis respondennya 0 dan
+        // bukan lagi "kelas yang belum mengisi". XI 2 punya siswa nyata yang
+        // belum mengisi, jadi itulah kelas dengan partisipasi 0%.
+        $participation = collect($literacyAnalytics['class_participation'])->keyBy('class');
+        $this->assertSame(0, (int) $participation['XI 2']['total']);
+        $this->assertSame(1, (int) $participation['XI 2']['missing_total']);
+        $this->assertSame(0.0, (float) $participation['XI 2']['percentage']);
+        $this->assertSame(1, (int) $participation['XI 1']['excluded_total']);
+        $this->assertSame(0, (int) $participation['XI 1']['respondent_base']);
 
         $activeSimilarityStudents = collect($literacyAnalytics['plagiarism_student_ranking'])->pluck('name');
         $this->assertTrue($activeSimilarityStudents->contains('Bima Rekap Sebagian'));
@@ -3110,7 +3119,8 @@ class LibraryLiteracyProgramTest extends TestCase
         );
         $this->assertStringContainsString('*Lingkup:* Literasi', $text);
         $this->assertStringContainsString('*Dibuat:* 06/08/2026 12:00 WIB', $text);
-        $this->assertStringContainsString('- Total responden: 5 partisipasi dari 5 siswa unik', $text);
+        $this->assertStringContainsString('- Total responden: 4 jawaban dari 5 siswa unik', $text);
+        $this->assertStringContainsString('- Basis responden: ', $text);
         $this->assertStringContainsString('- Sudah dinilai lengkap: 3 respons', $text);
         $this->assertStringContainsString('- Belum dinilai/masih sebagian: 1 respons', $text);
         $this->assertStringContainsString('*Kelas XI 2*', $text);
@@ -3413,15 +3423,18 @@ class LibraryLiteracyProgramTest extends TestCase
         $completion = $analytics['material_completion'];
 
         $this->assertSame(2, $completion['dispensation_total']);
-        $this->assertSame(2, $completion['respondent_total']);
+        // Dispensasi dikeluarkan dari basis, bukan ditambahkan: 3 siswa aktif
+        // pada materi ini, 2 di antaranya dispensasi -> basis 1 orang.
+        $this->assertSame(1, $completion['respondent_base']);
         $this->assertSame(1, $completion['trashed_total']);
-        $this->assertSame(2, $analytics['grading_summary']['responses']);
+        $this->assertSame(0, $analytics['grading_summary']['responses']);
         $this->assertSame(0, $analytics['grading_summary']['response_records']);
         $this->assertSame(2, $analytics['grading_summary']['dispensations']);
         $this->assertSame(0, $analytics['grading_summary']['total_answers']);
         $this->assertSame(0, $analytics['grading_summary']['correct_answers']);
-        $this->assertSame(2, collect($analytics['class_activity'])->firstWhere('class', 'X Dispensasi')['month']);
-        $this->assertSame(2, collect($analytics['class_response_ranking'])->firstWhere('class', 'X Dispensasi')['total']);
+        $this->assertSame(0, collect($analytics['class_activity'])->firstWhere('class', 'X Dispensasi')['month']);
+        $this->assertSame(0, collect($analytics['class_response_ranking'])->firstWhere('class', 'X Dispensasi')['total']);
+        $this->assertSame(2, collect($analytics['class_response_ranking'])->firstWhere('class', 'X Dispensasi')['excluded_total']);
 
         $html = (string) PerpustakaanLiterasiMaterialResource::monthlyRankingAnalysisHtml($material);
         $this->assertStringContainsString('Dispensasi', $html);
@@ -3484,7 +3497,6 @@ class LibraryLiteracyProgramTest extends TestCase
         $this->actingAs($admin)
             ->get(PerpustakaanLiterasiMaterialResource::getUrl('index'))
             ->assertOk()
-            ->assertSee('Ringkasan Literasi')
             ->assertSee('Daftar Materi')
             ->assertSee('Durasi Soal')
             ->assertSee('Status Materi')
@@ -3496,24 +3508,18 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('Sigap 29 Karakter')
             ->assertDontSee('Semua Aktif')
             ->assertDontSee('Soal Non Aktif')
-            ->assertSee('Keseluruhan Soal Selama 1 Bulan')
-            ->assertSee('Kategori analisa literasi', false)
             ->assertSee('Belum Berkategori')
             ->assertSee('History Pengerjaan Siswa')
-            ->assertSee('Salin Rekap Bulanan ke WhatsApp')
-            ->assertSee('Rekap Bulanan Total')
-            ->assertSee('Rekap SIGAP 29 Karakter')
-            ->assertSee('Rekap Literasi')
-            ->assertSee('Rekap Numerasi')
             ->assertSee('Hitung Ulang Plagiasi')
             ->assertSee('Setting Tatib')
             ->assertSee('Pilih Kategori')
-            ->assertSee('Ranking Kelas Terbanyak Mengisi')
-            ->assertSee('Ranking 3 Kelas Jawaban Benar Terbanyak')
-            ->assertSee('Ranking 3 Kelas Tersedikit Mengisi')
-            ->assertSee('Ranking Siswa Per Kelas Berdasarkan Jawaban Benar')
-            ->assertSee('Siswa Banyak Salah')
-            ->assertSee('Siswa Tidak Mengisi');
+            // Analitik sudah dipindah ke halaman terpisah; menu soal hanya
+            // menyisakan tautan menuju halaman itu.
+            ->assertSee('Buka Analisis')
+            ->assertSee('Kelola Dispensasi')
+            ->assertDontSee('Ringkasan Literasi')
+            ->assertDontSee('Ranking Kelas Terbanyak Mengisi')
+            ->assertDontSee('Siswa Tidak Mengisi');
 
         $materialList = Livewire::actingAs($admin)
             ->test(ListPerpustakaanLiterasiMaterials::class);

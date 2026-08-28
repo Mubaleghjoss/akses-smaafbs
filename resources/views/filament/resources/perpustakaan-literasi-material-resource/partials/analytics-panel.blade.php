@@ -37,7 +37,7 @@
             <strong class="literasi-metric-card__value">{{ $formatNumber((int) ($summary['responses'] ?? 0)) }}</strong>
             <small class="literasi-metric-card__detail">
                 {{ $formatNumber((int) ($summary['response_records'] ?? $summary['responses'] ?? 0)) }} jawaban
-                + {{ $formatNumber((int) ($summary['dispensations'] ?? 0)) }} dispensasi
+                · {{ $formatNumber((int) ($summary['dispensations'] ?? 0)) }} dispensasi dikecualikan
             </small>
         </article>
 
@@ -88,7 +88,7 @@
             <div class="literasi-completion__header">
                 <div>
                     <h3 class="literasi-panel__title">Status Pengisian Materi</h3>
-                    <p class="literasi-analytics__description">Seluruh waktu untuk semua siswa aktif. Responden adalah jawaban nyata + dispensasi; jawaban di Sampah tetap dipisahkan.</p>
+                    <p class="literasi-analytics__description">Seluruh waktu untuk semua siswa aktif. Basis responden = siswa aktif dikurangi dispensasi (izin, sakit, tes MT); jawaban di Sampah tetap dipisahkan.</p>
                 </div>
                 <div class="literasi-completion__header-tools">
                     <span class="literasi-analytics__period">Penyelesaian: {{ $formatPercent((float) ($materialCompletion['completion_percentage'] ?? 0)) }}</span>
@@ -120,7 +120,7 @@
                 <div class="is-info"><span>Dispensasi</span><strong>{{ $formatNumber((int) ($materialCompletion['dispensation_total'] ?? 0)) }}</strong></div>
                 <div class="is-warning"><span>Belum Mengisi</span><strong>{{ $formatNumber((int) ($materialCompletion['missing_total'] ?? 0)) }}</strong></div>
                 <div class="is-danger"><span>Di Sampah</span><strong>{{ $formatNumber((int) ($materialCompletion['trashed_total'] ?? 0)) }}</strong></div>
-                <div class="is-primary"><span>Total Responden</span><strong>{{ $formatNumber((int) ($materialCompletion['respondent_total'] ?? 0)) }}</strong></div>
+                <div class="is-primary"><span>Basis Responden</span><strong>{{ $formatNumber((int) ($materialCompletion['respondent_base'] ?? 0)) }}</strong></div>
             </div>
 
             <div class="literasi-completion__classes">
@@ -128,8 +128,8 @@
                     <details class="literasi-completion__class" @if(($class['missing_total'] ?? 0) > 0 || ($class['trashed_total'] ?? 0) > 0) open @endif>
                         <summary>
                             <strong>{{ $class['class'] }}</strong>
-                            <span>{{ $formatNumber((int) $class['respondent_total']) }}/{{ $formatNumber((int) $class['active_total']) }} responden</span>
-                            <span>{{ $formatNumber((int) $class['completed_total']) }} jawaban + {{ $formatNumber((int) $class['dispensation_total']) }} dispensasi</span>
+                            <span>{{ $formatNumber((int) $class['completed_total']) }}/{{ $formatNumber((int) $class['respondent_base']) }} mengisi</span>
+                            <span>{{ $formatNumber((int) $class['active_total']) }} siswa aktif · {{ $formatNumber((int) $class['dispensation_total']) }} dispensasi</span>
                             <span class="is-warning">{{ $formatNumber((int) $class['missing_total']) }} belum</span>
                             @if(($class['trashed_total'] ?? 0) > 0)
                                 <span class="is-danger">{{ $formatNumber((int) $class['trashed_total']) }} di Sampah</span>

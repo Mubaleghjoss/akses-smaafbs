@@ -1,0 +1,358 @@
+<?php
+
+namespace App\Filament\Pages\Perpustakaan;
+
+use App\Filament\Resources\PerpustakaanLiterasiMaterialResource;
+use App\Models\PerpustakaanLiterasiDispensation;
+use App\Models\PerpustakaanLiterasiMaterial;
+use App\Models\User;
+use App\Support\Perpustakaan\LiteracyMonthlyShareText;
+use App\Support\Perpustakaan\LiteracyRespondentBase;
+use App\Support\Perpustakaan\LiterasiAnalytics;
+use Filament\Actions\Action;
+use Filament\Pages\Page;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema as SchemaFacade;
+use Livewire\Attributes\Url;
+
+/**
+ * Halaman analisis literasi numerasi yang berdiri sendiri.
+ *
+ * Sebelumnya panel analitik menempel pada halaman daftar soal, sehingga rekap
+ * dan pengelolaan soal saling berebut ruang. Halaman ini memisahkannya dan
+ * menyimpan seluruh filter pada URL agar tautan hasil filter bisa dibagikan.
+ */
+class AnalisisLiterasiPage extends Page
+{
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-chart-bar-square';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Perpustakaan';
+
+    protected static ?string $navigationLabel = 'Analisis Literasi';
+
+    protected static ?string $title = 'Analisis Literasi Numerasi';
+
+    protected static ?int $navigationSort = 21;
+
+    protected static ?string $permissionPrefix = 'perpustakaan_literasi';
+
+    protected string $view = 'filament.pages.perpustakaan.analisis-literasi';
+
+    #[Url(as: 'dari')]
+    public ?string $dari = null;
+
+    #[Url(as: 'sampai')]
+    public ?string $sampai = null;
+
+    #[Url(as: 'kategori')]
+    public ?string $kategori = null;
+
+    #[Url(as: 'materi')]
+    public ?string $materi = null;
+
+    #[Url(as: 'kelas')]
+    public ?string $kelas = null;
+
+    protected ?array $analyticsCache = null;
+
+    protected ?array $baseCache = null;
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return static::hasRequiredTables() && static::userCanModule('view');
+    }
+
+    public static function canAccess(): bool
+    {
+        return static::hasRequiredTables() && static::userCanModule('view');
+    }
+
+    public function mount(): void
+    {
+        abort_unless(static::canAccess(), 403);
+
+        if (blank($this->dari)) {
+            $this->dari = now()->startOfMonth()->toDateString();
+        }
+
+        if (blank($this->sampai)) {
+            $this->sampai = now()->toDateString();
+        }
+    }
+
+    public function updated(string $property): void
+    {
+        if (in_array($property, ['dari', 'sampai', 'kategori', 'materi', 'kelas'], true)) {
+            $this->analyticsCache = null;
+            $this->baseCache = null;
+        }
+
+        // Materi terikat pada kategori: mengganti kategori membuat pilihan
+        // materi sebelumnya tidak lagi relevan.
+        if ($property === 'kategori') {
+            $this->materi = null;
+        }
+    }
+
+    public function terapkanBulanIni(): void
+    {
+        $this->dari = now()->startOfMonth()->toDateString();
+        $this->sampai = now()->toDateString();
+        $this->resetCaches();
+    }
+
+    public function terapkanSemesterIni(): void
+    {
+        $now = now();
+        $this->dari = $now->month >= 7
+            ? $now->copy()->setMonth(7)->startOfMonth()->toDateString()
+            : $now->copy()->setMonth(1)->startOfMonth()->toDateString();
+        $this->sampai = $now->toDateString();
+        $this->resetCaches();
+    }
+
+    public function bersihkanFilter(): void
+    {
+        $this->kategori = null;
+        $this->materi = null;
+        $this->kelas = null;
+        $this->resetCaches();
+    }
+
+    /**
+     * Basis responden untuk filter yang aktif.
+     *
+     * @return array<string, mixed>
+     */
+    public function getBaseProperty(): array
+    {
+        if ($this->baseCache !== null) {
+            return $this->baseCache;
+        }
+
+        [$start, $end] = $this->range();
+        $material = $this->selectedMaterial();
+        $classes = filled($this->kelas) ? [$this->kelas] : null;
+
+        return $this->baseCache = LiterasiAnalytics::respondentBase(
+            $material,
+            $start,
+            $end,
+            $material === null && filled($this->kategori) ? $this->kategori : null,
+            $classes,
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getAnalyticsProperty(): array
+    {
+        if ($this->analyticsCache !== null) {
+            return $this->analyticsCache;
+        }
+
+        [$start, $end] = $this->range();
+        $material = $this->selectedMaterial();
+        $category = $material === null && filled($this->kategori) ? $this->kategori : null;
+
+        return $this->analyticsCache = [
+            'grading_summary' => LiterasiAnalytics::gradingSummary($material, $start, $end, $category, filled($this->kelas) ? [$this->kelas] : null),
+            'class_response_ranking' => LiterasiAnalytics::classResponseRanking($material, $start, $end, null, $category),
+            'least_class_response_ranking' => LiterasiAnalytics::leastClassResponseRanking($material, $start, $end, 5, $category),
+            'class_correct_ranking' => LiterasiAnalytics::classCorrectRanking($material, $start, $end, 5, $category),
+            'student_correct_ranking_by_class' => LiterasiAnalytics::studentCorrectRankingByClass($material, $start, $end, 5, $category),
+            'student_wrong_ranking' => LiterasiAnalytics::studentWrongRanking($material, $start, $end, 10, $category),
+            'plagiarism_class_ranking' => LiterasiAnalytics::plagiarismClassRanking($material, $start, $end, 5, $category),
+            'plagiarism_student_ranking' => LiterasiAnalytics::plagiarismStudentRanking($material, $start, $end, 10, $category),
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function getKategoriOptionsProperty(): array
+    {
+        return PerpustakaanLiterasiMaterial::programCategoryOptions();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function getMateriOptionsProperty(): array
+    {
+        [$start, $end] = $this->range();
+
+        return PerpustakaanLiterasiMaterial::query()
+            ->when(filled($this->kategori), fn ($query) => $query->where('program_category', $this->kategori))
+            ->whereIn('id', LiteracyRespondentBase::materialIdsInScope($this->kategori, $start, $end))
+            ->orderByDesc('opens_at')
+            ->pluck('title', 'id')
+            ->map(fn ($title): string => (string) $title)
+            ->all();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function getKelasOptionsProperty(): array
+    {
+        return collect(LiteracyRespondentBase::activeClassNames())
+            ->mapWithKeys(fn (string $class): array => [$class => $class])
+            ->all();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function getAlasanLabelsProperty(): array
+    {
+        return PerpustakaanLiterasiDispensation::reasonOptions();
+    }
+
+    public function getPeriodeLabelProperty(): string
+    {
+        [$start, $end] = $this->range();
+
+        return $start->translatedFormat('d F Y').' s.d. '.$end->translatedFormat('d F Y');
+    }
+
+    public function getLingkupLabelProperty(): string
+    {
+        $material = $this->selectedMaterial();
+
+        if ($material !== null) {
+            return 'Materi: '.$material->title;
+        }
+
+        if (filled($this->kategori)) {
+            return $this->kategoriOptions[$this->kategori] ?? 'Kategori terpilih';
+        }
+
+        return 'Semua kategori';
+    }
+
+    protected function getViewData(): array
+    {
+        return [
+            'base' => $this->base,
+            'analytics' => $this->analytics,
+            'kategoriOptions' => $this->kategoriOptions,
+            'materiOptions' => $this->materiOptions,
+            'kelasOptions' => $this->kelasOptions,
+            'alasanLabels' => $this->alasanLabels,
+            'periodeLabel' => $this->periodeLabel,
+            'lingkupLabel' => $this->lingkupLabel,
+        ];
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('salinRekap')
+                ->label('Salin Rekap ke WhatsApp')
+                ->icon('heroicon-o-clipboard-document-list')
+                ->modalHeading('Rekap teks untuk WhatsApp')
+                ->modalDescription('Teks mengikuti rentang tanggal dan kategori yang sedang aktif di halaman ini.')
+                ->modalSubmitAction(false)
+                ->modalCancelActionLabel('Tutup')
+                ->modalWidth('3xl')
+                ->modalContent(fn () => view(
+                    'filament.pages.perpustakaan.partials.rekap-share',
+                    ['text' => $this->shareText()],
+                )),
+            Action::make('kelolaDispensasi')
+                ->label('Kelola Dispensasi')
+                ->icon('heroicon-o-user-minus')
+                ->color('gray')
+                ->url(fn (): string => KelolaDispensasiPage::getUrl())
+                ->visible(fn (): bool => KelolaDispensasiPage::canAccess()),
+            Action::make('kelolaSoal')
+                ->label('Kelola Soal Literasi')
+                ->icon('heroicon-o-queue-list')
+                ->color('gray')
+                ->url(fn (): string => PerpustakaanLiterasiMaterialResource::getUrl())
+                ->visible(fn (): bool => PerpustakaanLiterasiMaterialResource::canViewAny()),
+        ];
+    }
+
+    /**
+     * Teks rekap WhatsApp yang mengikuti rentang tanggal aktif.
+     */
+    public function shareText(): string
+    {
+        [$start, $end] = $this->range();
+
+        $scope = filled($this->kategori) && LiteracyMonthlyShareText::validScope($this->kategori)
+            ? $this->kategori
+            : LiteracyMonthlyShareText::SCOPE_ALL;
+
+        return LiteracyMonthlyShareText::make($scope, null, $start, $end);
+    }
+
+    /**
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    protected function range(): array
+    {
+        $start = filled($this->dari)
+            ? Carbon::parse($this->dari)->startOfDay()
+            : now()->startOfMonth();
+        $end = filled($this->sampai)
+            ? Carbon::parse($this->sampai)->endOfDay()
+            : now()->endOfDay();
+
+        // Rentang terbalik akan mengosongkan seluruh panel tanpa penjelasan,
+        // jadi urutannya dinormalkan lebih dulu.
+        return $start->greaterThan($end)
+            ? [$end->copy()->startOfDay(), $start->copy()->endOfDay()]
+            : [$start, $end];
+    }
+
+    protected function selectedMaterial(): ?PerpustakaanLiterasiMaterial
+    {
+        if (blank($this->materi)) {
+            return null;
+        }
+
+        return PerpustakaanLiterasiMaterial::query()->find($this->materi);
+    }
+
+    protected function resetCaches(): void
+    {
+        $this->analyticsCache = null;
+        $this->baseCache = null;
+    }
+
+    protected static function hasRequiredTables(): bool
+    {
+        return SchemaFacade::hasTable('perpustakaan_literasi_materials')
+            && SchemaFacade::hasTable('perpustakaan_literasi_responses')
+            && SchemaFacade::hasTable('data_siswa');
+    }
+
+    protected static function userCanModule(string $ability): bool
+    {
+        $user = auth()->user();
+
+        if (! $user instanceof User) {
+            return false;
+        }
+
+        $user->loadMissing('roles');
+
+        if ($user->hasFullAdminAccess()) {
+            return true;
+        }
+
+        $prefix = static::$permissionPrefix;
+
+        if (blank($prefix)) {
+            return false;
+        }
+
+        return $ability === 'view'
+            ? $user->canViewModule($prefix)
+            : $user->canManageModule($prefix);
+    }
+}

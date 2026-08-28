@@ -51,10 +51,15 @@ final class LiteracyRespondentBase
      *
      * @param  array<int, int>  $materialIds
      * @param  array<int, string>|null  $classes
+     * @param  Carbon|null  $responseStart  Batasi jawaban yang dihitung "mengisi" ke rentang ini.
      * @return array<string, mixed>
      */
-    public static function forMaterialIds(array $materialIds, ?array $classes = null): array
-    {
+    public static function forMaterialIds(
+        array $materialIds,
+        ?array $classes = null,
+        ?Carbon $responseStart = null,
+        ?Carbon $responseEnd = null,
+    ): array {
         $materialIds = collect($materialIds)
             ->map(fn ($id): int => (int) $id)
             ->filter(fn (int $id): bool => $id > 0)
@@ -70,9 +75,15 @@ final class LiteracyRespondentBase
 
         $rows = DB::table('data_siswa as students')
             ->crossJoin('perpustakaan_literasi_materials as materials')
-            ->leftJoin('perpustakaan_literasi_responses as responses', function (JoinClause $join): void {
+            ->leftJoin('perpustakaan_literasi_responses as responses', function (JoinClause $join) use ($responseStart, $responseEnd): void {
                 $join->on('responses.data_siswa_id', '=', 'students.id')
                     ->on('responses.material_id', '=', 'materials.id');
+
+                // Saat rentang diberikan, jawaban di luar rentang tidak dihitung
+                // sebagai "mengisi" pada rekap rentang tersebut.
+                if ($responseStart !== null && $responseEnd !== null) {
+                    $join->whereBetween('responses.submitted_at', [$responseStart, $responseEnd]);
+                }
             })
             ->leftJoin('perpustakaan_literasi_dispensations as dispensations', function (JoinClause $join): void {
                 $join->on('dispensations.data_siswa_id', '=', 'students.id')
@@ -219,6 +230,9 @@ final class LiteracyRespondentBase
             $bucket = &$classes[$class];
             $studentId = (int) $row->student_id;
             $bucket['student_ids'][$studentId] = true;
+            // Satu baris = satu slot (siswa x materi). Slot dan basis responden
+            // harus memakai satuan yang sama, kalau tidak persentasenya melar.
+            $bucket['active_total']++;
 
             $student = [
                 'student_id' => $studentId,
@@ -274,7 +288,7 @@ final class LiteracyRespondentBase
 
         $classes = collect($classes)
             ->map(function (array $bucket): array {
-                $bucket['active_total'] = count($bucket['student_ids']);
+                $bucket['unique_students'] = count($bucket['student_ids']);
                 unset($bucket['student_ids']);
 
                 $bucket['participation_percentage'] = $bucket['respondent_base'] > 0
@@ -325,6 +339,7 @@ final class LiteracyRespondentBase
         return [
             'class' => $class,
             'student_ids' => [],
+            'unique_students' => 0,
             'active_total' => 0,
             'excluded_total' => 0,
             'excluded_by_reason' => [],

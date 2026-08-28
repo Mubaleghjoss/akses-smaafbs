@@ -2,8 +2,9 @@
 
 namespace App\Filament\Resources\PerpustakaanLiterasiMaterialResource\Pages;
 
+use App\Filament\Pages\Perpustakaan\AnalisisLiterasiPage;
+use App\Filament\Pages\Perpustakaan\KelolaDispensasiPage;
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource;
-use App\Filament\Widgets\PerpustakaanLiterasiGlobalAnalytics;
 use App\Jobs\QueueLiteracySimilarityReanalysis;
 use App\Models\PerpustakaanLiterasiMaterial;
 use App\Models\PerpustakaanLiterasiResponse;
@@ -121,6 +122,23 @@ class ListPerpustakaanLiterasiMaterials extends ListRecords
                         ->success()
                         ->send();
                 }),
+            Actions\Action::make('historySiswa')
+                ->label('History Pengerjaan Siswa')
+                ->icon('heroicon-o-clock')
+                ->color('gray')
+                ->url(fn (): string => PerpustakaanLiterasiMaterialResource::getUrl('student-history')),
+            Actions\Action::make('bukaAnalisis')
+                ->label('Buka Analisis')
+                ->icon('heroicon-o-chart-bar-square')
+                ->color('gray')
+                ->url(fn (): string => AnalisisLiterasiPage::getUrl())
+                ->visible(fn (): bool => AnalisisLiterasiPage::canAccess()),
+            Actions\Action::make('kelolaDispensasi')
+                ->label('Kelola Dispensasi')
+                ->icon('heroicon-o-user-minus')
+                ->color('gray')
+                ->url(fn (): string => KelolaDispensasiPage::getUrl())
+                ->visible(fn (): bool => KelolaDispensasiPage::canAccess()),
             Actions\CreateAction::make()
                 ->fillForm(fn (): array => $this->activeProgramCategory() !== null
                     ? ['program_category' => $this->activeProgramCategory()]
@@ -128,11 +146,12 @@ class ListPerpustakaanLiterasiMaterials extends ListRecords
         ];
     }
 
+    /**
+     * Analitik tidak lagi ditempel di sini; halaman terpisah yang mengurusnya.
+     */
     protected function getHeaderWidgets(): array
     {
-        return [
-            PerpustakaanLiterasiGlobalAnalytics::class,
-        ];
+        return [];
     }
 
     public function getHeaderWidgetsColumns(): int|array

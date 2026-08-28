@@ -4,6 +4,7 @@ namespace App\Support\Perpustakaan;
 
 use App\Models\PerpustakaanLiterasiMaterial;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 
 final class LiteracyMonthlyShareText
@@ -49,10 +50,21 @@ final class LiteracyMonthlyShareText
         return 'Rekap Bulanan '.self::scope($scope)['label'];
     }
 
-    public static function make(string $scope, ?CarbonInterface $generatedAt = null): string
-    {
+    /**
+     * @param  CarbonInterface|null  $start  Rentang khusus; null = bulan berjalan.
+     */
+    public static function make(
+        string $scope,
+        ?CarbonInterface $generatedAt = null,
+        ?CarbonInterface $start = null,
+        ?CarbonInterface $end = null,
+    ): string {
         $scopeData = self::scope($scope);
-        $analytics = LiterasiAnalytics::monthlyShare($scopeData['category']);
+        $analytics = LiterasiAnalytics::monthlyShare(
+            $scopeData['category'],
+            $start !== null ? Carbon::parse($start) : null,
+            $end !== null ? Carbon::parse($end) : null,
+        );
         $summary = $analytics['grading_summary'] ?? [];
         $generatedAt = ($generatedAt ?? now())->copy()->setTimezone('Asia/Jakarta');
         $lines = [
