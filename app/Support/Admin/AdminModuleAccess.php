@@ -14,6 +14,7 @@ use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\Assessment\AstsInputScores;
 use App\Filament\Pages\Assessment\AstsReports;
 use App\Filament\Pages\Assessment\AstsSubmissionStatus;
+use App\Filament\Pages\Bk\RekapSigapPage;
 use App\Filament\Pages\DashboardProker;
 use App\Filament\Pages\SarprasStickerSettings;
 use App\Filament\Resources\AssessmentAuditLogResource;
@@ -119,6 +120,9 @@ class AdminModuleAccess
      * @var array<string, array<int, class-string>>
      */
     protected const ADDITIONAL_MODULE_CLASSES = [
+        'bk_kasus' => [
+            RekapSigapPage::class,
+        ],
         'penilaian' => [
             AstsHub::class,
             AsasHub::class,
