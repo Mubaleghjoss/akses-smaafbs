@@ -77,7 +77,15 @@ class DataSiswa extends Model
                 $record->forceFill(Rombel::nonActiveStudentAttributes($rombelRecord->nama));
             }
 
+            // Normalisasi hanya untuk atribut yang memang sedang diisi. Menulis
+            // keempat kolom tanpa syarat membuat setiap insert menyertakannya
+            // walau tidak dipakai — dan itu gagal pada skema yang belum memiliki
+            // kolom profiling (mis. instalasi lama atau tabel bentukan test).
             foreach (['kepribadian', 'gaya_belajar', 'profiling', 'mbti'] as $attribute) {
+                if (! array_key_exists($attribute, $record->getAttributes())) {
+                    continue;
+                }
+
                 $value = trim((string) ($record->{$attribute} ?? ''));
                 $record->{$attribute} = $value !== '' ? Str::upper($value) : null;
             }

@@ -229,6 +229,18 @@ class StrukturOrganisasiOrderingActionsTest extends TestCase
                     $table->string('kategori', 20)->default(StrukturOrganisasi::CATEGORY_SCHOOL);
                 }
 
+                // Kolom periode komite (migrasi 2026_04_05_110000). Wajib ikut
+                // dibuat agar bentuk tabel sama dengan test lain yang memakai
+                // tabel ini — perbedaan bentuk sempat menyebabkan kegagalan
+                // bergantung urutan eksekusi.
+                if (! Schema::hasColumn('struktur_organisasis', 'periode_tahun')) {
+                    $table->unsignedSmallInteger('periode_tahun')->nullable();
+                }
+
+                if (! Schema::hasColumn('struktur_organisasis', 'periode_label')) {
+                    $table->string('periode_label', 100)->nullable();
+                }
+
                 if (! Schema::hasColumn('struktur_organisasis', 'created_at') || ! Schema::hasColumn('struktur_organisasis', 'updated_at')) {
                     $table->timestamps();
                 }
@@ -249,6 +261,10 @@ class StrukturOrganisasiOrderingActionsTest extends TestCase
             $table->unsignedInteger('homepage_row')->nullable();
             $table->unsignedInteger('homepage_order')->nullable();
             $table->string('kategori', 20)->default(StrukturOrganisasi::CATEGORY_SCHOOL);
+            // Kolom periode komite (migrasi 2026_04_05_110000) — lihat catatan
+            // pada cabang Schema::table di atas.
+            $table->unsignedSmallInteger('periode_tahun')->nullable();
+            $table->string('periode_label', 100)->nullable();
             $table->timestamps();
         });
     }

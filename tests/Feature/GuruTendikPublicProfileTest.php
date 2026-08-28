@@ -114,6 +114,11 @@ class GuruTendikPublicProfileTest extends TestCase
             $table->unsignedInteger('homepage_row')->nullable();
             $table->unsignedInteger('homepage_order')->nullable();
             $table->string('kategori', 20)->default(StrukturOrganisasi::CATEGORY_SCHOOL);
+            // Kolom periode komite (migrasi 2026_04_05_110000). Disertakan agar
+            // bentuk tabel konsisten dengan test lain yang memakai tabel yang
+            // sama — perbedaan bentuk menimbulkan kegagalan bergantung urutan.
+            $table->unsignedSmallInteger('periode_tahun')->nullable();
+            $table->string('periode_label', 100)->nullable();
             $table->timestamps();
         });
     }

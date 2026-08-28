@@ -3,6 +3,7 @@
 .env
 .env.backup
 .env.production
+.hermes/
 .phpactor.json
 .phpunit.result.cache
 __pycache__/
@@ -35,8 +36,16 @@ bot-telegram/credentials.json
 !/public/storage/boarding-rapot/**
 !/public/storage/site-branding/
 !/public/storage/site-branding/**
+# Turunan yang dibangun ulang otomatis oleh PublicImageOptimizer dari berkas
+# sumber di atas (lihat OptimizePublicMedia). Hanya sumbernya yang di-commit.
+/public/storage/site-branding/**/*-optimized.webp
+/public/storage/site-branding/**/*-favicon.png
+/public/storage/site-branding/**/*-pwa-192.png
+/public/storage/site-branding/**/*-pwa-512.png
 /storage/*.key
 /storage/pail
+/storage/framework/PsySH/
+/storage/tes-*.php
 /vendor
 Homestead.json
 Homestead.yaml
