@@ -98,8 +98,9 @@ class LiterasiAnalytics
                 'dispensation_total' => 0,
                 'missing_total' => 0,
                 'trashed_total' => 0,
-                'respondent_total' => 0,
-                'completion_percentage' => 0.0,
+                'respondent_base' => 0,
+                'completion_percentage' => null,
+                'ratio' => '0/0',
                 'classes' => [],
             ];
         }
@@ -157,19 +158,21 @@ class LiterasiAnalytics
                 }
 
                 $activeTotal = $classStudents->count();
-                $respondentTotal = count($completed) + count($dispensated);
+                // Dispensasi dikeluarkan dari penyebut, bukan ditambahkan ke pembilang.
+                $respondentBase = max(0, $activeTotal - count($dispensated));
 
                 return [
                     'class' => $class,
                     'active_total' => $activeTotal,
                     'completed_total' => count($completed),
                     'dispensation_total' => count($dispensated),
-                    'respondent_total' => $respondentTotal,
+                    'respondent_base' => $respondentBase,
                     'missing_total' => count($missing),
                     'trashed_total' => count($trashed),
-                    'completion_percentage' => $activeTotal > 0
-                        ? round(($respondentTotal / $activeTotal) * 100, 1)
-                        : 0.0,
+                    'completion_percentage' => $respondentBase > 0
+                        ? round((count($completed) / $respondentBase) * 100, 1)
+                        : null,
+                    'ratio' => count($completed).'/'.$respondentBase,
                     'dispensated_students' => $dispensated,
                     'missing_students' => $missing,
                     'trashed_students' => $trashed,
@@ -181,7 +184,7 @@ class LiterasiAnalytics
         $activeTotal = $students->count();
         $completedTotal = (int) $classes->sum('completed_total');
         $dispensationTotal = (int) $classes->sum('dispensation_total');
-        $respondentTotal = $completedTotal + $dispensationTotal;
+        $respondentBase = max(0, $activeTotal - $dispensationTotal);
         $missingTotal = (int) $classes->sum('missing_total');
         $trashedTotal = (int) $classes->sum('trashed_total');
 
@@ -189,12 +192,13 @@ class LiterasiAnalytics
             'active_total' => $activeTotal,
             'completed_total' => $completedTotal,
             'dispensation_total' => $dispensationTotal,
-            'respondent_total' => $respondentTotal,
+            'respondent_base' => $respondentBase,
             'missing_total' => $missingTotal,
             'trashed_total' => $trashedTotal,
-            'completion_percentage' => $activeTotal > 0
-                ? round(($respondentTotal / $activeTotal) * 100, 1)
-                : 0.0,
+            'completion_percentage' => $respondentBase > 0
+                ? round(($completedTotal / $respondentBase) * 100, 1)
+                : null,
+            'ratio' => $completedTotal.'/'.$respondentBase,
             'classes' => $classes->all(),
         ];
     }
@@ -225,42 +229,40 @@ class LiterasiAnalytics
         [$monthStart, $monthEnd] = static::monthRange();
 
         $activeTotals = static::activeStudentTotalsByClass();
-        $todayTotals = static::participationCountsByClass($todayStart, $todayEnd, $material, $programCategory);
-        $weekTotals = static::participationCountsByClass($weekStart, $weekEnd, $material, $programCategory);
-        $monthTotals = static::participationCountsByClass($monthStart, $monthEnd, $material, $programCategory);
+        $todayTotals = static::responseCountsByClass($todayStart, $todayEnd, $material, $programCategory);
+        $weekTotals = static::responseCountsByClass($weekStart, $weekEnd, $material, $programCategory);
+
+        // Persentase bulanan memakai basis responden (slot materi x siswa,
+        // dispensasi dikeluarkan) supaya nilainya tidak pernah melewati 100%.
+        $monthBase = static::respondentBaseByClass($material, $monthStart, $monthEnd, $programCategory)
+            ->keyBy('class');
 
         return $activeTotals
             ->keys()
             ->merge($todayTotals->keys())
             ->merge($weekTotals->keys())
-            ->merge($monthTotals->keys())
+            ->merge($monthBase->keys())
             ->unique()
-            ->map(function (string $class) use ($activeTotals, $todayTotals, $weekTotals, $monthTotals): array {
+            ->map(function (string $class) use ($activeTotals, $todayTotals, $weekTotals, $monthBase): array {
                 $active = (int) ($activeTotals[$class] ?? 0);
-                $today = $todayTotals->get($class, static::emptyParticipationCounts());
-                $week = $weekTotals->get($class, static::emptyParticipationCounts());
-                $month = $monthTotals->get($class, static::emptyParticipationCounts());
+                $month = $monthBase->get($class);
 
                 return [
                     'class' => $class,
                     'active_total' => $active,
-                    'today' => (int) $today['total'],
-                    'today_responses' => (int) $today['responses'],
-                    'today_dispensations' => (int) $today['dispensations'],
-                    'week' => (int) $week['total'],
-                    'week_responses' => (int) $week['responses'],
-                    'week_dispensations' => (int) $week['dispensations'],
-                    'month' => (int) $month['total'],
-                    'month_responses' => (int) $month['responses'],
-                    'month_dispensations' => (int) $month['dispensations'],
-                    'month_ratio' => $active > 0 ? $month['total'].'/'.$active : $month['total'].'/?',
-                    'month_percentage' => $active > 0 ? round(($month['total'] / $active) * 100, 1) : null,
+                    'today' => (int) ($todayTotals[$class] ?? 0),
+                    'week' => (int) ($weekTotals[$class] ?? 0),
+                    'month' => (int) ($month['total'] ?? 0),
+                    'month_respondent_base' => (int) ($month['respondent_base'] ?? 0),
+                    'month_missing' => (int) ($month['missing_total'] ?? 0),
+                    'month_excluded' => (int) ($month['excluded_total'] ?? 0),
+                    'month_ratio' => (string) ($month['ratio'] ?? '0/0'),
+                    'month_percentage' => $month['percentage'] ?? null,
                 ];
             })
             ->sortBy([
+                ['month_percentage', 'desc'],
                 ['month', 'desc'],
-                ['week', 'desc'],
-                ['today', 'desc'],
                 ['class', 'asc'],
             ])
             ->values()
@@ -274,23 +276,7 @@ class LiterasiAnalytics
         ?int $limit = 10,
         ?string $programCategory = null
     ): array {
-        $activeTotals = static::activeStudentTotalsByClass();
-
-        $rows = static::participationCountsByClass($start, $end, $material, $programCategory)
-            ->map(function (array $counts, string $class) use ($activeTotals): array {
-                $active = (int) ($activeTotals[$class] ?? 0);
-                $total = (int) $counts['total'];
-
-                return [
-                    'class' => $class,
-                    'total' => $total,
-                    'response_total' => (int) $counts['responses'],
-                    'dispensation_total' => (int) $counts['dispensations'],
-                    'active_total' => $active,
-                    'ratio' => $active > 0 ? $total.'/'.$active : $total.'/?',
-                    'percentage' => $active > 0 ? round(($total / $active) * 100, 1) : null,
-                ];
-            })
+        $rows = static::respondentBaseByClass($material, $start, $end, $programCategory)
             ->sortBy([
                 ['total', 'desc'],
                 ['class', 'asc'],
@@ -350,35 +336,42 @@ class LiterasiAnalytics
         ?int $limit = 3,
         ?string $programCategory = null
     ): array {
-        $activeTotals = static::activeStudentTotalsByClass();
-        $monthTotals = static::participationCountsByClass($start, $end, $material, $programCategory);
-
-        $rows = $activeTotals
-            ->keys()
-            ->merge($monthTotals->keys())
-            ->unique()
-            ->map(function (string $class) use ($activeTotals, $monthTotals): array {
-                $active = (int) ($activeTotals[$class] ?? 0);
-                $counts = $monthTotals->get($class, static::emptyParticipationCounts());
-                $total = (int) $counts['total'];
-
-                return [
-                    'class' => $class,
-                    'total' => $total,
-                    'response_total' => (int) $counts['responses'],
-                    'dispensation_total' => (int) $counts['dispensations'],
-                    'active_total' => $active,
-                    'ratio' => $active > 0 ? $total.'/'.$active : $total.'/?',
-                    'percentage' => $active > 0 ? round(($total / $active) * 100, 1) : null,
-                ];
-            })
+        $rows = static::respondentBaseByClass($material, $start, $end, $programCategory)
             ->sortBy([
-                ['total', 'asc'],
                 ['percentage', 'asc'],
+                ['total', 'asc'],
                 ['class', 'asc'],
             ]);
 
         return ($limit === null ? $rows : $rows->take($limit))->values()->all();
+    }
+
+    /**
+     * Baris per kelas dari basis responden: penyebut sudah bebas dispensasi.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    protected static function respondentBaseByClass(
+        ?PerpustakaanLiterasiMaterial $material,
+        Carbon $start,
+        Carbon $end,
+        ?string $programCategory = null,
+        ?array $classes = null,
+    ): Collection {
+        $base = static::respondentBase($material, $start, $end, $programCategory, $classes);
+
+        return collect($base['classes'])->map(fn (array $row): array => [
+            'class' => $row['class'],
+            'total' => (int) $row['completed_total'],
+            'response_total' => (int) $row['completed_total'],
+            'excluded_total' => (int) $row['excluded_total'],
+            'excluded_by_reason' => $row['excluded_by_reason'],
+            'missing_total' => (int) $row['missing_total'],
+            'respondent_base' => (int) $row['respondent_base'],
+            'active_total' => (int) $row['active_total'],
+            'ratio' => (string) $row['ratio'],
+            'percentage' => $row['participation_percentage'],
+        ]);
     }
 
     public static function studentCorrectRankingByClass(
@@ -607,22 +600,25 @@ class LiterasiAnalytics
         ?PerpustakaanLiterasiMaterial $material,
         Carbon $start,
         Carbon $end,
-        ?string $programCategory = null
+        ?string $programCategory = null,
+        ?array $classes = null
     ): array {
         $responses = static::responseQuery($material, $programCategory)
             ->whereBetween('submitted_at', [$start, $end])
             ->count();
-        $dispensations = static::dispensationTableAvailable()
-            ? static::dispensationQuery($material, $programCategory)
-                ->whereBetween('confirmed_at', [$start, $end])
-                ->count()
-            : 0;
+        $base = static::respondentBase($material, $start, $end, $programCategory, $classes);
 
         if (! static::gradingColumnsAvailable()) {
             return [
-                'responses' => (int) $responses + (int) $dispensations,
+                // Responden = yang benar-benar mengisi. Dispensasi TIDAK ditambahkan.
+                'responses' => (int) $responses,
                 'response_records' => (int) $responses,
-                'dispensations' => (int) $dispensations,
+                'respondent_base' => (int) $base['respondent_base'],
+                'excluded_total' => (int) $base['excluded_total'],
+                'excluded_by_reason' => $base['excluded_by_reason'],
+                'missing_total' => (int) $base['missing_total'],
+                'participation_percentage' => $base['participation_percentage'],
+                'participation_ratio' => (string) $base['ratio'],
                 'total_answers' => 0,
                 'graded_answers' => 0,
                 'correct_answers' => 0,
@@ -645,15 +641,44 @@ class LiterasiAnalytics
         $correct = (int) ($answerTotals?->correct_answers ?? 0);
 
         return [
-            'responses' => (int) $responses + (int) $dispensations,
+            // Responden = yang benar-benar mengisi. Dispensasi TIDAK ditambahkan.
+            'responses' => (int) $responses,
             'response_records' => (int) $responses,
-            'dispensations' => (int) $dispensations,
+            'respondent_base' => (int) $base['respondent_base'],
+            'excluded_total' => (int) $base['excluded_total'],
+            'excluded_by_reason' => $base['excluded_by_reason'],
+            'missing_total' => (int) $base['missing_total'],
+            'participation_percentage' => $base['participation_percentage'],
+            'participation_ratio' => (string) $base['ratio'],
             'total_answers' => (int) ($answerTotals?->total_answers ?? 0),
             'graded_answers' => $graded,
             'correct_answers' => $correct,
             'accuracy' => $graded > 0 ? round(($correct / $graded) * 100, 1) : 0.0,
             'confirmed_plagiarism' => static::confirmedPlagiarismCount($material, $start, $end, $programCategory),
         ];
+    }
+
+    /**
+     * Basis responden untuk lingkup yang sedang dilihat.
+     *
+     * Selalu lewat LiteracyRespondentBase agar aturan pengecualian dispensasi
+     * hanya hidup di satu tempat.
+     *
+     * @param  array<int, string>|null  $classes
+     * @return array<string, mixed>
+     */
+    public static function respondentBase(
+        ?PerpustakaanLiterasiMaterial $material,
+        Carbon $start,
+        Carbon $end,
+        ?string $programCategory = null,
+        ?array $classes = null,
+    ): array {
+        $materialIds = $material !== null
+            ? [(int) $material->getKey()]
+            : LiteracyRespondentBase::materialIdsInScope($programCategory, $start, $end);
+
+        return LiteracyRespondentBase::forMaterialIds($materialIds, $classes);
     }
 
     protected static function confirmedPlagiarismCount(
@@ -769,55 +794,6 @@ class LiterasiAnalytics
             ->selectRaw('count(*) as total')
             ->groupBy('student_class_snapshot')
             ->pluck('total', 'student_class_snapshot');
-    }
-
-    protected static function participationCountsByClass(
-        Carbon $start,
-        Carbon $end,
-        ?PerpustakaanLiterasiMaterial $material,
-        ?string $programCategory = null
-    ): Collection {
-        $responses = static::responseCountsByClass($start, $end, $material, $programCategory);
-        $dispensations = collect();
-
-        if (static::dispensationTableAvailable()) {
-            $dispensations = static::dispensationQuery($material, $programCategory)
-                ->whereBetween('confirmed_at', [$start, $end])
-                ->whereNotNull('student_class_snapshot')
-                ->where('student_class_snapshot', '!=', '')
-                ->select('student_class_snapshot')
-                ->selectRaw('count(*) as total')
-                ->groupBy('student_class_snapshot')
-                ->pluck('total', 'student_class_snapshot');
-        }
-
-        return $responses->keys()
-            ->merge($dispensations->keys())
-            ->unique()
-            ->mapWithKeys(function (string $class) use ($responses, $dispensations): array {
-                $responseTotal = (int) ($responses[$class] ?? 0);
-                $dispensationTotal = (int) ($dispensations[$class] ?? 0);
-
-                return [
-                    $class => [
-                        'responses' => $responseTotal,
-                        'dispensations' => $dispensationTotal,
-                        'total' => $responseTotal + $dispensationTotal,
-                    ],
-                ];
-            });
-    }
-
-    /**
-     * @return array{responses: int, dispensations: int, total: int}
-     */
-    protected static function emptyParticipationCounts(): array
-    {
-        return [
-            'responses' => 0,
-            'dispensations' => 0,
-            'total' => 0,
-        ];
     }
 
     protected static function activeStudentTotalsByClass(): Collection
