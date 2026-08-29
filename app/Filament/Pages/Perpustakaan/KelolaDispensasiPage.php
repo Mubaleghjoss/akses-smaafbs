@@ -42,6 +42,8 @@ class KelolaDispensasiPage extends Page implements HasTable
 
     protected static ?string $navigationLabel = 'Kelola Dispensasi';
 
+    protected static ?string $slug = 'kelola-dispensasi';
+
     protected static ?string $title = 'Kelola Dispensasi Literasi';
 
     protected static ?int $navigationSort = 22;

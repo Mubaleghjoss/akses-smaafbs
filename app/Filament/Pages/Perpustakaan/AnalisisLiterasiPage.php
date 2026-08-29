@@ -30,6 +30,8 @@ class AnalisisLiterasiPage extends Page
 
     protected static ?string $navigationLabel = 'Analisis Literasi';
 
+    protected static ?string $slug = 'analisis-literasi';
+
     protected static ?string $title = 'Analisis Literasi Numerasi';
 
     protected static ?int $navigationSort = 21;
