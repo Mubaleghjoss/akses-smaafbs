@@ -10,45 +10,44 @@
             'label' => 'Slot Siswa Aktif',
             'value' => $angka($base['active_total'] ?? 0),
             'hint' => 'Siswa aktif x materi pada lingkup ini',
-            'tone' => 'default',
+            'tone' => '',
         ],
         [
             'label' => 'Dikeluarkan',
             'value' => $angka($base['excluded_total'] ?? 0),
             'hint' => 'Izin, sakit, dan tes MT — tidak dihitung mengisi',
-            'tone' => 'warning',
+            'tone' => 'is-warning',
         ],
         [
             'label' => 'Basis Responden',
             'value' => $angka($base['respondent_base'] ?? 0),
             'hint' => 'Penyebut persentase partisipasi',
-            'tone' => 'default',
+            'tone' => '',
         ],
         [
             'label' => 'Sudah Mengisi',
             'value' => $angka($base['completed_total'] ?? 0),
             'hint' => ($base['ratio'] ?? '0/0').' = '.$persen($base['participation_percentage'] ?? null),
-            'tone' => 'success',
+            'tone' => 'is-success',
         ],
         [
             'label' => 'Belum Mengisi',
             'value' => $angka($base['missing_total'] ?? 0),
             'hint' => 'Masuk basis responden tetapi belum ada jawaban',
-            'tone' => 'danger',
+            'tone' => 'is-danger',
         ],
         [
             'label' => 'Jawaban di Sampah',
             'value' => $angka($base['trashed_total'] ?? 0),
             'hint' => 'Pernah mengisi lalu dihapus — tetap dihitung belum mengisi',
-            'tone' => 'default',
+            'tone' => '',
         ],
     ];
 
-    $tones = [
-        'default' => 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900',
-        'success' => 'border-success-200 bg-success-50 dark:border-success-800 dark:bg-success-950/40',
-        'warning' => 'border-warning-200 bg-warning-50 dark:border-warning-800 dark:bg-warning-950/40',
-        'danger' => 'border-danger-200 bg-danger-50 dark:border-danger-800 dark:bg-danger-950/40',
+    $penilaian = [
+        ['label' => 'Jawaban Dinilai', 'value' => $angka($summary['graded_answers'] ?? 0).'/'.$angka($summary['total_answers'] ?? 0)],
+        ['label' => 'Jawaban Benar', 'value' => $angka($summary['correct_answers'] ?? 0)],
+        ['label' => 'Akurasi Dinilai', 'value' => $persen($summary['accuracy'] ?? 0)],
     ];
 @endphp
 
@@ -59,30 +58,27 @@
         pengisi maupun sebagai yang belum mengisi.
     </x-slot>
 
-    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    @include('filament.pages.perpustakaan.partials.salin-bagian', [
+        'teks' => $salinTeks ?? '',
+        'catatan' => 'Menyalin ringkasan responden dan penilaian sesuai filter aktif.',
+    ])
+
+    <div class="lit-cards">
         @foreach ($kartu as $item)
-            <div class="rounded-xl border p-4 shadow-sm {{ $tones[$item['tone']] }}">
-                <p class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ $item['label'] }}</p>
-                <p class="mt-1 text-3xl font-bold text-gray-900 dark:text-gray-50">{{ $item['value'] }}</p>
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ $item['hint'] }}</p>
+            <div class="lit-card {{ $item['tone'] }}">
+                <p class="lit-card__label">{{ $item['label'] }}</p>
+                <p class="lit-card__value">{{ $item['value'] }}</p>
+                <p class="lit-card__hint">{{ $item['hint'] }}</p>
             </div>
         @endforeach
     </div>
 
-    <div class="mt-6 grid gap-4 sm:grid-cols-3">
-        <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-            <p class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Jawaban Dinilai</p>
-            <p class="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-50">
-                {{ $angka($summary['graded_answers'] ?? 0) }}/{{ $angka($summary['total_answers'] ?? 0) }}
-            </p>
-        </div>
-        <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-            <p class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Jawaban Benar</p>
-            <p class="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-50">{{ $angka($summary['correct_answers'] ?? 0) }}</p>
-        </div>
-        <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-            <p class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Akurasi Dinilai</p>
-            <p class="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-50">{{ $persen($summary['accuracy'] ?? 0) }}</p>
-        </div>
+    <div class="lit-cards lit-cards--tight">
+        @foreach ($penilaian as $item)
+            <div class="lit-card">
+                <p class="lit-card__label">{{ $item['label'] }}</p>
+                <p class="lit-card__value">{{ $item['value'] }}</p>
+            </div>
+        @endforeach
     </div>
 </x-filament::section>

@@ -233,4 +233,5 @@
         @include('library.literacy._mathjax')
     @endif
     @include('library.literacy._answer_tools', ['students' => $students])
+    @include('library.literacy._copy_guard')
 @endpush

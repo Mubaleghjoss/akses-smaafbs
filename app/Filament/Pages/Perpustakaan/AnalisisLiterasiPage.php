@@ -6,6 +6,7 @@ use App\Filament\Resources\PerpustakaanLiterasiMaterialResource;
 use App\Models\PerpustakaanLiterasiDispensation;
 use App\Models\PerpustakaanLiterasiMaterial;
 use App\Models\User;
+use App\Support\Perpustakaan\LiteracyAnalysisShareText;
 use App\Support\Perpustakaan\LiteracyMonthlyShareText;
 use App\Support\Perpustakaan\LiteracyRespondentBase;
 use App\Support\Perpustakaan\LiterasiAnalytics;
@@ -160,8 +161,10 @@ class AnalisisLiterasiPage extends Page
 
         return $this->analyticsCache = [
             'grading_summary' => LiterasiAnalytics::gradingSummary($material, $start, $end, $category, filled($this->kelas) ? [$this->kelas] : null),
-            'class_response_ranking' => LiterasiAnalytics::classResponseRanking($material, $start, $end, null, $category),
+            // 7 kelas dengan jawaban terbanyak sesuai permintaan operasional.
+            'class_response_ranking' => LiterasiAnalytics::classResponseRanking($material, $start, $end, 7, $category),
             'least_class_response_ranking' => LiterasiAnalytics::leastClassResponseRanking($material, $start, $end, 5, $category),
+            'class_submission_timeline' => LiterasiAnalytics::classSubmissionTimeline($material, $start, $end, $category, filled($this->kelas) ? [$this->kelas] : null),
             'class_correct_ranking' => LiterasiAnalytics::classCorrectRanking($material, $start, $end, 5, $category),
             'student_correct_ranking_by_class' => LiterasiAnalytics::studentCorrectRankingByClass($material, $start, $end, 5, $category),
             'student_wrong_ranking' => LiterasiAnalytics::studentWrongRanking($material, $start, $end, 10, $category),
@@ -245,6 +248,7 @@ class AnalisisLiterasiPage extends Page
             'alasanLabels' => $this->alasanLabels,
             'periodeLabel' => $this->periodeLabel,
             'lingkupLabel' => $this->lingkupLabel,
+            'shareSections' => $this->shareSections(),
         ];
     }
 
@@ -252,16 +256,22 @@ class AnalisisLiterasiPage extends Page
     {
         return [
             Action::make('salinRekap')
-                ->label('Salin Rekap ke WhatsApp')
+                ->label('Salin ke WhatsApp')
                 ->icon('heroicon-o-clipboard-document-list')
-                ->modalHeading('Rekap teks untuk WhatsApp')
-                ->modalDescription('Teks mengikuti rentang tanggal dan kategori yang sedang aktif di halaman ini.')
+                ->modalHeading('Salin hasil analisis ke WhatsApp')
+                ->modalDescription('Pilih bagian yang ingin disalin. Semua teks mengikuti filter yang aktif di halaman ini.')
                 ->modalSubmitAction(false)
                 ->modalCancelActionLabel('Tutup')
-                ->modalWidth('3xl')
+                ->modalWidth('4xl')
                 ->modalContent(fn () => view(
                     'filament.pages.perpustakaan.partials.rekap-share',
-                    ['text' => $this->shareText()],
+                    [
+                        'sections' => $this->shareSections(),
+                        'sectionLabels' => LiteracyAnalysisShareText::sectionLabels(),
+                        'monthlyText' => $this->shareText(),
+                        'periodeLabel' => $this->periodeLabel,
+                        'lingkupLabel' => $this->lingkupLabel,
+                    ],
                 )),
             Action::make('kelolaDispensasi')
                 ->label('Kelola Dispensasi')
@@ -276,6 +286,23 @@ class AnalisisLiterasiPage extends Page
                 ->url(fn (): string => PerpustakaanLiterasiMaterialResource::getUrl())
                 ->visible(fn (): bool => PerpustakaanLiterasiMaterialResource::canViewAny()),
         ];
+    }
+
+    /**
+     * Teks per bagian yang dibangun dari data yang sedang tampil, sehingga
+     * angka pada modal salin selalu sama dengan angka pada halaman.
+     *
+     * @return array<string, string>
+     */
+    public function shareSections(): array
+    {
+        return LiteracyAnalysisShareText::sections(
+            $this->base,
+            $this->analytics,
+            $this->periodeLabel,
+            $this->lingkupLabel,
+            filled($this->kelas) ? $this->kelas : null,
+        );
     }
 
     /**

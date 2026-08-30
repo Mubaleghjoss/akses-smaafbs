@@ -10,6 +10,7 @@ use App\Models\PerpustakaanLiterasiMaterial;
 use App\Models\PerpustakaanLiterasiResponse;
 use App\Models\User;
 use App\Support\Admin\AdminModuleAccess;
+use App\Support\Perpustakaan\LiteracyAnalysisShareText;
 use App\Support\Perpustakaan\LiteracyDispensationWriter;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -256,6 +257,176 @@ class LiteracyAnalysisPagesTest extends TestCase
             ->assertSuccessful()
             ->loadTable()
             ->assertCanSeeTableRecords([$dispensation]);
+    }
+
+    public function test_halaman_merender_kelas_css_khusus_bukan_utility_tailwind(): void
+    {
+        // Panel admin memuat CSS pracompile, bukan Tailwind via Vite, sehingga
+        // halaman harus memakai kelas .lit-* agar tetap bergaya.
+        $material = $this->createMaterial('Materi Render CSS');
+        $this->createResponse($material, $this->createStudent('Ahmad Render', 'X 1'));
+
+        $admin = $this->createAdmin('admin-render-css-literasi');
+
+        Livewire::actingAs($admin)
+            ->test(AnalisisLiterasiPage::class)
+            ->assertSuccessful()
+            ->assertSee('lit-cards', false)
+            ->assertSee('lit-table', false)
+            ->assertSee('lit-field__control', false)
+            ->assertSee('lit-copybar', false)
+            ->assertDontSee('xl:grid-cols-5', false);
+    }
+
+    public function test_teks_salin_per_bagian_tersedia_untuk_semua_label(): void
+    {
+        $material = $this->createMaterial('Materi Bagian Salin');
+        $mengisi = $this->createStudent('Ahmad Salin', 'X 1');
+        $belum = $this->createStudent('Budi Salin', 'X 1');
+        $dispensasi = $this->createStudent('Cici Salin', 'X 2');
+
+        $this->createResponse($material, $mengisi);
+        $this->createDispensation($material, $dispensasi, PerpustakaanLiterasiDispensation::REASON_SICK);
+
+        $admin = $this->createAdmin('admin-bagian-salin');
+
+        $sections = Livewire::actingAs($admin)
+            ->test(AnalisisLiterasiPage::class)
+            ->instance()
+            ->shareSections();
+
+        $this->assertSame(
+            array_keys(LiteracyAnalysisShareText::sectionLabels()),
+            array_keys($sections),
+        );
+
+        foreach ($sections as $key => $text) {
+            $this->assertNotSame('', trim($text), "Bagian {$key} kosong.");
+            $this->assertStringContainsString('*ANALISIS LITERASI NUMERASI*', $text);
+        }
+
+        // Angka pada teks harus sama dengan angka yang tampil di halaman.
+        $this->assertStringContainsString('Basis responden: 2', $sections['ringkasan']);
+        $this->assertStringContainsString('Dikeluarkan (izin/sakit/tes MT): 1', $sections['ringkasan']);
+        $this->assertStringContainsString($belum->nama, $sections['belum']);
+        $this->assertStringContainsString($dispensasi->nama, $sections['dispensasi']);
+        $this->assertStringNotContainsString($mengisi->nama, $sections['belum']);
+    }
+
+    public function test_teks_salin_mengikuti_filter_kelas_yang_aktif(): void
+    {
+        $material = $this->createMaterial('Materi Filter Salin');
+        $this->createResponse($material, $this->createStudent('Ahmad Kelas', 'X 1'));
+        $luarKelas = $this->createStudent('Budi Kelas', 'X 2');
+
+        $admin = $this->createAdmin('admin-filter-salin');
+
+        $sections = Livewire::actingAs($admin)
+            ->test(AnalisisLiterasiPage::class)
+            ->set('kelas', 'X 1')
+            ->instance()
+            ->shareSections();
+
+        $this->assertStringContainsString('*Kelas:* X 1', $sections['ringkasan']);
+        $this->assertStringContainsString('X 1', $sections['partisipasi']);
+        $this->assertStringNotContainsString($luarKelas->nama, $sections['belum']);
+    }
+
+    public function test_teks_salin_membersihkan_karakter_penanda_whatsapp(): void
+    {
+        // Nama materi bertanda bintang tidak boleh merusak format tebal WhatsApp.
+        $material = $this->createMaterial('Materi *Bintang* Uji');
+        $this->createStudent('Ahmad Bintang', 'XI 3');
+        $this->createResponse($material, $this->createStudent('Budi Bintang', 'XI 3'));
+
+        $admin = $this->createAdmin('admin-sanitasi-salin');
+
+        $sections = Livewire::actingAs($admin)
+            ->test(AnalisisLiterasiPage::class)
+            ->instance()
+            ->shareSections();
+
+        $this->assertStringContainsString('Materi Bintang Uji', $sections['belum']);
+        $this->assertStringNotContainsString('*Bintang*', $sections['belum']);
+    }
+
+    public function test_teks_salin_tetap_terbentuk_saat_tidak_ada_data(): void
+    {
+        $admin = $this->createAdmin('admin-kosong-salin');
+
+        $sections = Livewire::actingAs($admin)
+            ->test(AnalisisLiterasiPage::class)
+            ->instance()
+            ->shareSections();
+
+        $this->assertStringContainsString('Tidak ada data pada rentang dan filter ini.', $sections['partisipasi']);
+        $this->assertStringContainsString('Belum ada dispensasi pada rentang dan filter ini.', $sections['dispensasi']);
+        $this->assertStringContainsString('Tidak ada indikasi kemiripan.', $sections['plagiasi']);
+    }
+
+    public function test_ranking_kelas_jawaban_terbanyak_dibatasi_tujuh_kelas(): void
+    {
+        $material = $this->createMaterial('Materi Tujuh Kelas');
+
+        // 9 kelas mengisi; tabel hanya boleh menampilkan 7 teratas.
+        foreach (range(1, 9) as $index) {
+            $class = 'X '.$index;
+
+            foreach (range(1, $index) as $urutan) {
+                $this->createResponse($material, $this->createStudent('Siswa '.$class.' '.$urutan, $class));
+            }
+        }
+
+        $admin = $this->createAdmin('admin-tujuh-kelas');
+
+        $ranking = Livewire::actingAs($admin)
+            ->test(AnalisisLiterasiPage::class)
+            ->instance()
+            ->analytics['class_response_ranking'];
+
+        $this->assertCount(7, $ranking);
+        // Urutan dari jawaban terbanyak: X 9 (9 jawaban) sampai X 3.
+        $this->assertSame('X 9', $ranking[0]['class']);
+        $this->assertSame(9, $ranking[0]['total']);
+        $this->assertSame('X 3', $ranking[6]['class']);
+    }
+
+    public function test_timeline_pengisian_menampilkan_awal_akhir_dan_hari_tersibuk(): void
+    {
+        $material = $this->createMaterial('Materi Timeline');
+
+        $awal = now()->startOfMonth()->addDays(1)->setTime(7, 30);
+        $sibuk = now()->startOfMonth()->addDays(3)->setTime(9, 0);
+
+        $satu = $this->createResponse($material, $this->createStudent('Ahmad Timeline', 'XI 1'));
+        $satu->forceFill(['submitted_at' => $awal])->save();
+
+        foreach (['Budi Timeline', 'Cici Timeline'] as $nama) {
+            $response = $this->createResponse($material, $this->createStudent($nama, 'XI 1'));
+            $response->forceFill(['submitted_at' => $sibuk])->save();
+        }
+
+        $admin = $this->createAdmin('admin-timeline-walas');
+
+        $component = Livewire::actingAs($admin)
+            ->test(AnalisisLiterasiPage::class)
+            ->assertSuccessful()
+            ->assertSee('Timeline Pengisian Per Kelas');
+
+        $timeline = $component->instance()->analytics['class_submission_timeline'];
+
+        $this->assertCount(1, $timeline);
+        $this->assertSame('XI 1', $timeline[0]['class']);
+        $this->assertSame(3, $timeline[0]['total']);
+        $this->assertSame($awal->toDateTimeString(), $timeline[0]['first_at']->toDateTimeString());
+        $this->assertSame($sibuk->toDateTimeString(), $timeline[0]['last_at']->toDateTimeString());
+        $this->assertSame(2, $timeline[0]['active_days']);
+        $this->assertSame($sibuk->toDateString(), $timeline[0]['busiest_day']);
+        $this->assertSame(2, $timeline[0]['busiest_day_total']);
+
+        $sections = $component->instance()->shareSections();
+        $this->assertStringContainsString('*TIMELINE PENGISIAN PER KELAS*', $sections['timeline']);
+        $this->assertStringContainsString('Hari tersibuk', $sections['timeline']);
     }
 
     public function test_teks_share_mengikuti_rentang_tanggal_aktif(): void

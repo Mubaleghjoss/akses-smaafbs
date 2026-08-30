@@ -293,6 +293,82 @@ class LiterasiAnalytics
         return ($limit === null ? $rows : $rows->take($limit))->values()->all();
     }
 
+    /**
+     * Timeline pengisian per kelas: kapan kelas mulai mengisi, kapan terakhir,
+     * dan hari tersibuknya. Dipakai wali kelas untuk melihat ritme pengisian.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function classSubmissionTimeline(
+        ?PerpustakaanLiterasiMaterial $material,
+        Carbon $start,
+        Carbon $end,
+        ?string $programCategory = null,
+        ?array $classes = null,
+    ): array {
+        $rows = static::responseQuery($material, $programCategory)
+            ->whereBetween('submitted_at', [$start, $end])
+            ->whereNotNull('student_class_snapshot')
+            ->where('student_class_snapshot', '!=', '')
+            ->when(
+                $classes !== null && $classes !== [],
+                fn (Builder $query): Builder => $query->whereIn('student_class_snapshot', $classes),
+            )
+            ->get(['student_class_snapshot', 'submitted_at']);
+
+        if ($rows->isEmpty()) {
+            return [];
+        }
+
+        $base = collect(
+            static::respondentBaseByClass($material, $start, $end, $programCategory, $classes),
+        )->keyBy('class');
+
+        return $rows
+            ->groupBy('student_class_snapshot')
+            ->map(function (Collection $group, string $class) use ($base): array {
+                $times = $group
+                    ->pluck('submitted_at')
+                    ->filter()
+                    ->map(fn ($value): Carbon => Carbon::parse($value))
+                    ->sort()
+                    ->values();
+
+                // Hari tersibuk memakai tanggal lokal supaya sama dengan yang
+                // dilihat wali kelas pada tabel harian.
+                $perDay = $times
+                    ->groupBy(fn (Carbon $time): string => $time->toDateString())
+                    ->map(fn (Collection $items): int => $items->count())
+                    ->sortDesc();
+
+                $first = $times->first();
+                $last = $times->last();
+                $classBase = $base->get($class);
+
+                return [
+                    'class' => $class,
+                    'total' => $times->count(),
+                    'respondent_base' => (int) ($classBase['respondent_base'] ?? 0),
+                    'missing_total' => (int) ($classBase['missing_total'] ?? 0),
+                    'percentage' => $classBase['percentage'] ?? null,
+                    'first_at' => $first,
+                    'last_at' => $last,
+                    'active_days' => $perDay->count(),
+                    'busiest_day' => $perDay->keys()->first(),
+                    'busiest_day_total' => (int) ($perDay->first() ?? 0),
+                    'span_days' => $first !== null && $last !== null
+                        ? $first->copy()->startOfDay()->diffInDays($last->copy()->startOfDay()) + 1
+                        : 0,
+                ];
+            })
+            ->sortBy([
+                ['first_at', 'asc'],
+                ['class', 'asc'],
+            ])
+            ->values()
+            ->all();
+    }
+
     public static function classCorrectRanking(
         ?PerpustakaanLiterasiMaterial $material,
         Carbon $start,

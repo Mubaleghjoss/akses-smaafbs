@@ -4119,6 +4119,25 @@ class LibraryLiteracyProgramTest extends TestCase
         }
     }
 
+    public function test_public_literacy_page_blocks_right_click_and_copy_on_prompt_and_answer_form(): void
+    {
+        $material = $this->createMaterial('Materi Proteksi Salin');
+        $material->questions()->create([
+            'prompt' => 'Jelaskan isi bacaan dengan kalimatmu sendiri.',
+            'question_type' => PerpustakaanLiterasiQuestion::TYPE_ESSAY,
+            'min_characters' => 10,
+            'max_characters' => 500,
+        ]);
+
+        $this->get(route('library.literacy.show', $material->slug))
+            ->assertOk()
+            // Guard dipasang lewat @push('scripts') sehingga ikut terender.
+            ->assertSee("document.addEventListener('contextmenu'", false)
+            ->assertSee("['copy', 'cut', 'dragstart']", false)
+            ->assertSee('[data-literacy-answer-form]', false)
+            ->assertSee('.literacy-reading-content', false);
+    }
+
     protected function createMaterial(string $title, array $attributes = []): PerpustakaanLiterasiMaterial
     {
         return PerpustakaanLiterasiMaterial::query()->create(array_merge([

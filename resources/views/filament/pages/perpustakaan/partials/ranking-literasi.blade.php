@@ -8,155 +8,174 @@
     $siswaSalah = $analytics['student_wrong_ranking'] ?? [];
 @endphp
 
-<div class="grid gap-6 xl:grid-cols-2">
-    <x-filament::section>
-        <x-slot name="heading">Kelas Partisipasi Tertinggi</x-slot>
+<x-filament::section>
+    <x-slot name="heading">Ranking Kelas & Siswa</x-slot>
+    <x-slot name="description">
+        Empat sudut pandang pada lingkup yang sama: partisipasi tertinggi, kelas perlu perhatian, akurasi
+        jawaban, dan siswa dengan jawaban salah terbanyak.
+    </x-slot>
 
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead class="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:text-gray-400">
-                    <tr>
-                        <th class="py-2 pr-3">#</th>
-                        <th class="py-2 pr-3">Kelas</th>
-                        <th class="py-2 pr-3 text-right">Rasio</th>
-                        <th class="py-2 text-right">Persen</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-                    @forelse ($partisipasiTertinggi as $index => $row)
+    @include('filament.pages.perpustakaan.partials.salin-bagian', [
+        'teks' => $salinTeks ?? '',
+        'catatan' => 'Menyalin seluruh ranking termasuk siswa terbaik per kelas.',
+    ])
+
+    <div class="lit-duo">
+        <div>
+            <p class="lit-subhead">7 Kelas Jawaban Terbanyak</p>
+            <div class="lit-tableWrap">
+                <table class="lit-table">
+                    <thead>
                         <tr>
-                            <td class="py-2 pr-3 text-gray-500">{{ $index + 1 }}</td>
-                            <td class="py-2 pr-3 font-medium text-gray-900 dark:text-gray-100">{{ $row['class'] }}</td>
-                            <td class="py-2 pr-3 text-right">{{ $row['ratio'] ?? '-' }}</td>
-                            <td class="py-2 text-right font-semibold">{{ $persen($row['percentage'] ?? null) }}</td>
+                            <th>#</th>
+                            <th>Kelas</th>
+                            <th class="is-num">Jawaban</th>
+                            <th class="is-num">Rasio</th>
+                            <th class="is-num">Persen</th>
                         </tr>
-                    @empty
-                        <tr><td colspan="4" class="py-6 text-center text-gray-500 dark:text-gray-400">Belum ada data.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @forelse ($partisipasiTertinggi as $index => $row)
+                            <tr>
+                                <td data-label="Peringkat"><span class="lit-rank">{{ $index + 1 }}</span></td>
+                                <td class="is-name" data-label="Kelas">{{ $row['class'] }}</td>
+                                <td class="is-num is-strong" data-label="Jawaban">{{ $angka($row['total'] ?? 0) }}</td>
+                                <td class="is-num" data-label="Rasio">{{ $row['ratio'] ?? '-' }}</td>
+                                <td class="is-num" data-label="Persen">
+                                    <span class="lit-pct is-good">{{ $persen($row['percentage'] ?? null) }}</span>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="5" class="lit-empty">Belum ada data.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
         </div>
-    </x-filament::section>
 
-    <x-filament::section>
-        <x-slot name="heading">Kelas Perlu Perhatian</x-slot>
-        <x-slot name="description">Partisipasi terendah pada lingkup ini.</x-slot>
-
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead class="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:text-gray-400">
-                    <tr>
-                        <th class="py-2 pr-3">Kelas</th>
-                        <th class="py-2 pr-3 text-right">Rasio</th>
-                        <th class="py-2 pr-3 text-right">Persen</th>
-                        <th class="py-2 text-right">Belum Mengisi</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-                    @forelse ($partisipasiTerendah as $row)
+        <div>
+            <p class="lit-subhead">Kelas Perlu Perhatian</p>
+            <div class="lit-tableWrap">
+                <table class="lit-table">
+                    <thead>
                         <tr>
-                            <td class="py-2 pr-3 font-medium text-gray-900 dark:text-gray-100">{{ $row['class'] }}</td>
-                            <td class="py-2 pr-3 text-right">{{ $row['ratio'] ?? '-' }}</td>
-                            <td class="py-2 pr-3 text-right font-semibold text-danger-600 dark:text-danger-400">{{ $persen($row['percentage'] ?? null) }}</td>
-                            <td class="py-2 text-right">{{ $angka($row['missing_total'] ?? 0) }}</td>
+                            <th>Kelas</th>
+                            <th class="is-num">Rasio</th>
+                            <th class="is-num">Persen</th>
+                            <th class="is-num">Belum Mengisi</th>
                         </tr>
-                    @empty
-                        <tr><td colspan="4" class="py-6 text-center text-gray-500 dark:text-gray-400">Belum ada data.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @forelse ($partisipasiTerendah as $row)
+                            <tr>
+                                <td class="is-name" data-label="Kelas">{{ $row['class'] }}</td>
+                                <td class="is-num" data-label="Rasio">{{ $row['ratio'] ?? '-' }}</td>
+                                <td class="is-num" data-label="Persen">
+                                    <span class="lit-pct is-bad">{{ $persen($row['percentage'] ?? null) }}</span>
+                                </td>
+                                <td class="is-num" data-label="Belum Mengisi">{{ $angka($row['missing_total'] ?? 0) }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="4" class="lit-empty">Belum ada data.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
         </div>
-    </x-filament::section>
 
-    <x-filament::section>
-        <x-slot name="heading">Akurasi Per Kelas</x-slot>
-
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead class="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:text-gray-400">
-                    <tr>
-                        <th class="py-2 pr-3">Kelas</th>
-                        <th class="py-2 pr-3 text-right">Benar</th>
-                        <th class="py-2 pr-3 text-right">Dinilai</th>
-                        <th class="py-2 text-right">Akurasi</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-                    @forelse ($kelasBenar as $row)
+        <div>
+            <p class="lit-subhead">Akurasi Per Kelas</p>
+            <div class="lit-tableWrap">
+                <table class="lit-table">
+                    <thead>
                         <tr>
-                            <td class="py-2 pr-3 font-medium text-gray-900 dark:text-gray-100">{{ $row['class'] }}</td>
-                            <td class="py-2 pr-3 text-right">{{ $angka($row['correct_answers'] ?? 0) }}</td>
-                            <td class="py-2 pr-3 text-right">{{ $angka($row['graded_answers'] ?? 0) }}</td>
-                            <td class="py-2 text-right font-semibold">{{ $persen($row['accuracy'] ?? 0) }}</td>
+                            <th>Kelas</th>
+                            <th class="is-num">Benar</th>
+                            <th class="is-num">Dinilai</th>
+                            <th class="is-num">Akurasi</th>
                         </tr>
-                    @empty
-                        <tr><td colspan="4" class="py-6 text-center text-gray-500 dark:text-gray-400">Belum ada jawaban dinilai.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @forelse ($kelasBenar as $row)
+                            <tr>
+                                <td class="is-name" data-label="Kelas">{{ $row['class'] }}</td>
+                                <td class="is-num" data-label="Benar">{{ $angka($row['correct_answers'] ?? 0) }}</td>
+                                <td class="is-num" data-label="Dinilai">{{ $angka($row['graded_answers'] ?? 0) }}</td>
+                                <td class="is-num is-strong" data-label="Akurasi">{{ $persen($row['accuracy'] ?? 0) }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="4" class="lit-empty">Belum ada jawaban dinilai.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
         </div>
-    </x-filament::section>
 
-    <x-filament::section>
-        <x-slot name="heading">Siswa Banyak Salah</x-slot>
-
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead class="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:text-gray-400">
-                    <tr>
-                        <th class="py-2 pr-3">Siswa</th>
-                        <th class="py-2 pr-3">Kelas</th>
-                        <th class="py-2 text-right">Salah</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-                    @forelse ($siswaSalah as $row)
+        <div>
+            <p class="lit-subhead">Siswa Banyak Salah</p>
+            <div class="lit-tableWrap">
+                <table class="lit-table">
+                    <thead>
                         <tr>
-                            <td class="py-2 pr-3 text-gray-900 dark:text-gray-100">{{ $row['name'] }}</td>
-                            <td class="py-2 pr-3 text-gray-500 dark:text-gray-400">{{ $row['class'] }}</td>
-                            <td class="py-2 text-right font-semibold">{{ $angka($row['wrong_answers'] ?? 0) }}</td>
+                            <th>Siswa</th>
+                            <th>Kelas</th>
+                            <th class="is-num">Salah</th>
                         </tr>
-                    @empty
-                        <tr><td colspan="3" class="py-6 text-center text-gray-500 dark:text-gray-400">Belum ada jawaban salah.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @forelse ($siswaSalah as $row)
+                            <tr>
+                                <td class="is-name" data-label="Siswa">{{ $row['name'] }}</td>
+                                <td class="is-muted" data-label="Kelas">{{ $row['class'] }}</td>
+                                <td class="is-num is-strong" data-label="Salah">{{ $angka($row['wrong_answers'] ?? 0) }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="3" class="lit-empty">Belum ada jawaban salah.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
         </div>
-    </x-filament::section>
-</div>
+    </div>
+</x-filament::section>
 
 <x-filament::section collapsible collapsed>
     <x-slot name="heading">Siswa Terbaik Per Kelas</x-slot>
 
-    <div class="space-y-3">
+    <div class="lit-details">
         @forelse ($siswaPerKelas as $kelas => $rows)
-            <details class="rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
-                <summary class="cursor-pointer text-sm font-medium text-gray-800 dark:text-gray-100">{{ $kelas }}</summary>
-                <div class="mt-3 overflow-x-auto">
-                    <table class="w-full text-xs">
-                        <thead class="text-left uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                            <tr>
-                                <th class="py-1 pr-3">Siswa</th>
-                                <th class="py-1 pr-3 text-right">Benar</th>
-                                <th class="py-1 pr-3 text-right">Dinilai</th>
-                                <th class="py-1 text-right">Akurasi</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-                            @foreach ($rows as $row)
+            <details class="lit-detail">
+                <summary>
+                    <span>{{ $kelas }}</span>
+                    <span class="lit-detail__count">{{ count($rows) }} siswa</span>
+                </summary>
+                <div class="lit-detail__body">
+                    <div class="lit-tableWrap">
+                        <table class="lit-table">
+                            <thead>
                                 <tr>
-                                    <td class="py-1 pr-3 text-gray-900 dark:text-gray-100">{{ $row['name'] }}</td>
-                                    <td class="py-1 pr-3 text-right">{{ $angka($row['correct_answers'] ?? 0) }}</td>
-                                    <td class="py-1 pr-3 text-right">{{ $angka($row['graded_answers'] ?? 0) }}</td>
-                                    <td class="py-1 text-right">{{ $persen($row['accuracy'] ?? 0) }}</td>
+                                    <th>Siswa</th>
+                                    <th class="is-num">Benar</th>
+                                    <th class="is-num">Dinilai</th>
+                                    <th class="is-num">Akurasi</th>
                                 </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                @foreach ($rows as $row)
+                                    <tr>
+                                        <td class="is-name" data-label="Siswa">{{ $row['name'] }}</td>
+                                        <td class="is-num" data-label="Benar">{{ $angka($row['correct_answers'] ?? 0) }}</td>
+                                        <td class="is-num" data-label="Dinilai">{{ $angka($row['graded_answers'] ?? 0) }}</td>
+                                        <td class="is-num is-strong" data-label="Akurasi">{{ $persen($row['accuracy'] ?? 0) }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </details>
         @empty
-            <p class="text-sm text-gray-500 dark:text-gray-400">Belum ada jawaban yang dinilai pada lingkup ini.</p>
+            <p class="lit-empty">Belum ada jawaban yang dinilai pada lingkup ini.</p>
         @endforelse
     </div>
 </x-filament::section>
