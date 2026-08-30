@@ -8537,12 +8537,15 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
    memakai kelas .lit-* di bawah ini supaya tetap terbaca.
    ========================================================================== */
 
-.lit-stack { display:grid; gap:1.5rem; }
+.lit-stack { display:grid; gap:1.5rem; min-width:0; }
+.lit-stack > * { min-width:0; max-width:100%; }
 
 /* --- Filter ------------------------------------------------------------- */
 .lit-filter__grid {
     display:grid;
-    grid-template-columns:repeat(auto-fit, minmax(11rem, 1fr));
+    /* min() menjaga kolom tetap menyusut di bawah lebar minimumnya pada ponsel;
+       tanpa itu grid memaksa lebar kolom dan isi tabel/kartu terpotong. */
+    grid-template-columns:repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
     gap:.85rem;
 }
 
@@ -8587,7 +8590,7 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 
 .lit-meta {
     display:grid;
-    grid-template-columns:repeat(auto-fit, minmax(13rem, 1fr));
+    grid-template-columns:repeat(auto-fit, minmax(min(13rem, 100%), 1fr));
     gap:.5rem;
     margin-top:1rem;
 }
@@ -8613,11 +8616,11 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 /* --- Kartu ringkasan ---------------------------------------------------- */
 .lit-cards {
     display:grid;
-    grid-template-columns:repeat(auto-fit, minmax(13rem, 1fr));
+    grid-template-columns:repeat(auto-fit, minmax(min(13rem, 100%), 1fr));
     gap:.85rem;
 }
 
-.lit-cards--tight { grid-template-columns:repeat(auto-fit, minmax(11rem, 1fr)); margin-top:1.25rem; }
+.lit-cards--tight { grid-template-columns:repeat(auto-fit, minmax(min(11rem, 100%), 1fr)); margin-top:1.25rem; }
 
 .lit-card {
     min-width:0;
@@ -8664,7 +8667,18 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .dark .lit-card.is-danger { background:rgb(225 29 72 / 0.1); }
 
 /* --- Tabel -------------------------------------------------------------- */
-.lit-tableWrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+/* min-width:0 + max-width:100% wajib: pembungkus tabel berada di dalam grid
+   (.lit-stack/.lit-duo) dan di dalam section Filament yang memakai flex.
+   Tanpa keduanya, item grid/flex memakai lebar konten sebagai lebar minimum,
+   sehingga overflow-x:auto tidak pernah aktif dan kolom terakhir tabel
+   terpotong di luar kartu — inilah gejala "data kepotong di samping" pada PWA. */
+.lit-tableWrap {
+    max-width:100%;
+    min-width:0;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-x:contain;
+}
 
 .lit-table {
     width:100%;
@@ -8747,8 +8761,10 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .dark .lit-empty { color:#94a3b8; }
 
 /* --- Grid dua kolom ----------------------------------------------------- */
-.lit-duo { display:grid; grid-template-columns:repeat(auto-fit, minmax(22rem, 1fr)); gap:1.5rem; }
-.lit-split { display:grid; grid-template-columns:repeat(auto-fit, minmax(18rem, 1fr)); gap:1.25rem; }
+.lit-duo { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(22rem, 100%), 1fr)); gap:1.5rem; }
+.lit-split { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); gap:1.25rem; }
+.lit-duo > *,
+.lit-split > * { min-width:0; }
 
 .lit-subhead {
     margin:0 0 .5rem;
@@ -8809,7 +8825,7 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 
 .lit-chips {
     display:grid;
-    grid-template-columns:repeat(auto-fill, minmax(15rem, 1fr));
+    grid-template-columns:repeat(auto-fill, minmax(min(15rem, 100%), 1fr));
     gap:.35rem;
     margin:0;
     padding:0;
@@ -8916,9 +8932,13 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .dark .lit-share__count { color:#94a3b8; }
 
 /* --- Mobile ------------------------------------------------------------- */
-@media (max-width:640px) {
-    .lit-card__value { font-size:1.5rem; }
+/* Tabel berubah menjadi kartu berdasarkan lebar RUANG ISI (container query),
+   bukan lebar layar. Di panel admin, area isi jauh lebih sempit daripada
+   viewport karena ada sidebar; memakai @media saja membuat tabel tetap tampil
+   penuh pada tablet/PWA lalu kolom terakhirnya terpotong. */
+.lit-tableWrap { container-type:inline-size; container-name:littable; }
 
+@container littable (max-width: 46rem) {
     .lit-table thead { display:none; }
 
     .lit-table,
@@ -8945,6 +8965,7 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
         padding:.4rem .65rem;
         white-space:normal;
         text-align:right;
+        overflow-wrap:anywhere;
     }
 
     .lit-table td + td { border-top:1px solid #eef2f7; }
@@ -8967,6 +8988,61 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
     .lit-table td[data-label=""]::before { content:none; }
     .lit-table td.lit-empty { display:block; text-align:center; }
     .lit-table td.lit-empty::before { content:none; }
+}
 
+@media (max-width:640px) {
+    .lit-card__value { font-size:1.5rem; }
     .lit-share__text { min-height:14rem; font-size:.72rem; }
+
+    /* Cadangan untuk browser tanpa dukungan container query. */
+    @supports not (container-type: inline-size) {
+        .lit-table thead { display:none; }
+
+        .lit-table,
+        .lit-table tbody,
+        .lit-table tr,
+        .lit-table td { display:block; width:100%; }
+
+        .lit-table tbody tr {
+            margin-bottom:.6rem;
+            border:1px solid #dbe4ee;
+            border-radius:.7rem;
+            overflow:hidden;
+        }
+
+        .dark .lit-table tbody tr { border-color:rgb(255 255 255 / 0.1); }
+        .lit-table tbody tr + tr td { border-top:0; }
+
+        .lit-table td {
+            display:flex;
+            align-items:baseline;
+            justify-content:space-between;
+            gap:.75rem;
+            padding:.4rem .65rem;
+            white-space:normal;
+            text-align:right;
+            overflow-wrap:anywhere;
+        }
+
+        .lit-table td + td { border-top:1px solid #eef2f7; }
+        .dark .lit-table td + td { border-top-color:rgb(255 255 255 / 0.07); }
+
+        .lit-table td::before {
+            content:attr(data-label);
+            flex:0 0 auto;
+            font-size:.7rem;
+            font-weight:850;
+            letter-spacing:.04em;
+            text-transform:uppercase;
+            color:#64748b;
+            text-align:left;
+        }
+
+        .dark .lit-table td::before { color:#94a3b8; }
+
+        .lit-table td.is-name { text-align:right; }
+        .lit-table td[data-label=""]::before { content:none; }
+        .lit-table td.lit-empty { display:block; text-align:center; }
+        .lit-table td.lit-empty::before { content:none; }
+    }
 }

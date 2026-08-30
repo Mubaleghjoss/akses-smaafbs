@@ -4134,8 +4134,16 @@ class LibraryLiteracyProgramTest extends TestCase
             // Guard dipasang lewat @push('scripts') sehingga ikut terender.
             ->assertSee("document.addEventListener('contextmenu'", false)
             ->assertSee("['copy', 'cut', 'dragstart']", false)
+            ->assertSee("document.addEventListener('selectstart'", false)
             ->assertSee('[data-literacy-answer-form]', false)
-            ->assertSee('.literacy-reading-content', false);
+            ->assertSee('.literacy-reading-content', false)
+            // Lapis CSS wajib ada: long-press di HP TIDAK memicu event
+            // contextmenu, jadi tanpa ini teks soal masih bisa diblok & disalin.
+            ->assertSee('-webkit-touch-callout: none', false)
+            ->assertSee('user-select: none', false)
+            // Kolom jawaban harus tetap bisa diseleksi supaya siswa bisa
+            // mengoreksi tulisannya sendiri.
+            ->assertSee('user-select: text', false);
     }
 
     protected function createMaterial(string $title, array $attributes = []): PerpustakaanLiterasiMaterial
