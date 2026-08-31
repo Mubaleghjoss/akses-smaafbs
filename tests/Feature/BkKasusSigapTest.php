@@ -169,7 +169,25 @@ class BkKasusSigapTest extends TestCase
             ->assertSee('Kelas yang Terkena Catatan SIGAP')
             ->assertSee('Kelas Tanpa Catatan SIGAP')
             ->assertSee('Siswa A')
-            ->assertSee('XII 3');
+            ->assertSee('XII 3')
+            ->assertSee('sigap-page', false)
+            ->assertSee('sigap-summary-grid', false)
+            ->assertSee('data-label="Nama Siswa"', false)
+            ->assertDontSee('class="space-y-6"', false)
+            ->assertDontSee('md:grid-cols-4', false);
+
+        $blade = file_get_contents(resource_path('views/filament/pages/bk/rekap-sigap.blade.php'));
+        $css = file_get_contents(public_path('css/filament-admin-responsive.css'));
+
+        $this->assertIsString($blade);
+        $this->assertIsString($css);
+        preg_match_all('/\bsigap-[a-z0-9_-]+/', $blade, $matches);
+        $classes = array_values(array_unique($matches[0]));
+
+        $this->assertNotEmpty($classes);
+        foreach ($classes as $class) {
+            $this->assertStringContainsString('.'.$class, $css, "Selector .{$class} belum tersedia di CSS panel.");
+        }
     }
 
     protected function makeAdmin(): User
