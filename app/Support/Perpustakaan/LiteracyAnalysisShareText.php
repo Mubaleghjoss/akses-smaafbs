@@ -122,8 +122,8 @@ final class LiteracyAnalysisShareText
             $lines[] = ($index + 1).'. '.self::plain($row['class'] ?? '-')
                 .' — '.self::number($row['completed_total'] ?? 0).'/'.self::number($row['respondent_base'] ?? 0)
                 .' ('.self::percent($row['participation_percentage'] ?? null).')'
-                .', belum '.self::number($row['missing_total'] ?? 0)
-                .(($row['excluded_total'] ?? 0) > 0 ? ', dispensasi '.self::number($row['excluded_total']) : '');
+                .', belum '.self::number($row['missing_total'] ?? 0).' slot'
+                .(($row['excluded_total'] ?? 0) > 0 ? ', dispensasi '.self::number($row['excluded_total']).' slot' : '');
         }
 
         return $lines;
@@ -151,6 +151,10 @@ final class LiteracyAnalysisShareText
             $lines[] = ($index + 1).'. *'.self::plain($row['class'] ?? '-').'*';
             $lines[] = '   Pengisian: '.self::number($row['total'] ?? 0).'/'.self::number($row['respondent_base'] ?? 0)
                 .' ('.self::percent($row['percentage'] ?? null).')';
+            $lines[] = '   Asal angka: '.self::number($row['active_total'] ?? 0).' slot siswa aktif'
+                .' - '.self::number($row['excluded_total'] ?? 0).' dispensasi'
+                .' = '.self::number($row['respondent_base'] ?? 0).' basis'
+                .' ('.self::number($row['unique_students'] ?? 0).' siswa)';
             $lines[] = '   Mulai: '.($mulai ? $mulai->translatedFormat('d M Y H:i') : '-');
             $lines[] = '   Terakhir: '.($akhir ? $akhir->translatedFormat('d M Y H:i') : '-');
             $lines[] = '   Hari aktif: '.self::number($row['active_days'] ?? 0)
@@ -160,6 +164,61 @@ final class LiteracyAnalysisShareText
                 $lines[] = '   Hari tersibuk: '
                     .Carbon::parse($row['busiest_day'])->translatedFormat('d M Y')
                     .' ('.self::number($row['busiest_day_total'] ?? 0).' pengisian)';
+            }
+
+            $lines = array_merge($lines, self::rincianHarian($row));
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Rincian per hari satu kelas: jumlah pengisi, nama-namanya, dan siapa yang
+     * belum. Dipakai oleh bagian timeline dan ranking supaya isi salinan sama
+     * dengan drill-down di layar.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<int, string>
+     */
+    private static function rincianHarian(array $row, string $indent = '   '): array
+    {
+        $lines = [];
+        $days = $row['days'] ?? [];
+
+        if ($days !== []) {
+            $lines[] = $indent.'Rincian per hari:';
+
+            foreach ($days as $day) {
+                $lines[] = $indent.'- '.Carbon::parse($day['date'])->translatedFormat('d M Y')
+                    .': '.self::number($day['total'] ?? 0).' mengisi';
+
+                foreach ($day['students'] ?? [] as $student) {
+                    $lines[] = $indent.'  . '.self::plain($student['name'] ?? '-')
+                        .' ('.self::plain($student['time'] ?? '-').' - '.self::plain($student['material_title'] ?? '-').')';
+                }
+            }
+        }
+
+        $belum = $row['missing_students'] ?? [];
+
+        if ($belum !== []) {
+            $lines[] = $indent.'Belum mengisi ('.self::number($row['missing_total'] ?? count($belum)).'):';
+
+            foreach (array_values($belum) as $index => $student) {
+                $lines[] = $indent.'  '.($index + 1).'. '.self::plain($student['name'] ?? '-')
+                    .' ('.self::plain($student['material_title'] ?? '-').')';
+            }
+        }
+
+        $dispensasi = $row['excluded_students'] ?? [];
+
+        if ($dispensasi !== []) {
+            $lines[] = $indent.'Dispensasi - tidak dihitung ('.self::number($row['excluded_total'] ?? count($dispensasi)).'):';
+
+            foreach (array_values($dispensasi) as $index => $student) {
+                $lines[] = $indent.'  '.($index + 1).'. '.self::plain($student['name'] ?? '-')
+                    .' - '.self::plain($student['reason_label'] ?? '-')
+                    .' ('.self::plain($student['material_title'] ?? '-').')';
             }
         }
 
@@ -240,7 +299,8 @@ final class LiteracyAnalysisShareText
         $lines = [];
 
         $lines[] = '*KELAS PARTISIPASI TERTINGGI*';
-        $lines = array_merge($lines, self::rasioRows($analytics['class_response_ranking'] ?? []));
+        $lines[] = '(Jawaban = slot terisi siswa x materi; rasio dibanding basis responden kelas itu sendiri, dispensasi sudah dikeluarkan)';
+        $lines = array_merge($lines, self::rasioRows($analytics['class_response_ranking'] ?? [], true));
 
         $lines[] = '';
         $lines[] = '*KELAS PERLU PERHATIAN*';
@@ -248,15 +308,39 @@ final class LiteracyAnalysisShareText
 
         $lines[] = '';
         $lines[] = '*AKURASI PER KELAS*';
-        $akurasi = $analytics['class_correct_ranking'] ?? [];
+        $lines[] = '(Akurasi = poin benar / poin yang sudah dinilai; jawaban belum dinilai tidak dihitung salah)';
+        $akurasi = collect($analytics['class_correct_ranking'] ?? [])->keyBy('class');
+        $belumDinilai = $analytics['class_pending_grading'] ?? [];
+        $akurasi = $akurasi
+            ->union(collect(array_keys($belumDinilai))->mapWithKeys(fn (string $kelas): array => [
+                $kelas => [
+                    'class' => $kelas,
+                    'correct_answers' => 0,
+                    'graded_answers' => 0,
+                    'accuracy' => null,
+                ],
+            ]))
+            ->sortKeys(SORT_NATURAL)
+            ->values();
 
-        if ($akurasi === []) {
-            $lines[] = 'Belum ada jawaban dinilai.';
+        if ($akurasi->isEmpty()) {
+            $lines[] = 'Belum ada jawaban untuk dinilai.';
         } else {
             foreach ($akurasi as $index => $row) {
-                $lines[] = ($index + 1).'. '.self::plain($row['class'] ?? '-')
+                $class = (string) ($row['class'] ?? '-');
+                $pending = $belumDinilai[$class] ?? [];
+                $pendingTotal = (int) collect($pending)->sum('pending_answers');
+
+                $lines[] = ($index + 1).'. '.self::plain($class)
                     .' — '.self::number($row['correct_answers'] ?? 0).'/'.self::number($row['graded_answers'] ?? 0)
-                    .' ('.self::percent($row['accuracy'] ?? null).')';
+                    .' ('.self::percent($row['accuracy'] ?? null).')'
+                    .($pendingTotal > 0 ? ', belum dinilai '.self::number($pendingTotal) : '');
+
+                foreach ($pending as $item) {
+                    $lines[] = '   - '.self::plain($item['material_title'] ?? '-')
+                        .': '.self::number($item['pending_answers'] ?? 0).' jawaban'
+                        .' dari '.self::number($item['pending_students'] ?? 0).' siswa';
+                }
             }
         }
 
@@ -300,9 +384,10 @@ final class LiteracyAnalysisShareText
 
     /**
      * @param  array<int, array<string, mixed>>  $rows
+     * @param  bool  $withDaily  sertakan rincian harian dan daftar belum mengisi
      * @return array<int, string>
      */
-    private static function rasioRows(array $rows): array
+    private static function rasioRows(array $rows, bool $withDaily = false): array
     {
         if ($rows === []) {
             return ['Belum ada data kelas.'];
@@ -315,6 +400,18 @@ final class LiteracyAnalysisShareText
                 .' — '.($row['ratio'] ?? '-')
                 .' ('.self::percent($row['percentage'] ?? null).')'
                 .(array_key_exists('missing_total', $row) ? ', belum '.self::number($row['missing_total']) : '');
+
+            if (! $withDaily) {
+                continue;
+            }
+
+            $lines[] = '   Asal angka: '.self::number($row['active_total'] ?? 0).' slot siswa aktif'
+                .' - '.self::number($row['excluded_total'] ?? 0).' dispensasi'
+                .' = '.self::number($row['respondent_base'] ?? 0).' basis'
+                .' ('.self::number($row['unique_students'] ?? 0).' siswa x '
+                .self::number($row['material_count'] ?? 0).' materi)';
+
+            $lines = array_merge($lines, self::rincianHarian($row));
         }
 
         return $lines;

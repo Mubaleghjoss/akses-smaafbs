@@ -9,6 +9,7 @@ use App\Models\PerpustakaanLiterasiMaterial;
 use App\Models\PerpustakaanLiterasiResponse;
 use App\Models\PerpustakaanLiterasiSimilarityMatch;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
@@ -225,8 +226,26 @@ class LiterasiAnalytics
             'student_correct_ranking_by_class' => static::studentCorrectRankingByClass($material, $monthStart, $monthEnd, programCategory: $programCategory),
             'student_wrong_ranking' => static::studentWrongRanking($material, $monthStart, $monthEnd, programCategory: $programCategory),
             'missing_students' => static::missingStudents($material, $monthStart, $monthEnd, programCategory: $programCategory),
-            'plagiarism_class_ranking' => static::plagiarismClassRanking($material, $monthStart, $monthEnd, programCategory: $programCategory),
-            'plagiarism_student_ranking' => static::plagiarismStudentRanking($material, $monthStart, $monthEnd, programCategory: $programCategory),
+            'plagiarism_class_ranking' => static::plagiarismClassRanking(
+                $material,
+                $monthStart,
+                $monthEnd,
+                programCategory: $programCategory,
+                reviewStatuses: [
+                    PerpustakaanLiterasiSimilarityMatch::REVIEW_SUSPECTED,
+                    PerpustakaanLiterasiSimilarityMatch::REVIEW_CONFIRMED,
+                ],
+            ),
+            'plagiarism_student_ranking' => static::plagiarismStudentRanking(
+                $material,
+                $monthStart,
+                $monthEnd,
+                programCategory: $programCategory,
+                reviewStatuses: [
+                    PerpustakaanLiterasiSimilarityMatch::REVIEW_SUSPECTED,
+                    PerpustakaanLiterasiSimilarityMatch::REVIEW_CONFIRMED,
+                ],
+            ),
         ];
     }
 
@@ -282,9 +301,10 @@ class LiterasiAnalytics
         Carbon $start,
         Carbon $end,
         ?int $limit = 10,
-        ?string $programCategory = null
+        ?string $programCategory = null,
+        ?array $classes = null,
     ): array {
-        $rows = static::respondentBaseByClass($material, $start, $end, $programCategory)
+        $rows = static::respondentBaseByClass($material, $start, $end, $programCategory, $classes)
             ->sortBy([
                 ['total', 'desc'],
                 ['class', 'asc'],
@@ -295,7 +315,14 @@ class LiterasiAnalytics
 
     /**
      * Timeline pengisian per kelas: kapan kelas mulai mengisi, kapan terakhir,
-     * dan hari tersibuknya. Dipakai wali kelas untuk melihat ritme pengisian.
+     * hari tersibuknya, plus rincian harian siapa yang mengisi dan siapa yang
+     * belum. Dipakai wali kelas untuk melihat ritme pengisian.
+     *
+     * Pembilang ("total") sengaja diambil dari basis responden yang sama dengan
+     * penyebutnya. Jumlah baris jawaban mentah tetap dilaporkan pada
+     * `response_records`; bila lebih besar dari `total`, selisihnya berasal dari
+     * jawaban siswa yang sudah tidak aktif atau pindah rombel sehingga tidak
+     * masuk basis.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -306,7 +333,83 @@ class LiterasiAnalytics
         ?string $programCategory = null,
         ?array $classes = null,
     ): array {
-        $rows = static::responseQuery($material, $programCategory)
+        $base = collect(static::rangeBoundBase($material, $start, $end, $programCategory, $classes)['classes'] ?? [])
+            ->keyBy('class');
+
+        $daily = static::dailySubmissionsByClass($material, $start, $end, $programCategory, $classes);
+
+        $classNames = $base->keys()
+            ->merge($daily->keys())
+            ->unique()
+            ->values();
+
+        if ($classNames->isEmpty()) {
+            return [];
+        }
+
+        return $classNames
+            ->map(function (string $class) use ($daily, $base): array {
+                $classBase = $base->get($class, []);
+                $days = $daily->get($class, []);
+
+                $busiest = collect($days)->sortByDesc('total')->first();
+                $first = collect($days)->first()['first_at'] ?? null;
+                $last = collect($days)->last()['last_at'] ?? null;
+
+                return [
+                    'class' => $class,
+                    // Satuan sama dengan penyebut: slot (siswa x materi) terisi.
+                    'total' => (int) ($classBase['completed_total'] ?? 0),
+                    'response_records' => (int) collect($days)->sum('total'),
+                    'respondent_base' => (int) ($classBase['respondent_base'] ?? 0),
+                    'active_total' => (int) ($classBase['active_total'] ?? 0),
+                    'excluded_total' => (int) ($classBase['excluded_total'] ?? 0),
+                    'unique_students' => (int) ($classBase['unique_students'] ?? 0),
+                    'missing_total' => (int) ($classBase['missing_total'] ?? 0),
+                    'trashed_total' => (int) ($classBase['trashed_total'] ?? 0),
+                    'percentage' => $classBase['participation_percentage'] ?? null,
+                    'ratio' => (string) ($classBase['ratio'] ?? '0/0'),
+                    'first_at' => $first,
+                    'last_at' => $last,
+                    'active_days' => count($days),
+                    'busiest_day' => $busiest['date'] ?? null,
+                    'busiest_day_total' => (int) ($busiest['total'] ?? 0),
+                    'span_days' => $first !== null && $last !== null
+                        ? $first->copy()->startOfDay()->diffInDays($last->copy()->startOfDay()) + 1
+                        : 0,
+                    'days' => $days,
+                    'missing_students' => array_values($classBase['missing_students'] ?? []),
+                    'excluded_students' => array_values($classBase['excluded_students'] ?? []),
+                    'trashed_students' => array_values($classBase['trashed_students'] ?? []),
+                ];
+            })
+            ->sortBy([
+                // Kelas yang belum mengisi tidak punya first_at; taruh di bawah.
+                fn (array $row): string => $row['first_at'] === null
+                    ? '9999-99-99 '.$row['class']
+                    : $row['first_at']->format('Y-m-d H:i:s').' '.$row['class'],
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Rincian pengisian per hari per kelas, termasuk daftar nama pengisinya.
+     *
+     * Satu sumber untuk timeline dan drill-down ranking supaya angka harian di
+     * kedua panel tidak pernah berbeda.
+     *
+     * @param  array<int, string>|null  $classes
+     * @return Collection<string, array<int, array<string, mixed>>>
+     */
+    protected static function dailySubmissionsByClass(
+        ?PerpustakaanLiterasiMaterial $material,
+        Carbon $start,
+        Carbon $end,
+        ?string $programCategory = null,
+        ?array $classes = null,
+    ): Collection {
+        return static::responseQuery($material, $programCategory)
             ->whereBetween('submitted_at', [$start, $end])
             ->whereNotNull('student_class_snapshot')
             ->where('student_class_snapshot', '!=', '')
@@ -314,58 +417,117 @@ class LiterasiAnalytics
                 $classes !== null && $classes !== [],
                 fn (Builder $query): Builder => $query->whereIn('student_class_snapshot', $classes),
             )
-            ->get(['student_class_snapshot', 'submitted_at']);
+            ->with('material:id,title')
+            ->orderBy('submitted_at')
+            ->get([
+                'id',
+                'material_id',
+                'data_siswa_id',
+                'student_name_snapshot',
+                'student_class_snapshot',
+                'submitted_at',
+            ])
+            ->groupBy('student_class_snapshot')
+            ->map(fn (Collection $group): array => $group
+                // Tanggal lokal supaya sama dengan yang dilihat wali kelas.
+                ->groupBy(fn ($row): string => Carbon::parse($row->submitted_at)->toDateString())
+                ->map(function (Collection $items, string $date): array {
+                    $times = $items
+                        ->pluck('submitted_at')
+                        ->filter()
+                        ->map(fn ($value): Carbon => Carbon::parse($value))
+                        ->sort()
+                        ->values();
 
-        if ($rows->isEmpty()) {
+                    return [
+                        'date' => $date,
+                        'total' => $items->count(),
+                        'first_at' => $times->first(),
+                        'last_at' => $times->last(),
+                        'students' => $items
+                            ->sortBy('submitted_at')
+                            ->map(fn ($row): array => [
+                                'student_id' => (int) $row->data_siswa_id,
+                                'name' => (string) $row->student_name_snapshot,
+                                'material_id' => (int) $row->material_id,
+                                'material_title' => (string) ($row->material?->title ?? 'Materi tidak ditemukan'),
+                                'time' => Carbon::parse($row->submitted_at)->format('H:i'),
+                            ])
+                            ->values()
+                            ->all(),
+                    ];
+                })
+                ->sortKeys()
+                ->values()
+                ->all());
+    }
+
+    /**
+     * Materi yang masih menyisakan jawaban belum dinilai, dipecah per kelas.
+     *
+     * Dipakai untuk menjelaskan mengapa "Akurasi Per Kelas" belum 100%: tim
+     * penilai bisa langsung menuju materi yang tertinggal.
+     *
+     * @return array<string, array<int, array<string, mixed>>>
+     */
+    public static function classPendingGrading(
+        ?PerpustakaanLiterasiMaterial $material,
+        Carbon $start,
+        Carbon $end,
+        ?string $programCategory = null,
+        ?array $classes = null,
+    ): array {
+        if (! static::gradingColumnsAvailable()) {
             return [];
         }
 
-        $base = collect(
-            static::respondentBaseByClass($material, $start, $end, $programCategory, $classes),
-        )->keyBy('class');
-
-        return $rows
-            ->groupBy('student_class_snapshot')
-            ->map(function (Collection $group, string $class) use ($base): array {
-                $times = $group
-                    ->pluck('submitted_at')
-                    ->filter()
-                    ->map(fn ($value): Carbon => Carbon::parse($value))
-                    ->sort()
-                    ->values();
-
-                // Hari tersibuk memakai tanggal lokal supaya sama dengan yang
-                // dilihat wali kelas pada tabel harian.
-                $perDay = $times
-                    ->groupBy(fn (Carbon $time): string => $time->toDateString())
-                    ->map(fn (Collection $items): int => $items->count())
-                    ->sortDesc();
-
-                $first = $times->first();
-                $last = $times->last();
-                $classBase = $base->get($class);
-
-                return [
-                    'class' => $class,
-                    'total' => $times->count(),
-                    'respondent_base' => (int) ($classBase['respondent_base'] ?? 0),
-                    'missing_total' => (int) ($classBase['missing_total'] ?? 0),
-                    'percentage' => $classBase['percentage'] ?? null,
-                    'first_at' => $first,
-                    'last_at' => $last,
-                    'active_days' => $perDay->count(),
-                    'busiest_day' => $perDay->keys()->first(),
-                    'busiest_day_total' => (int) ($perDay->first() ?? 0),
-                    'span_days' => $first !== null && $last !== null
-                        ? $first->copy()->startOfDay()->diffInDays($last->copy()->startOfDay()) + 1
-                        : 0,
-                ];
-            })
-            ->sortBy([
-                ['first_at', 'asc'],
-                ['class', 'asc'],
+        return PerpustakaanLiterasiAnswer::query()
+            ->join('perpustakaan_literasi_responses as responses', 'responses.id', '=', 'perpustakaan_literasi_answers.response_id')
+            ->join('perpustakaan_literasi_materials as materials', 'materials.id', '=', 'responses.material_id')
+            ->tap(fn (Builder $query): Builder => static::constrainEligibleJoinedResponses($query))
+            ->whereBetween('responses.submitted_at', [$start, $end])
+            ->when($material, fn (Builder $query): Builder => $query->where('responses.material_id', $material->getKey()))
+            ->when($programCategory, fn (Builder $query): Builder => static::constrainJoinedResponseCategory($query, $programCategory))
+            ->when(
+                Schema::hasColumn('perpustakaan_literasi_responses', 'deleted_at'),
+                fn (Builder $query): Builder => $query->whereNull('responses.deleted_at'),
+            )
+            ->when(
+                $classes !== null && $classes !== [],
+                fn (Builder $query): Builder => $query->whereIn('responses.student_class_snapshot', $classes),
+            )
+            ->whereNotNull('responses.student_class_snapshot')
+            ->where('responses.student_class_snapshot', '!=', '')
+            // Belum dinilai = tidak ada poin dan tidak ada penanda benar/salah.
+            ->whereNull('perpustakaan_literasi_answers.score_earned')
+            ->whereNull('perpustakaan_literasi_answers.is_correct')
+            ->select([
+                'responses.student_class_snapshot',
+                'responses.material_id',
+                'materials.title as material_title',
             ])
-            ->values()
+            ->selectRaw('count(*) as pending_answers')
+            ->selectRaw('count(distinct responses.id) as pending_responses')
+            ->selectRaw('count(distinct responses.data_siswa_id) as pending_students')
+            ->groupBy([
+                'responses.student_class_snapshot',
+                'responses.material_id',
+                'materials.title',
+            ])
+            ->orderByDesc('pending_answers')
+            ->orderBy('materials.title')
+            ->get()
+            ->map(fn ($row): array => [
+                'class' => (string) $row->student_class_snapshot,
+                'material_id' => (int) $row->material_id,
+                'material_title' => (string) ($row->material_title ?: 'Materi tidak ditemukan'),
+                'pending_answers' => (int) $row->pending_answers,
+                'pending_responses' => (int) $row->pending_responses,
+                'pending_students' => (int) $row->pending_students,
+            ])
+            ->groupBy('class')
+            ->sortKeys()
+            ->map(fn (Collection $rows): array => $rows->values()->all())
             ->all();
     }
 
@@ -374,7 +536,8 @@ class LiterasiAnalytics
         Carbon $start,
         Carbon $end,
         int $limit = 3,
-        ?string $programCategory = null
+        ?string $programCategory = null,
+        ?array $classes = null,
     ): array {
         if (! static::gradingColumnsAvailable()) {
             return [];
@@ -382,9 +545,20 @@ class LiterasiAnalytics
 
         return PerpustakaanLiterasiAnswer::query()
             ->join('perpustakaan_literasi_responses as responses', 'responses.id', '=', 'perpustakaan_literasi_answers.response_id')
+            ->tap(fn (Builder $query): Builder => static::constrainEligibleJoinedResponses($query))
             ->whereBetween('responses.submitted_at', [$start, $end])
             ->when($material, fn (Builder $query): Builder => $query->where('responses.material_id', $material->getKey()))
             ->when($programCategory, fn (Builder $query): Builder => static::constrainJoinedResponseCategory($query, $programCategory))
+            // Jawaban di Sampah tidak boleh menyumbang akurasi; join manual tidak
+            // ikut menerapkan SoftDeletes milik model response.
+            ->when(
+                Schema::hasColumn('perpustakaan_literasi_responses', 'deleted_at'),
+                fn (Builder $query): Builder => $query->whereNull('responses.deleted_at'),
+            )
+            ->when(
+                $classes !== null && $classes !== [],
+                fn (Builder $query): Builder => $query->whereIn('responses.student_class_snapshot', $classes),
+            )
             ->whereNotNull('responses.student_class_snapshot')
             ->where('responses.student_class_snapshot', '!=', '')
             ->select('responses.student_class_snapshot')
@@ -418,9 +592,10 @@ class LiterasiAnalytics
         Carbon $start,
         Carbon $end,
         ?int $limit = 3,
-        ?string $programCategory = null
+        ?string $programCategory = null,
+        ?array $classes = null,
     ): array {
-        $rows = static::respondentBaseByClass($material, $start, $end, $programCategory)
+        $rows = static::respondentBaseByClass($material, $start, $end, $programCategory, $classes)
             ->sortBy([
                 ['percentage', 'asc'],
                 ['total', 'asc'],
@@ -433,6 +608,10 @@ class LiterasiAnalytics
     /**
      * Baris per kelas dari basis responden: penyebut sudah bebas dispensasi.
      *
+     * Setiap baris juga membawa rincian harian (`days`) dan daftar siswa yang
+     * belum mengisi / dispensasi, supaya panel ranking bisa menjelaskan asal
+     * angkanya tanpa query tambahan.
+     *
      * @return Collection<int, array<string, mixed>>
      */
     protected static function respondentBaseByClass(
@@ -442,26 +621,58 @@ class LiterasiAnalytics
         ?string $programCategory = null,
         ?array $classes = null,
     ): Collection {
-        // Ranking dan aktivitas selalu terikat rentang: jawaban di luar rentang
-        // tidak boleh ikut terhitung meskipun materinya sama.
+        $base = static::rangeBoundBase($material, $start, $end, $programCategory, $classes);
+        $daily = static::dailySubmissionsByClass($material, $start, $end, $programCategory, $classes);
+
+        return collect($base['classes'])->map(function (array $row) use ($daily, $base): array {
+            $days = $daily->get($row['class'], []);
+
+            return [
+                'class' => $row['class'],
+                'total' => (int) $row['completed_total'],
+                'response_total' => (int) $row['completed_total'],
+                'response_records' => (int) collect($days)->sum('total'),
+                'excluded_total' => (int) $row['excluded_total'],
+                'excluded_by_reason' => $row['excluded_by_reason'],
+                'missing_total' => (int) $row['missing_total'],
+                'trashed_total' => (int) $row['trashed_total'],
+                'respondent_base' => (int) $row['respondent_base'],
+                'active_total' => (int) $row['active_total'],
+                'unique_students' => (int) $row['unique_students'],
+                'material_count' => (int) ($base['material_count'] ?? 0),
+                'ratio' => (string) $row['ratio'],
+                'percentage' => $row['participation_percentage'],
+                'active_days' => count($days),
+                'days' => $days,
+                'missing_students' => array_values($row['missing_students'] ?? []),
+                'excluded_students' => array_values($row['excluded_students'] ?? []),
+                'trashed_students' => array_values($row['trashed_students'] ?? []),
+            ];
+        });
+    }
+
+    /**
+     * Basis responden yang selalu terikat rentang tanggal.
+     *
+     * Berbeda dengan respondentBase() yang untuk satu materi memakai rekap
+     * seluruh waktu, helper ini dipakai panel-panel yang harus konsisten dengan
+     * rentang aktif (timeline, ranking, aktivitas kelas).
+     *
+     * @param  array<int, string>|null  $classes
+     * @return array<string, mixed>
+     */
+    protected static function rangeBoundBase(
+        ?PerpustakaanLiterasiMaterial $material,
+        Carbon $start,
+        Carbon $end,
+        ?string $programCategory = null,
+        ?array $classes = null,
+    ): array {
         $materialIds = $material !== null
             ? [(int) $material->getKey()]
             : LiteracyRespondentBase::materialIdsInScope($programCategory, $start, $end);
 
-        $base = LiteracyRespondentBase::forMaterialIds($materialIds, $classes, $start, $end);
-
-        return collect($base['classes'])->map(fn (array $row): array => [
-            'class' => $row['class'],
-            'total' => (int) $row['completed_total'],
-            'response_total' => (int) $row['completed_total'],
-            'excluded_total' => (int) $row['excluded_total'],
-            'excluded_by_reason' => $row['excluded_by_reason'],
-            'missing_total' => (int) $row['missing_total'],
-            'respondent_base' => (int) $row['respondent_base'],
-            'active_total' => (int) $row['active_total'],
-            'ratio' => (string) $row['ratio'],
-            'percentage' => $row['participation_percentage'],
-        ]);
+        return LiteracyRespondentBase::forMaterialIds($materialIds, $classes, $start, $end);
     }
 
     public static function studentCorrectRankingByClass(
@@ -469,7 +680,8 @@ class LiterasiAnalytics
         Carbon $start,
         Carbon $end,
         ?int $limitPerClass = 5,
-        ?string $programCategory = null
+        ?string $programCategory = null,
+        ?array $classes = null,
     ): array {
         if (! static::gradingColumnsAvailable()) {
             return [];
@@ -477,9 +689,11 @@ class LiterasiAnalytics
 
         $rows = PerpustakaanLiterasiAnswer::query()
             ->join('perpustakaan_literasi_responses as responses', 'responses.id', '=', 'perpustakaan_literasi_answers.response_id')
+            ->tap(fn (Builder $query): Builder => static::constrainEligibleJoinedResponses($query))
             ->whereBetween('responses.submitted_at', [$start, $end])
             ->when($material, fn (Builder $query): Builder => $query->where('responses.material_id', $material->getKey()))
             ->when($programCategory, fn (Builder $query): Builder => static::constrainJoinedResponseCategory($query, $programCategory))
+            ->when($classes !== null && $classes !== [], fn (Builder $query): Builder => $query->whereIn('responses.student_class_snapshot', $classes))
             ->select([
                 'responses.data_siswa_id',
                 'responses.student_name_snapshot',
@@ -537,9 +751,11 @@ class LiterasiAnalytics
         ?int $limit = 10,
         ?string $programCategory = null,
         ?array $reviewStatuses = null,
+        ?array $classes = null,
     ): array {
         $query = static::similarityQuery($material, $start, $end, $programCategory)
             ->when($reviewStatuses !== null, fn (Builder $query): Builder => $query->whereIn('review_status', $reviewStatuses))
+            ->when($classes !== null && $classes !== [], fn (Builder $query): Builder => $query->whereIn('student_class_snapshot', $classes))
             ->whereNotNull('student_class_snapshot')
             ->where('student_class_snapshot', '!=', '')
             ->select('student_class_snapshot')
@@ -565,10 +781,12 @@ class LiterasiAnalytics
         ?int $limit = 10,
         ?string $programCategory = null,
         ?array $reviewStatuses = null,
+        ?array $classes = null,
     ): array {
         $query = static::similarityQuery($material, $start, $end, $programCategory)
             ->when($reviewStatuses !== null, fn (Builder $query): Builder => $query->whereIn('review_status', $reviewStatuses))
             ->join('perpustakaan_literasi_responses as later', 'later.id', '=', 'perpustakaan_literasi_similarity_matches.later_response_id')
+            ->when($classes !== null && $classes !== [], fn (Builder $query): Builder => $query->whereIn('later.student_class_snapshot', $classes))
             ->select([
                 'later.data_siswa_id',
                 'later.student_name_snapshot',
@@ -601,7 +819,8 @@ class LiterasiAnalytics
         Carbon $start,
         Carbon $end,
         ?int $limit = 15,
-        ?string $programCategory = null
+        ?string $programCategory = null,
+        ?array $classes = null,
     ): array {
         if (! static::gradingColumnsAvailable()) {
             return [];
@@ -609,9 +828,11 @@ class LiterasiAnalytics
 
         $query = PerpustakaanLiterasiAnswer::query()
             ->join('perpustakaan_literasi_responses as responses', 'responses.id', '=', 'perpustakaan_literasi_answers.response_id')
+            ->tap(fn (Builder $query): Builder => static::constrainEligibleJoinedResponses($query))
             ->whereBetween('responses.submitted_at', [$start, $end])
             ->when($material, fn (Builder $query): Builder => $query->where('responses.material_id', $material->getKey()))
             ->when($programCategory, fn (Builder $query): Builder => static::constrainJoinedResponseCategory($query, $programCategory))
+            ->when($classes !== null && $classes !== [], fn (Builder $query): Builder => $query->whereIn('responses.student_class_snapshot', $classes))
             ->where(function (Builder $query): void {
                 $query
                     ->whereNotNull('perpustakaan_literasi_answers.score_earned')
@@ -694,7 +915,9 @@ class LiterasiAnalytics
         ?array $classes = null
     ): array {
         $responses = static::responseQuery($material, $programCategory)
+            ->tap(fn (Builder $query): Builder => static::constrainEligibleResponseQuery($query))
             ->whereBetween('submitted_at', [$start, $end])
+            ->when($classes !== null && $classes !== [], fn (Builder $query): Builder => $query->whereIn('student_class_snapshot', $classes))
             ->count();
         $base = static::respondentBase($material, $start, $end, $programCategory, $classes);
 
@@ -720,9 +943,11 @@ class LiterasiAnalytics
 
         $answerTotals = PerpustakaanLiterasiAnswer::query()
             ->join('perpustakaan_literasi_responses as responses', 'responses.id', '=', 'perpustakaan_literasi_answers.response_id')
+            ->tap(fn (Builder $query): Builder => static::constrainEligibleJoinedResponses($query))
             ->whereBetween('responses.submitted_at', [$start, $end])
             ->when($material, fn (Builder $query): Builder => $query->where('responses.material_id', $material->getKey()))
             ->when($programCategory, fn (Builder $query): Builder => static::constrainJoinedResponseCategory($query, $programCategory))
+            ->when($classes !== null && $classes !== [], fn (Builder $query): Builder => $query->whereIn('responses.student_class_snapshot', $classes))
             ->selectRaw('sum(coalesce(perpustakaan_literasi_answers.score_possible, 1)) as total_answers')
             ->selectRaw('sum(case when perpustakaan_literasi_answers.score_earned is not null or perpustakaan_literasi_answers.is_correct is not null then coalesce(perpustakaan_literasi_answers.score_possible, 1) else 0 end) as graded_answers')
             ->selectRaw('sum(coalesce(perpustakaan_literasi_answers.score_earned, case when perpustakaan_literasi_answers.is_correct = 1 then 1 else 0 end)) as correct_answers')
@@ -771,11 +996,7 @@ class LiterasiAnalytics
             ? [(int) $material->getKey()]
             : LiteracyRespondentBase::materialIdsInScope($programCategory, $start, $end);
 
-        // Untuk satu materi, rekap "seluruh waktu" tetap dipakai (panel materi).
-        // Untuk lingkup kategori, jawaban dibatasi ke rentang yang diminta.
-        return $material !== null
-            ? LiteracyRespondentBase::forMaterialIds($materialIds, $classes)
-            : LiteracyRespondentBase::forMaterialIds($materialIds, $classes, $start, $end);
+        return LiteracyRespondentBase::forMaterialIds($materialIds, $classes, $start, $end);
     }
 
     protected static function confirmedPlagiarismCount(
@@ -969,6 +1190,51 @@ class LiterasiAnalytics
     protected static function constrainJoinedResponseCategory(Builder $query, string $programCategory): Builder
     {
         return $query->whereIn('responses.material_id', static::materialIdsForCategoryQuery($programCategory));
+    }
+
+    /** Hanya respons yang masih termasuk slot aktif dan bebas dispensasi. */
+    protected static function constrainEligibleJoinedResponses(Builder $query): Builder
+    {
+        return $query
+            ->whereExists(function (QueryBuilder $student): void {
+                $student->from('data_siswa as eligible_students')
+                    ->whereColumn('eligible_students.id', 'responses.data_siswa_id')
+                    ->whereColumn('eligible_students.rombel_saat_ini', 'responses.student_class_snapshot')
+                    ->where('eligible_students.status', 'aktif');
+            })
+            ->when(
+                Schema::hasColumn('perpustakaan_literasi_responses', 'deleted_at'),
+                fn (Builder $query): Builder => $query->whereNull('responses.deleted_at'),
+            )
+            ->when(static::dispensationTableAvailable(), function (Builder $query): Builder {
+                return $query->whereNotExists(function (QueryBuilder $dispensation): void {
+                    $dispensation->from('perpustakaan_literasi_dispensations as eligible_dispensations')
+                        ->whereColumn('eligible_dispensations.data_siswa_id', 'responses.data_siswa_id')
+                        ->whereColumn('eligible_dispensations.material_id', 'responses.material_id')
+                        ->whereNull('eligible_dispensations.deleted_at')
+                        ->whereNotNull('eligible_dispensations.confirmed_at');
+                });
+            });
+    }
+
+    protected static function constrainEligibleResponseQuery(Builder $query): Builder
+    {
+        return $query
+            ->whereExists(function (QueryBuilder $student): void {
+                $student->from('data_siswa as eligible_students')
+                    ->whereColumn('eligible_students.id', 'perpustakaan_literasi_responses.data_siswa_id')
+                    ->whereColumn('eligible_students.rombel_saat_ini', 'perpustakaan_literasi_responses.student_class_snapshot')
+                    ->where('eligible_students.status', 'aktif');
+            })
+            ->when(static::dispensationTableAvailable(), function (Builder $query): Builder {
+                return $query->whereNotExists(function (QueryBuilder $dispensation): void {
+                    $dispensation->from('perpustakaan_literasi_dispensations as eligible_dispensations')
+                        ->whereColumn('eligible_dispensations.data_siswa_id', 'perpustakaan_literasi_responses.data_siswa_id')
+                        ->whereColumn('eligible_dispensations.material_id', 'perpustakaan_literasi_responses.material_id')
+                        ->whereNull('eligible_dispensations.deleted_at')
+                        ->whereNotNull('eligible_dispensations.confirmed_at');
+                });
+            });
     }
 
     protected static function constrainSimilarityCategory(Builder $query, string $programCategory): Builder

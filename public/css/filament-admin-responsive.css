@@ -8855,6 +8855,62 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 
 .dark .lit-timeline__span { color:#94a3b8; }
 
+/* --- Drill-down rincian harian ------------------------------------------ */
+.lit-note {
+    margin:0 0 .6rem;
+    font-size:.76rem;
+    line-height:1.5;
+    color:#475569;
+}
+
+.dark .lit-note { color:#cbd5e1; }
+.lit-note strong { font-weight:800; color:#172033; }
+.dark .lit-note strong { color:#f8fafc; }
+
+.lit-muted { color:#64748b; font-weight:600; }
+.dark .lit-muted { color:#94a3b8; }
+
+.lit-list {
+    margin:0 0 .6rem;
+    padding-left:1.35rem;
+    display:grid;
+    gap:.2rem;
+    font-size:.8rem;
+    color:#334155;
+}
+
+.dark .lit-list { color:#e2e8f0; }
+
+.lit-link {
+    font-size:.78rem;
+    font-weight:800;
+    color:#be123c;
+    text-decoration:underline;
+    text-underline-offset:2px;
+}
+
+.lit-link:hover { color:#9f1239; }
+.dark .lit-link { color:#fb7185; }
+.dark .lit-link:hover { color:#fda4af; }
+
+/* Baris drill-down menempel pada baris datanya, tanpa garis pemisah ganda.
+   Specificity di sini sengaja lebih tinggi dari blok stacked (container query
+   dan @media) supaya baris rincian tidak ikut dipecah jadi kartu label-nilai. */
+.lit-table tr.lit-drillRow > td {
+    display:block;
+    padding:0 0 .6rem;
+    border-top:0;
+    background:transparent;
+    text-align:left;
+    white-space:normal;
+}
+
+.lit-table tr.lit-drillRow > td::before { content:none; }
+.lit-table tr.lit-drillRow { border:0; margin:0; }
+
+.lit-chip { display:inline-block; margin:0 .25rem .25rem 0; }
+.lit-chip__meta { display:block; font-size:.68rem; font-weight:600; }
+
 /* --- Bar salin per bagian ---------------------------------------------- */
 .lit-copybar {
     display:flex;

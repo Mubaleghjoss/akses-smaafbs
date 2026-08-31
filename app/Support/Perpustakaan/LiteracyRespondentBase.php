@@ -88,7 +88,8 @@ final class LiteracyRespondentBase
             ->leftJoin('perpustakaan_literasi_dispensations as dispensations', function (JoinClause $join): void {
                 $join->on('dispensations.data_siswa_id', '=', 'students.id')
                     ->on('dispensations.material_id', '=', 'materials.id')
-                    ->whereNull('dispensations.deleted_at');
+                    ->whereNull('dispensations.deleted_at')
+                    ->whereNotNull('dispensations.confirmed_at');
             })
             ->whereIn('materials.id', $materialIds)
             ->whereNull('materials.deleted_at')
@@ -244,7 +245,10 @@ final class LiteracyRespondentBase
 
             $hasLiveResponse = $row->response_id !== null && $row->response_deleted_at === null;
             $hasTrashedResponse = $row->response_id !== null && $row->response_deleted_at !== null;
-            $isExcluded = $row->dispensation_id !== null && ! $hasLiveResponse;
+            // Dispensasi terkonfirmasi selalu menang atas response. Keadaan
+            // keduanya bersamaan adalah anomali data, tetapi slot tetap tidak
+            // boleh masuk pembilang maupun penyebut.
+            $isExcluded = $row->dispensation_id !== null;
 
             if ($isExcluded) {
                 $reason = (string) $row->dispensation_reason;

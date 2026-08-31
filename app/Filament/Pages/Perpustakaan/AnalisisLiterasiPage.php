@@ -5,6 +5,7 @@ namespace App\Filament\Pages\Perpustakaan;
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource;
 use App\Models\PerpustakaanLiterasiDispensation;
 use App\Models\PerpustakaanLiterasiMaterial;
+use App\Models\PerpustakaanLiterasiSimilarityMatch;
 use App\Models\User;
 use App\Support\Perpustakaan\LiteracyAnalysisShareText;
 use App\Support\Perpustakaan\LiteracyMonthlyShareText;
@@ -158,18 +159,44 @@ class AnalisisLiterasiPage extends Page
         [$start, $end] = $this->range();
         $material = $this->selectedMaterial();
         $category = $material === null && filled($this->kategori) ? $this->kategori : null;
+        $classes = filled($this->kelas) ? [$this->kelas] : null;
 
         return $this->analyticsCache = [
-            'grading_summary' => LiterasiAnalytics::gradingSummary($material, $start, $end, $category, filled($this->kelas) ? [$this->kelas] : null),
+            'grading_summary' => LiterasiAnalytics::gradingSummary($material, $start, $end, $category, $classes),
             // 7 kelas dengan jawaban terbanyak sesuai permintaan operasional.
-            'class_response_ranking' => LiterasiAnalytics::classResponseRanking($material, $start, $end, 7, $category),
-            'least_class_response_ranking' => LiterasiAnalytics::leastClassResponseRanking($material, $start, $end, 5, $category),
-            'class_submission_timeline' => LiterasiAnalytics::classSubmissionTimeline($material, $start, $end, $category, filled($this->kelas) ? [$this->kelas] : null),
-            'class_correct_ranking' => LiterasiAnalytics::classCorrectRanking($material, $start, $end, 5, $category),
-            'student_correct_ranking_by_class' => LiterasiAnalytics::studentCorrectRankingByClass($material, $start, $end, 5, $category),
-            'student_wrong_ranking' => LiterasiAnalytics::studentWrongRanking($material, $start, $end, 10, $category),
-            'plagiarism_class_ranking' => LiterasiAnalytics::plagiarismClassRanking($material, $start, $end, 5, $category),
-            'plagiarism_student_ranking' => LiterasiAnalytics::plagiarismStudentRanking($material, $start, $end, 10, $category),
+            'class_response_ranking' => LiterasiAnalytics::classResponseRanking($material, $start, $end, 7, $category, $classes),
+            'least_class_response_ranking' => LiterasiAnalytics::leastClassResponseRanking($material, $start, $end, 5, $category, $classes),
+            'class_submission_timeline' => LiterasiAnalytics::classSubmissionTimeline($material, $start, $end, $category, $classes),
+            'class_correct_ranking' => LiterasiAnalytics::classCorrectRanking($material, $start, $end, 5, $category, $classes),
+            // Penjelas "kenapa akurasi belum 100%": materi yang jawabannya masih
+            // menunggu penilaian, dipecah per kelas.
+            'class_pending_grading' => LiterasiAnalytics::classPendingGrading($material, $start, $end, $category, $classes),
+            'student_correct_ranking_by_class' => LiterasiAnalytics::studentCorrectRankingByClass($material, $start, $end, 5, $category, $classes),
+            'student_wrong_ranking' => LiterasiAnalytics::studentWrongRanking($material, $start, $end, 10, $category, $classes),
+            'plagiarism_class_ranking' => LiterasiAnalytics::plagiarismClassRanking(
+                $material,
+                $start,
+                $end,
+                5,
+                $category,
+                [
+                    PerpustakaanLiterasiSimilarityMatch::REVIEW_SUSPECTED,
+                    PerpustakaanLiterasiSimilarityMatch::REVIEW_CONFIRMED,
+                ],
+                $classes,
+            ),
+            'plagiarism_student_ranking' => LiterasiAnalytics::plagiarismStudentRanking(
+                $material,
+                $start,
+                $end,
+                10,
+                $category,
+                [
+                    PerpustakaanLiterasiSimilarityMatch::REVIEW_SUSPECTED,
+                    PerpustakaanLiterasiSimilarityMatch::REVIEW_CONFIRMED,
+                ],
+                $classes,
+            ),
         ];
     }
 

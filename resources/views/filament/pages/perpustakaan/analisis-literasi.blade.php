@@ -17,7 +17,9 @@
             'salinBelumTeks' => $shareSections['belum'] ?? '',
         ])
 
-        @include('filament.pages.perpustakaan.partials.timeline-walas')
+        @include('filament.pages.perpustakaan.partials.timeline-walas', [
+            'salinTeks' => $shareSections['timeline'] ?? '',
+        ])
 
         @include('filament.pages.perpustakaan.partials.dispensasi-ringkas', [
             'salinTeks' => $shareSections['dispensasi'] ?? '',
