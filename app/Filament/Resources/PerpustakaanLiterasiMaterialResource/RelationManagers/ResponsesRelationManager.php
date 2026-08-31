@@ -31,27 +31,77 @@ class ResponsesRelationManager extends RelationManager
     /** Parameter URL untuk memfokuskan daftar pada jawaban yang belum dinilai. */
     public const GRADING_FOCUS_STATUS = 'fokusPenilaian';
 
+    /** Kelas yang difokuskan, dibawa dari halaman induk saat komponen dipasang. */
+    public ?string $fokusKelas = null;
+
+    /** Status penilaian yang difokuskan ('belum'), dibawa dari halaman induk. */
+    public ?string $fokusPenilaian = null;
+
     /**
-     * Terapkan fokus penilaian dari URL sebelum tabel membaca filternya.
+     * Bawa fokus penilaian dari query string halaman induk ke komponen ini.
      *
-     * Tautan "Nilai sekarang" pada halaman Analisis Literasi sebelumnya hanya
-     * membuka halaman materi, sehingga daftar jawaban tampil tanpa filter dan
-     * penilai harus mencari sendiri kelas serta jawaban yang tertunda. Nilai
-     * filter ditulis ke $tableFilters di mount(); bootedInteractsWithTable()
-     * berjalan setelahnya dan mengisi form filter dari array ini.
+     * Relation manager Filament berjalan lazy: pada permintaan halaman materi
+     * hanya placeholder yang dirender, lalu tabel dimuat oleh permintaan
+     * Livewire kedua ke /livewire/update. Permintaan kedua itu POST tanpa query
+     * string, jadi request()->query('fokusKelas') di mount() SELALU kosong di
+     * browser dan filter tidak pernah terpasang — meskipun tautannya benar.
      *
-     * Parameter dibaca dari request, bukan lewat atribut #[Url], karena relation
-     * manager adalah komponen Livewire bersarang yang tidak mengikat query
-     * string halaman induk.
+     * Nilai fokus karena itu dititipkan sebagai properti Livewire di sini.
+     * Metode ini dipanggil saat halaman materi dirender (request GET asli yang
+     * masih memuat query string), nilainya ikut ke snapshot placeholder, dan
+     * tersedia kembali ketika tabel benar-benar dimuat.
+     *
+     * @return array<string, mixed>
      */
-    public function mount(): void
+    public static function getDefaultProperties(): array
     {
-        parent::mount();
+        $properties = parent::getDefaultProperties();
 
         $focusClass = request()->query(self::GRADING_FOCUS_CLASS);
         $focusStatus = request()->query(self::GRADING_FOCUS_STATUS);
 
-        if (blank($focusClass) && blank($focusStatus)) {
+        if (filled($focusClass)) {
+            $properties['fokusKelas'] = (string) $focusClass;
+        }
+
+        if (filled($focusStatus)) {
+            $properties['fokusPenilaian'] = (string) $focusStatus;
+        }
+
+        return $properties;
+    }
+
+    /**
+     * Terapkan fokus penilaian sebelum tabel membaca filternya.
+     *
+     * Tautan "Nilai sekarang" pada halaman Analisis Literasi sebelumnya hanya
+     * membuka halaman materi, sehingga daftar jawaban tampil tanpa filter dan
+     * penilai harus mencari sendiri kelas serta jawaban yang tertunda. Nilai
+     * filter ditulis ke $tableFilters di sini; bootedInteractsWithTable()
+     * berjalan setelahnya dan mengisi form filter dari array ini.
+     *
+     * Sumber nilai berlapis supaya tahan pada semua jalur pemasangan: properti
+     * yang sudah terhidrasi dari snapshot placeholder (jalur lazy di browser),
+     * argumen mount dari parameter komponen, lalu query string request (jalur
+     * non-lazy). Atribut #[Url] tidak dipakai karena relation manager adalah
+     * komponen Livewire bersarang yang tidak mengikat query string induknya.
+     */
+    public function mount(?string $fokusKelas = null, ?string $fokusPenilaian = null): void
+    {
+        parent::mount();
+
+        $focusClass = $this->fokusKelas
+            ?? $fokusKelas
+            ?? request()->query(self::GRADING_FOCUS_CLASS);
+
+        $focusStatus = $this->fokusPenilaian
+            ?? $fokusPenilaian
+            ?? request()->query(self::GRADING_FOCUS_STATUS);
+
+        $this->fokusKelas = filled($focusClass) ? (string) $focusClass : null;
+        $this->fokusPenilaian = filled($focusStatus) ? (string) $focusStatus : null;
+
+        if (blank($this->fokusKelas) && blank($this->fokusPenilaian)) {
             return;
         }
 
@@ -59,11 +109,11 @@ class ResponsesRelationManager extends RelationManager
         // Jawaban di Sampah tidak pernah dinilai, jadi fokus selalu pada aktif.
         $filters['response_status']['value'] = 'active';
 
-        if (filled($focusClass)) {
-            $filters['student_class_snapshot']['value'] = (string) $focusClass;
+        if (filled($this->fokusKelas)) {
+            $filters['student_class_snapshot']['value'] = $this->fokusKelas;
         }
 
-        if ($focusStatus === 'belum') {
+        if ($this->fokusPenilaian === 'belum') {
             // TernaryFilter memakai nilai select 1/0, bukan boolean PHP:
             // getDefaultState() mengecast bool menjadi integer. Menulis 0 di
             // sini membuat state form dan state URL sama bentuknya.

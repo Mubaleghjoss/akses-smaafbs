@@ -811,6 +811,72 @@ class LiteracyAnalysisPagesTest extends TestCase
             ->assertCanNotSeeTableRecords([$sudahDinilai, $kelasLain]);
     }
 
+    public function test_fokus_penilaian_dititipkan_sebagai_properti_komponen_lazy(): void
+    {
+        // Relation manager Filament lazy: query string hanya ada pada request GET
+        // halaman materi, sedangkan tabel dimuat oleh POST /livewire/update.
+        // getDefaultProperties() harus menyalin fokus ke properti komponen agar
+        // nilainya ikut ke snapshot placeholder dan bertahan sampai tabel dimuat.
+        request()->query->set(ResponsesRelationManager::GRADING_FOCUS_CLASS, 'XII 4');
+        request()->query->set(ResponsesRelationManager::GRADING_FOCUS_STATUS, 'belum');
+
+        $properties = ResponsesRelationManager::getDefaultProperties();
+
+        $this->assertTrue($properties['lazy'] ?? false);
+        $this->assertSame('XII 4', $properties['fokusKelas']);
+        $this->assertSame('belum', $properties['fokusPenilaian']);
+    }
+
+    public function test_relation_manager_menerapkan_filter_dari_properti_tanpa_query_string(): void
+    {
+        $material = $this->createMaterial('Materi Filter Lazy');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Pertanyaan untuk filter lazy?',
+            'max_characters' => 500,
+        ]);
+
+        $belumDinilai = $this->createResponse($material, $this->createStudent('Dedi Belum', 'XII 6'));
+        PerpustakaanLiterasiAnswer::query()->create([
+            'response_id' => $belumDinilai->getKey(),
+            'question_id' => $question->getKey(),
+            'answer_text' => 'Jawaban lazy yang belum dinilai.',
+            'character_count' => 31,
+            'score_possible' => 1,
+        ]);
+
+        $sudahDinilai = $this->createResponse($material, $this->createStudent('Eka Sudah', 'XII 6'));
+        PerpustakaanLiterasiAnswer::query()->create([
+            'response_id' => $sudahDinilai->getKey(),
+            'question_id' => $question->getKey(),
+            'answer_text' => 'Jawaban lazy yang sudah dinilai.',
+            'character_count' => 31,
+            'is_correct' => true,
+            'score_earned' => 1,
+            'score_possible' => 1,
+        ]);
+
+        // Tanpa withQueryParams: meniru POST /livewire/update yang tidak membawa
+        // query string, hanya properti hasil hidrasi snapshot placeholder.
+        $component = Livewire::actingAs($this->createAdmin('admin-filter-lazy'))
+            ->test(ResponsesRelationManager::class, [
+                'ownerRecord' => $material,
+                'pageClass' => ViewPerpustakaanLiterasiMaterial::class,
+                'fokusKelas' => 'XII 6',
+                'fokusPenilaian' => 'belum',
+            ])
+            ->assertSuccessful();
+
+        $filters = $component->instance()->tableFilters;
+
+        $this->assertSame('XII 6', $filters['student_class_snapshot']['value']);
+        $this->assertSame(0, $filters['grading_complete']['value']);
+
+        $component
+            ->assertCanSeeTableRecords([$belumDinilai])
+            ->assertCanNotSeeTableRecords([$sudahDinilai]);
+    }
+
     public function test_peringkat_jawaban_benar_mencakup_semua_kelas_dan_menandai_peringkat_sementara(): void
     {
         $material = $this->createMaterial('Materi Peringkat Benar');
