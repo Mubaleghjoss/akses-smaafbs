@@ -4,8 +4,8 @@
     $tabs = collect($sectionLabels)
         ->filter(fn ($label, $key) => array_key_exists($key, $sections))
         ->all();
-    $tabs['bulanan'] = 'Rekap Bulanan Lengkap';
-    $payload = $sections + ['bulanan' => $monthlyText];
+    $tabs['semua'] = 'Semua Bagian (Filter Aktif)';
+    $payload = $sections + ['semua' => $allText];
     $firstKey = array_key_first($tabs);
 @endphp
 

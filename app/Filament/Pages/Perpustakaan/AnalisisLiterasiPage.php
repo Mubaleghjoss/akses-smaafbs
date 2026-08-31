@@ -8,7 +8,6 @@ use App\Models\PerpustakaanLiterasiMaterial;
 use App\Models\PerpustakaanLiterasiSimilarityMatch;
 use App\Models\User;
 use App\Support\Perpustakaan\LiteracyAnalysisShareText;
-use App\Support\Perpustakaan\LiteracyMonthlyShareText;
 use App\Support\Perpustakaan\LiteracyRespondentBase;
 use App\Support\Perpustakaan\LiterasiAnalytics;
 use Filament\Actions\Action;
@@ -176,6 +175,7 @@ class AnalisisLiterasiPage extends Page
             'class_pending_grading' => LiterasiAnalytics::classPendingGrading($material, $start, $end, $category, $classes),
             'student_correct_ranking_by_class' => LiterasiAnalytics::studentCorrectRankingByClass($material, $start, $end, 5, $category, $classes),
             'student_wrong_ranking' => LiterasiAnalytics::studentWrongRanking($material, $start, $end, 10, $category, $classes),
+            'frequent_missing_students' => LiterasiAnalytics::frequentMissingStudents($this->base, 10),
             'plagiarism_class_ranking' => LiterasiAnalytics::plagiarismClassRanking(
                 $material,
                 $start,
@@ -305,7 +305,7 @@ class AnalisisLiterasiPage extends Page
                     [
                         'sections' => $this->shareSections(),
                         'sectionLabels' => LiteracyAnalysisShareText::sectionLabels(),
-                        'monthlyText' => $this->shareText(),
+                        'allText' => $this->shareText(),
                         'periodeLabel' => $this->periodeLabel,
                         'lingkupLabel' => $this->lingkupLabel,
                     ],
@@ -343,17 +343,12 @@ class AnalisisLiterasiPage extends Page
     }
 
     /**
-     * Teks rekap WhatsApp yang mengikuti rentang tanggal aktif.
+     * Gabungan semua bagian dari data yang sedang tampil. Berbeda dari rekap
+     * bulanan lama, metode ini menghormati filter materi dan kelas juga.
      */
     public function shareText(): string
     {
-        [$start, $end] = $this->range();
-
-        $scope = filled($this->kategori) && LiteracyMonthlyShareText::validScope($this->kategori)
-            ? $this->kategori
-            : LiteracyMonthlyShareText::SCOPE_ALL;
-
-        return LiteracyMonthlyShareText::make($scope, null, $start, $end);
+        return collect($this->shareSections())->implode("\n\n");
     }
 
     /**

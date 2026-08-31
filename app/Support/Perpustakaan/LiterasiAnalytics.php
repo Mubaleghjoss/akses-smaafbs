@@ -695,6 +695,39 @@ class LiterasiAnalytics
     }
 
     /**
+     * Siswa yang paling sering tidak mengisi pada basis responden terfilter.
+     * Satu hitungan adalah satu slot siswa x materi.
+     *
+     * @param  array<string, mixed>  $base
+     * @return array<int, array<string, mixed>>
+     */
+    public static function frequentMissingStudents(array $base, int $limit = 10): array
+    {
+        return collect($base['classes'] ?? [])
+            ->flatMap(fn (array $class): array => $class['missing_students'] ?? [])
+            ->groupBy(fn (array $student): string => (string) ($student['student_id'] ?? '').'|'.(string) ($student['class'] ?? ''))
+            ->map(function (Collection $slots): array {
+                $first = $slots->first();
+
+                return [
+                    'student_id' => (int) ($first['student_id'] ?? 0),
+                    'name' => (string) ($first['name'] ?? '-'),
+                    'class' => (string) ($first['class'] ?? '-'),
+                    'missing_total' => $slots->count(),
+                    'materials' => $slots->pluck('material_title')->filter()->unique()->sort(SORT_NATURAL)->values()->all(),
+                ];
+            })
+            ->sortBy([
+                ['missing_total', 'desc'],
+                ['class', 'asc'],
+                ['name', 'asc'],
+            ])
+            ->take(max(0, $limit))
+            ->values()
+            ->all();
+    }
+
+    /**
      * Rincian harian satu kelas untuk halaman tersendiri: per tanggal, siapa
      * yang mengisi dan siapa yang belum sampai hari itu.
      *

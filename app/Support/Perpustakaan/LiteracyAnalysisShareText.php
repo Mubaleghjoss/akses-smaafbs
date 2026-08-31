@@ -28,7 +28,7 @@ final class LiteracyAnalysisShareText
             'timeline' => 'Timeline Pengisian',
             'belum' => 'Belum Mengisi',
             'dispensasi' => 'Dispensasi',
-            'ranking' => 'Ranking',
+            'siswa' => 'Analisis Siswa',
             'peringkat' => 'Peringkat Benar',
             'plagiasi' => 'Kemiripan',
         ];
@@ -54,7 +54,7 @@ final class LiteracyAnalysisShareText
             'timeline' => self::join($header, self::timeline($analytics)),
             'belum' => self::join($header, self::belumMengisi($base)),
             'dispensasi' => self::join($header, self::dispensasi($base)),
-            'ranking' => self::join($header, self::ranking($analytics)),
+            'siswa' => self::join($header, self::analisisSiswa($analytics)),
             'peringkat' => self::join($header, self::peringkatBenar($analytics)),
             'plagiasi' => self::join($header, self::plagiasi($analytics)),
         ];
@@ -296,58 +296,27 @@ final class LiteracyAnalysisShareText
      * @param  array<string, mixed>  $analytics
      * @return array<int, string>
      */
-    private static function ranking(array $analytics): array
+    private static function analisisSiswa(array $analytics): array
     {
-        $lines = [];
+        $lines = ['*ANALISIS SISWA*', '', '*SISWA TERBAIK PER KELAS*'];
+        $perKelas = $analytics['student_correct_ranking_by_class'] ?? [];
 
-        $lines[] = '*KELAS PARTISIPASI TERTINGGI*';
-        $lines[] = '(Jawaban = slot terisi siswa x materi; rasio dibanding basis responden kelas itu sendiri, dispensasi sudah dikeluarkan)';
-        $lines = array_merge($lines, self::rasioRows($analytics['class_response_ranking'] ?? [], true));
-
-        $lines[] = '';
-        $lines[] = '*KELAS PERLU PERHATIAN*';
-        $lines = array_merge($lines, self::rasioRows($analytics['least_class_response_ranking'] ?? []));
-
-        $lines[] = '';
-        $lines[] = '*AKURASI PER KELAS*';
-        $lines[] = '(Akurasi = poin benar / poin yang sudah dinilai; jawaban belum dinilai tidak dihitung salah)';
-        $akurasi = collect($analytics['class_correct_ranking'] ?? [])->keyBy('class');
-        $belumDinilai = $analytics['class_pending_grading'] ?? [];
-        $akurasi = $akurasi
-            ->union(collect(array_keys($belumDinilai))->mapWithKeys(fn (string $kelas): array => [
-                $kelas => [
-                    'class' => $kelas,
-                    'correct_answers' => 0,
-                    'graded_answers' => 0,
-                    'accuracy' => null,
-                ],
-            ]))
-            ->sortKeys(SORT_NATURAL)
-            ->values();
-
-        if ($akurasi->isEmpty()) {
-            $lines[] = 'Belum ada jawaban untuk dinilai.';
+        if ($perKelas === []) {
+            $lines[] = 'Belum ada jawaban yang dinilai.';
         } else {
-            foreach ($akurasi as $index => $row) {
-                $class = (string) ($row['class'] ?? '-');
-                $pending = $belumDinilai[$class] ?? [];
-                $pendingTotal = (int) collect($pending)->sum('pending_answers');
-
-                $lines[] = ($index + 1).'. '.self::plain($class)
-                    .' — '.self::number($row['correct_answers'] ?? 0).'/'.self::number($row['graded_answers'] ?? 0)
-                    .' ('.self::percent($row['accuracy'] ?? null).')'
-                    .($pendingTotal > 0 ? ', belum dinilai '.self::number($pendingTotal) : '');
-
-                foreach ($pending as $item) {
-                    $lines[] = '   - '.self::plain($item['material_title'] ?? '-')
-                        .': '.self::number($item['pending_answers'] ?? 0).' jawaban'
-                        .' dari '.self::number($item['pending_students'] ?? 0).' siswa';
+            foreach (collect($perKelas)->sortKeys(SORT_NATURAL) as $kelas => $rows) {
+                $lines[] = '';
+                $lines[] = '*'.self::plain($kelas).'*';
+                foreach (array_values($rows) as $index => $row) {
+                    $lines[] = ($index + 1).'. '.self::plain($row['name'] ?? '-')
+                        .' — '.self::number($row['correct_answers'] ?? 0).'/'.self::number($row['graded_answers'] ?? 0)
+                        .' ('.self::percent($row['accuracy'] ?? null).')';
                 }
             }
         }
 
         $lines[] = '';
-        $lines[] = '*SISWA BANYAK SALAH*';
+        $lines[] = '*SISWA DENGAN JAWABAN SALAH TERBANYAK*';
         $salah = $analytics['student_wrong_ranking'] ?? [];
 
         if ($salah === []) {
@@ -360,24 +329,17 @@ final class LiteracyAnalysisShareText
             }
         }
 
-        $lines[] = '';
-        $lines[] = '*SISWA TERBAIK PER KELAS*';
-        $perKelas = $analytics['student_correct_ranking_by_class'] ?? [];
-
-        if ($perKelas === []) {
-            $lines[] = 'Belum ada jawaban yang dinilai.';
-
-            return $lines;
-        }
-
-        foreach (collect($perKelas)->sortKeys(SORT_NATURAL) as $kelas => $rows) {
+        $seringKosong = $analytics['frequent_missing_students'] ?? [];
+        if ($seringKosong !== []) {
             $lines[] = '';
-            $lines[] = '*'.self::plain($kelas).'*';
-
-            foreach (array_values($rows) as $index => $row) {
+            $lines[] = '*SISWA YANG SERING TIDAK MENGISI*';
+            foreach ($seringKosong as $index => $row) {
                 $lines[] = ($index + 1).'. '.self::plain($row['name'] ?? '-')
-                    .' — '.self::number($row['correct_answers'] ?? 0).'/'.self::number($row['graded_answers'] ?? 0)
-                    .' ('.self::percent($row['accuracy'] ?? null).')';
+                    .' — '.self::plain($row['class'] ?? '-')
+                    .' — '.self::number($row['missing_total'] ?? 0).' slot tidak diisi';
+                if (($row['materials'] ?? []) !== []) {
+                    $lines[] = '   Materi: '.self::plain(implode(', ', $row['materials']));
+                }
             }
         }
 

@@ -514,7 +514,7 @@ class LiteracyAnalysisPagesTest extends TestCase
 
         $component = Livewire::actingAs($admin)->test(AnalisisLiterasiPage::class);
 
-        $this->assertStringContainsString('*REKAP BULANAN LITERASI NUMERASI*', $component->instance()->shareText());
+        $this->assertStringContainsString('*ANALISIS LITERASI NUMERASI*', $component->instance()->shareText());
 
         $lalu = now()->subMonthNoOverflow();
         $component
@@ -522,7 +522,7 @@ class LiteracyAnalysisPagesTest extends TestCase
             ->set('sampai', $lalu->copy()->endOfMonth()->toDateString());
 
         $this->assertStringContainsString(
-            $lalu->copy()->startOfMonth()->format('d/m/Y'),
+            $lalu->copy()->startOfMonth()->translatedFormat('d F Y'),
             $component->instance()->shareText(),
         );
     }
@@ -600,9 +600,10 @@ class LiteracyAnalysisPagesTest extends TestCase
         $this->assertCount(1, $row['days']);
         $this->assertSame(2, $row['days'][0]['total']);
 
-        $rankingTeks = $component->instance()->shareSections()['ranking'];
-        $this->assertStringContainsString('slot terisi', $rankingTeks);
-        $this->assertStringContainsString('Ahmad Rank', $rankingTeks);
+        // Container ranking partisipasi sudah dihapus dari halaman karena
+        // tumpang tindih dengan peringkat jawaban benar. Datanya tetap tersedia
+        // untuk timeline/rincian harian dan tidak perlu disalin dua kali.
+        $this->assertArrayNotHasKey('ranking', $component->instance()->shareSections());
     }
 
     public function test_akurasi_kelas_menyertakan_materi_yang_belum_dinilai(): void
@@ -669,11 +670,7 @@ class LiteracyAnalysisPagesTest extends TestCase
         $this->assertSame(1, $pending['XI 8'][0]['pending_answers']);
         $component->assertSee('XI 8')->assertSee('Nilai sekarang');
 
-        $rankingTeks = $component->instance()->shareSections()['ranking'];
-        $this->assertStringContainsString('*AKURASI PER KELAS*', $rankingTeks);
-        $this->assertStringContainsString('belum dinilai 1', $rankingTeks);
-        $this->assertStringContainsString('Materi Belum Dinilai', $rankingTeks);
-        $this->assertStringContainsString('XI 8', $rankingTeks);
+        $this->assertArrayNotHasKey('ranking', $component->instance()->shareSections());
     }
 
     public function test_partisipasi_kelas_melaporkan_jumlah_materi_dan_slot_wajib(): void
@@ -875,6 +872,66 @@ class LiteracyAnalysisPagesTest extends TestCase
         $component
             ->assertCanSeeTableRecords([$belumDinilai])
             ->assertCanNotSeeTableRecords([$sudahDinilai]);
+    }
+
+    public function test_container_siswa_menggabungkan_terbaik_salah_dan_sering_tidak_mengisi_sesuai_filter(): void
+    {
+        $materiSatu = $this->createMaterial('Materi Gabungan Satu', ['opens_at' => now()]);
+        $materiDua = $this->createMaterial('Materi Gabungan Dua', ['opens_at' => now()]);
+        $soal = $materiSatu->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Pertanyaan gabungan?',
+            'max_characters' => 500,
+        ]);
+
+        $terbaik = $this->createStudent('Ahmad Terbaik Filter', 'X 1');
+        $seringKosong = $this->createStudent('Budi Sering Kosong Filter', 'X 1');
+        $luarKelas = $this->createStudent('Cici Luar Filter', 'X 2');
+
+        $response = $this->createResponse($materiSatu, $terbaik);
+        PerpustakaanLiterasiAnswer::query()->create([
+            'response_id' => $response->getKey(),
+            'question_id' => $soal->getKey(),
+            'answer_text' => 'Jawaban yang salah.',
+            'character_count' => 18,
+            'is_correct' => false,
+            'score_earned' => 0,
+            'score_possible' => 1,
+        ]);
+
+        $component = Livewire::actingAs($this->createAdmin('admin-container-siswa-gabungan'))
+            ->test(AnalisisLiterasiPage::class)
+            ->set('kelas', 'X 1')
+            ->assertSuccessful()
+            ->assertDontSee('Ranking Kelas & Siswa')
+            ->assertSee('Analisis Siswa')
+            ->assertSee('Siswa Terbaik Per Kelas')
+            ->assertSee('Siswa dengan Jawaban Salah Terbanyak')
+            ->assertSee('Siswa yang Sering Tidak Mengisi')
+            ->assertSee($terbaik->nama)
+            ->assertSee($seringKosong->nama)
+            ->assertDontSee($luarKelas->nama);
+
+        $sections = $component->instance()->shareSections();
+        $this->assertArrayHasKey('siswa', $sections);
+        $this->assertArrayNotHasKey('ranking', $sections);
+        $this->assertStringContainsString('*Kelas:* X 1', $sections['siswa']);
+        $this->assertStringContainsString($terbaik->nama, $sections['siswa']);
+        $this->assertStringContainsString($seringKosong->nama, $sections['siswa']);
+        $this->assertStringContainsString('2 slot tidak diisi', $sections['siswa']);
+        $this->assertStringNotContainsString($luarKelas->nama, $sections['siswa']);
+
+        $modal = view('filament.pages.perpustakaan.partials.rekap-share', [
+            'sections' => $sections,
+            'sectionLabels' => LiteracyAnalysisShareText::sectionLabels(),
+            'allText' => $component->instance()->shareText(),
+            'periodeLabel' => $component->instance()->periodeLabel,
+            'lingkupLabel' => $component->instance()->lingkupLabel,
+        ])->render();
+        $this->assertStringContainsString('Semua Bagian (Filter Aktif)', $modal);
+        $this->assertStringNotContainsString('Rekap Bulanan Lengkap', $modal);
+        $this->assertStringContainsString('Budi Sering Kosong Filter', $modal);
+        $this->assertStringNotContainsString('Cici Luar Filter', $modal);
     }
 
     public function test_peringkat_jawaban_benar_mencakup_semua_kelas_dan_menandai_peringkat_sementara(): void
