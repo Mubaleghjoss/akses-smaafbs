@@ -377,12 +377,64 @@ class LiteracyAnalysisPagesTest extends TestCase
             $this->assertStringContainsString('*ANALISIS LITERASI NUMERASI*', $text);
         }
 
-        // Angka pada teks harus sama dengan angka yang tampil di halaman.
-        $this->assertStringContainsString('Basis responden: 2', $sections['ringkasan']);
-        $this->assertStringContainsString('Dikeluarkan (izin/sakit/tes MT): 1', $sections['ringkasan']);
+        // Angka pada teks harus sama dengan angka yang tampil di halaman,
+        // tetapi disampaikan dengan istilah yang mudah dipahami di WhatsApp.
+        $this->assertStringContainsString('Target pengisian setelah dispensasi: 2', $sections['ringkasan']);
+        $this->assertStringContainsString('Tidak dihitung karena dispensasi: 1', $sections['ringkasan']);
+        $this->assertStringContainsString('Tingkat partisipasi:', $sections['ringkasan']);
+        $this->assertStringContainsString('Jawaban yang sudah diperiksa:', $sections['ringkasan']);
+        $this->assertStringContainsString('Tingkat jawaban benar:', $sections['ringkasan']);
+        $this->assertStringContainsString('dari', $sections['ringkasan']);
+        $this->assertStringContainsString('kesempatan pengisian sudah terisi', $sections['partisipasi']);
+        $this->assertStringContainsString('Perhitungannya:', $sections['timeline']);
+        $this->assertStringContainsString('TIDAK DIHITUNG KARENA DISPENSASI', $sections['dispensasi']);
         $this->assertStringContainsString($belum->nama, $sections['belum']);
         $this->assertStringContainsString($dispensasi->nama, $sections['dispensasi']);
         $this->assertStringNotContainsString($mengisi->nama, $sections['belum']);
+
+        $allText = mb_strtolower(implode("\n\n", $sections));
+        foreach (['slot siswa aktif', 'basis responden', 'akurasi dinilai', 'asal angka', 'slot tidak diisi'] as $technicalTerm) {
+            $this->assertStringNotContainsString($technicalTerm, $allText);
+        }
+    }
+
+    public function test_ringkasan_whatsapp_menjelaskan_tingkat_jawaban_benar_dengan_pembilang_dan_penyebut(): void
+    {
+        $sections = LiteracyAnalysisShareText::sections(
+            [
+                'active_total' => 648,
+                'excluded_total' => 42,
+                'respondent_base' => 606,
+                'completed_total' => 606,
+                'missing_total' => 0,
+                'trashed_total' => 0,
+                'material_count' => 4,
+                'participation_percentage' => 100,
+            ],
+            [
+                'grading_summary' => [
+                    'graded_answers' => 1528,
+                    'total_answers' => 1529,
+                    'correct_answers' => 1021,
+                    'accuracy' => 66.8,
+                ],
+            ],
+            '01 Agustus 2026 s.d. 31 Agustus 2026',
+            'Numeracy Excellence Programme',
+        );
+
+        $this->assertStringContainsString('Jawaban yang sudah diperiksa: 1.528 dari 1.529', $sections['ringkasan']);
+        $this->assertStringContainsString(
+            'Kesempatan pengisian yang sudah terisi: 606 dari 606',
+            $sections['ringkasan'],
+        );
+        $this->assertStringContainsString('Kesempatan pengisian yang belum terisi: 0', $sections['ringkasan']);
+        $this->assertStringNotContainsString('Siswa yang sudah mengisi: 606', $sections['ringkasan']);
+        $this->assertStringContainsString(
+            'Tingkat jawaban benar: 66,8% (1.021 benar dari 1.528 jawaban yang diperiksa)',
+            $sections['ringkasan'],
+        );
+        $this->assertStringNotContainsString('Akurasi dinilai', $sections['ringkasan']);
     }
 
     public function test_teks_salin_mengikuti_filter_kelas_yang_aktif(): void
@@ -964,7 +1016,7 @@ class LiteracyAnalysisPagesTest extends TestCase
         $this->assertStringContainsString('*Kelas:* X 1', $sections['siswa']);
         $this->assertStringContainsString($terbaik->nama, $sections['siswa']);
         $this->assertStringContainsString($seringKosong->nama, $sections['siswa']);
-        $this->assertStringContainsString('2 slot tidak diisi', $sections['siswa']);
+        $this->assertStringContainsString('2 kesempatan pengisian belum terisi', $sections['siswa']);
         $this->assertStringNotContainsString($luarKelas->nama, $sections['siswa']);
 
         $modal = view('filament.pages.perpustakaan.partials.rekap-share', [

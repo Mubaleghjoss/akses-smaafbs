@@ -89,19 +89,23 @@ final class LiteracyAnalysisShareText
 
         return [
             '*RINGKASAN RESPONDEN*',
-            '- Slot siswa aktif: '.self::number($base['active_total'] ?? 0),
-            '- Dikeluarkan (izin/sakit/tes MT): '.self::number($base['excluded_total'] ?? 0),
-            '- Basis responden: '.self::number($base['respondent_base'] ?? 0),
-            '- Sudah mengisi: '.self::number($base['completed_total'] ?? 0)
-                .' ('.($base['ratio'] ?? '-').' = '.self::percent($base['participation_percentage'] ?? null).')',
-            '- Belum mengisi: '.self::number($base['missing_total'] ?? 0),
+            '- Total kesempatan mengisi: '.self::number($base['active_total'] ?? 0),
+            '- Tidak dihitung karena dispensasi: '.self::number($base['excluded_total'] ?? 0),
+            '- Target pengisian setelah dispensasi: '.self::number($base['respondent_base'] ?? 0),
+            '- Kesempatan pengisian yang sudah terisi: '.self::number($base['completed_total'] ?? 0)
+                .' dari '.self::number($base['respondent_base'] ?? 0),
+            '- Tingkat partisipasi: '.self::percent($base['participation_percentage'] ?? null),
+            '- Kesempatan pengisian yang belum terisi: '.self::number($base['missing_total'] ?? 0),
             '- Jawaban di sampah: '.self::number($base['trashed_total'] ?? 0),
-            '- Materi tercakup: '.self::number($base['material_count'] ?? 0),
+            '- Jumlah materi: '.self::number($base['material_count'] ?? 0),
             '',
             '*PENILAIAN*',
-            '- Jawaban dinilai: '.self::number($summary['graded_answers'] ?? 0).'/'.self::number($summary['total_answers'] ?? 0),
+            '- Jawaban yang sudah diperiksa: '.self::number($summary['graded_answers'] ?? 0)
+                .' dari '.self::number($summary['total_answers'] ?? 0),
             '- Jawaban benar: '.self::number($summary['correct_answers'] ?? 0),
-            '- Akurasi dinilai: '.self::percent($summary['accuracy'] ?? null),
+            '- Tingkat jawaban benar: '.self::percent($summary['accuracy'] ?? null)
+                .' ('.self::number($summary['correct_answers'] ?? 0).' benar dari '
+                .self::number($summary['graded_answers'] ?? 0).' jawaban yang diperiksa)',
         ];
     }
 
@@ -122,10 +126,10 @@ final class LiteracyAnalysisShareText
 
         foreach ($rows as $index => $row) {
             $lines[] = ($index + 1).'. '.self::plain($row['class'] ?? '-')
-                .' — '.self::number($row['completed_total'] ?? 0).'/'.self::number($row['respondent_base'] ?? 0)
-                .' ('.self::percent($row['participation_percentage'] ?? null).')'
-                .', belum '.self::number($row['missing_total'] ?? 0).' slot'
-                .(($row['excluded_total'] ?? 0) > 0 ? ', dispensasi '.self::number($row['excluded_total']).' slot' : '');
+                .' — '.self::number($row['completed_total'] ?? 0).' dari '.self::number($row['respondent_base'] ?? 0)
+                .' kesempatan pengisian sudah terisi ('.self::percent($row['participation_percentage'] ?? null).')'
+                .', belum terisi '.self::number($row['missing_total'] ?? 0)
+                .(($row['excluded_total'] ?? 0) > 0 ? ', tidak dihitung karena dispensasi '.self::number($row['excluded_total']) : '');
         }
 
         return $lines;
@@ -151,15 +155,16 @@ final class LiteracyAnalysisShareText
             $akhir = $row['last_at'] ?? null;
 
             $lines[] = ($index + 1).'. *'.self::plain($row['class'] ?? '-').'*';
-            $lines[] = '   Pengisian: '.self::number($row['total'] ?? 0).'/'.self::number($row['respondent_base'] ?? 0)
+            $lines[] = '   Kesempatan pengisian yang sudah terisi: '.self::number($row['total'] ?? 0)
+                .' dari '.self::number($row['respondent_base'] ?? 0)
                 .' ('.self::percent($row['percentage'] ?? null).')';
-            $lines[] = '   Asal angka: '.self::number($row['active_total'] ?? 0).' slot siswa aktif'
+            $lines[] = '   Perhitungannya: '.self::number($row['active_total'] ?? 0).' kesempatan mengisi'
                 .' - '.self::number($row['excluded_total'] ?? 0).' dispensasi'
-                .' = '.self::number($row['respondent_base'] ?? 0).' basis'
-                .' ('.self::number($row['unique_students'] ?? 0).' siswa)';
+                .' = '.self::number($row['respondent_base'] ?? 0).' target pengisian'
+                .' dari '.self::number($row['unique_students'] ?? 0).' siswa';
             $lines[] = '   Mulai: '.($mulai ? $mulai->translatedFormat('d M Y H:i') : '-');
             $lines[] = '   Terakhir: '.($akhir ? $akhir->translatedFormat('d M Y H:i') : '-');
-            $lines[] = '   Hari aktif: '.self::number($row['active_days'] ?? 0)
+            $lines[] = '   Hari yang memiliki pengisian: '.self::number($row['active_days'] ?? 0)
                 .' dari '.self::number($row['span_days'] ?? 0).' hari';
 
             if (filled($row['busiest_day'] ?? null)) {
@@ -215,7 +220,7 @@ final class LiteracyAnalysisShareText
         $dispensasi = $row['excluded_students'] ?? [];
 
         if ($dispensasi !== []) {
-            $lines[] = $indent.'Dispensasi - tidak dihitung ('.self::number($row['excluded_total'] ?? count($dispensasi)).'):';
+            $lines[] = $indent.'Tidak dihitung karena dispensasi ('.self::number($row['excluded_total'] ?? count($dispensasi)).'):';
 
             foreach (array_values($dispensasi) as $index => $student) {
                 $lines[] = $indent.'  '.($index + 1).'. '.self::plain($student['name'] ?? '-')
@@ -239,7 +244,7 @@ final class LiteracyAnalysisShareText
         $lines = ['*SISWA BELUM MENGISI*'];
 
         if ($rows->isEmpty()) {
-            $lines[] = 'Semua siswa pada basis responden sudah mengisi.';
+            $lines[] = 'Semua kesempatan pengisian sudah terisi.';
 
             return $lines;
         }
@@ -263,7 +268,7 @@ final class LiteracyAnalysisShareText
      */
     private static function dispensasi(array $base): array
     {
-        $lines = ['*DISPENSASI PADA LINGKUP INI*'];
+        $lines = ['*SISWA YANG TIDAK DIHITUNG KARENA DISPENSASI*'];
 
         if (($base['excluded_total'] ?? 0) < 1) {
             $lines[] = 'Belum ada dispensasi pada rentang dan filter ini.';
@@ -271,7 +276,7 @@ final class LiteracyAnalysisShareText
             return $lines;
         }
 
-        $lines[] = '- Total dikeluarkan: '.self::number($base['excluded_total']);
+        $lines[] = '- Total tidak dihitung: '.self::number($base['excluded_total']);
 
         foreach ($base['classes'] ?? [] as $row) {
             if (($row['excluded_total'] ?? 0) < 1) {
@@ -279,7 +284,7 @@ final class LiteracyAnalysisShareText
             }
 
             $lines[] = '';
-            $lines[] = '*'.self::plain($row['class'] ?? '-').'* — '.self::number($row['excluded_total']).' dikeluarkan';
+            $lines[] = '*'.self::plain($row['class'] ?? '-').'* — '.self::number($row['excluded_total']).' tidak dihitung';
 
             foreach (array_values($row['excluded_students'] ?? []) as $index => $student) {
                 $lines[] = ($index + 1).'. '.self::plain($student['name'] ?? '-')
@@ -302,14 +307,15 @@ final class LiteracyAnalysisShareText
         $perKelas = $analytics['student_correct_ranking_by_class'] ?? [];
 
         if ($perKelas === []) {
-            $lines[] = 'Belum ada jawaban yang dinilai.';
+            $lines[] = 'Belum ada jawaban yang diperiksa.';
         } else {
             foreach (collect($perKelas)->sortKeys(SORT_NATURAL) as $kelas => $rows) {
                 $lines[] = '';
                 $lines[] = '*'.self::plain($kelas).'*';
                 foreach (array_values($rows) as $index => $row) {
                     $lines[] = ($index + 1).'. '.self::plain($row['name'] ?? '-')
-                        .' — '.self::number($row['correct_answers'] ?? 0).'/'.self::number($row['graded_answers'] ?? 0)
+                        .' — '.self::number($row['correct_answers'] ?? 0).' jawaban benar dari '
+                        .self::number($row['graded_answers'] ?? 0).' yang diperiksa'
                         .' ('.self::percent($row['accuracy'] ?? null).')';
                 }
             }
@@ -336,7 +342,7 @@ final class LiteracyAnalysisShareText
             foreach ($seringKosong as $index => $row) {
                 $lines[] = ($index + 1).'. '.self::plain($row['name'] ?? '-')
                     .' — '.self::plain($row['class'] ?? '-')
-                    .' — '.self::number($row['missing_total'] ?? 0).' slot tidak diisi';
+                    .' — '.self::number($row['missing_total'] ?? 0).' kesempatan pengisian belum terisi';
                 if (($row['materials'] ?? []) !== []) {
                     $lines[] = '   Materi: '.self::plain(implode(', ', $row['materials']));
                 }
@@ -369,9 +375,9 @@ final class LiteracyAnalysisShareText
                 continue;
             }
 
-            $lines[] = '   Asal angka: '.self::number($row['active_total'] ?? 0).' slot siswa aktif'
+            $lines[] = '   Perhitungannya: '.self::number($row['active_total'] ?? 0).' kesempatan mengisi'
                 .' - '.self::number($row['excluded_total'] ?? 0).' dispensasi'
-                .' = '.self::number($row['respondent_base'] ?? 0).' basis'
+                .' = '.self::number($row['respondent_base'] ?? 0).' target pengisian'
                 .' ('.self::number($row['unique_students'] ?? 0).' siswa x '
                 .self::number($row['material_count'] ?? 0).' materi)';
 
@@ -408,12 +414,12 @@ final class LiteracyAnalysisShareText
 
         foreach ($rows as $row) {
             $lines[] = ($row['rank'] ?? '-').'. '.self::plain($row['class'] ?? '-')
-                .' — benar '.self::number($row['correct_answers'] ?? 0)
-                .' dari '.self::number($row['graded_answers'] ?? 0).' dinilai'
+                .' — '.self::number($row['correct_answers'] ?? 0).' jawaban benar'
+                .' dari '.self::number($row['graded_answers'] ?? 0).' yang diperiksa'
                 .' ('.self::percent($row['accuracy'] ?? null).')';
 
             if (($row['pending_answers'] ?? 0) > 0) {
-                $lines[] = '   Belum dinilai: '.self::number($row['pending_answers'])
+                $lines[] = '   Belum diperiksa: '.self::number($row['pending_answers'])
                     .' jawaban dari '.self::number($row['pending_students'] ?? 0).' siswa'
                     .' — potensi benar sampai '.self::number($row['potential_correct'] ?? 0);
 
@@ -435,8 +441,8 @@ final class LiteracyAnalysisShareText
     {
         $summary = $analytics['grading_summary'] ?? [];
         $lines = [
-            '*INDIKASI KEMIRIPAN JAWABAN*',
-            '- Plagiasi terkonfirmasi: '.self::number($summary['confirmed_plagiarism'] ?? 0),
+            '*INDIKASI JAWABAN MIRIP*',
+            '- Kemiripan yang sudah dikonfirmasi: '.self::number($summary['confirmed_plagiarism'] ?? 0),
             '',
             '*PER KELAS*',
         ];
