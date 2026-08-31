@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class LiterasiAnalytics
@@ -1199,8 +1200,13 @@ class LiterasiAnalytics
             ->whereExists(function (QueryBuilder $student): void {
                 $student->from('data_siswa as eligible_students')
                     ->whereColumn('eligible_students.id', 'responses.data_siswa_id')
-                    ->whereColumn('eligible_students.rombel_saat_ini', 'responses.student_class_snapshot')
                     ->where('eligible_students.status', 'aktif');
+
+                static::whereClassSnapshotMatches(
+                    $student,
+                    'eligible_students.rombel_saat_ini',
+                    'responses.student_class_snapshot',
+                );
             })
             ->when(
                 Schema::hasColumn('perpustakaan_literasi_responses', 'deleted_at'),
@@ -1223,8 +1229,13 @@ class LiterasiAnalytics
             ->whereExists(function (QueryBuilder $student): void {
                 $student->from('data_siswa as eligible_students')
                     ->whereColumn('eligible_students.id', 'perpustakaan_literasi_responses.data_siswa_id')
-                    ->whereColumn('eligible_students.rombel_saat_ini', 'perpustakaan_literasi_responses.student_class_snapshot')
                     ->where('eligible_students.status', 'aktif');
+
+                static::whereClassSnapshotMatches(
+                    $student,
+                    'eligible_students.rombel_saat_ini',
+                    'perpustakaan_literasi_responses.student_class_snapshot',
+                );
             })
             ->when(static::dispensationTableAvailable(), function (Builder $query): Builder {
                 return $query->whereNotExists(function (QueryBuilder $dispensation): void {
@@ -1235,6 +1246,36 @@ class LiterasiAnalytics
                         ->whereNotNull('eligible_dispensations.confirmed_at');
                 });
             });
+    }
+
+    /**
+     * Bandingkan rombel siswa dengan snapshot kelas pada respons.
+     *
+     * Di produksi kedua kolom ini berbeda collation (`data_siswa` warisan
+     * `utf8mb4_general_ci`, tabel literasi `utf8mb4_unicode_ci`), sehingga
+     * `whereColumn` polos ditolak MySQL dengan error 1267 "Illegal mix of
+     * collations". Perbandingan dipaksa ke collation kolom kanan agar MySQL
+     * punya satu collation eksplisit; pada SQLite lokal COLLATE seperti itu
+     * tidak dikenal, jadi di sana tetap memakai whereColumn biasa.
+     */
+    protected static function whereClassSnapshotMatches(
+        QueryBuilder $query,
+        string $studentClassColumn,
+        string $snapshotColumn,
+    ): void {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $query->whereColumn($studentClassColumn, $snapshotColumn);
+
+            return;
+        }
+
+        $grammar = $query->getGrammar();
+
+        $query->whereRaw(sprintf(
+            '%s = %s collate utf8mb4_general_ci',
+            $grammar->wrap($studentClassColumn),
+            $grammar->wrap($snapshotColumn),
+        ));
     }
 
     protected static function constrainSimilarityCategory(Builder $query, string $programCategory): Builder
