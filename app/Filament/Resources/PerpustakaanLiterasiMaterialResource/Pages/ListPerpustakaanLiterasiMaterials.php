@@ -77,51 +77,6 @@ class ListPerpustakaanLiterasiMaterials extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            Actions\Action::make('reanalyzeAllSimilarity')
-                ->label('Hitung Ulang Plagiasi')
-                ->icon('heroicon-o-arrow-path')
-                ->color('gray')
-                ->requiresConfirmation()
-                ->modalHeading('Hitung ulang plagiasi semua materi?')
-                ->modalDescription('Sistem akan menghitung ulang indikasi plagiasi untuk semua jawaban literasi sesuai pengaturan soal terbaru.')
-                ->modalSubmitActionLabel('Hitung Ulang')
-                ->visible(fn (): bool => PerpustakaanLiterasiMaterialResource::canCreate())
-                ->action(function (): void {
-                    $total = PerpustakaanLiterasiResponse::query()->count();
-
-                    QueueLiteracySimilarityReanalysis::dispatch();
-
-                    Notification::make()
-                        ->title('Hitung ulang plagiasi masuk antrean')
-                        ->body(number_format($total, 0, ',', '.').' responden akan dianalisa bertahap di background.')
-                        ->success()
-                        ->send();
-                }),
-            Actions\Action::make('configureDefaultInstructions')
-                ->label('Setting Tatib')
-                ->icon('heroicon-o-clipboard-document-list')
-                ->color('gray')
-                ->visible(fn (): bool => PerpustakaanLiterasiMaterialResource::canCreate())
-                ->fillForm(fn (): array => [
-                    'instructions' => PerpustakaanLiterasiMaterial::defaultInstructionsText(),
-                ])
-                ->form([
-                    Forms\Components\Textarea::make('instructions')
-                        ->label('Arahan / Tatib Default')
-                        ->rows(7)
-                        ->required()
-                        ->helperText('Dipakai di halaman daftar Literasi Numerasi dan menjadi fallback untuk materi yang belum punya tatib khusus.'),
-                ])
-                ->modalHeading('Setting Tatib Literasi Numerasi')
-                ->modalSubmitActionLabel('Simpan Tatib')
-                ->action(function (array $data): void {
-                    PerpustakaanLiterasiMaterial::saveDefaultInstructions((string) ($data['instructions'] ?? ''));
-
-                    Notification::make()
-                        ->title('Tatib default Literasi Numerasi diperbarui.')
-                        ->success()
-                        ->send();
-                }),
             Actions\Action::make('historySiswa')
                 ->label('History Pengerjaan Siswa')
                 ->icon('heroicon-o-clock')
@@ -133,16 +88,68 @@ class ListPerpustakaanLiterasiMaterials extends ListRecords
                 ->color('gray')
                 ->url(fn (): string => AnalisisLiterasiPage::getUrl())
                 ->visible(fn (): bool => AnalisisLiterasiPage::canAccess()),
-            Actions\Action::make('kelolaDispensasi')
-                ->label('Kelola Dispensasi')
-                ->icon('heroicon-o-user-minus')
-                ->color('gray')
-                ->url(fn (): string => KelolaDispensasiPage::getUrl())
-                ->visible(fn (): bool => KelolaDispensasiPage::canAccess()),
             Actions\CreateAction::make()
+                ->label('Buat Materi Literasi Numerasi')
                 ->fillForm(fn (): array => $this->activeProgramCategory() !== null
                     ? ['program_category' => $this->activeProgramCategory()]
                     : []),
+            Actions\ActionGroup::make([
+                Actions\Action::make('reanalyzeAllSimilarity')
+                    ->label('Hitung Ulang Plagiasi')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('gray')
+                    ->requiresConfirmation()
+                    ->modalHeading('Hitung ulang plagiasi semua materi?')
+                    ->modalDescription('Sistem akan menghitung ulang indikasi plagiasi untuk semua jawaban literasi sesuai pengaturan soal terbaru.')
+                    ->modalSubmitActionLabel('Hitung Ulang')
+                    ->visible(fn (): bool => PerpustakaanLiterasiMaterialResource::canCreate())
+                    ->action(function (): void {
+                        $total = PerpustakaanLiterasiResponse::query()->count();
+
+                        QueueLiteracySimilarityReanalysis::dispatch();
+
+                        Notification::make()
+                            ->title('Hitung ulang plagiasi masuk antrean')
+                            ->body(number_format($total, 0, ',', '.').' responden akan dianalisa bertahap di background.')
+                            ->success()
+                            ->send();
+                    }),
+                Actions\Action::make('configureDefaultInstructions')
+                    ->label('Setting Tatib')
+                    ->icon('heroicon-o-clipboard-document-list')
+                    ->color('gray')
+                    ->visible(fn (): bool => PerpustakaanLiterasiMaterialResource::canCreate())
+                    ->fillForm(fn (): array => [
+                        'instructions' => PerpustakaanLiterasiMaterial::defaultInstructionsText(),
+                    ])
+                    ->form([
+                        Forms\Components\Textarea::make('instructions')
+                            ->label('Arahan / Tatib Default')
+                            ->rows(7)
+                            ->required()
+                            ->helperText('Dipakai di halaman daftar Literasi Numerasi dan menjadi fallback untuk materi yang belum punya tatib khusus.'),
+                    ])
+                    ->modalHeading('Setting Tatib Literasi Numerasi')
+                    ->modalSubmitActionLabel('Simpan Tatib')
+                    ->action(function (array $data): void {
+                        PerpustakaanLiterasiMaterial::saveDefaultInstructions((string) ($data['instructions'] ?? ''));
+
+                        Notification::make()
+                            ->title('Tatib default Literasi Numerasi diperbarui.')
+                            ->success()
+                            ->send();
+                    }),
+                Actions\Action::make('kelolaDispensasi')
+                    ->label('Kelola Dispensasi')
+                    ->icon('heroicon-o-user-minus')
+                    ->color('gray')
+                    ->url(fn (): string => KelolaDispensasiPage::getUrl())
+                    ->visible(fn (): bool => KelolaDispensasiPage::canAccess()),
+            ])
+                ->label('Aksi Lainnya')
+                ->icon('heroicon-o-ellipsis-horizontal')
+                ->color('gray')
+                ->button(),
         ];
     }
 

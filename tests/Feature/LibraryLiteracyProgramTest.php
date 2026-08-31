@@ -35,6 +35,7 @@ use App\Support\Perpustakaan\LiterasiAnalytics;
 use App\Support\Perpustakaan\LiterasiSimilarityAnalyzer;
 use App\Support\SiteSettings\SiteSettingKeys;
 use Carbon\CarbonImmutable;
+use Filament\Actions\ActionGroup;
 use Filament\Facades\Filament;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -3523,6 +3524,31 @@ class LibraryLiteracyProgramTest extends TestCase
 
         $materialList = Livewire::actingAs($admin)
             ->test(ListPerpustakaanLiterasiMaterials::class);
+
+        $headerActions = $materialList->instance()->getCachedHeaderActions();
+        $this->assertCount(4, $headerActions, 'Header hanya memuat tiga aksi utama dan satu menu tambahan.');
+        $this->assertSame([
+            'History Pengerjaan Siswa',
+            'Buka Analisis',
+            'Buat Materi Literasi Numerasi',
+        ], collect($headerActions)
+            ->reject(fn (mixed $action): bool => $action instanceof ActionGroup)
+            ->map(fn (mixed $action): string => (string) $action->getLabel())
+            ->values()
+            ->all());
+
+        $additionalActions = collect($headerActions)
+            ->first(fn (mixed $action): bool => $action instanceof ActionGroup);
+        $this->assertNotNull($additionalActions);
+        $this->assertSame('Aksi Lainnya', (string) $additionalActions->getLabel());
+        $this->assertSame([
+            'Hitung Ulang Plagiasi',
+            'Setting Tatib',
+            'Kelola Dispensasi',
+        ], collect($additionalActions->getActions())
+            ->map(fn (mixed $action): string => (string) $action->getLabel())
+            ->values()
+            ->all());
 
         $this->assertSame([
             PerpustakaanLiterasiMaterial::CATEGORY_LITERACY_HABITUATION,
