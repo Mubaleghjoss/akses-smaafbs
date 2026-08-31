@@ -404,6 +404,28 @@ class LiteracyAnalysisPagesTest extends TestCase
         $this->assertStringNotContainsString($luarKelas->nama, $sections['belum']);
     }
 
+    public function test_tombol_salin_diinisialisasi_ulang_saat_payload_filter_berubah(): void
+    {
+        $partial = file_get_contents(resource_path('views/filament/pages/perpustakaan/partials/salin-bagian.blade.php'));
+
+        $this->assertIsString($partial);
+        $this->assertStringContainsString('$payloadKey = hash(\'sha256\', $teks);', $partial);
+        $this->assertStringContainsString('wire:key="lit-copybar-{{ $payloadKey }}"', $partial);
+
+        $admin = $this->createAdmin('admin-key-salin-filter');
+        $component = Livewire::actingAs($admin)
+            ->test(AnalisisLiterasiPage::class)
+            ->set('kategori', 'numeracy_excellence')
+            ->set('dari', '2026-08-01')
+            ->set('sampai', '2026-08-31');
+
+        $ringkasan = $component->instance()->shareSections()['ringkasan'];
+
+        $this->assertStringContainsString('*Periode:* 01 Agustus 2026 s.d. 31 Agustus 2026', $ringkasan);
+        $this->assertStringContainsString('*Lingkup:* Numeracy Excellence', $ringkasan);
+        $component->assertSee('lit-copybar-'.hash('sha256', $ringkasan), false);
+    }
+
     public function test_teks_salin_membersihkan_karakter_penanda_whatsapp(): void
     {
         // Nama materi bertanda bintang tidak boleh merusak format tebal WhatsApp.

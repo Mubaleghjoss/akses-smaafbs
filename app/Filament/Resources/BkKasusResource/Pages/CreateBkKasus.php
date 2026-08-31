@@ -25,6 +25,8 @@ class CreateBkKasus extends CreateRecord
             ->values()
             ->all();
 
+        $this->siswaIds = BkKasusSiswaSync::validateIds($this->siswaIds);
+
         unset($data['siswa_ids']);
 
         return $data;

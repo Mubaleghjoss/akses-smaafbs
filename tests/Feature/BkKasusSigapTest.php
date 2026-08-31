@@ -3,16 +3,20 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\Bk\RekapSigapPage;
+use App\Filament\Resources\BkKasusResource;
 use App\Filament\Resources\BkKasusResource\Pages\CreateBkKasus;
 use App\Filament\Resources\BkKasusResource\Pages\EditBkKasus;
 use App\Models\BkKasus;
 use App\Models\DataSiswa;
 use App\Models\Rombel;
 use App\Models\User;
+use App\Support\Admin\AdminModuleAccess;
+use App\Support\Bk\BkKasusSiswaSync;
 use App\Support\Bk\BkSigapRecap;
 use Filament\Facades\Filament;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use Tests\Feature\Concerns\BootstrapsUserAndPermissionTables;
 use Tests\TestCase;
@@ -31,6 +35,92 @@ class BkKasusSigapTest extends TestCase
         $this->runBkKasusMigration();
 
         Filament::setCurrentPanel(Filament::getPanel('admin'));
+    }
+
+    public function test_akun_biasa_bisa_disetel_mengisi_laporan_sigap_tanpa_menjadi_admin(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Guru Pengisi SIGAP',
+            'username' => 'guru-pengisi-sigap',
+            'password' => bcrypt('password'),
+            'module_access_levels' => [
+                'bk_kasus' => AdminModuleAccess::MANAGE,
+            ],
+        ]);
+        $user->assignRole('guru');
+
+        $this->actingAs($user);
+
+        $definition = AdminModuleAccess::definition('bk_kasus');
+
+        $this->assertSame('Laporan SIGAP', $definition['label']);
+        $this->assertStringContainsString('mengisi', strtolower($definition['description']));
+        $this->assertSame('Isi / Kelola Laporan', AdminModuleAccess::levelOptions('bk_kasus')[AdminModuleAccess::MANAGE]);
+        $this->assertTrue(BkKasusResource::canViewAny());
+        $this->assertTrue(BkKasusResource::canCreate());
+
+        Livewire::actingAs($user)
+            ->test(CreateBkKasus::class)
+            ->assertOk();
+    }
+
+    public function test_akun_lihat_saja_tidak_bisa_mengisi_laporan_sigap(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Guru Pemantau SIGAP',
+            'username' => 'guru-pemantau-sigap',
+            'password' => bcrypt('password'),
+            'module_access_levels' => [
+                'bk_kasus' => AdminModuleAccess::VIEW,
+            ],
+        ]);
+        $user->assignRole('guru');
+
+        $this->actingAs($user);
+
+        $this->assertTrue(BkKasusResource::canViewAny());
+        $this->assertFalse(BkKasusResource::canCreate());
+    }
+
+    public function test_payload_sigap_tidak_bisa_menyisipkan_siswa_nonaktif(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Guru Pengisi SIGAP Aman',
+            'username' => 'guru-pengisi-sigap-aman',
+            'password' => bcrypt('password'),
+            'module_access_levels' => [
+                'bk_kasus' => AdminModuleAccess::MANAGE,
+            ],
+        ]);
+        $user->assignRole('guru');
+
+        $inactive = DataSiswa::query()->create([
+            'nama' => 'Siswa Nonaktif Disisipkan',
+            'nipd' => '2026999',
+            'nisn' => '9999999999',
+            'rombel_saat_ini' => null,
+            'status' => 'keluar',
+        ]);
+
+        $this->actingAs($user);
+        $kasus = BkKasus::query()->create([
+            'tanggal_kasus' => now()->toDateString(),
+            'judul_kasus' => 'Payload manipulasi',
+            'keterangan_kasus' => 'ID siswa dikirim langsung.',
+            'kategori' => 'Lainnya',
+            'tindak_lanjut' => 'Ditolak',
+            'status_tindak_lanjut' => 'belum',
+            'created_by' => $user->id,
+        ]);
+
+        try {
+            BkKasusSiswaSync::sync($kasus, [$inactive->id]);
+            $this->fail('Payload siswa nonaktif seharusnya ditolak.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('siswa_ids', $exception->errors());
+        }
+
+        $this->assertSame(0, $kasus->siswa()->count());
     }
 
     public function test_satu_kasus_bisa_menampung_banyak_siswa_dengan_satu_tindak_lanjut(): void

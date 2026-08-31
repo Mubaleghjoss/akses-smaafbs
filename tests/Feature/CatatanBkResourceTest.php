@@ -72,6 +72,42 @@ class CatatanBkResourceTest extends TestCase
             ->assertSee('Siswa menyepakati jadwal belajar sore dan evaluasi mingguan.');
     }
 
+    public function test_daftar_catatan_bk_default_hanya_siswa_aktif_dan_membaca_nama_master_terbaru(): void
+    {
+        $admin = User::query()->create([
+            'name' => 'Admin Filter BK',
+            'username' => 'admin-filter-bk',
+            'password' => bcrypt('password'),
+        ]);
+        $admin->assignRole('admin');
+
+        $active = DataSiswa::query()->create([
+            'nama' => 'Nama Lama Siswa Aktif',
+            'nipd' => '2026011',
+            'nisn' => '1234567811',
+            'rombel_saat_ini' => 'XI IPA 1',
+            'status' => 'aktif',
+        ]);
+        $inactive = DataSiswa::query()->create([
+            'nama' => 'Siswa Sudah Keluar',
+            'nipd' => '2026012',
+            'nisn' => '1234567812',
+            'rombel_saat_ini' => null,
+            'status' => 'keluar',
+        ]);
+
+        $active->update(['nama' => 'Nama Terbaru Siswa Aktif']);
+
+        Livewire::actingAs($admin)
+            ->test(ListCatatanBks::class)
+            ->call('loadTable')
+            ->assertSet('tableFilters.status.value', 'aktif')
+            ->assertCanSeeTableRecords([$active->fresh()])
+            ->assertCanNotSeeTableRecords([$inactive])
+            ->assertSee('Nama Terbaru Siswa Aktif')
+            ->assertDontSee('Nama Lama Siswa Aktif');
+    }
+
     protected function createDataSiswaTable(): void
     {
         if (Schema::hasTable('data_siswa')) {
@@ -104,4 +140,3 @@ class CatatanBkResourceTest extends TestCase
         $migration->up();
     }
 }
-

@@ -18,6 +18,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema as SchemaFacade;
 
 class CatatanBkResource extends Resource
@@ -159,7 +160,8 @@ class CatatanBkResource extends Resource
             ->filters([
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Status')
-                    ->options(DataSiswa::statusOptions()),
+                    ->options(DataSiswa::statusOptions())
+                    ->default('aktif'),
                 Tables\Filters\SelectFilter::make('jk')
                     ->label('JK')
                     ->options([
@@ -224,7 +226,7 @@ class CatatanBkResource extends Resource
                                 $tanggal = $record->catatanBks()->max('tanggal_konseling');
 
                                 return filled($tanggal)
-                                    ? \Illuminate\Support\Carbon::parse($tanggal)->format('d/m/Y')
+                                    ? Carbon::parse($tanggal)->format('d/m/Y')
                                     : '-';
                             }),
                     ]),

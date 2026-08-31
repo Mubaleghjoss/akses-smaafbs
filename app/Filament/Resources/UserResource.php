@@ -5,15 +5,14 @@ namespace App\Filament\Resources;
 use App\Filament\Concerns\HasConfirmedDeleteActions;
 use App\Filament\Concerns\HasModulePermissions;
 use App\Filament\Resources\UserResource\Pages;
-use App\Models\DataSiswa;
 use App\Models\GuruTendik;
 use App\Models\User;
 use App\Support\Admin\AdminAccessChangeLogSupport;
 use App\Support\Admin\AdminModuleAccess;
 use App\Support\Admin\AdminNavigationSupport;
 use App\Support\Admin\AdminRoleTemplateSupport;
-use App\Support\Admin\AdminUserCredentialSupport;
 use App\Support\Admin\AdminUserCredentialShareSupport;
+use App\Support\Admin\AdminUserCredentialSupport;
 use App\Support\DataSiswa\DataSiswaSupport;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
@@ -338,7 +337,7 @@ class UserResource extends Resource
     {
         return Forms\Components\Select::make('module_access_levels.'.$definition['prefix'])
             ->label($definition['label'])
-            ->options(AdminModuleAccess::levelOptions())
+            ->options(AdminModuleAccess::levelOptions($definition['prefix']))
             ->default($defaultLevels[$definition['prefix']] ?? AdminModuleAccess::NONE)
             ->native(false)
             ->live()

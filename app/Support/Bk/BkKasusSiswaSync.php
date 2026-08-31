@@ -5,6 +5,7 @@ namespace App\Support\Bk;
 use App\Models\BkKasus;
 use App\Models\DataSiswa;
 use App\Models\Rombel;
+use Illuminate\Validation\ValidationException;
 
 class BkKasusSiswaSync
 {
@@ -17,11 +18,7 @@ class BkKasusSiswaSync
      */
     public static function sync(BkKasus $kasus, array $siswaIds): void
     {
-        $ids = collect($siswaIds)
-            ->map(fn ($id): int => (int) $id)
-            ->filter()
-            ->unique()
-            ->values();
+        $ids = collect(self::validateIds($siswaIds, $kasus));
 
         if ($ids->isEmpty()) {
             $kasus->siswa()->detach();
@@ -60,6 +57,8 @@ class BkKasusSiswaSync
             return;
         }
 
+        self::validateIds([$siswaId], $kasus);
+
         $snapshot = Rombel::normalizeName(
             DataSiswa::query()->whereKey($siswaId)->value('rombel_saat_ini')
         );
@@ -67,5 +66,40 @@ class BkKasusSiswaSync
         $kasus->siswa()->attach($siswaId, [
             'rombel_snapshot' => $snapshot !== '' ? $snapshot : null,
         ]);
+    }
+
+    /**
+     * ID baru wajib siswa aktif dan berada dalam scope akun. Peserta yang
+     * sudah tersimpan tetap boleh dipertahankan untuk menjaga data historis.
+     *
+     * @param  array<int, int|string>  $siswaIds
+     * @return array<int, int>
+     */
+    public static function validateIds(array $siswaIds, ?BkKasus $kasus = null): array
+    {
+        $ids = collect($siswaIds)
+            ->map(fn ($id): int => (int) $id)
+            ->filter()
+            ->unique()
+            ->values();
+
+        $existingIds = $kasus?->exists
+            ? $kasus->siswa()->whereIn('data_siswa.id', $ids->all())->pluck('data_siswa.id')
+            : collect();
+        $newIds = $ids->diff($existingIds)->values();
+
+        $allowedNewIds = DataSiswa::query()
+            ->visibleToUser(auth()->user())
+            ->where('status', 'aktif')
+            ->whereIn('id', $newIds->all())
+            ->pluck('id');
+
+        if ($allowedNewIds->count() !== $newIds->count()) {
+            throw ValidationException::withMessages([
+                'siswa_ids' => 'Pilihan siswa tidak valid, tidak aktif, atau di luar akses akun Anda.',
+            ]);
+        }
+
+        return $ids->all();
     }
 }

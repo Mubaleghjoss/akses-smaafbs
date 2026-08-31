@@ -36,6 +36,8 @@ class EditBkKasus extends EditRecord
             ->values()
             ->all();
 
+        $this->siswaIds = BkKasusSiswaSync::validateIds($this->siswaIds, $this->getRecord());
+
         unset($data['siswa_ids']);
 
         return $data;

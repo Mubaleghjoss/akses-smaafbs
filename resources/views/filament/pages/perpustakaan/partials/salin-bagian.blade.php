@@ -3,9 +3,13 @@
     // bagian yang sedang dilihat, tanpa membuka modal.
     $teks = $teks ?? '';
     $catatan = $catatan ?? 'Teks mengikuti filter yang aktif.';
+    // Livewire mempertahankan state Alpine saat morph. Key berbasis payload
+    // memaksa clipboard memakai teks baru setiap kali filter berubah.
+    $payloadKey = hash('sha256', $teks);
 @endphp
 
 <div
+    wire:key="lit-copybar-{{ $payloadKey }}"
     class="lit-copybar"
     x-data="{
         tersalin: false,

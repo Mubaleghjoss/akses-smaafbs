@@ -172,7 +172,7 @@ class AdminModuleAccess
         'boarding_arsip' => 'Akses arsip dan dokumen boarding.',
         'boarding_perizinan' => 'Kelola perizinan keluar dan data kepulangan siswa boarding.',
         'catatan_bk' => 'Kelola catatan bimbingan konseling siswa.',
-        'bk_kasus' => 'Kelola laporan SIGAP: kasus multi-siswa, tindak lanjut, dan rekap per kelas.',
+        'bk_kasus' => 'Atur siapa yang dapat melihat atau mengisi laporan SIGAP, termasuk kasus multi-siswa, tindak lanjut, dan rekap per kelas.',
         'survei' => 'Kelola survei sekolah, target responden, dan monitoring hasil pengisian.',
         'proker_dashboard' => 'Lihat dashboard ringkasan proker dan aksi cepat monitoring.',
         'proker_bidang' => 'Kelola master bidang proker dan penanggung jawabnya.',
@@ -195,8 +195,16 @@ class AdminModuleAccess
         'penilaian' => 'Akses ASTS, ASAS, nilai, rekap, rapor, dan pengaturan Penilaian.',
     ];
 
-    public static function levelOptions(): array
+    public static function levelOptions(?string $prefix = null): array
     {
+        if ($prefix === 'bk_kasus') {
+            return [
+                self::NONE => 'Sembunyikan',
+                self::VIEW => 'Lihat Saja',
+                self::MANAGE => 'Isi / Kelola Laporan',
+            ];
+        }
+
         return [
             self::NONE => 'Sembunyikan',
             self::VIEW => 'Lihat Saja',
