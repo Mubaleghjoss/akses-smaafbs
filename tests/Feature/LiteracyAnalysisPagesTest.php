@@ -4,6 +4,10 @@ namespace Tests\Feature;
 
 use App\Filament\Pages\Perpustakaan\AnalisisLiterasiPage;
 use App\Filament\Pages\Perpustakaan\KelolaDispensasiPage;
+use App\Filament\Pages\Perpustakaan\RincianHarianKelasPage;
+use App\Filament\Resources\PerpustakaanLiterasiMaterialResource;
+use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\Pages\ViewPerpustakaanLiterasiMaterial;
+use App\Filament\Resources\PerpustakaanLiterasiMaterialResource\RelationManagers\ResponsesRelationManager;
 use App\Models\DataSiswa;
 use App\Models\PerpustakaanLiterasiAnswer;
 use App\Models\PerpustakaanLiterasiDispensation;
@@ -670,6 +674,275 @@ class LiteracyAnalysisPagesTest extends TestCase
         $this->assertStringContainsString('belum dinilai 1', $rankingTeks);
         $this->assertStringContainsString('Materi Belum Dinilai', $rankingTeks);
         $this->assertStringContainsString('XI 8', $rankingTeks);
+    }
+
+    public function test_partisipasi_kelas_melaporkan_jumlah_materi_dan_slot_wajib(): void
+    {
+        $satu = $this->createMaterial('Materi Wajib Satu');
+        $dua = $this->createMaterial('Materi Wajib Dua');
+
+        $ahmad = $this->createStudent('Ahmad Materi', 'X 3');
+        $budi = $this->createStudent('Budi Materi', 'X 3');
+
+        $this->createResponse($satu, $ahmad);
+        $this->createResponse($dua, $ahmad);
+        $this->createResponse($satu, $budi);
+
+        $component = Livewire::actingAs($this->createAdmin('admin-materi-wajib'))
+            ->test(AnalisisLiterasiPage::class)
+            ->assertSuccessful();
+
+        $base = $component->instance()->base;
+        $row = collect($base['classes'])->firstWhere('class', 'X 3');
+
+        // 2 siswa x 2 materi = 4 slot wajib; terisi 3.
+        $this->assertSame(2, $row['material_count']);
+        $this->assertSame(2, $row['unique_students']);
+        $this->assertSame(4, $row['active_total']);
+        $this->assertSame(3, $row['completed_total']);
+        $this->assertSame('3/4', $row['ratio']);
+
+        $this->assertSame(2, $base['material_count']);
+        $this->assertSame(
+            ['Materi Wajib Dua', 'Materi Wajib Satu'],
+            array_column($base['materials'], 'title'),
+        );
+
+        $component->assertSee('Slot Wajib')->assertSee('Daftar materi pada rentang ini');
+    }
+
+    public function test_tautan_nilai_sekarang_membawa_filter_kelas_dan_status_belum_dinilai(): void
+    {
+        $material = $this->createMaterial('Materi Tautan Penilaian');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Pertanyaan menunggu penilaian?',
+            'max_characters' => 500,
+        ]);
+
+        $response = $this->createResponse($material, $this->createStudent('Ahmad Tautan', 'XI 9'));
+        PerpustakaanLiterasiAnswer::query()->create([
+            'response_id' => $response->getKey(),
+            'question_id' => $question->getKey(),
+            'answer_text' => 'Jawaban yang belum dinilai sama sekali.',
+            'character_count' => 38,
+            'score_possible' => 1,
+        ]);
+
+        $url = PerpustakaanLiterasiMaterialResource::gradingUrl((int) $material->getKey(), 'XI 9');
+
+        $this->assertNotNull($url);
+        $this->assertStringContainsString('relation=0', $url);
+        $this->assertStringContainsString(
+            ResponsesRelationManager::GRADING_FOCUS_CLASS.'=XI+9',
+            $url,
+        );
+        $this->assertStringContainsString(
+            ResponsesRelationManager::GRADING_FOCUS_STATUS.'=belum',
+            $url,
+        );
+
+        // Halaman analisis harus memakai tautan terfilter itu, bukan URL polos.
+        Livewire::actingAs($this->createAdmin('admin-tautan-nilai'))
+            ->test(AnalisisLiterasiPage::class)
+            ->assertSuccessful()
+            ->assertSee(ResponsesRelationManager::GRADING_FOCUS_STATUS.'=belum', false);
+    }
+
+    public function test_relation_manager_menerapkan_filter_dari_parameter_url(): void
+    {
+        $material = $this->createMaterial('Materi Filter Otomatis');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Pertanyaan untuk filter otomatis?',
+            'max_characters' => 500,
+        ]);
+
+        $belumDinilai = $this->createResponse($material, $this->createStudent('Ahmad Belum', 'XII 4'));
+        PerpustakaanLiterasiAnswer::query()->create([
+            'response_id' => $belumDinilai->getKey(),
+            'question_id' => $question->getKey(),
+            'answer_text' => 'Jawaban yang belum dinilai.',
+            'character_count' => 27,
+            'score_possible' => 1,
+        ]);
+
+        $sudahDinilai = $this->createResponse($material, $this->createStudent('Budi Sudah', 'XII 4'));
+        PerpustakaanLiterasiAnswer::query()->create([
+            'response_id' => $sudahDinilai->getKey(),
+            'question_id' => $question->getKey(),
+            'answer_text' => 'Jawaban yang sudah dinilai guru.',
+            'character_count' => 32,
+            'is_correct' => true,
+            'score_earned' => 1,
+            'score_possible' => 1,
+        ]);
+
+        $kelasLain = $this->createResponse($material, $this->createStudent('Cici Lain', 'XII 5'));
+        PerpustakaanLiterasiAnswer::query()->create([
+            'response_id' => $kelasLain->getKey(),
+            'question_id' => $question->getKey(),
+            'answer_text' => 'Jawaban kelas lain yang belum dinilai.',
+            'character_count' => 37,
+            'score_possible' => 1,
+        ]);
+
+        // Parameter dibaca dari request; Livewire::withQueryParams menirukan URL.
+        $component = Livewire::actingAs($this->createAdmin('admin-filter-otomatis'))
+            ->withQueryParams([
+                ResponsesRelationManager::GRADING_FOCUS_CLASS => 'XII 4',
+                ResponsesRelationManager::GRADING_FOCUS_STATUS => 'belum',
+            ])
+            ->test(ResponsesRelationManager::class, [
+                'ownerRecord' => $material,
+                'pageClass' => ViewPerpustakaanLiterasiMaterial::class,
+            ])
+            ->assertSuccessful();
+
+        $filters = $component->instance()->tableFilters;
+
+        $this->assertSame('XII 4', $filters['student_class_snapshot']['value']);
+        // TernaryFilter menyimpan 0/1, bukan boolean PHP.
+        $this->assertSame(0, $filters['grading_complete']['value']);
+        $this->assertSame('active', $filters['response_status']['value']);
+
+        $component
+            ->assertCanSeeTableRecords([$belumDinilai])
+            ->assertCanNotSeeTableRecords([$sudahDinilai, $kelasLain]);
+    }
+
+    public function test_peringkat_jawaban_benar_mencakup_semua_kelas_dan_menandai_peringkat_sementara(): void
+    {
+        $material = $this->createMaterial('Materi Peringkat Benar');
+        $question = $material->questions()->create([
+            'sort_order' => 1,
+            'prompt' => 'Pertanyaan peringkat?',
+            'max_characters' => 500,
+        ]);
+        $questionKedua = $material->questions()->create([
+            'sort_order' => 2,
+            'prompt' => 'Pertanyaan peringkat kedua?',
+            'max_characters' => 500,
+        ]);
+
+        // Kelas A: 2 poin benar, penilaian lengkap.
+        $unggul = $this->createResponse($material, $this->createStudent('Ahmad Unggul', 'X 7'));
+        foreach ([$question, $questionKedua] as $soal) {
+            PerpustakaanLiterasiAnswer::query()->create([
+                'response_id' => $unggul->getKey(),
+                'question_id' => $soal->getKey(),
+                'answer_text' => 'Jawaban benar yang sudah dinilai.',
+                'character_count' => 33,
+                'is_correct' => true,
+                'score_earned' => 1,
+                'score_possible' => 1,
+            ]);
+        }
+
+        // Kelas B: 1 poin benar + 1 jawaban tertunda -> potensi menyamai kelas A.
+        $tertunda = $this->createResponse($material, $this->createStudent('Budi Tertunda', 'X 8'));
+        PerpustakaanLiterasiAnswer::query()->create([
+            'response_id' => $tertunda->getKey(),
+            'question_id' => $question->getKey(),
+            'answer_text' => 'Jawaban benar kelas kedua.',
+            'character_count' => 26,
+            'is_correct' => true,
+            'score_earned' => 1,
+            'score_possible' => 1,
+        ]);
+        PerpustakaanLiterasiAnswer::query()->create([
+            'response_id' => $tertunda->getKey(),
+            'question_id' => $questionKedua->getKey(),
+            'answer_text' => 'Jawaban kedua yang masih menunggu penilaian.',
+            'character_count' => 44,
+            'score_possible' => 1,
+        ]);
+
+        $component = Livewire::actingAs($this->createAdmin('admin-peringkat-benar'))
+            ->test(AnalisisLiterasiPage::class)
+            ->assertSuccessful();
+
+        $peringkat = collect($component->instance()->analytics['class_correct_ranking_full'])->keyBy('class');
+
+        $this->assertSame(1, $peringkat['X 7']['rank']);
+        $this->assertSame(2, $peringkat['X 7']['correct_answers']);
+        $this->assertSame(0, $peringkat['X 7']['pending_answers']);
+        // Kelas teratas tetap ditandai sementara karena kelas lain masih bisa
+        // menyamainya setelah penilaian tertunda selesai.
+        $this->assertTrue($peringkat['X 7']['rank_provisional']);
+
+        $this->assertSame(2, $peringkat['X 8']['rank']);
+        $this->assertSame(1, $peringkat['X 8']['correct_answers']);
+        $this->assertSame(1, $peringkat['X 8']['pending_answers']);
+        $this->assertSame(2, $peringkat['X 8']['potential_correct']);
+        $this->assertTrue($peringkat['X 8']['rank_provisional']);
+        $this->assertSame(
+            'Materi Peringkat Benar',
+            $peringkat['X 8']['pending_materials'][0]['material_title'],
+        );
+
+        $component
+            ->assertSee('Peringkat Kelas: Jawaban Benar Terbanyak')
+            ->assertSee('Masih bisa berubah');
+
+        $teks = $component->instance()->shareSections()['peringkat'];
+        $this->assertStringContainsString('*PERINGKAT KELAS: JAWABAN BENAR TERBANYAK*', $teks);
+        $this->assertStringContainsString('Belum final', $teks);
+        $this->assertStringContainsString('potensi benar sampai 2', $teks);
+    }
+
+    public function test_halaman_rincian_harian_menampilkan_pengisi_dan_yang_belum_per_hari(): void
+    {
+        $material = $this->createMaterial('Materi Rincian Halaman');
+
+        $hariSatu = now()->startOfMonth()->addDays(1)->setTime(7, 30);
+        $hariDua = now()->startOfMonth()->addDays(2)->setTime(9, 10);
+
+        $ahmad = $this->createStudent('Ahmad Harian', 'XI 4');
+        $budi = $this->createStudent('Budi Harian', 'XI 4');
+        $belum = $this->createStudent('Cici Harian', 'XI 4');
+
+        $this->createResponse($material, $ahmad)->forceFill(['submitted_at' => $hariSatu])->save();
+        $this->createResponse($material, $budi)->forceFill(['submitted_at' => $hariDua])->save();
+
+        $component = Livewire::actingAs($this->createAdmin('admin-rincian-halaman'))
+            ->test(RincianHarianKelasPage::class, ['kelas' => 'XI 4'])
+            ->assertSuccessful();
+
+        $rincian = $component->instance()->rincian;
+
+        $this->assertSame('XI 4', $rincian['class']);
+        $this->assertSame(1, $rincian['material_count']);
+        $this->assertSame(3, $rincian['respondent_base']);
+        $this->assertSame(2, $rincian['completed_total']);
+        $this->assertCount(2, $rincian['days']);
+
+        // Hari pertama: Ahmad sudah mengisi, Budi dan Cici belum.
+        $this->assertSame(['Ahmad Harian'], array_column($rincian['days'][0]['students'], 'name'));
+        $this->assertSame(2, $rincian['days'][0]['pending_total']);
+        $this->assertSame(
+            ['Budi Harian', 'Cici Harian'],
+            array_column($rincian['days'][0]['pending_students'], 'name'),
+        );
+
+        // Hari kedua: Budi menyusul, hanya Cici yang masih belum.
+        $this->assertSame(['Budi Harian'], array_column($rincian['days'][1]['students'], 'name'));
+        $this->assertSame(1, $rincian['days'][1]['pending_total']);
+        $this->assertSame($belum->nama, $rincian['days'][1]['pending_students'][0]['name']);
+
+        $component->assertSee('Sudah mengisi')->assertSee('Belum mengisi');
+    }
+
+    public function test_timeline_menautkan_rincian_harian_ke_halaman_tersendiri(): void
+    {
+        $material = $this->createMaterial('Materi Tautan Rincian');
+        $this->createResponse($material, $this->createStudent('Ahmad Tautan Rincian', 'XII 7'));
+
+        Livewire::actingAs($this->createAdmin('admin-tautan-rincian'))
+            ->test(AnalisisLiterasiPage::class)
+            ->assertSuccessful()
+            ->assertSee('Rincian harian')
+            ->assertSee('rincian-harian-literasi', false);
     }
 
     public function test_ranking_kemiripan_tidak_memasukkan_hasil_yang_sudah_dinyatakan_aman(): void

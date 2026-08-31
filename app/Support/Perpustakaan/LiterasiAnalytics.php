@@ -368,6 +368,7 @@ class LiterasiAnalytics
                     'unique_students' => (int) ($classBase['unique_students'] ?? 0),
                     'missing_total' => (int) ($classBase['missing_total'] ?? 0),
                     'trashed_total' => (int) ($classBase['trashed_total'] ?? 0),
+                    'material_count' => (int) ($classBase['material_count'] ?? 0),
                     'percentage' => $classBase['participation_percentage'] ?? null,
                     'ratio' => (string) ($classBase['ratio'] ?? '0/0'),
                     'first_at' => $first,
@@ -536,7 +537,7 @@ class LiterasiAnalytics
         ?PerpustakaanLiterasiMaterial $material,
         Carbon $start,
         Carbon $end,
-        int $limit = 3,
+        ?int $limit = 3,
         ?string $programCategory = null,
         ?array $classes = null,
     ): array {
@@ -571,7 +572,7 @@ class LiterasiAnalytics
             ->orderByDesc('correct_answers')
             ->orderByDesc('graded_answers')
             ->orderBy('responses.student_class_snapshot')
-            ->limit($limit)
+            ->when($limit !== null, fn (Builder $query): Builder => $query->limit($limit))
             ->get()
             ->map(function ($row): array {
                 $graded = (int) $row->graded_answers;
@@ -604,6 +605,162 @@ class LiterasiAnalytics
             ]);
 
         return ($limit === null ? $rows : $rows->take($limit))->values()->all();
+    }
+
+    /**
+     * Peringkat SELURUH kelas berdasarkan jumlah jawaban benar.
+     *
+     * Berbeda dengan classCorrectRanking() yang hanya mengambil kelas dengan
+     * poin benar > 0 dan dibatasi limit, peringkat ini menyertakan setiap kelas
+     * pada lingkup aktif — termasuk kelas yang seluruh jawabannya masih
+     * menunggu penilaian (benar = 0). Setiap baris membawa jumlah jawaban yang
+     * belum dinilai supaya tampilan bisa menandai "peringkat masih bisa
+     * berubah" secara jujur, bukan menyembunyikan kelasnya.
+     *
+     * @param  array<int, string>|null  $classes
+     * @return array<int, array<string, mixed>>
+     */
+    public static function classCorrectRankingFull(
+        ?PerpustakaanLiterasiMaterial $material,
+        Carbon $start,
+        Carbon $end,
+        ?string $programCategory = null,
+        ?array $classes = null,
+    ): array {
+        $correct = collect(static::classCorrectRanking($material, $start, $end, null, $programCategory, $classes))
+            ->keyBy('class');
+        $pending = collect(static::classPendingGrading($material, $start, $end, $programCategory, $classes));
+        $participation = static::respondentBaseByClass($material, $start, $end, $programCategory, $classes)
+            ->keyBy('class');
+
+        $classNames = $correct->keys()
+            ->merge($pending->keys())
+            ->merge($participation->keys())
+            ->unique()
+            ->values();
+
+        if ($classNames->isEmpty()) {
+            return [];
+        }
+
+        $rows = $classNames
+            ->map(function (string $class) use ($correct, $pending, $participation): array {
+                $score = $correct->get($class, []);
+                $pendingRows = collect($pending->get($class, []));
+                $base = $participation->get($class, []);
+
+                $graded = (int) ($score['graded_answers'] ?? 0);
+                $correctAnswers = (int) ($score['correct_answers'] ?? 0);
+                $pendingAnswers = (int) $pendingRows->sum('pending_answers');
+
+                return [
+                    'class' => $class,
+                    'correct_answers' => $correctAnswers,
+                    'graded_answers' => $graded,
+                    'accuracy' => $graded > 0 ? round(($correctAnswers / $graded) * 100, 1) : null,
+                    'response_count' => (int) ($score['response_count'] ?? 0),
+                    'pending_answers' => $pendingAnswers,
+                    'pending_students' => (int) $pendingRows->sum('pending_students'),
+                    'pending_materials' => $pendingRows->values()->all(),
+                    // Batas atas bila SELURUH jawaban tertunda ternyata benar.
+                    'potential_correct' => $correctAnswers + $pendingAnswers,
+                    'participation_ratio' => (string) ($base['ratio'] ?? '0/0'),
+                    'participation_percentage' => $base['percentage'] ?? null,
+                    'material_count' => (int) ($base['material_count'] ?? 0),
+                ];
+            })
+            ->sortBy([
+                ['correct_answers', 'desc'],
+                ['accuracy', 'desc'],
+                ['graded_answers', 'desc'],
+                ['class', 'asc'],
+            ])
+            ->values();
+
+        // Peringkat dianggap belum final bila kelas ini masih punya jawaban
+        // tertunda, atau kelas lain berpeluang menyamai/melewati jumlah benar
+        // kelas ini setelah penilaiannya selesai (seri pun mengubah urutan).
+        return $rows
+            ->map(function (array $row, int $index) use ($rows): array {
+                $row['rank'] = $index + 1;
+                $row['rank_provisional'] = $row['pending_answers'] > 0 || $rows->contains(
+                    fn (array $other): bool => $other['class'] !== $row['class']
+                        && $other['pending_answers'] > 0
+                        && $other['potential_correct'] >= $row['correct_answers'],
+                );
+
+                return $row;
+            })
+            ->all();
+    }
+
+    /**
+     * Rincian harian satu kelas untuk halaman tersendiri: per tanggal, siapa
+     * yang mengisi dan siapa yang belum sampai hari itu.
+     *
+     * @param  array<int, string>|null  $classes
+     * @return array<string, mixed>
+     */
+    public static function classDailyBreakdown(
+        ?PerpustakaanLiterasiMaterial $material,
+        Carbon $start,
+        Carbon $end,
+        string $class,
+        ?string $programCategory = null,
+    ): array {
+        $classes = [$class];
+        $base = static::rangeBoundBase($material, $start, $end, $programCategory, $classes);
+        $classBase = collect($base['classes'] ?? [])->firstWhere('class', $class) ?? [];
+        $days = static::dailySubmissionsByClass($material, $start, $end, $programCategory, $classes)
+            ->get($class, []);
+
+        $completed = collect($classBase['completed_students'] ?? []);
+
+        // Slot yang sudah terisi tetapi tanggal kirimnya di luar rentang harian
+        // tidak dipakai; daftar "belum mengisi per hari" dihitung kumulatif dari
+        // slot yang pada akhir hari itu masih kosong.
+        $slots = collect($classBase['missing_students'] ?? [])
+            ->map(fn (array $slot): array => $slot + ['submitted_at' => null])
+            ->merge($completed)
+            ->values();
+
+        $daily = collect($days)->map(function (array $day) use ($slots): array {
+            $cutoff = Carbon::parse($day['date'])->endOfDay();
+
+            $day['pending_students'] = $slots
+                ->filter(fn (array $slot): bool => $slot['submitted_at'] === null
+                    || $slot['submitted_at']->greaterThan($cutoff))
+                ->sortBy('name')
+                ->map(fn (array $slot): array => [
+                    'student_id' => $slot['student_id'] ?? 0,
+                    'name' => $slot['name'] ?? '-',
+                    'material_title' => $slot['material_title'] ?? '-',
+                ])
+                ->values()
+                ->all();
+            $day['pending_total'] = count($day['pending_students']);
+
+            return $day;
+        })->values()->all();
+
+        return [
+            'class' => $class,
+            'days' => $daily,
+            'material_count' => (int) ($classBase['material_count'] ?? 0),
+            'materials' => $base['materials'] ?? [],
+            'active_total' => (int) ($classBase['active_total'] ?? 0),
+            'respondent_base' => (int) ($classBase['respondent_base'] ?? 0),
+            'completed_total' => (int) ($classBase['completed_total'] ?? 0),
+            'excluded_total' => (int) ($classBase['excluded_total'] ?? 0),
+            'missing_total' => (int) ($classBase['missing_total'] ?? 0),
+            'trashed_total' => (int) ($classBase['trashed_total'] ?? 0),
+            'unique_students' => (int) ($classBase['unique_students'] ?? 0),
+            'ratio' => (string) ($classBase['ratio'] ?? '0/0'),
+            'percentage' => $classBase['participation_percentage'] ?? null,
+            'missing_students' => array_values($classBase['missing_students'] ?? []),
+            'excluded_students' => array_values($classBase['excluded_students'] ?? []),
+            'trashed_students' => array_values($classBase['trashed_students'] ?? []),
+        ];
     }
 
     /**
@@ -640,7 +797,12 @@ class LiterasiAnalytics
                 'respondent_base' => (int) $row['respondent_base'],
                 'active_total' => (int) $row['active_total'],
                 'unique_students' => (int) $row['unique_students'],
-                'material_count' => (int) ($base['material_count'] ?? 0),
+                // Jumlah materi yang wajib diisi kelas ini pada rentang aktif.
+                // Dihitung per kelas, bukan dari total materi lingkup, supaya
+                // penyebut "100% dari berapa materi" tidak keliru saat sebuah
+                // materi tidak menyentuh seluruh kelas.
+                'material_count' => (int) ($row['material_count'] ?? $base['material_count'] ?? 0),
+                'scope_material_count' => (int) ($base['material_count'] ?? 0),
                 'ratio' => (string) $row['ratio'],
                 'percentage' => $row['participation_percentage'],
                 'active_days' => count($days),

@@ -110,6 +110,7 @@ final class LiteracyRespondentBase
                 'materials.title as material_title',
                 'responses.id as response_id',
                 'responses.deleted_at as response_deleted_at',
+                'responses.submitted_at as response_submitted_at',
                 'dispensations.id as dispensation_id',
                 'dispensations.reason as dispensation_reason',
                 'dispensations.note as dispensation_note',
@@ -220,6 +221,7 @@ final class LiteracyRespondentBase
         $classes = [];
         $studentsWhoFilled = [];
         $studentsExcluded = [];
+        $materials = [];
 
         foreach ($rows as $row) {
             $class = trim((string) $row->class) ?: '-';
@@ -234,6 +236,8 @@ final class LiteracyRespondentBase
             // Satu baris = satu slot (siswa x materi). Slot dan basis responden
             // harus memakai satuan yang sama, kalau tidak persentasenya melar.
             $bucket['active_total']++;
+            $bucket['material_ids'][(int) $row->material_id] = true;
+            $materials[(int) $row->material_id] = (string) $row->material_title;
 
             $student = [
                 'student_id' => $studentId,
@@ -273,6 +277,13 @@ final class LiteracyRespondentBase
             if ($hasLiveResponse) {
                 $bucket['completed_total']++;
                 $studentsWhoFilled[$studentId] = true;
+                // Tanggal pengisian dipakai halaman rincian harian untuk
+                // menghitung siapa yang belum mengisi sampai hari tertentu.
+                $bucket['completed_students'][] = $student + [
+                    'submitted_at' => $row->response_submitted_at !== null
+                        ? Carbon::parse($row->response_submitted_at)
+                        : null,
+                ];
 
                 continue;
             }
@@ -294,6 +305,12 @@ final class LiteracyRespondentBase
             ->map(function (array $bucket): array {
                 $bucket['unique_students'] = count($bucket['student_ids']);
                 unset($bucket['student_ids']);
+
+                // Jumlah materi yang wajib diisi kelas ini pada rentang aktif.
+                // Dipakai panel partisipasi untuk menjelaskan "100% itu dari
+                // berapa materi".
+                $bucket['material_count'] = count($bucket['material_ids']);
+                $bucket['material_ids'] = array_keys($bucket['material_ids']);
 
                 $bucket['participation_percentage'] = $bucket['respondent_base'] > 0
                     ? round(($bucket['completed_total'] / $bucket['respondent_base']) * 100, 1)
@@ -318,6 +335,13 @@ final class LiteracyRespondentBase
 
         return [
             'material_count' => $materialCount,
+            // Materi yang benar-benar muncul pada slot (siswa x materi) di
+            // rentang ini, beserta judulnya untuk keperluan tampilan.
+            'materials' => collect($materials)
+                ->map(fn (string $title, int $id): array => ['id' => $id, 'title' => $title])
+                ->sortBy('title', SORT_NATURAL)
+                ->values()
+                ->all(),
             'active_total' => (int) collect($classes)->sum('active_total'),
             'excluded_total' => (int) collect($classes)->sum('excluded_total'),
             'excluded_by_reason' => $excludedByReason,
@@ -344,6 +368,8 @@ final class LiteracyRespondentBase
             'class' => $class,
             'student_ids' => [],
             'unique_students' => 0,
+            'material_ids' => [],
+            'material_count' => 0,
             'active_total' => 0,
             'excluded_total' => 0,
             'excluded_by_reason' => [],
@@ -354,6 +380,7 @@ final class LiteracyRespondentBase
             'excluded_students' => [],
             'missing_students' => [],
             'trashed_students' => [],
+            'completed_students' => [],
         ];
     }
 
@@ -364,6 +391,7 @@ final class LiteracyRespondentBase
     {
         return [
             'material_count' => $materialCount,
+            'materials' => [],
             'active_total' => 0,
             'excluded_total' => 0,
             'excluded_by_reason' => [],

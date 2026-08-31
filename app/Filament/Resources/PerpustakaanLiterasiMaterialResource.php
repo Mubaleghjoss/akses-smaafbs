@@ -970,6 +970,37 @@ class PerpustakaanLiterasiMaterialResource extends Resource
         ];
     }
 
+    /**
+     * Tautan "Nilai sekarang" yang mendarat pada daftar jawaban SUDAH terfilter.
+     *
+     * Tanpa parameter ini halaman materi membuka seluruh jawaban tanpa filter,
+     * sehingga penilai harus mencari sendiri kelas dan jawaban yang tertunda.
+     * Nama tab relasi dihitung dari posisi manajer relasi supaya tidak
+     * bergantung pada angka yang ditulis manual.
+     */
+    public static function gradingUrl(int $materialId, ?string $class = null): ?string
+    {
+        if ($materialId < 1) {
+            return null;
+        }
+
+        try {
+            $url = static::getUrl('view', ['record' => $materialId]);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $relationKey = array_search(ResponsesRelationManager::class, static::getRelations(), true);
+
+        $query = array_filter([
+            'relation' => $relationKey === false ? null : (string) $relationKey,
+            ResponsesRelationManager::GRADING_FOCUS_CLASS => filled($class) ? $class : null,
+            ResponsesRelationManager::GRADING_FOCUS_STATUS => 'belum',
+        ], fn ($value): bool => filled($value));
+
+        return $url.(str_contains($url, '?') ? '&' : '?').http_build_query($query);
+    }
+
     public static function canDelete($record): bool
     {
         return $record instanceof PerpustakaanLiterasiMaterial

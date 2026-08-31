@@ -3,9 +3,7 @@
 namespace App\Filament\Resources\PerpustakaanLiterasiMaterialResource\RelationManagers;
 
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource;
-use App\Models\PerpustakaanLiterasiAnswer;
 use App\Models\PerpustakaanLiterasiResponse;
-use App\Models\PerpustakaanLiterasiSimilarityMatch;
 use App\Support\Literacy\LiteracyResponseGrading;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -26,6 +24,69 @@ class ResponsesRelationManager extends RelationManager
     protected static string $relationship = 'responses';
 
     protected static ?string $title = 'Detail Jawaban Responden';
+
+    /** Parameter URL untuk memfokuskan daftar pada satu kelas. */
+    public const GRADING_FOCUS_CLASS = 'fokusKelas';
+
+    /** Parameter URL untuk memfokuskan daftar pada jawaban yang belum dinilai. */
+    public const GRADING_FOCUS_STATUS = 'fokusPenilaian';
+
+    /**
+     * Terapkan fokus penilaian dari URL sebelum tabel membaca filternya.
+     *
+     * Tautan "Nilai sekarang" pada halaman Analisis Literasi sebelumnya hanya
+     * membuka halaman materi, sehingga daftar jawaban tampil tanpa filter dan
+     * penilai harus mencari sendiri kelas serta jawaban yang tertunda. Nilai
+     * filter ditulis ke $tableFilters di mount(); bootedInteractsWithTable()
+     * berjalan setelahnya dan mengisi form filter dari array ini.
+     *
+     * Parameter dibaca dari request, bukan lewat atribut #[Url], karena relation
+     * manager adalah komponen Livewire bersarang yang tidak mengikat query
+     * string halaman induk.
+     */
+    public function mount(): void
+    {
+        parent::mount();
+
+        $focusClass = request()->query(self::GRADING_FOCUS_CLASS);
+        $focusStatus = request()->query(self::GRADING_FOCUS_STATUS);
+
+        if (blank($focusClass) && blank($focusStatus)) {
+            return;
+        }
+
+        $filters = is_array($this->tableFilters) ? $this->tableFilters : [];
+        // Jawaban di Sampah tidak pernah dinilai, jadi fokus selalu pada aktif.
+        $filters['response_status']['value'] = 'active';
+
+        if (filled($focusClass)) {
+            $filters['student_class_snapshot']['value'] = (string) $focusClass;
+        }
+
+        if ($focusStatus === 'belum') {
+            // TernaryFilter memakai nilai select 1/0, bukan boolean PHP:
+            // getDefaultState() mengecast bool menjadi integer. Menulis 0 di
+            // sini membuat state form dan state URL sama bentuknya.
+            $filters['grading_complete']['value'] = 0;
+        }
+
+        $this->tableFilters = $filters;
+    }
+
+    /**
+     * Definisi "belum dinilai" yang dipakai bersama panel analisis.
+     *
+     * LiterasiAnalytics::classPendingGrading() menghitung jawaban tertunda saat
+     * score_earned DAN is_correct dua-duanya kosong. Filter tabel harus memakai
+     * aturan yang sama, kalau tidak jumlah pada halaman analisis tidak akan
+     * cocok dengan isi daftar yang dibuka dari tautan penilaian.
+     */
+    protected static function scopeUngradedAnswers(Builder $query): Builder
+    {
+        return $query
+            ->whereNull('is_correct')
+            ->whereNull('score_earned');
+    }
 
     public function table(Table $table): Table
     {
@@ -148,9 +209,9 @@ class ResponsesRelationManager extends RelationManager
                     ->queries(
                         true: fn (Builder $query): Builder => $query
                             ->whereHas('answers')
-                            ->whereDoesntHave('answers', fn (Builder $answerQuery): Builder => $answerQuery->whereNull('is_correct')),
+                            ->whereDoesntHave('answers', fn (Builder $answerQuery): Builder => static::scopeUngradedAnswers($answerQuery)),
                         false: fn (Builder $query): Builder => $query
-                            ->whereHas('answers', fn (Builder $answerQuery): Builder => $answerQuery->whereNull('is_correct')),
+                            ->whereHas('answers', fn (Builder $answerQuery): Builder => static::scopeUngradedAnswers($answerQuery)),
                     ),
             ])
             ->headerActions([
@@ -590,5 +651,4 @@ class ResponsesRelationManager extends RelationManager
     {
         return app(LiteracyResponseGrading::class)->isFullyGraded($record);
     }
-
 }

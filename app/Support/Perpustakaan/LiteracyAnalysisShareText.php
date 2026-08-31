@@ -29,6 +29,7 @@ final class LiteracyAnalysisShareText
             'belum' => 'Belum Mengisi',
             'dispensasi' => 'Dispensasi',
             'ranking' => 'Ranking',
+            'peringkat' => 'Peringkat Benar',
             'plagiasi' => 'Kemiripan',
         ];
     }
@@ -54,6 +55,7 @@ final class LiteracyAnalysisShareText
             'belum' => self::join($header, self::belumMengisi($base)),
             'dispensasi' => self::join($header, self::dispensasi($base)),
             'ranking' => self::join($header, self::ranking($analytics)),
+            'peringkat' => self::join($header, self::peringkatBenar($analytics)),
             'plagiasi' => self::join($header, self::plagiasi($analytics)),
         ];
     }
@@ -412,6 +414,52 @@ final class LiteracyAnalysisShareText
                 .self::number($row['material_count'] ?? 0).' materi)';
 
             $lines = array_merge($lines, self::rincianHarian($row));
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Peringkat kelas menurut jawaban benar, lengkap dengan catatan bahwa
+     * urutannya masih dapat berubah selama ada jawaban yang belum dinilai.
+     *
+     * @param  array<string, mixed>  $analytics
+     * @return array<int, string>
+     */
+    private static function peringkatBenar(array $analytics): array
+    {
+        $rows = $analytics['class_correct_ranking_full'] ?? [];
+        $lines = ['*PERINGKAT KELAS: JAWABAN BENAR TERBANYAK*'];
+
+        if ($rows === []) {
+            $lines[] = 'Belum ada jawaban pada lingkup ini.';
+
+            return $lines;
+        }
+
+        $tertunda = (int) collect($rows)->sum('pending_answers');
+
+        if ($tertunda > 0) {
+            $lines[] = '(Belum final: '.self::number($tertunda).' jawaban masih menunggu penilaian,'
+                .' urutan dapat berubah setelah penilaiannya selesai)';
+        }
+
+        foreach ($rows as $row) {
+            $lines[] = ($row['rank'] ?? '-').'. '.self::plain($row['class'] ?? '-')
+                .' — benar '.self::number($row['correct_answers'] ?? 0)
+                .' dari '.self::number($row['graded_answers'] ?? 0).' dinilai'
+                .' ('.self::percent($row['accuracy'] ?? null).')';
+
+            if (($row['pending_answers'] ?? 0) > 0) {
+                $lines[] = '   Belum dinilai: '.self::number($row['pending_answers'])
+                    .' jawaban dari '.self::number($row['pending_students'] ?? 0).' siswa'
+                    .' — potensi benar sampai '.self::number($row['potential_correct'] ?? 0);
+
+                foreach ($row['pending_materials'] ?? [] as $item) {
+                    $lines[] = '   - '.self::plain($item['material_title'] ?? '-')
+                        .': '.self::number($item['pending_answers'] ?? 0).' jawaban';
+                }
+            }
         }
 
         return $lines;

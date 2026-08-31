@@ -8,6 +8,7 @@
     $siswaPerKelas = $analytics['student_correct_ranking_by_class'] ?? [];
     $siswaSalah = $analytics['student_wrong_ranking'] ?? [];
     $belumDinilai = $analytics['class_pending_grading'] ?? [];
+    $peringkatBenar = $analytics['class_correct_ranking_full'] ?? [];
     $akurasiPerKelas = collect($kelasBenar)
         ->keyBy('class')
         ->union(collect(array_keys($belumDinilai))->mapWithKeys(fn (string $kelas): array => [
@@ -21,18 +22,9 @@
         ->sortKeys(SORT_NATURAL);
 
     // Tautan penilaian dibuat sekali di sini supaya tabel akurasi tidak perlu
-    // tahu detail resource Filament.
-    $tautanMateri = function (int $materialId): ?string {
-        if ($materialId < 1) {
-            return null;
-        }
-
-        try {
-            return \App\Filament\Resources\PerpustakaanLiterasiMaterialResource::getUrl('view', ['record' => $materialId]);
-        } catch (\Throwable) {
-            return null;
-        }
-    };
+    // tahu detail resource Filament. Kelas diteruskan agar daftar jawaban di
+    // halaman materi langsung terfilter ke kelas dan jawaban yang belum dinilai.
+    $tautanMateri = fn (int $materialId, ?string $kelas = null): ?string => \App\Filament\Resources\PerpustakaanLiterasiMaterialResource::gradingUrl($materialId, $kelas);
 @endphp
 
 <x-filament::section>
@@ -286,7 +278,7 @@
                                                         </thead>
                                                         <tbody>
                                                             @foreach ($pending as $item)
-                                                                @php $url = $tautanMateri((int) ($item['material_id'] ?? 0)); @endphp
+                                                                @php $url = $tautanMateri((int) ($item['material_id'] ?? 0), $row['class']); @endphp
                                                                 <tr>
                                                                     <td class="is-name" data-label="Materi">{{ $item['material_title'] }}</td>
                                                                     <td class="is-num is-strong" data-label="Jawaban">{{ $angka($item['pending_answers'] ?? 0) }}</td>

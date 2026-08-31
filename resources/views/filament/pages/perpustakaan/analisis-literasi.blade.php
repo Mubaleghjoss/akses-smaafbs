@@ -29,6 +29,10 @@
             'salinTeks' => $shareSections['ranking'] ?? '',
         ])
 
+        @include('filament.pages.perpustakaan.partials.peringkat-benar', [
+            'salinTeks' => $shareSections['peringkat'] ?? '',
+        ])
+
         @include('filament.pages.perpustakaan.partials.plagiasi-literasi', [
             'salinTeks' => $shareSections['plagiasi'] ?? '',
         ])

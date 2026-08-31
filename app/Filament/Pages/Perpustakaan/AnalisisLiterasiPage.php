@@ -168,6 +168,9 @@ class AnalisisLiterasiPage extends Page
             'least_class_response_ranking' => LiterasiAnalytics::leastClassResponseRanking($material, $start, $end, 5, $category, $classes),
             'class_submission_timeline' => LiterasiAnalytics::classSubmissionTimeline($material, $start, $end, $category, $classes),
             'class_correct_ranking' => LiterasiAnalytics::classCorrectRanking($material, $start, $end, 5, $category, $classes),
+            // Peringkat jawaban benar untuk SELURUH kelas, termasuk kelas yang
+            // masih menunggu penilaian, beserta penanda peringkat sementara.
+            'class_correct_ranking_full' => LiterasiAnalytics::classCorrectRankingFull($material, $start, $end, $category, $classes),
             // Penjelas "kenapa akurasi belum 100%": materi yang jawabannya masih
             // menunggu penilaian, dipecah per kelas.
             'class_pending_grading' => LiterasiAnalytics::classPendingGrading($material, $start, $end, $category, $classes),
@@ -276,6 +279,13 @@ class AnalisisLiterasiPage extends Page
             'periodeLabel' => $this->periodeLabel,
             'lingkupLabel' => $this->lingkupLabel,
             'shareSections' => $this->shareSections(),
+            // Nilai filter mentah diteruskan supaya partial bisa membangun
+            // tautan ke halaman rincian dengan lingkup yang sama.
+            'dari' => $this->dari,
+            'sampai' => $this->sampai,
+            'kategori' => $this->kategori,
+            'materi' => $this->materi,
+            'kelas' => $this->kelas,
         ];
     }
 
