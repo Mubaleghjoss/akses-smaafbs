@@ -14,7 +14,7 @@
     };
 @endphp
 
-<x-filament::section>
+<x-filament::section collapsible collapsed>
     <x-slot name="heading">Partisipasi Per Kelas</x-slot>
     <x-slot name="description">
         Persentase dihitung dari jumlah yang mengisi dibagi basis responden kelas tersebut, sehingga tidak pernah

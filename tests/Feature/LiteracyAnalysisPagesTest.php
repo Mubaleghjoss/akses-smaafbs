@@ -874,6 +874,30 @@ class LiteracyAnalysisPagesTest extends TestCase
             ->assertCanNotSeeTableRecords([$sudahDinilai]);
     }
 
+    public function test_semua_container_analisis_minimize_saat_pertama_dibuka(): void
+    {
+        $partials = [
+            'filter-analisis',
+            'ringkasan-responden',
+            'partisipasi-kelas',
+            'timeline-walas',
+            'dispensasi-ringkas',
+            'analisis-siswa',
+            'peringkat-benar',
+            'plagiasi-literasi',
+        ];
+
+        foreach ($partials as $partial) {
+            $source = file_get_contents(resource_path("views/filament/pages/perpustakaan/partials/{$partial}.blade.php"));
+
+            $this->assertStringContainsString(
+                '<x-filament::section collapsible collapsed>',
+                $source,
+                "Container {$partial} harus dapat diminimize dan tertutup secara default.",
+            );
+        }
+    }
+
     public function test_container_siswa_menggabungkan_terbaik_salah_dan_sering_tidak_mengisi_sesuai_filter(): void
     {
         $materiSatu = $this->createMaterial('Materi Gabungan Satu', ['opens_at' => now()]);

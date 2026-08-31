@@ -16,7 +16,7 @@
     );
 @endphp
 
-<x-filament::section collapsible>
+<x-filament::section collapsible collapsed>
     <x-slot name="heading">Timeline Pengisian Per Kelas</x-slot>
     <x-slot name="description">
         Kapan setiap kelas mulai dan terakhir mengisi pada rentang aktif, berapa hari kelas itu aktif, dan

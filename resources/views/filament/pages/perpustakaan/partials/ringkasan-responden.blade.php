@@ -51,7 +51,7 @@
     ];
 @endphp
 
-<x-filament::section>
+<x-filament::section collapsible collapsed>
     <x-slot name="heading">Ringkasan Responden</x-slot>
     <x-slot name="description">
         Siswa berstatus izin, sakit, atau tes MT dikeluarkan dari basis responden — tidak dihitung sebagai

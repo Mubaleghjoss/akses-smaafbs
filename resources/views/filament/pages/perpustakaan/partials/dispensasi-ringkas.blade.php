@@ -6,7 +6,7 @@
     $kelasDispensasi = collect($kelasRows)->filter(fn ($row) => ($row['excluded_total'] ?? 0) > 0);
 @endphp
 
-<x-filament::section>
+<x-filament::section collapsible collapsed>
     <x-slot name="heading">Dispensasi Pada Lingkup Ini</x-slot>
     <x-slot name="description">
         Rincian siswa yang dikeluarkan dari basis responden. Untuk menetapkan atau membatalkan status,

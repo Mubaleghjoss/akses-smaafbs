@@ -1,4 +1,4 @@
-<x-filament::section>
+<x-filament::section collapsible collapsed>
     <x-slot name="heading">Filter Analisis</x-slot>
     <x-slot name="description">
         Pilih rentang tanggal, kategori program, materi, dan kelas. Semua filter tersimpan di alamat halaman,

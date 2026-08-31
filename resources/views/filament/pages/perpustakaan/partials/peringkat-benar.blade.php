@@ -8,7 +8,7 @@
     $tautanMateri = fn (int $materialId, ?string $kelas = null): ?string => \App\Filament\Resources\PerpustakaanLiterasiMaterialResource::gradingUrl($materialId, $kelas);
 @endphp
 
-<x-filament::section>
+<x-filament::section collapsible collapsed>
     <x-slot name="heading">Peringkat Kelas: Jawaban Benar Terbanyak</x-slot>
     <x-slot name="description">
         Seluruh kelas pada lingkup aktif diurutkan dari jumlah poin benar terbanyak. Berbeda dengan tabel

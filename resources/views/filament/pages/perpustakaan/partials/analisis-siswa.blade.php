@@ -6,7 +6,7 @@
     $seringKosong = $analytics['frequent_missing_students'] ?? [];
 @endphp
 
-<x-filament::section>
+<x-filament::section collapsible collapsed>
     <x-slot name="heading">Analisis Siswa</x-slot>
     <x-slot name="description">
         Siswa terbaik per kelas, siswa dengan jawaban salah terbanyak, dan siswa yang paling sering tidak
