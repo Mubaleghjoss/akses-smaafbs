@@ -6,18 +6,18 @@
             @php($emptyState = $this->getEmptyState())
 
             <section class="assessment-report-progress__empty-state rounded-2xl border p-5 shadow-sm sm:p-8" data-empty-state="{{ $emptyState['key'] }}">
-                <div class="flex flex-col gap-5 sm:flex-row sm:items-start">
+                <div class="assessment-report-progress__empty-layout flex flex-col gap-5 sm:flex-row sm:items-start">
                     <div class="assessment-report-progress__empty-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-xl" aria-hidden="true">
                         <x-filament::icon :icon="$emptyState['icon']" class="h-7 w-7" />
                     </div>
 
-                    <div class="min-w-0 flex-1">
+                    <div class="assessment-report-progress__empty-content min-w-0 flex-1">
                         <span class="assessment-report-progress__empty-label inline-flex rounded-full px-3 py-1 text-xs font-bold">Informasi progres rapor</span>
                         <h2 class="assessment-report-progress__empty-title mt-3 break-words text-xl font-bold leading-tight sm:text-2xl">{{ $emptyState['title'] }}</h2>
                         <p class="assessment-report-progress__empty-description mt-3 max-w-3xl break-words text-sm leading-6 sm:text-base sm:leading-7">{{ $emptyState['description'] }}</p>
 
                         <div class="assessment-report-progress__empty-action mt-5 rounded-xl border p-4">
-                            <div class="flex items-start gap-3">
+                            <div class="assessment-report-progress__empty-action-layout flex items-start gap-3">
                                 <x-filament::icon icon="heroicon-o-information-circle" class="mt-0.5 h-5 w-5 shrink-0" />
                                 <div class="min-w-0">
                                     <p class="text-xs font-bold uppercase tracking-wide">Yang perlu Anda lakukan</p>
@@ -32,8 +32,8 @@
             </section>
         @else
             <section class="assessment-report-progress__hero rounded-2xl border p-4 shadow-sm sm:p-6">
-                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div class="min-w-0">
+                <div class="assessment-report-progress__hero-layout flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="assessment-report-progress__hero-copy min-w-0">
                         <span class="assessment-report-progress__eyebrow inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold">
                             <x-filament::icon icon="heroicon-o-flag" class="h-4 w-4" />
                             Tujuan akhir: rapor siap dicetak
@@ -50,15 +50,15 @@
 
             @foreach ($periods as $period)
                 <section class="assessment-report-progress__period rounded-2xl border p-4 shadow-sm sm:p-6" aria-labelledby="progress-period-{{ $period['id'] }}">
-                    <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <header class="assessment-report-progress__period-header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div class="min-w-0">
-                            <div class="flex flex-wrap items-center gap-2">
+                            <div class="assessment-report-progress__badges flex flex-wrap items-center gap-2">
                                 <span class="assessment-report-progress__type rounded-full px-2.5 py-1 text-xs font-bold">{{ $period['type_label'] }}</span>
                                 <span class="assessment-report-progress__workflow rounded-full px-2.5 py-1 text-xs font-semibold">{{ $period['status_label'] }}</span>
                             </div>
                             <h2 id="progress-period-{{ $period['id'] }}" class="assessment-report-progress__period-title mt-2 break-words text-lg font-bold sm:text-xl">{{ $period['name'] }}</h2>
                         </div>
-                        <div class="text-right">
+                        <div class="assessment-report-progress__summary text-right">
                             <strong class="assessment-report-progress__overall block text-2xl">{{ $period['overall_percent'] }}%</strong>
                             <span class="assessment-report-progress__readiness {{ $period['ready_to_print'] ? 'is-ready' : 'is-blocked' }} mt-1 inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold">
                                 <x-filament::icon :icon="$period['ready_to_print'] ? 'heroicon-o-check-circle' : 'heroicon-o-exclamation-triangle'" class="h-4 w-4" />
@@ -73,10 +73,10 @@
                         @endforeach
                     </div>
 
-                    <div class="mt-5 grid gap-4 lg:grid-cols-2">
+                    <div class="assessment-report-progress__roles mt-5 grid gap-4 lg:grid-cols-2">
                         @foreach ($period['roles'] as $role)
                             <article class="assessment-report-progress__role flex min-w-0 flex-col rounded-xl border p-4">
-                                <div class="flex min-w-0 items-start justify-between gap-3">
+                                <div class="assessment-report-progress__role-header flex min-w-0 items-start justify-between gap-3">
                                     <div class="min-w-0">
                                         <h3 class="assessment-report-progress__role-title font-bold">{{ $role['label'] }}</h3>
                                         <p class="assessment-report-progress__scope mt-1 break-words text-xs leading-5">{{ $role['scope'] }}</p>

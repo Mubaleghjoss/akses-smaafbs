@@ -267,4 +267,16 @@ class AssessmentReportProgressTest extends TestCase
             ->assertSee('hubungi Kurikulum atau Admin')
             ->assertSeeHtml('assessment-report-progress__empty-state');
     }
+
+    public function test_css_struktural_progres_rapor_tidak_bergantung_pada_utility_build(): void
+    {
+        $css = file_get_contents(public_path('css/filament-admin-responsive.css'));
+
+        $this->assertIsString($css);
+        $this->assertStringContainsString('.assessment-report-progress { display:flex; flex-direction:column; gap:1.5rem; }', $css);
+        $this->assertStringContainsString('.assessment-report-progress__hero,.assessment-report-progress__period,.assessment-report-progress__empty-state { border-style:solid; border-width:1px; border-radius:1rem; padding:1.5rem; }', $css);
+        $this->assertStringContainsString('.assessment-report-progress__path { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:.5rem; }', $css);
+        $this->assertStringContainsString('.assessment-report-progress__roles { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }', $css);
+        $this->assertStringContainsString('.assessment-report-progress__action { display:inline-flex; min-height:2.5rem; align-items:center; justify-content:center; }', $css);
+    }
 }
