@@ -5,6 +5,7 @@ namespace App\Support\Admin;
 use App\Filament\Pages\Assessment\AsasHub;
 use App\Filament\Pages\Assessment\AsatHub;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
+use App\Filament\Pages\Assessment\AssessmentReportProgressPage;
 use App\Filament\Pages\Assessment\AssessmentSetupWizard;
 use App\Filament\Pages\Assessment\AssessmentTeachingMatrix;
 use App\Filament\Pages\Assessment\AstsHub;
@@ -127,6 +128,7 @@ class AdminSchoolNavigation
         PerpustakaanLemariResource::class => 'Perpustakaan',
         PerpustakaanLiterasiMaterialResource::class => 'Perpustakaan',
         AssessmentDashboard::class => 'Penilaian',
+        AssessmentReportProgressPage::class => 'Penilaian',
         AssessmentSetupWizard::class => 'Penilaian',
         AssessmentTeachingMatrix::class => 'Penilaian',
         AstsHub::class => 'Penilaian',
@@ -139,6 +141,7 @@ class AdminSchoolNavigation
      */
     protected const CLASS_GROUP_MAP = [
         AssessmentDashboard::class => self::GROUP,
+        AssessmentReportProgressPage::class => self::GROUP,
         AssessmentSetupWizard::class => self::GROUP,
         AssessmentTeachingMatrix::class => self::GROUP,
         AstsHub::class => self::GROUP,
@@ -170,6 +173,7 @@ class AdminSchoolNavigation
             AsasHub::class,
             AsatHub::class,
             AssessmentDashboard::class,
+            AssessmentReportProgressPage::class,
         ], true);
     }
 

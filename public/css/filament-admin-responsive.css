@@ -9859,3 +9859,46 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 }
 
 .dark .lit-flag { background:rgb(251 191 36 / 0.16); color:#fcd34d; }
+
+
+/* Progres Rapor: semantic light/dark palette */
+.assessment-report-progress__hero { border-color:#bfdbfe; background:#eff6ff; color:#0f172a; }
+.assessment-report-progress .assessment-report-progress__eyebrow { background:#dbeafe !important; color:#1e40af !important; }
+.assessment-report-progress__title,.assessment-report-progress__period-title,.assessment-report-progress__role-title,.assessment-report-progress__percent,.assessment-report-progress__overall { color:#0f172a; }
+.assessment-report-progress__copy,.assessment-report-progress__scope,.assessment-report-progress__numbers { color:#475569; }
+.assessment-report-progress__period-count { border-color:#bfdbfe; background:#fff; color:#1e3a8a; }
+.assessment-report-progress__period { border-color:#dbe3ef; background:#fff; }
+.assessment-report-progress .assessment-report-progress__type { background:#dbeafe !important; color:#1e40af !important; }
+.assessment-report-progress .assessment-report-progress__workflow { background:#e2e8f0 !important; color:#334155 !important; }
+.assessment-report-progress__readiness.is-ready { background:#dcfce7; color:#166534; }
+.assessment-report-progress__readiness.is-blocked { background:#fef3c7; color:#92400e; }
+.assessment-report-progress__step { border-color:#cbd5e1; background:#f8fafc; color:#334155; }
+.assessment-report-progress__role { border-color:#dbe3ef; background:#f8fafc; }
+.assessment-report-progress .assessment-report-progress__role-status { background:#e2e8f0 !important; color:#334155 !important; }
+.assessment-report-progress__track { background:#cbd5e1; }
+.assessment-report-progress__bar { background:#2563eb; }
+.assessment-report-progress__next { border-color:#bfdbfe; background:#eff6ff; color:#1e3a8a; }
+.assessment-report-progress__action { background:#1d4ed8; color:#fff; }
+.assessment-report-progress__action:hover { background:#1e40af; }
+.assessment-report-progress__action:focus-visible { outline:3px solid #93c5fd; outline-offset:2px; }
+.assessment-report-progress__empty { border-color:#94a3b8; background:#f8fafc; color:#334155; }
+.dark .assessment-report-progress__hero,.fi-theme-dark .assessment-report-progress__hero { border-color:#1e40af; background:#172554; color:#f8fafc; }
+.dark .assessment-report-progress .assessment-report-progress__eyebrow,.fi-theme-dark .assessment-report-progress .assessment-report-progress__eyebrow { background:#1e3a8a !important; color:#dbeafe !important; }
+.dark .assessment-report-progress__title,.dark .assessment-report-progress__period-title,.dark .assessment-report-progress__role-title,.dark .assessment-report-progress__percent,.dark .assessment-report-progress__overall,.fi-theme-dark .assessment-report-progress__title,.fi-theme-dark .assessment-report-progress__period-title,.fi-theme-dark .assessment-report-progress__role-title,.fi-theme-dark .assessment-report-progress__percent,.fi-theme-dark .assessment-report-progress__overall { color:#f8fafc; }
+.dark .assessment-report-progress__copy,.dark .assessment-report-progress__scope,.dark .assessment-report-progress__numbers,.fi-theme-dark .assessment-report-progress__copy,.fi-theme-dark .assessment-report-progress__scope,.fi-theme-dark .assessment-report-progress__numbers { color:#cbd5e1; }
+.dark .assessment-report-progress__period-count,.fi-theme-dark .assessment-report-progress__period-count { border-color:#1e40af; background:#172554; color:#dbeafe; }
+.dark .assessment-report-progress__period,.fi-theme-dark .assessment-report-progress__period { border-color:#334155; background:#111827; }
+.dark .assessment-report-progress .assessment-report-progress__type,.fi-theme-dark .assessment-report-progress .assessment-report-progress__type { background:#1e3a8a !important; color:#dbeafe !important; }
+.dark .assessment-report-progress .assessment-report-progress__workflow,.fi-theme-dark .assessment-report-progress .assessment-report-progress__workflow { background:#334155 !important; color:#f1f5f9 !important; }
+.dark .assessment-report-progress__readiness.is-ready,.fi-theme-dark .assessment-report-progress__readiness.is-ready { background:#14532d; color:#dcfce7; }
+.dark .assessment-report-progress__readiness.is-blocked,.fi-theme-dark .assessment-report-progress__readiness.is-blocked { background:#78350f; color:#fef3c7; }
+.dark .assessment-report-progress__step,.fi-theme-dark .assessment-report-progress__step { border-color:#475569; background:#1e293b; color:#e2e8f0; }
+.dark .assessment-report-progress__role,.fi-theme-dark .assessment-report-progress__role { border-color:#334155; background:#1e293b; }
+.dark .assessment-report-progress .assessment-report-progress__role-status,.fi-theme-dark .assessment-report-progress .assessment-report-progress__role-status { background:#475569 !important; color:#f8fafc !important; }
+.dark .assessment-report-progress__track,.fi-theme-dark .assessment-report-progress__track { background:#475569; }
+.dark .assessment-report-progress__bar,.fi-theme-dark .assessment-report-progress__bar { background:#60a5fa; }
+.dark .assessment-report-progress__next,.fi-theme-dark .assessment-report-progress__next { border-color:#1d4ed8; background:#172554; color:#dbeafe; }
+.dark .assessment-report-progress__action,.fi-theme-dark .assessment-report-progress__action { background:#2563eb; color:#fff; }
+.dark .assessment-report-progress__action:hover,.fi-theme-dark .assessment-report-progress__action:hover { background:#3b82f6; }
+.dark .assessment-report-progress__empty,.fi-theme-dark .assessment-report-progress__empty { border-color:#475569; background:#111827; color:#e2e8f0; }
+@media (max-width:640px) { .assessment-report-progress__path { overflow-x:auto; grid-template-columns:repeat(8,minmax(6.5rem,1fr)); padding-bottom:.25rem; } }

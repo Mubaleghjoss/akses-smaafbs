@@ -13,6 +13,7 @@ use App\Filament\Pages\Assessment\AsatInputScores;
 use App\Filament\Pages\Assessment\AsatReports;
 use App\Filament\Pages\Assessment\AsatSubmissionStatus;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
+use App\Filament\Pages\Assessment\AssessmentReportProgressPage;
 use App\Filament\Pages\Assessment\AssessmentMasterImport;
 use App\Filament\Pages\Assessment\AssessmentSetupWizard;
 use App\Filament\Pages\Assessment\AssessmentTeachingMatrix;
@@ -139,6 +140,7 @@ class AdminModuleAccess
             RincianHarianKelasPage::class,
         ],
         'penilaian' => [
+            AssessmentReportProgressPage::class,
             AssessmentSetupWizard::class,
             AssessmentTeachingMatrix::class,
             AstsHub::class,
