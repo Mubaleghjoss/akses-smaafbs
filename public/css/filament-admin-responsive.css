@@ -8812,6 +8812,231 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .asmt-typebar__hint { margin-left:auto; font-size:.75rem; color:#64748b; }
 .dark .asmt-typebar__hint { color:#94a3b8; }
 
+/* Assessment contrast contract: explicit light/dark colors for all
+   navigation and type-hub copy. Keep these semantic selectors after the
+   utility-generated rules so text never inherits a low-contrast tone. */
+.assessment-context-stack,
+.assessment-type-page {
+    --asmt-ink: #0f172a;
+    --asmt-copy: #475569;
+    --asmt-muted: #526277;
+    --asmt-border: #cbd5e1;
+    --asmt-surface: #ffffff;
+    --asmt-surface-soft: #f1f5f9;
+    --asmt-active: #115e59;
+    --asmt-active-hover: #134e4a;
+    color: var(--asmt-ink);
+}
+
+.dark .assessment-context-stack,
+.fi-theme-dark .assessment-context-stack,
+.dark .assessment-type-page,
+.fi-theme-dark .assessment-type-page {
+    --asmt-ink: #f8fafc;
+    --asmt-copy: #d7e0eb;
+    --asmt-muted: #cbd5e1;
+    --asmt-border: #64748b;
+    --asmt-surface: #18181b;
+    --asmt-surface-soft: #1e293b;
+    --asmt-active: #0f766e;
+    --asmt-active-hover: #0d9488;
+}
+
+.asmt-typebar {
+    border-color: var(--asmt-border);
+    background: var(--asmt-surface-soft);
+}
+
+.asmt-typebar__label,
+.asmt-typebar__hint {
+    color: var(--asmt-copy);
+}
+
+.dark .asmt-typebar__label,
+.dark .asmt-typebar__hint,
+.fi-theme-dark .asmt-typebar__label,
+.fi-theme-dark .asmt-typebar__hint {
+    color: #e2e8f0;
+}
+
+.asmt-typebar__tabs {
+    border: 1px solid var(--asmt-border);
+    background: var(--asmt-surface);
+}
+
+.asmt-typebar__tab,
+.dark .asmt-typebar__tab,
+.fi-theme-dark .asmt-typebar__tab {
+    color: var(--asmt-ink);
+}
+
+.asmt-typebar__tab:hover,
+.dark .asmt-typebar__tab:hover,
+.fi-theme-dark .asmt-typebar__tab:hover {
+    background: var(--asmt-surface-soft);
+    color: var(--asmt-ink);
+}
+
+.asmt-typebar__tab.is-active,
+.dark .asmt-typebar__tab.is-active,
+.fi-theme-dark .asmt-typebar__tab.is-active {
+    background: var(--asmt-active);
+    color: #ffffff !important;
+}
+
+.asmt-typebar__tab.is-active > *,
+.assessment-context-nav__tabs a.is-active > * {
+    color: #ffffff !important;
+}
+
+.asmt-typebar__tab.is-active:hover,
+.dark .asmt-typebar__tab.is-active:hover,
+.fi-theme-dark .asmt-typebar__tab.is-active:hover {
+    background: var(--asmt-active-hover);
+    color: #ffffff !important;
+}
+
+.asmt-typebar__tab.is-disabled {
+    color: var(--asmt-muted);
+    opacity: .65;
+}
+
+.assessment-context-nav {
+    border-color: var(--asmt-border);
+    background: var(--asmt-surface);
+}
+
+.assessment-context-nav__crumbs,
+.assessment-context-nav__crumbs a,
+.dark .assessment-context-nav__crumbs,
+.fi-theme-dark .assessment-context-nav__crumbs,
+.dark .assessment-context-nav__crumbs a,
+.fi-theme-dark .assessment-context-nav__crumbs a {
+    color: var(--asmt-copy);
+}
+
+.assessment-context-nav__crumbs a:hover,
+.assessment-context-nav__crumbs a:focus-visible {
+    color: var(--asmt-ink);
+}
+
+.assessment-context-nav__tabs a,
+.dark .assessment-context-nav__tabs a,
+.fi-theme-dark .assessment-context-nav__tabs a {
+    border: 1px solid transparent;
+    color: var(--asmt-ink) !important;
+}
+
+.assessment-context-nav__tabs a:hover,
+.assessment-context-nav__tabs a:focus-visible {
+    border-color: var(--asmt-border);
+    background: var(--asmt-surface-soft);
+    color: var(--asmt-ink) !important;
+}
+
+.assessment-context-nav__tabs a.is-active,
+.dark .assessment-context-nav__tabs a.is-active,
+.fi-theme-dark .assessment-context-nav__tabs a.is-active {
+    border-color: var(--asmt-active);
+    background: var(--asmt-active);
+    color: #ffffff !important;
+}
+
+.assessment-type-empty {
+    border-color: #d97706;
+    background: #fffbeb;
+}
+
+.assessment-type-empty__title {
+    color: #78350f;
+}
+
+.assessment-type-empty__copy {
+    color: #7c2d12;
+}
+
+.dark .assessment-type-empty,
+.fi-theme-dark .assessment-type-empty {
+    border-color: #f59e0b;
+    background: #451a03;
+}
+
+.dark .assessment-type-empty__title,
+.fi-theme-dark .assessment-type-empty__title {
+    color: #fef3c7;
+}
+
+.dark .assessment-type-empty__copy,
+.fi-theme-dark .assessment-type-empty__copy {
+    color: #fde68a;
+}
+
+.assessment-type-hero__eyebrow {
+    background: var(--asmt-surface-soft);
+    color: var(--asmt-ink);
+}
+
+.assessment-type-hero__title,
+.assessment-type-summary-card__value,
+.assessment-type-section__title,
+.assessment-type-action-card__value,
+.assessment-type-action-card__title {
+    color: var(--asmt-ink);
+}
+
+.assessment-type-hero__copy,
+.assessment-type-period__label,
+.assessment-type-summary-card__label,
+.assessment-type-section__copy,
+.assessment-type-action-card__caption,
+.assessment-type-action-card__copy {
+    color: var(--asmt-copy) !important;
+}
+
+.assessment-type-period__select {
+    border-color: var(--asmt-border);
+    background: var(--asmt-surface);
+    color: var(--asmt-ink);
+}
+
+.assessment-type-period__select option {
+    background: var(--asmt-surface);
+    color: var(--asmt-ink);
+}
+
+.dark .assessment-type-summary-card,
+.fi-theme-dark .assessment-type-summary-card,
+.dark .assessment-type-action-card,
+.fi-theme-dark .assessment-type-action-card,
+.dark .assessment-dashboard-period,
+.fi-theme-dark .assessment-dashboard-period {
+    border-color: var(--asmt-border);
+    background: var(--asmt-surface);
+}
+
+.assessment-type-page a:focus-visible,
+.assessment-context-stack a:focus-visible,
+.assessment-type-page select:focus-visible {
+    outline: 3px solid #38bdf8;
+    outline-offset: 2px;
+}
+
+/* Active school navigation must become clearer, not dimmer, in either theme. */
+.fi-sidebar-item.fi-active > .fi-sidebar-item-btn,
+.fi-sidebar-item.fi-active > .fi-sidebar-item-btn .fi-sidebar-item-label,
+.fi-sidebar-item.fi-active > .fi-sidebar-item-btn .fi-icon {
+    color: #0f172a !important;
+}
+
+.dark .fi-sidebar-item.fi-active > .fi-sidebar-item-btn,
+.dark .fi-sidebar-item.fi-active > .fi-sidebar-item-btn .fi-sidebar-item-label,
+.dark .fi-sidebar-item.fi-active > .fi-sidebar-item-btn .fi-icon,
+.fi-theme-dark .fi-sidebar-item.fi-active > .fi-sidebar-item-btn,
+.fi-theme-dark .fi-sidebar-item.fi-active > .fi-sidebar-item-btn .fi-sidebar-item-label,
+.fi-theme-dark .fi-sidebar-item.fi-active > .fi-sidebar-item-btn .fi-icon {
+    color: #f8fafc !important;
+}
+
 @media (max-width:640px) {
     .asmt-typebar { gap:.5rem; }
     .asmt-typebar__tabs { width:100%; }
