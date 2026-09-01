@@ -7,12 +7,6 @@ use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssessmentType;
 use App\Filament\Concerns\HasAssessmentPermissions;
 use App\Filament\Concerns\HasOptimizedAdminTable;
-use App\Filament\Pages\Assessment\AsasInputScores;
-use App\Filament\Pages\Assessment\AsasReports;
-use App\Filament\Pages\Assessment\AsasSubmissionStatus;
-use App\Filament\Pages\Assessment\AstsInputScores;
-use App\Filament\Pages\Assessment\AstsReports;
-use App\Filament\Pages\Assessment\AstsSubmissionStatus;
 use App\Filament\Resources\AssessmentSubjectResource\Pages;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentScheme;
@@ -25,6 +19,7 @@ use App\Models\Rombel;
 use App\Models\User;
 use App\Support\Assessment\AssessmentActionFailureNotification;
 use App\Support\Assessment\AssessmentAuditLogger;
+use App\Support\Assessment\AssessmentPageMap;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -539,9 +534,10 @@ class AssessmentSubjectResource extends Resource
         $type = $period->type instanceof AssessmentType
             ? $period->type
             : AssessmentType::from((string) $period->type);
-        $inputPage = $type === AssessmentType::ASAS ? AsasInputScores::class : AstsInputScores::class;
-        $statusPage = $type === AssessmentType::ASAS ? AsasSubmissionStatus::class : AstsSubmissionStatus::class;
-        $reportsPage = $type === AssessmentType::ASAS ? AsasReports::class : AstsReports::class;
+        $pages = AssessmentPageMap::for($type);
+        $inputPage = $pages['input'];
+        $statusPage = $pages['status'];
+        $reportsPage = $pages['reports'];
         $actions = [];
         foreach ([
             ['name' => 'input', 'label' => 'Buka Input Nilai', 'page' => $inputPage],

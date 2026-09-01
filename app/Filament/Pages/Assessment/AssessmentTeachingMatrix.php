@@ -31,7 +31,7 @@ class AssessmentTeachingMatrix extends AssessmentPage
 
     protected static ?string $slug = 'penilaian/matriks-penugasan';
 
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 20;
 
     protected static string $assessmentPermission = 'penilaian.manage';
 

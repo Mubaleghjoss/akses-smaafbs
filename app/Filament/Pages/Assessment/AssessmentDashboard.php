@@ -27,6 +27,7 @@ use App\Models\DataSiswa;
 use App\Models\GuruTendik;
 use App\Models\Rombel;
 use App\Models\User;
+use App\Support\Assessment\AssessmentPageMap;
 use App\Support\Assessment\AssessmentStatusScope;
 use App\Support\Storage\HostingStorageAudit;
 use Filament\Actions\Action;
@@ -44,7 +45,7 @@ class AssessmentDashboard extends AssessmentPage
 
     protected static ?string $slug = 'penilaian';
 
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 30;
 
     protected string $view = 'filament.pages.assessment.dashboard';
 
@@ -72,7 +73,7 @@ class AssessmentDashboard extends AssessmentPage
 
     public function getSubheading(): string|Htmlable|null
     {
-        return 'Pantau kesiapan master, input guru, verifikasi, dan pembuatan rapor ASTS–ASAS.';
+        return 'Pantau kesiapan master, input guru, verifikasi, dan pembuatan rapor untuk seluruh jenis penilaian.';
     }
 
     public function getPeriodOptions(): array
@@ -84,6 +85,38 @@ class AssessmentDashboard extends AssessmentPage
                 $type = $period->type instanceof AssessmentType ? $period->type->label() : strtoupper((string) $period->type);
 
                 return [$period->getKey() => "{$type} · {$period->name}"];
+            })
+            ->all();
+    }
+
+    /**
+     * Pusat kerja per JENIS penilaian (ASTS · ASAS · ASAT).
+     *
+     * Dibangun dari enum + peta halaman, sehingga jenis penilaian baru langsung
+     * muncul di sini tanpa menyunting blade atau menambah kartu manual.
+     *
+     * @return array<int, array{label:string,long_label:string,url:?string,period_count:int,semesters:string}>
+     */
+    public function getTypeCenters(): array
+    {
+        $periodCounts = AssessmentPeriod::query()
+            ->selectRaw('type, COUNT(*) as aggregate')
+            ->groupBy('type')
+            ->pluck('aggregate', 'type');
+
+        return collect(AssessmentType::cases())
+            ->map(function (AssessmentType $type) use ($periodCounts): array {
+                $page = AssessmentPageMap::page($type, 'hub');
+
+                return [
+                    'label' => $type->label(),
+                    'long_label' => $type->namaPanjang(),
+                    'url' => $page::canAccess() ? $page::getUrl() : null,
+                    'period_count' => (int) ($periodCounts[$type->value] ?? 0),
+                    'semesters' => collect($type->semesterYangDiizinkan())
+                        ->map(fn (string $semester): string => ucfirst($semester))
+                        ->implode(' & '),
+                ];
             })
             ->all();
     }
@@ -211,8 +244,7 @@ class AssessmentDashboard extends AssessmentPage
      * @return array{
      *     steps: array<int, array<string, mixed>>,
      *     notes: array<int, string>,
-     *     asts_url: ?string,
-     *     asas_url: ?string
+     *     type_links: array<int, array{label:string,long_label:string,url:?string}>
      * }
      */
     public function getSetupWorkflow(): array
@@ -270,12 +302,16 @@ class AssessmentDashboard extends AssessmentPage
             ->diff($linkedAssignedTeacherIds)
             ->count();
 
-        $astsPeriodCount = AssessmentPeriod::query()
-            ->where('type', AssessmentType::ASTS->value)
-            ->count();
-        $asasPeriodCount = AssessmentPeriod::query()
-            ->where('type', AssessmentType::ASAS->value)
-            ->count();
+        // Dihitung per JENIS dari enum, bukan dua variabel tetap: begitu jenis
+        // baru ditambahkan (ASAT dan seterusnya) angkanya ikut terhitung.
+        $periodCountPerType = AssessmentPeriod::query()
+            ->selectRaw('type, COUNT(*) as aggregate')
+            ->groupBy('type')
+            ->pluck('aggregate', 'type');
+        $periodCountSummary = collect(AssessmentType::cases())
+            ->map(fn (AssessmentType $type): string => (int) ($periodCountPerType[$type->value] ?? 0).' '.$type->label())
+            ->implode(' · ');
+        $totalPeriodCount = (int) $periodCountPerType->sum();
         $openPeriodCount = AssessmentPeriod::query()
             ->whereIn('status', [
                 AssessmentPeriodStatus::OPEN->value,
@@ -309,7 +345,7 @@ class AssessmentDashboard extends AssessmentPage
             && $activeTeachingCount > 0
             && $activeHomeroomCount > 0
             && $unlinkedAssignedTeacherCount === 0;
-        $periodReady = ($astsPeriodCount + $asasPeriodCount) > 0;
+        $periodReady = $totalPeriodCount > 0;
         $schemeReady = $activeSchemes->isNotEmpty() && $invalidSchemeCount === 0;
         $inputReady = $openPeriodCount > 0;
 
@@ -354,8 +390,8 @@ class AssessmentDashboard extends AssessmentPage
                 ],
                 [
                     'number' => '4',
-                    'title' => 'Buat Periode ASTS / ASAS',
-                    'subtitle' => "{$astsPeriodCount} periode ASTS · {$asasPeriodCount} periode ASAS.",
+                    'title' => 'Buat Periode Penilaian',
+                    'subtitle' => 'Periode tersedia: '.$periodCountSummary.'.',
                     'detail' => 'Pilih tahun, semester, jenis penilaian, jadwal input, dan rombel peserta.',
                     'ready' => $periodReady,
                     'url' => $periodUrl,
@@ -386,8 +422,19 @@ class AssessmentDashboard extends AssessmentPage
                 'Kolom label mapel lama pada akun hanya keterangan. Penilaian memakai pasangan terstruktur guru–mapel–kelas–semester.',
                 'Saat periode dibuka, hanya siswa berstatus aktif yang nama rombelnya cocok dengan rombel aktif pilihan periode yang dimasukkan.',
             ],
-            'asts_url' => AstsHub::canAccess() ? AstsHub::getUrl() : null,
-            'asas_url' => AsasHub::canAccess() ? AsasHub::getUrl() : null,
+            // Tautan pusat per jenis dibangun dari peta halaman agar jenis baru
+            // otomatis muncul tanpa menambah kunci 'xxx_url' satu per satu.
+            'type_links' => collect(AssessmentType::cases())
+                ->map(function (AssessmentType $type): array {
+                    $page = AssessmentPageMap::page($type, 'hub');
+
+                    return [
+                        'label' => $type->label(),
+                        'long_label' => $type->namaPanjang(),
+                        'url' => $page::canAccess() ? $page::getUrl() : null,
+                    ];
+                })
+                ->all(),
         ];
     }
 
@@ -635,12 +682,10 @@ class AssessmentDashboard extends AssessmentPage
 
     protected function statusUrl(AssessmentPeriod $period, AssignmentStatus $status): string
     {
-        $type = $period->type instanceof AssessmentType
-            ? $period->type
-            : AssessmentType::from((string) $period->type);
-        $page = $type === AssessmentType::ASTS
-            ? AstsSubmissionStatus::class
-            : AsasSubmissionStatus::class;
+        $page = AssessmentPageMap::page(
+            AssessmentPageMap::normalizeType($period->type),
+            'status',
+        );
 
         return $page::getUrl([
             'period' => $period->getKey(),

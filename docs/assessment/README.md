@@ -12,7 +12,8 @@ Dokumen ini adalah pintu masuk wajib bagi pengembang dan AI yang mengubah modul 
 
 ## Invariant yang tidak boleh dilanggar
 
-- ASTS dan ASAS selalu dibedakan oleh `assessment_period_id`; nilai antarperiode tidak boleh saling menimpa.
+- ASTS, ASAS, dan ASAT selalu dibedakan oleh `assessment_period_id`; nilai antarperiode tidak boleh saling menimpa.
+- Menambah jenis penilaian berarti menambah satu baris pada `AssessmentType`, satu baris pada `AssessmentPageMap`, kelas halaman turunannya, dan pendaftaran menu di `AdminSchoolNavigation`. `tests/Feature/AssessmentPageMapTest.php` gagal bila salah satu terlewat.
 - Master lama hanya menjadi referensi logis. Transaksi memakai snapshot nama siswa, kelas, guru, dan mapel.
 - Periode dibuka melalui preflight atomik, bukan dengan mengubah kolom `status` secara langsung.
 - Nilai `null` berarti belum diisi, bukan nol.
@@ -38,6 +39,7 @@ Dokumen ini adalah pintu masuk wajib bagi pengembang dan AI yang mengubah modul 
 - Data awal plotting 2026/2027: `php artisan assessment:teaching-plan-2026` untuk preview, lalu `--apply` setelah seluruh guru dan kelas cocok.
 - Sinkron mapel ke periode Terbuka: `php artisan assessment:sync-open-period-subjects {period} --all` untuk dry-run. Tambahkan `--source-scheme=ID --apply --actor=ID` hanya setelah pratinjau bebas konflik.
 - Admin: `app/Filament/Pages/Assessment` dan resource `Assessment*Resource`
+- Peta halaman per jenis penilaian: `app/Support/Assessment/AssessmentPageMap.php`. Setiap tautan antar-halaman (hub, input, status, rekap, rapor) WAJIB melewati peta ini. Jangan menulis ulang pola `$type === ASTS ? A : B` — pola dua cabang itulah yang membuat ASAT diam-diam membuka halaman ASAS.
 - Reporting: `app/Support/Assessment/Reporting`, `app/Jobs/Assessment`, dan `AssessmentReportController`
 - PDF: `resources/views/assessment/reports`
 - Layout/preflight/format nilai: `app/Support/Assessment/Reporting` dan `app/Support/Assessment/AssessmentNumberFormatter.php`

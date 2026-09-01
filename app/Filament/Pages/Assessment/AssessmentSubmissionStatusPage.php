@@ -11,6 +11,7 @@ use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodAssignment;
 use App\Models\User;
 use App\Support\Assessment\AssessmentActionFailureNotification;
+use App\Support\Assessment\AssessmentPageMap;
 use App\Support\Assessment\AssessmentStatusScope;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\Support\Htmlable;
@@ -527,9 +528,7 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
 
     protected function scoreReviewUrl(AssessmentPeriodAssignment $assignment): string
     {
-        $page = static::$assessmentType === AssessmentType::ASTS
-            ? AstsInputScores::class
-            : AsasInputScores::class;
+        $page = AssessmentPageMap::page(static::$assessmentType, 'input');
 
         return $page::getUrl([
             'period' => $assignment->assessment_period_id,

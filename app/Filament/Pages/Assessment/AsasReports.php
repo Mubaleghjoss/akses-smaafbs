@@ -8,7 +8,7 @@ class AsasReports extends AssessmentReportsPage
 {
     protected static AssessmentType $assessmentType = AssessmentType::ASAS;
 
-    protected static ?string $navigationLabel = 'Cetak Rapor Semester';
+    protected static ?string $navigationLabel = 'Cetak Rapor ASAS';
 
     protected static ?string $slug = 'penilaian/asas/cetak-rapor';
 

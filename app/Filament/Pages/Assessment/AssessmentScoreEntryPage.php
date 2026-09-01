@@ -15,6 +15,7 @@ use App\Models\Assessment\StudentSubjectResult;
 use App\Models\User;
 use App\Support\Assessment\AssessmentActionFailureNotification;
 use App\Support\Assessment\AssessmentNumberFormatter;
+use App\Support\Assessment\AssessmentPageMap;
 use App\Support\Assessment\AssessmentSchemeResolver;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\Support\Htmlable;
@@ -269,9 +270,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             && ($access['subjects'] ?? []) === [];
 
         if ($isHomeroomOnly) {
-            $page = static::$assessmentType === AssessmentType::ASTS
-                ? AstsHomeroomRecap::class
-                : AsasHomeroomRecap::class;
+            $page = AssessmentPageMap::page(static::$assessmentType, 'recap');
 
             return [
                 'title' => 'Belum ada mapel yang diampu',

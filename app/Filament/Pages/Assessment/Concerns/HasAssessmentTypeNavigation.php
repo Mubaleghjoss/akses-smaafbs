@@ -3,63 +3,24 @@
 namespace App\Filament\Pages\Assessment\Concerns;
 
 use App\Enums\Assessment\AssessmentType;
-use App\Filament\Pages\Assessment\AsasHomeroomRecap;
-use App\Filament\Pages\Assessment\AsasHub;
-use App\Filament\Pages\Assessment\AsasInputScores;
-use App\Filament\Pages\Assessment\AsasReports;
-use App\Filament\Pages\Assessment\AsasSubmissionStatus;
-use App\Filament\Pages\Assessment\AsatHomeroomRecap;
-use App\Filament\Pages\Assessment\AsatHub;
-use App\Filament\Pages\Assessment\AsatInputScores;
-use App\Filament\Pages\Assessment\AsatReports;
-use App\Filament\Pages\Assessment\AsatSubmissionStatus;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
-use App\Filament\Pages\Assessment\AstsHomeroomRecap;
-use App\Filament\Pages\Assessment\AstsHub;
-use App\Filament\Pages\Assessment\AstsInputScores;
-use App\Filament\Pages\Assessment\AstsReports;
-use App\Filament\Pages\Assessment\AstsSubmissionStatus;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodAssignment;
 use App\Models\Assessment\AssessmentPeriodHomeroom;
 use App\Models\User;
+use App\Support\Assessment\AssessmentPageMap;
 
 trait HasAssessmentTypeNavigation
 {
     /**
-     * PETA halaman per jenis penilaian — satu tempat, bukan if/else bercabang.
-     *
-     * Sebelumnya navigasi memakai `$isAsts ? A : B`, yang berarti setiap jenis
-     * baru harus menyunting logika navigasi dan mudah terlewat. Dengan peta ini,
-     * menambah jenis cukup menambah satu baris.
+     * PETA halaman per jenis penilaian dipusatkan di AssessmentPageMap agar
+     * navigasi halaman, notifikasi, dan resource memakai sumber yang sama.
      *
      * @return array<string, array<string, class-string>>
      */
     protected static function assessmentPageMap(): array
     {
-        return [
-            AssessmentType::ASTS->value => [
-                'hub' => AstsHub::class,
-                'input' => AstsInputScores::class,
-                'status' => AstsSubmissionStatus::class,
-                'recap' => AstsHomeroomRecap::class,
-                'reports' => AstsReports::class,
-            ],
-            AssessmentType::ASAS->value => [
-                'hub' => AsasHub::class,
-                'input' => AsasInputScores::class,
-                'status' => AsasSubmissionStatus::class,
-                'recap' => AsasHomeroomRecap::class,
-                'reports' => AsasReports::class,
-            ],
-            AssessmentType::ASAT->value => [
-                'hub' => AsatHub::class,
-                'input' => AsatInputScores::class,
-                'status' => AsatSubmissionStatus::class,
-                'recap' => AsatHomeroomRecap::class,
-                'reports' => AsatReports::class,
-            ],
-        ];
+        return AssessmentPageMap::all();
     }
 
     /**
@@ -67,8 +28,7 @@ trait HasAssessmentTypeNavigation
      */
     protected static function assessmentPagesFor(AssessmentType $type): array
     {
-        return static::assessmentPageMap()[$type->value]
-            ?? static::assessmentPageMap()[AssessmentType::ASTS->value];
+        return AssessmentPageMap::for($type);
     }
 
     /**

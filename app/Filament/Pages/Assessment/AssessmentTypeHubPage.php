@@ -7,6 +7,7 @@ use App\Enums\Assessment\AssignmentStatus;
 use App\Filament\Pages\Assessment\Concerns\HasAssessmentTypeNavigation;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\User;
+use App\Support\Assessment\AssessmentPageMap;
 use App\Support\Assessment\AssessmentStatusScope;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
@@ -41,9 +42,8 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
 
     public function getSubheading(): string|Htmlable|null
     {
-        return static::$assessmentType === AssessmentType::ASTS
-            ? 'Kelola input nilai, pengumpulan, rekap wali kelas, dan rapor tengah semester dari satu halaman.'
-            : 'Kelola input nilai, pengumpulan, rekap wali kelas, dan rapor semester dari satu halaman.';
+        return 'Kelola input nilai, pengumpulan, rekap wali kelas, dan rapor '
+            .static::$assessmentType->namaPanjang().' dari satu halaman.';
     }
 
     public function getAssessmentTypeLabel(): string
@@ -169,11 +169,11 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
         int $inputCompletedCount,
         int $homeroomCount,
     ): array {
-        $isAsts = static::$assessmentType === AssessmentType::ASTS;
-        $inputPage = $isAsts ? AstsInputScores::class : AsasInputScores::class;
-        $statusPage = $isAsts ? AstsSubmissionStatus::class : AsasSubmissionStatus::class;
-        $homeroomPage = $isAsts ? AstsHomeroomRecap::class : AsasHomeroomRecap::class;
-        $reportsPage = $isAsts ? AstsReports::class : AsasReports::class;
+        $pages = AssessmentPageMap::for(static::$assessmentType);
+        $inputPage = $pages['input'];
+        $statusPage = $pages['status'];
+        $homeroomPage = $pages['recap'];
+        $reportsPage = $pages['reports'];
         $parameters = $period ? ['period' => $period->getKey()] : [];
 
         return [
@@ -207,7 +207,7 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
                 'url' => $homeroomPage::canAccess() ? $homeroomPage::getUrl($parameters) : null,
             ],
             [
-                'title' => $isAsts ? 'Cetak Rapor ASTS' : 'Cetak Rapor Semester',
+                'title' => 'Cetak Rapor '.static::$assessmentType->label(),
                 'description' => 'Buat PDF privat, pantau proses, dan kelola tautan rapor yang aman.',
                 'icon' => 'heroicon-o-printer',
                 'tone' => 'info',

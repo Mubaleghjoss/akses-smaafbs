@@ -7,8 +7,15 @@ use App\Filament\Pages\Assessment\AsasHub;
 use App\Filament\Pages\Assessment\AsasInputScores;
 use App\Filament\Pages\Assessment\AsasReports;
 use App\Filament\Pages\Assessment\AsasSubmissionStatus;
+use App\Filament\Pages\Assessment\AsatHomeroomRecap;
+use App\Filament\Pages\Assessment\AsatHub;
+use App\Filament\Pages\Assessment\AsatInputScores;
+use App\Filament\Pages\Assessment\AsatReports;
+use App\Filament\Pages\Assessment\AsatSubmissionStatus;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Assessment\AssessmentMasterImport;
+use App\Filament\Pages\Assessment\AssessmentSetupWizard;
+use App\Filament\Pages\Assessment\AssessmentTeachingMatrix;
 use App\Filament\Pages\Assessment\AstsHomeroomRecap;
 use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\Assessment\AstsInputScores;
@@ -132,8 +139,11 @@ class AdminModuleAccess
             RincianHarianKelasPage::class,
         ],
         'penilaian' => [
+            AssessmentSetupWizard::class,
+            AssessmentTeachingMatrix::class,
             AstsHub::class,
             AsasHub::class,
+            AsatHub::class,
             AstsInputScores::class,
             AstsSubmissionStatus::class,
             AstsHomeroomRecap::class,
@@ -142,6 +152,10 @@ class AdminModuleAccess
             AsasSubmissionStatus::class,
             AsasHomeroomRecap::class,
             AsasReports::class,
+            AsatInputScores::class,
+            AsatSubmissionStatus::class,
+            AsatHomeroomRecap::class,
+            AsatReports::class,
             AssessmentPeriodResource::class,
             AssessmentSchemeResource::class,
             AssessmentSubjectCategoryResource::class,
@@ -192,7 +206,7 @@ class AdminModuleAccess
         'sarpras_room_inventory' => 'Kelola inventaris barang per ruang atau gedung.',
         'sarpras_activity' => 'Kelola dokumentasi pekerjaan dan perbaikan sarpras.',
         'sarpras_monthly_agenda' => 'Kelola agenda bulanan tindak lanjut sarpras.',
-        'penilaian' => 'Akses ASTS, ASAS, nilai, rekap, rapor, dan pengaturan Penilaian.',
+        'penilaian' => 'Akses ASTS, ASAS, ASAT, nilai, rekap, rapor, dan pengaturan Penilaian.',
     ];
 
     public static function levelOptions(?string $prefix = null): array

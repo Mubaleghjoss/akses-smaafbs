@@ -3,15 +3,18 @@
 namespace App\Support\Admin;
 
 use App\Filament\Pages\Assessment\AsasHub;
+use App\Filament\Pages\Assessment\AsatHub;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
+use App\Filament\Pages\Assessment\AssessmentSetupWizard;
+use App\Filament\Pages\Assessment\AssessmentTeachingMatrix;
 use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\Bk\RekapSigapPage;
 use App\Filament\Pages\DashboardProker;
 use App\Filament\Pages\SarprasStickerSettings;
 use App\Filament\Resources\AccountCategoryResource;
-use App\Filament\Resources\BeritaResource;
 use App\Filament\Resources\BelajarIdAccountResource;
 use App\Filament\Resources\BelajarIdGuruResource;
+use App\Filament\Resources\BeritaResource;
 use App\Filament\Resources\BerkasGuruResource;
 use App\Filament\Resources\BerkasSiswaResource;
 use App\Filament\Resources\BkKasusResource;
@@ -124,8 +127,11 @@ class AdminSchoolNavigation
         PerpustakaanLemariResource::class => 'Perpustakaan',
         PerpustakaanLiterasiMaterialResource::class => 'Perpustakaan',
         AssessmentDashboard::class => 'Penilaian',
+        AssessmentSetupWizard::class => 'Penilaian',
+        AssessmentTeachingMatrix::class => 'Penilaian',
         AstsHub::class => 'Penilaian',
         AsasHub::class => 'Penilaian',
+        AsatHub::class => 'Penilaian',
     ];
 
     /**
@@ -133,8 +139,11 @@ class AdminSchoolNavigation
      */
     protected const CLASS_GROUP_MAP = [
         AssessmentDashboard::class => self::GROUP,
+        AssessmentSetupWizard::class => self::GROUP,
+        AssessmentTeachingMatrix::class => self::GROUP,
         AstsHub::class => self::GROUP,
         AsasHub::class => self::GROUP,
+        AsatHub::class => self::GROUP,
     ];
 
     public static function shouldClassify(string $class): bool
@@ -143,12 +152,24 @@ class AdminSchoolNavigation
             || array_key_exists($class, self::CLASS_GROUP_MAP);
     }
 
+    /**
+     * Halaman Penilaian yang MUNCUL di sidebar.
+     *
+     * Halaman turunan (input nilai, status, rekap wali, cetak rapor) sengaja
+     * TIDAK didaftarkan: semuanya dibuka dari pusat jenis (ASTS/ASAS/ASAT)
+     * lewat tab konteks, agar sidebar tidak membengkak menjadi 15+ baris.
+     * Resource pengaturan (periode, komponen, template, log, impor) juga tetap
+     * lewat kartu di Pengaturan Penilaian.
+     */
     public static function shouldRegisterAssessmentClass(string $class): bool
     {
         return in_array($class, [
-            AssessmentDashboard::class,
+            AssessmentSetupWizard::class,
+            AssessmentTeachingMatrix::class,
             AstsHub::class,
             AsasHub::class,
+            AsatHub::class,
+            AssessmentDashboard::class,
         ], true);
     }
 

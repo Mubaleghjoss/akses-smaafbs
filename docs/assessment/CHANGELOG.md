@@ -1,5 +1,27 @@
 # Riwayat Perubahan Penilaian
 
+## 2026-09-01
+
+- Memusatkan peta halaman per jenis penilaian ke `App\Support\Assessment\AssessmentPageMap`.
+  Sebelumnya tujuan tautan dipilih dengan pola dua cabang (`$type === ASTS ? A : B`)
+  yang tersebar di hub, input nilai, status pengumpulan, rapor, notifikasi
+  kegagalan, dan Mapel Penilaian. Akibatnya **ASAT selalu diarahkan ke halaman
+  ASAS** tanpa pesan kesalahan: pengguna merasa membuka ASAT tetapi mengisi layar
+  ASAS. Kini setiap jenis memakai halamannya sendiri, dan jenis baru cukup
+  ditambahkan satu baris.
+- Menampilkan **ASAT** sebagai baris menu tersendiri di induk Penilaian, sejajar
+  ASTS dan ASAS, sekaligus mendaftarkan Setelan Awal Penilaian dan Matriks
+  Penugasan yang sebelumnya sudah ada tetapi tidak dapat ditemukan dari sidebar.
+- Menyeragamkan urutan menu Penilaian: Setelan Awal → ASTS → ASAS → ASAT →
+  Matriks Penugasan → Pengaturan Penilaian, mengikuti pola urutan bertingkat
+  sepuluh seperti kelompok menu lain.
+- Menambahkan kartu **Pusat Penilaian** pada Pengaturan Penilaian yang dibangun
+  dari enum jenis, sehingga jumlah periode dan semester yang diizinkan tiap jenis
+  terlihat tanpa menambah kartu manual.
+- Menyamakan label halaman rapor menjadi Cetak Rapor ASTS/ASAS/ASAT dan izin
+  modul `penilaian` sekarang membuka halaman ASAT, Setelan Awal, serta Matriks
+  Penugasan yang sebelumnya tertinggal.
+
 ## 2026-08-07
 
 - Memisahkan scope **Input Nilai Saya** dari scope pemantauan wali kelas:

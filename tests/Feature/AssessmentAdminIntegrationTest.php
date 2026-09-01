@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssessmentType;
 use App\Filament\Pages\Assessment\AsasHub;
+use App\Filament\Pages\Assessment\AsatHub;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Assessment\AssessmentMasterImport;
 use App\Filament\Pages\Assessment\AstsHub;
@@ -449,6 +450,9 @@ class AssessmentAdminIntegrationTest extends TestCase
         $this->assertTrue(AssessmentDashboard::shouldRegisterNavigation());
         $this->assertTrue(AstsHub::shouldRegisterNavigation());
         $this->assertTrue(AsasHub::shouldRegisterNavigation());
+        // ASAT wajib punya baris menunya sendiri, bukan menumpang menu ASAS.
+        $this->assertTrue(AsatHub::shouldRegisterNavigation());
+        // Halaman turunan tetap TIDAK muncul di sidebar; dibuka dari pusat jenis.
         $this->assertFalse(AstsInputScores::canAccess());
         $this->assertFalse(AstsInputScores::shouldRegisterNavigation());
         $this->assertFalse(
@@ -524,7 +528,12 @@ class AssessmentAdminIntegrationTest extends TestCase
             ->assertSeeHtml('assessment-dashboard-status')
             ->assertSeeHtml('assessment-dashboard-activity')
             ->assertDontSee('Alur Menyiapkan ASTS dan ASAS')
-            ->assertSee('Pusat Penilaian ASTS–ASAS')
+            ->assertSee('Pengaturan Penilaian')
+            ->assertSee('Pusat Penilaian')
+            // Ketiga jenis harus dapat ditemukan dari satu tempat.
+            ->assertSee('Asesmen Sumatif Tengah Semester')
+            ->assertSee('Asesmen Sumatif Akhir Semester')
+            ->assertSee('Asesmen Sumatif Akhir Tahun')
             ->assertSee('Kategori Mapel')
             ->assertSee('Kelola Kategori')
             ->assertSee('Guru Mapel & Kelas')
@@ -568,7 +577,15 @@ class AssessmentAdminIntegrationTest extends TestCase
             ->assertSee('Input Nilai Saya')
             ->assertSee('Status Pengumpulan')
             ->assertSee('Rekap Wali Kelas')
-            ->assertSee('Cetak Rapor Semester');
+            ->assertSee('Cetak Rapor ASAS');
+
+        // ASAT dipastikan berdiri sendiri: sebelum ini jenis ketiga selalu
+        // jatuh ke halaman ASAS karena tautan memakai pola dua cabang.
+        Livewire::actingAs($admin)
+            ->test(AsatHub::class)
+            ->assertSeeHtml('assessment-type-hero')
+            ->assertSee('Semua kebutuhan ASAT dalam satu halaman')
+            ->assertSee('Cetak Rapor ASAT');
 
         $year = AcademicYear::query()->create([
             'code' => '2026-2027',

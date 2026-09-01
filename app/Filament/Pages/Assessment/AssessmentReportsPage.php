@@ -19,10 +19,11 @@ use App\Models\Assessment\ReportSnapshot;
 use App\Models\Assessment\ReportTemplate;
 use App\Models\User;
 use App\Support\Assessment\AssessmentActionFailureNotification;
+use App\Support\Assessment\AssessmentPageMap;
 use App\Support\Assessment\Reporting\AssessmentReportCompleteness;
+use App\Support\Assessment\Reporting\AssessmentReportPreflight;
 use App\Support\Assessment\Reporting\AssessmentReportShareService;
 use App\Support\Assessment\Reporting\CreateReportSnapshotsAction;
-use App\Support\Assessment\Reporting\AssessmentReportPreflight;
 use App\Support\Assessment\Reporting\RetryReportGenerationAction;
 use App\Support\Assessment\Reporting\ScheduleReportClassesAction;
 use App\Support\Assessment\Reporting\StopAssessmentReportQueueAction;
@@ -480,14 +481,10 @@ abstract class AssessmentReportsPage extends AssessmentPage
             ];
         }
 
-        $type = $period->type instanceof AssessmentType
-            ? $period->type
-            : AssessmentType::from((string) $period->type);
+        $type = AssessmentPageMap::normalizeType($period->type);
 
         if ($code === 'assignments_unlocked') {
-            $page = $type === AssessmentType::ASTS
-                ? AstsSubmissionStatus::class
-                : AsasSubmissionStatus::class;
+            $page = AssessmentPageMap::page($type, 'status');
 
             if ($page::canAccess()) {
                 return [
@@ -499,9 +496,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
         }
 
         if ($code === 'results_missing') {
-            $page = $type === AssessmentType::ASTS
-                ? AstsInputScores::class
-                : AsasInputScores::class;
+            $page = AssessmentPageMap::page($type, 'input');
 
             if ($page::canAccess()) {
                 return [
@@ -513,9 +508,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
         }
 
         if (in_array($code, ['attitudes_missing', 'semester_status_missing'], true)) {
-            $page = $type === AssessmentType::ASTS
-                ? AstsHomeroomRecap::class
-                : AsasHomeroomRecap::class;
+            $page = AssessmentPageMap::page($type, 'recap');
 
             if ($page::canAccess()) {
                 return [

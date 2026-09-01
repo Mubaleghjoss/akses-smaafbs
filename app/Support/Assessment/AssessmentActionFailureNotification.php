@@ -2,18 +2,7 @@
 
 namespace App\Support\Assessment;
 
-use App\Enums\Assessment\AssessmentType;
-use App\Filament\Pages\Assessment\AsasHomeroomRecap;
-use App\Filament\Pages\Assessment\AsasHub;
-use App\Filament\Pages\Assessment\AsasInputScores;
-use App\Filament\Pages\Assessment\AsasReports;
-use App\Filament\Pages\Assessment\AsasSubmissionStatus;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
-use App\Filament\Pages\Assessment\AstsHomeroomRecap;
-use App\Filament\Pages\Assessment\AstsHub;
-use App\Filament\Pages\Assessment\AstsInputScores;
-use App\Filament\Pages\Assessment\AstsReports;
-use App\Filament\Pages\Assessment\AstsSubmissionStatus;
 use App\Filament\Resources\AssessmentReportTemplateResource;
 use App\Filament\Resources\AssessmentSchemeResource;
 use App\Models\Assessment\AssessmentPeriod;
@@ -68,9 +57,7 @@ final class AssessmentActionFailureNotification
             : '';
         $context = Str::lower($keys.' '.$detail);
         $periodId = $period?->getKey();
-        $type = $period?->type instanceof AssessmentType
-            ? $period->type
-            : AssessmentType::tryFrom((string) $period?->type);
+        $type = AssessmentPageMap::normalizeType($period?->type);
 
         if (self::containsAny($context, [
             'scheme', 'skema', 'komponen', 'bobot',
@@ -88,7 +75,7 @@ final class AssessmentActionFailureNotification
         if ($period && self::containsAny($context, [
             'assignment', 'assignments', 'penugasan', 'dikirim', 'verifikasi',
         ])) {
-            $page = $type === AssessmentType::ASAS ? AsasSubmissionStatus::class : AstsSubmissionStatus::class;
+            $page = AssessmentPageMap::page($type, 'status');
             if ($page::canAccess()) {
                 return [
                     'label' => 'Buka Status Pengumpulan',
@@ -102,7 +89,7 @@ final class AssessmentActionFailureNotification
         if ($period && self::containsAny($context, [
             'result', 'results', 'score', 'scores', 'nilai', 'capaian',
         ])) {
-            $page = $type === AssessmentType::ASAS ? AsasInputScores::class : AstsInputScores::class;
+            $page = AssessmentPageMap::page($type, 'input');
             if ($page::canAccess()) {
                 return [
                     'label' => 'Buka Input Nilai',
@@ -116,7 +103,7 @@ final class AssessmentActionFailureNotification
         if ($period && self::containsAny($context, [
             'homeroom', 'wali', 'sikap', 'spiritual', 'sosial', 'ekstrakurikuler', 'prestasi', 'semester_status',
         ])) {
-            $page = $type === AssessmentType::ASAS ? AsasHomeroomRecap::class : AstsHomeroomRecap::class;
+            $page = AssessmentPageMap::page($type, 'recap');
             if ($page::canAccess()) {
                 return [
                     'label' => 'Buka Rekap Wali Kelas',
@@ -140,7 +127,7 @@ final class AssessmentActionFailureNotification
         if ($period && self::containsAny($context, [
             'report', 'reports', 'rapor', 'pdf', 'snapshot', 'revisi', 'cache', 'antrean',
         ])) {
-            $page = $type === AssessmentType::ASAS ? AsasReports::class : AstsReports::class;
+            $page = AssessmentPageMap::page($type, 'reports');
             if ($page::canAccess()) {
                 return [
                     'label' => 'Buka Proses Rapor',
@@ -152,7 +139,7 @@ final class AssessmentActionFailureNotification
         }
 
         if ($period) {
-            $page = $type === AssessmentType::ASAS ? AsasHub::class : AstsHub::class;
+            $page = AssessmentPageMap::page($type, 'hub');
             if ($page::canAccess()) {
                 return [
                     'label' => 'Buka Pusat '.$type?->label(),

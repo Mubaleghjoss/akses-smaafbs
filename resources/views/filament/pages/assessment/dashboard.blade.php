@@ -8,8 +8,8 @@
         <section class="assessment-dashboard-panel assessment-dashboard-overview">
             <div class="assessment-dashboard-overview__layout">
                 <div class="min-w-0">
-                    <h2 class="assessment-dashboard-title">Pusat Penilaian ASTS–ASAS</h2>
-                    <p class="assessment-dashboard-copy">Pilih periode, lalu buka menu atau status yang perlu ditangani.</p>
+                    <h2 class="assessment-dashboard-title">Pengaturan Penilaian</h2>
+                    <p class="assessment-dashboard-copy">Pilih periode, lalu buka pusat jenis penilaian atau pengaturan yang perlu ditangani.</p>
                 </div>
                 <label class="assessment-dashboard-period">
                     <span class="assessment-dashboard-label">Periode yang dipantau</span>
@@ -21,6 +21,37 @@
                         @endforelse
                     </select>
                 </label>
+            </div>
+        </section>
+
+        {{-- Pusat kerja per jenis penilaian. Ditaruh PALING ATAS karena inilah
+             yang dibuka setiap hari; pengaturan hanya disentuh saat awal semester. --}}
+        <section class="assessment-dashboard-group" aria-labelledby="assessment-type-title">
+            <div class="assessment-dashboard-group__head">
+                <h2 id="assessment-type-title">Pusat Penilaian</h2>
+                <p>Buka jenis penilaian yang sedang dikerjakan. Input nilai, status, rekap wali, dan rapor ada di dalamnya.</p>
+            </div>
+            <div class="assessment-dashboard-card-grid">
+                @foreach ($this->getTypeCenters() as $center)
+                    <article class="assessment-dashboard-card assessment-dashboard-card--menu">
+                        <div class="assessment-dashboard-card__head">
+                            <h3>{{ $center['label'] }}</h3>
+                            <span class="assessment-dashboard-card__badge">{{ $center['period_count'] }} periode</span>
+                        </div>
+                        <p class="assessment-dashboard-card__caption">{{ $center['long_label'] }}</p>
+                        <div class="assessment-dashboard-card__points">
+                            <p>Semester: {{ $center['semesters'] }}</p>
+                            <p>Input nilai, status pengumpulan, rekap wali kelas, dan cetak rapor.</p>
+                        </div>
+                        @if ($center['url'])
+                            <a href="{{ $center['url'] }}" wire:navigate class="assessment-dashboard-card__action">
+                                Buka {{ $center['label'] }}
+                            </a>
+                        @else
+                            <span class="assessment-dashboard-card__action is-disabled">Akses tidak tersedia</span>
+                        @endif
+                    </article>
+                @endforeach
             </div>
         </section>
 

@@ -14,5 +14,5 @@ class AsasHub extends AssessmentTypeHubPage
 
     protected static ?string $slug = 'penilaian/asas';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 11;
 }
