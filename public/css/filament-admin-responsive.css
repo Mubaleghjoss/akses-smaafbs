@@ -1057,7 +1057,7 @@
     gap: 0.65rem;
 }
 
-.assessment-report-progress {
+.assessment-report-progress-bar {
     height: 0.45rem;
     margin-top: 0.75rem;
     overflow: hidden;
@@ -1065,7 +1065,7 @@
     background: #e2e8f0;
 }
 
-.assessment-report-progress span {
+.assessment-report-progress-bar span {
     display: block;
     height: 100%;
     border-radius: inherit;

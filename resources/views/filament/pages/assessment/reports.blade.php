@@ -232,7 +232,7 @@
                                 <div><strong>{{ $row['rombel'] }}</strong><small>Revisi {{ $row['revision'] }}</small></div>
                                 <span class="assessment-report-status is-{{ $row['status'] }}">{{ $row['status_label'] }}</span>
                             </div>
-                            <div class="assessment-report-progress"><span style="width: {{ $row['student_count'] > 0 ? round($row['completed_students'] / $row['student_count'] * 100) : 0 }}%"></span></div>
+                            <div class="assessment-report-progress-bar"><span style="width: {{ $row['student_count'] > 0 ? round($row['completed_students'] / $row['student_count'] * 100) : 0 }}%"></span></div>
                             <p>{{ $row['completed_students'] }}/{{ $row['student_count'] }} snapshot siswa siap.</p>
                             @if ($row['cache_expires_at'])<p>Cache berlaku sampai {{ $row['cache_expires_at'] }}.</p>@endif
                             @if ($row['error'])<p class="assessment-report-error">{{ $row['error'] }}</p>@endif

@@ -278,5 +278,11 @@ class AssessmentReportProgressTest extends TestCase
         $this->assertStringContainsString('.assessment-report-progress__path { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:.5rem; }', $css);
         $this->assertStringContainsString('.assessment-report-progress__roles { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }', $css);
         $this->assertStringContainsString('.assessment-report-progress__action { display:inline-flex; min-height:2.5rem; align-items:center; justify-content:center; }', $css);
+        $this->assertStringNotContainsString(".assessment-report-progress {\n    height: 0.45rem;", $css);
+        $this->assertStringContainsString('.assessment-report-progress-bar {', $css);
+
+        $reportsView = file_get_contents(resource_path('views/filament/pages/assessment/reports.blade.php'));
+        $this->assertIsString($reportsView);
+        $this->assertStringContainsString('class="assessment-report-progress-bar"', $reportsView);
     }
 }
