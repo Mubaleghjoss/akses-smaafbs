@@ -11,6 +11,7 @@ use App\Models\Assessment\AssessmentPeriodAssignment;
 use App\Models\Assessment\AssessmentPeriodHomeroom;
 use App\Models\Assessment\AssessmentPeriodRombel;
 use App\Models\User;
+use App\Support\Admin\AdminModuleAccess;
 use App\Support\Admin\AdminSchoolNavigation;
 use App\Support\Assessment\AssessmentReportProgress;
 use Livewire\Livewire;
@@ -221,5 +222,49 @@ class AssessmentReportProgressTest extends TestCase
 
         $this->assertSame('Penilaian', AdminSchoolNavigation::parentItemForClass(AssessmentReportProgressPage::class));
         $this->assertTrue(AdminSchoolNavigation::shouldRegisterAssessmentClass(AssessmentReportProgressPage::class));
+    }
+
+    public function test_empty_state_menjelaskan_periode_masih_disusun_dan_belum_waktunya(): void
+    {
+        $user = User::factory()->create(['username' => 'guru-belum-waktunya']);
+        AssessmentPeriod::factory()->asts()->create([
+            'name' => 'ASTS Ganjil Mendatang',
+            'status' => AssessmentPeriodStatus::DRAFT,
+            'entry_start_at' => now()->addDays(7),
+        ]);
+
+        $state = app(AssessmentReportProgress::class)->emptyStateForUser($user);
+
+        $this->assertSame('not_started', $state['key']);
+        $this->assertSame('Progres Rapor Belum Dibuka', $state['title']);
+        $this->assertStringContainsString('ASTS Ganjil Mendatang', $state['description']);
+        $this->assertStringContainsString('belum perlu', mb_strtolower($state['action']));
+    }
+
+    public function test_empty_state_menjelaskan_periode_aktif_tetapi_akun_belum_punya_tanggung_jawab(): void
+    {
+        $user = User::factory()->create(['username' => 'guru-belum-ditugaskan']);
+        $user->forceFill([
+            'module_access_levels' => ['penilaian' => AdminModuleAccess::VIEW],
+        ])->save();
+        AssessmentPeriod::factory()->asas()->create([
+            'name' => 'ASAS Ganjil Aktif',
+            'status' => AssessmentPeriodStatus::OPEN,
+        ]);
+
+        $state = app(AssessmentReportProgress::class)->emptyStateForUser($user);
+
+        $this->assertSame('unassigned', $state['key']);
+        $this->assertSame('Belum Ada Tanggung Jawab Rapor', $state['title']);
+        $this->assertStringContainsString('ASAS Ganjil Aktif', $state['description']);
+        $this->assertStringContainsString('Kurikulum atau Admin', $state['action']);
+
+        $this->actingAs($user);
+
+        Livewire::test(AssessmentReportProgressPage::class)
+            ->assertSee('Belum Ada Tanggung Jawab Rapor')
+            ->assertSee('ASAS Ganjil Aktif')
+            ->assertSee('hubungi Kurikulum atau Admin')
+            ->assertSeeHtml('assessment-report-progress__empty-state');
     }
 }

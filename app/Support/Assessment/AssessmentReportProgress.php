@@ -18,17 +18,60 @@ final class AssessmentReportProgress
     public function forUser(User $user): Collection
     {
         return AssessmentPeriod::query()
-            ->whereIn('status', [
-                AssessmentPeriodStatus::OPEN->value,
-                AssessmentPeriodStatus::ENTRY_CLOSED->value,
-                AssessmentPeriodStatus::VERIFICATION->value,
-                AssessmentPeriodStatus::LOCKED->value,
-            ])
+            ->whereIn('status', $this->operationalStatuses())
             ->latest('id')
             ->get()
             ->map(fn (AssessmentPeriod $period): array => $this->periodProgress($period, $user))
             ->filter(fn (array $period): bool => $period['roles'] !== [])
             ->values();
+    }
+
+    /** @return array{key: string, title: string, description: string, action: string, icon: string} */
+    public function emptyStateForUser(User $user): array
+    {
+        $operationalPeriods = AssessmentPeriod::query()
+            ->whereIn('status', $this->operationalStatuses())
+            ->latest('id')
+            ->get(['name']);
+
+        if ($operationalPeriods->isNotEmpty()) {
+            $names = $operationalPeriods->pluck('name')->filter()->implode(', ');
+
+            return [
+                'key' => 'unassigned',
+                'title' => 'Belum Ada Tanggung Jawab Rapor',
+                'description' => "Periode {$names} sedang aktif, tetapi akun Anda belum tercatat sebagai Guru mapel, Wali Kelas, Kurikulum, atau Admin pada periode tersebut.",
+                'action' => 'Jika Anda seharusnya memiliki tugas, hubungi Kurikulum atau Admin agar penugasan dan akses akun diperiksa.',
+                'icon' => 'heroicon-o-user-plus',
+            ];
+        }
+
+        $draft = AssessmentPeriod::query()
+            ->where('status', AssessmentPeriodStatus::DRAFT->value)
+            ->latest('id')
+            ->first(['name', 'entry_start_at']);
+
+        if ($draft) {
+            $schedule = $draft->entry_start_at
+                ? ' Jadwal mulai input: '.$draft->entry_start_at->translatedFormat('d F Y, H:i').'.'
+                : '';
+
+            return [
+                'key' => 'not_started',
+                'title' => 'Progres Rapor Belum Dibuka',
+                'description' => "Periode {$draft->name} masih disiapkan dan belum memasuki waktu pengerjaan.{$schedule}",
+                'action' => 'Anda belum perlu mengerjakan apa pun. Halaman ini akan menampilkan tugas setelah periode dibuka dan penugasan selesai disusun.',
+                'icon' => 'heroicon-o-clock',
+            ];
+        }
+
+        return [
+            'key' => 'no_period',
+            'title' => 'Belum Ada Periode Rapor Aktif',
+            'description' => 'Saat ini tidak ada periode penilaian yang sedang dikerjakan dalam antrean progres rapor.',
+            'action' => 'Tidak ada tindakan yang perlu dilakukan. Periksa kembali setelah Kurikulum membuka periode penilaian berikutnya.',
+            'icon' => 'heroicon-o-calendar-days',
+        ];
     }
 
     /** @return array<string, mixed> */
@@ -195,6 +238,17 @@ final class AssessmentReportProgress
                 return $priority[$templateType] ?? 99;
             })
             ->first();
+    }
+
+    /** @return list<string> */
+    private function operationalStatuses(): array
+    {
+        return [
+            AssessmentPeriodStatus::OPEN->value,
+            AssessmentPeriodStatus::ENTRY_CLOSED->value,
+            AssessmentPeriodStatus::VERIFICATION->value,
+            AssessmentPeriodStatus::LOCKED->value,
+        ];
     }
 
     private function statusValue(mixed $status): string

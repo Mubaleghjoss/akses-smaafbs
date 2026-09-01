@@ -37,4 +37,20 @@ class AssessmentReportProgressPage extends AssessmentPage
             ? app(AssessmentReportProgress::class)->forUser($user)->all()
             : [];
     }
+
+    /** @return array{key: string, title: string, description: string, action: string, icon: string} */
+    public function getEmptyState(): array
+    {
+        $user = auth()->user();
+
+        return $user instanceof User
+            ? app(AssessmentReportProgress::class)->emptyStateForUser($user)
+            : [
+                'key' => 'unauthenticated',
+                'title' => 'Sesi Anda Tidak Aktif',
+                'description' => 'Silakan masuk kembali untuk melihat progres rapor.',
+                'action' => 'Masuk kembali melalui halaman login.',
+                'icon' => 'heroicon-o-lock-closed',
+            ];
+    }
 }

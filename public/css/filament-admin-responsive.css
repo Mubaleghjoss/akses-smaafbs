@@ -9882,6 +9882,12 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .assessment-report-progress__action:hover { background:#1e40af; }
 .assessment-report-progress__action:focus-visible { outline:3px solid #93c5fd; outline-offset:2px; }
 .assessment-report-progress__empty { border-color:#94a3b8; background:#f8fafc; color:#334155; }
+.assessment-report-progress__empty-state { border-color:#93c5fd; background:#eff6ff; color:#0f172a; overflow-wrap:anywhere; }
+.assessment-report-progress__empty-icon { background:#dbeafe; color:#1d4ed8; }
+.assessment-report-progress .assessment-report-progress__empty-label { background:#dbeafe !important; color:#1e40af !important; }
+.assessment-report-progress__empty-title { color:#0f172a; }
+.assessment-report-progress__empty-description,.assessment-report-progress__empty-footnote { color:#475569; }
+.assessment-report-progress__empty-action { border-color:#86efac; background:#f0fdf4; color:#14532d; }
 .dark .assessment-report-progress__hero,.fi-theme-dark .assessment-report-progress__hero { border-color:#1e40af; background:#172554; color:#f8fafc; }
 .dark .assessment-report-progress .assessment-report-progress__eyebrow,.fi-theme-dark .assessment-report-progress .assessment-report-progress__eyebrow { background:#1e3a8a !important; color:#dbeafe !important; }
 .dark .assessment-report-progress__title,.dark .assessment-report-progress__period-title,.dark .assessment-report-progress__role-title,.dark .assessment-report-progress__percent,.dark .assessment-report-progress__overall,.fi-theme-dark .assessment-report-progress__title,.fi-theme-dark .assessment-report-progress__period-title,.fi-theme-dark .assessment-report-progress__role-title,.fi-theme-dark .assessment-report-progress__percent,.fi-theme-dark .assessment-report-progress__overall { color:#f8fafc; }
@@ -9901,4 +9907,10 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .dark .assessment-report-progress__action,.fi-theme-dark .assessment-report-progress__action { background:#2563eb; color:#fff; }
 .dark .assessment-report-progress__action:hover,.fi-theme-dark .assessment-report-progress__action:hover { background:#3b82f6; }
 .dark .assessment-report-progress__empty,.fi-theme-dark .assessment-report-progress__empty { border-color:#475569; background:#111827; color:#e2e8f0; }
+.dark .assessment-report-progress__empty-state,.fi-theme-dark .assessment-report-progress__empty-state { border-color:#1d4ed8; background:#172554; color:#f8fafc; }
+.dark .assessment-report-progress__empty-icon,.fi-theme-dark .assessment-report-progress__empty-icon { background:#1e3a8a; color:#dbeafe; }
+.dark .assessment-report-progress .assessment-report-progress__empty-label,.fi-theme-dark .assessment-report-progress .assessment-report-progress__empty-label { background:#1e3a8a !important; color:#dbeafe !important; }
+.dark .assessment-report-progress__empty-title,.fi-theme-dark .assessment-report-progress__empty-title { color:#f8fafc; }
+.dark .assessment-report-progress__empty-description,.dark .assessment-report-progress__empty-footnote,.fi-theme-dark .assessment-report-progress__empty-description,.fi-theme-dark .assessment-report-progress__empty-footnote { color:#cbd5e1; }
+.dark .assessment-report-progress__empty-action,.fi-theme-dark .assessment-report-progress__empty-action { border-color:#166534; background:#14532d; color:#dcfce7; }
 @media (max-width:640px) { .assessment-report-progress__path { overflow-x:auto; grid-template-columns:repeat(8,minmax(6.5rem,1fr)); padding-bottom:.25rem; } }
