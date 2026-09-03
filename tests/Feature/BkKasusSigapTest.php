@@ -153,6 +153,43 @@ class BkKasusSigapTest extends TestCase
         $this->assertFalse($user->canAccessNavigationItem(RekapSigapPage::class));
     }
 
+    public function test_submenu_yang_dipilih_per_menu_disimpan_sebagai_satu_daftar_eksplisit(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Walas Pilih Menu SIGAP',
+            'username' => 'walas-pilih-menu-sigap',
+            'password' => bcrypt('password'),
+        ]);
+        $user->assignRole('guru');
+
+        UserResource::syncScopedModuleConfiguration($user, [
+            'roles' => $user->roles->pluck('id')->all(),
+            'module_access_levels' => [
+                'bk_kasus' => AdminModuleAccess::MANAGE,
+                'catatan_bk' => AdminModuleAccess::MANAGE,
+            ],
+            'allowed_navigation_items' => [
+                'manajemen_sekolah_bk' => [
+                    BkKasusResource::class,
+                    RekapSigapPage::class,
+                ],
+                'menu_utama' => [],
+            ],
+            'navigation_selection_explicit' => true,
+        ]);
+
+        $user->refresh();
+
+        $this->assertTrue($user->hasExplicitNavigationSelection());
+        $this->assertSame([
+            BkKasusResource::class,
+            RekapSigapPage::class,
+        ], $user->resolvedNavigationItems());
+        $this->assertTrue($user->canAccessNavigationItem(BkKasusResource::class));
+        $this->assertTrue($user->canAccessNavigationItem(RekapSigapPage::class));
+        $this->assertFalse($user->canAccessNavigationItem(CatatanBkResource::class));
+    }
+
     public function test_submenu_perpustakaan_yang_tidak_dipilih_ditolak(): void
     {
         $user = User::query()->create([

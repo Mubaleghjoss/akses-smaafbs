@@ -59,6 +59,11 @@ class UserResource extends Resource
     protected static ?array $advancedNavigationItemOptionsCache = null;
 
     /**
+     * @var array{options:array<string, string>,descriptions:array<string, string>}|null
+     */
+    protected static ?array $navigationItemChoicesCache = null;
+
+    /**
      * @var array<int, ?GuruTendik>
      */
     protected static array $guruTendikAccessSuggestionCache = [];
@@ -373,7 +378,7 @@ class UserResource extends Resource
     protected static function advancedAccessSection(): Section
     {
         return Section::make('Menu & Submenu per Akun')
-            ->description('Pilih seluruh menu dan submenu bisnis yang boleh tampil dan dibuka oleh akun ini. Kemampuan Lihat atau Kelola tetap mengikuti matrix akses modul di atas.')
+            ->description('Centang menu dan submenu yang boleh tampil serta dibuka akun ini. Daftarnya sama untuk semua akun dan tidak menyusut mengikuti matrix akses modul di atas; matrix hanya menentukan Lihat atau Kelola.')
             ->compact()
             ->collapsible()
             ->collapsed()
@@ -381,10 +386,9 @@ class UserResource extends Resource
                 Forms\Components\Placeholder::make('sidebar_preview')
                     ->label('Ringkasan Sidebar')
                     ->content(function (Get $get): string {
-                        $selectedItems = collect($get('allowed_navigation_items') ?? [])
-                            ->map(fn ($item): string => trim((string) $item))
-                            ->filter()
-                            ->all();
+                        $selectedItems = AdminModuleAccess::flattenNavigationItems(
+                            (array) ($get('allowed_navigation_items') ?? []),
+                        );
                         $groups = AdminModuleAccess::deriveNavigationGroups($selectedItems);
 
                         return $groups === []
@@ -394,12 +398,20 @@ class UserResource extends Resource
                     ->columnSpanFull(),
                 Forms\Components\Hidden::make('navigation_selection_explicit')
                     ->default(true),
-                Forms\Components\CheckboxList::make('allowed_navigation_items')
-                    ->label('Menu & Submenu yang Ditampilkan')
-                    ->options(fn (): array => static::navigationItemOptionsSnapshot())
-                    ->columns(['default' => 1, 'md' => 2])
-                    ->helperText('Pilih setiap menu atau submenu yang boleh tampil dan dibuka akun. Level akses modul di atas tetap menentukan Lihat atau Kelola.')
-                    ->columnSpanFull(),
+                ...collect(AdminModuleAccess::navigationItemOptionGroups())
+                    ->map(fn (array $group): Fieldset => Fieldset::make($group['label'])
+                        ->schema([
+                            Forms\Components\CheckboxList::make("allowed_navigation_items.{$group['key']}")
+                                ->label('Submenu')
+                                ->options($group['options'])
+                                ->bulkToggleable()
+                                ->searchable()
+                                ->columns(['default' => 1, 'md' => 2])
+                                ->helperText('Pilih submenu yang boleh tampil dan dibuka. Daftar ini selalu sama untuk semua akun.')
+                                ->columnSpanFull(),
+                        ])
+                        ->columnSpanFull())
+                    ->all(),
             ]);
     }
 
@@ -437,7 +449,42 @@ class UserResource extends Resource
     /** @return array<string, string> */
     protected static function navigationItemOptionsSnapshot(): array
     {
-        return AdminModuleAccess::navigationItemOptions();
+        return static::navigationItemChoicesSnapshot()['options'];
+    }
+
+    /** @return array<string, string> */
+    protected static function navigationItemDescriptionsSnapshot(): array
+    {
+        return static::navigationItemChoicesSnapshot()['descriptions'];
+    }
+
+    /**
+     * Satu daftar pilihan menu untuk semua akun: label submenu apa adanya,
+     * dengan menu induknya sebagai keterangan agar nama yang sama (misalnya
+     * "Data Akun WiFi" di Siswa dan Guru) tetap bisa dibedakan.
+     *
+     * @return array{options:array<string, string>,descriptions:array<string, string>}
+     */
+    protected static function navigationItemChoicesSnapshot(): array
+    {
+        if (static::$navigationItemChoicesCache !== null) {
+            return static::$navigationItemChoicesCache;
+        }
+
+        $options = [];
+        $descriptions = [];
+
+        foreach (AdminModuleAccess::navigationItemOptionGroups() as $group) {
+            foreach ($group['options'] as $class => $label) {
+                $options[$class] = $label;
+                $descriptions[$class] = $group['label'];
+            }
+        }
+
+        return static::$navigationItemChoicesCache = [
+            'options' => $options,
+            'descriptions' => $descriptions,
+        ];
     }
 
     public static function table(Table $table): Table
@@ -1234,9 +1281,10 @@ class UserResource extends Resource
             ...array_keys(AdminModuleAccess::navigationItemOptions()),
             Dashboard::class,
         ];
-        $selectedItems = collect($state['allowed_navigation_items'] ?? [])
-            ->map(fn ($item): string => trim((string) $item))
-            ->filter()
+
+        $selectedItems = collect(AdminModuleAccess::flattenNavigationItems(
+            (array) ($state['allowed_navigation_items'] ?? []),
+        ))
             ->intersect($selectableNavigationClasses)
             ->values()
             ->all();

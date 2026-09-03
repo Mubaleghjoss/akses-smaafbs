@@ -17,12 +17,12 @@ class EditUser extends EditRecord
         /** @var User $record */
         $record = $this->record->loadMissing('roles');
         $data['module_access_levels'] = AdminModuleAccess::effectiveLevels($record);
-        $data['allowed_navigation_items'] = $record->hasExplicitNavigationSelection()
-            ? $record->resolvedNavigationItems()
-            : AdminModuleAccess::deriveNavigationItems(
-                $data['module_access_levels'],
+        $data['allowed_navigation_items'] = AdminModuleAccess::navigationItemSelectionGroups(
+            AdminModuleAccess::selectableNavigationItems(
+                $record->hasExplicitNavigationSelection() ? [] : $data['module_access_levels'],
                 (array) ($record->allowed_navigation_items ?? []),
-            );
+            ),
+        );
         $data['navigation_selection_explicit'] = true;
         $data['access_template_addons'] = UserResource::defaultAccessAddonState();
 

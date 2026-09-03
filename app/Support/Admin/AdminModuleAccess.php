@@ -588,23 +588,145 @@ class AdminModuleAccess
     }
 
     /**
+     * Kelas pendamping modul yang benar-benar MUNCUL sebagai menu atau submenu.
+     *
+     * Halaman turunan (input nilai, status pengumpulan, rekap wali kelas, cetak
+     * rapor, resource pengaturan penilaian, rincian harian literasi) sengaja
+     * tidak ikut: semuanya dibuka dari halaman induk dan izinnya mengikuti
+     * kelas induk lewat canAccessNavigationItem(), jadi tidak perlu dicentang
+     * terpisah.
+     *
+     * @return array<int, class-string>
+     */
+    protected static function sidebarCompanionClasses(): array
+    {
+        $assessmentClasses = self::ADDITIONAL_MODULE_CLASSES['penilaian'] ?? [];
+
+        return collect(self::ADDITIONAL_MODULE_CLASSES)
+            ->flatten()
+            ->reject(fn (string $class): bool => in_array($class, $assessmentClasses, true)
+                && ! AdminSchoolNavigation::shouldRegisterAssessmentClass($class))
+            ->reject(fn (string $class): bool => $class === RincianHarianKelasPage::class)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
      * Seluruh menu dan submenu yang benar-benar terdaftar di panel admin.
+     *
+     * Daftar ini adalah SATU-SATUNYA sumber pilihan menu per akun. Isinya
+     * dibangun dari peta statis modul dan navigasi sekolah, BUKAN dari navigasi
+     * panel yang sedang aktif: `shouldRegisterNavigation()` setiap halaman
+     * bergantung pada izin akun yang sedang login, sehingga daftar opsi dulu
+     * menyusut mengikuti akses pengedit dan nilai tersimpan jatuh di luar daftar
+     * pilihan.
      *
      * @return array<string, string>
      */
     public static function navigationItemOptions(): array
     {
-        $classes = collect([Dashboard::class])
-            ->merge(array_values(self::RESOURCE_MAP))
+        $classes = collect(array_values(self::RESOURCE_MAP))
+            ->merge(self::sidebarCompanionClasses())
             ->merge(AdminSchoolNavigation::classifiedClasses())
-            ->merge(array_keys(AdminNavigationSupport::availableNavigationItemOptions()))
+            ->reject(fn (string $class): bool => $class === Dashboard::class)
             ->unique()
             ->values()
             ->all();
 
-        return array_diff_key(
-            AdminNavigationSupport::optionsForClasses($classes),
-            [Dashboard::class => true],
-        );
+        return AdminNavigationSupport::optionsForClasses($classes);
+    }
+
+    /**
+     * Menu dan submenu yang boleh tercentang untuk satu akun.
+     *
+     * Selalu disaring dengan daftar opsi yang dipakai CheckboxList di form, agar
+     * nilai yang terisi tidak pernah keluar dari daftar pilihan — penyebab pesan
+     * "yang dipilih tidak valid" ketika pengaturan akun disimpan.
+     *
+     * @param  array<string, string>  $levels
+     * @param  array<int, string>  $storedItems
+     * @return array<int, string>
+     */
+    public static function selectableNavigationItems(array $levels, array $storedItems = []): array
+    {
+        $optionKeys = array_keys(self::navigationItemOptions());
+
+        return collect(self::deriveNavigationItems($levels, self::flattenNavigationItems($storedItems)))
+            ->map(fn ($class): string => trim((string) $class))
+            ->filter()
+            ->intersect($optionKeys)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Meratakan state CheckboxList yang disimpan per menu menjadi satu daftar
+     * kelas menu. State lama yang datar tetap diterima untuk kompatibilitas.
+     *
+     * @param  array<int|string, mixed>  $items
+     * @return array<int, string>
+     */
+    public static function flattenNavigationItems(array $items): array
+    {
+        return collect($items)
+            ->flatten()
+            ->filter(fn ($item): bool => is_string($item) || is_numeric($item))
+            ->map(fn ($item): string => trim((string) $item))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Memecah pilihan datar menjadi state CheckboxList per menu untuk form.
+     *
+     * @param  array<int, string>  $items
+     * @return array<string, array<int, string>>
+     */
+    public static function navigationItemSelectionGroups(array $items): array
+    {
+        $selected = array_flip(self::flattenNavigationItems($items));
+        $groups = [];
+
+        foreach (self::navigationItemOptionGroups() as $group) {
+            $groups[$group['key']] = array_values(array_filter(
+                array_keys($group['options']),
+                fn (string $class): bool => array_key_exists($class, $selected),
+            ));
+        }
+
+        return $groups;
+    }
+
+    /**
+     * Daftar opsi menu, dikelompokkan per menu induk.
+     *
+     * Dipakai form akun agar setiap menu menampilkan submenunya sendiri, dengan
+     * isi yang selalu sama untuk semua akun.
+     *
+     * @return array<int, array{key:string,label:string,options:array<string, string>}>
+     */
+    public static function navigationItemOptionGroups(): array
+    {
+        $groups = [];
+
+        foreach (self::navigationItemOptions() as $class => $label) {
+            $segments = collect(explode('->', (string) $label))
+                ->map(fn (string $segment): string => trim($segment))
+                ->filter()
+                ->values();
+
+            $leaf = $segments->pop() ?? class_basename($class);
+            $menuLabel = $segments->isEmpty() ? 'Menu Utama' : $segments->implode(' › ');
+            $key = str($menuLabel)->slug('_')->value();
+
+            $groups[$key] ??= ['key' => $key, 'label' => $menuLabel, 'options' => []];
+            $groups[$key]['options'][$class] = $leaf;
+        }
+
+        return array_values($groups);
     }
 }
