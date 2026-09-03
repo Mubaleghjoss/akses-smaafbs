@@ -2,6 +2,7 @@
 
 namespace App\Filament\Concerns;
 
+use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Models\User;
 use App\Support\Admin\AdminSchoolNavigation;
 use Illuminate\Database\Eloquent\Model;
@@ -23,6 +24,7 @@ trait HasAssessmentPermissions
         return config('assessment.enabled')
             && Schema::hasTable('assessment_periods')
             && $user instanceof User
+            && $user->canAccessNavigationItem(AssessmentDashboard::class)
             && (
                 $user->hasFullAdminAccess()
                 || (

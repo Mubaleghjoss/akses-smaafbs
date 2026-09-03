@@ -262,7 +262,7 @@ class GuruModulesAndUksTest extends TestCase
 
         $this->assertSame(AdminModuleAccess::VIEW, $guruUser->moduleAccessLevel('data_siswa'));
         $this->assertSame(AdminModuleAccess::MANAGE, $guruUser->moduleAccessLevel('prestasi'));
-        $this->assertContains('Siswa', $guruUser->resolvedNavigationGroups());
+        $this->assertContains('Manajemen Sekolah', $guruUser->resolvedNavigationGroups());
         $this->assertContains(DataSiswaResource::class, $guruUser->resolvedNavigationItems());
         $this->assertContains(PrestasiResource::class, $guruUser->resolvedNavigationItems());
 
@@ -304,7 +304,7 @@ class GuruModulesAndUksTest extends TestCase
         $guruUser->refresh();
 
         $this->assertTrue($guruUser->canViewModule('data_siswa'));
-        $this->assertContains('Siswa', $guruUser->resolvedNavigationGroups());
+        $this->assertContains('Manajemen Sekolah', $guruUser->resolvedNavigationGroups());
         $this->assertContains(DataSiswaResource::class, $guruUser->resolvedNavigationItems());
     }
 
@@ -365,7 +365,7 @@ class GuruModulesAndUksTest extends TestCase
         $this->assertSame(['XI.I / 2025-2026'], $targetUser->guruWalasScopes());
         $this->assertTrue($targetUser->canViewModule('data_siswa'));
         $this->assertTrue($targetUser->canViewModule('users'));
-        $this->assertContains('Siswa', $targetUser->resolvedNavigationGroups());
+        $this->assertContains('Manajemen Sekolah', $targetUser->resolvedNavigationGroups());
         $this->assertContains(DataSiswaResource::class, $targetUser->resolvedNavigationItems());
     }
 

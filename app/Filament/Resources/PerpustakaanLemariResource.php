@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Concerns\HasConfirmedDeleteActions;
+use App\Filament\Concerns\HasModulePermissions;
 use App\Filament\Resources\PerpustakaanLemariResource\Pages;
 use App\Models\PerpustakaanLemari;
 use Filament\Actions\BulkActionGroup;
@@ -16,8 +17,11 @@ use Filament\Tables\Table;
 class PerpustakaanLemariResource extends Resource
 {
     use HasConfirmedDeleteActions;
+    use HasModulePermissions;
 
     protected static ?string $model = PerpustakaanLemari::class;
+
+    protected static ?string $permissionPrefix = 'perpustakaan_literasi';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-rectangle-stack';
 

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Concerns\HasConfirmedDeleteActions;
+use App\Filament\Concerns\HasModulePermissions;
 use App\Filament\Resources\PerpustakaanBukuResource\Pages;
 use App\Models\PerpustakaanBuku;
 use App\Models\PerpustakaanKategori;
@@ -19,8 +20,11 @@ use Illuminate\Support\Facades\Storage;
 class PerpustakaanBukuResource extends Resource
 {
     use HasConfirmedDeleteActions;
+    use HasModulePermissions;
 
     protected static ?string $model = PerpustakaanBuku::class;
+
+    protected static ?string $permissionPrefix = 'perpustakaan_literasi';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-rectangle-stack';
 

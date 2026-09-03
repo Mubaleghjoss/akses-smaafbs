@@ -13,8 +13,8 @@ use App\Filament\Pages\Assessment\AsatInputScores;
 use App\Filament\Pages\Assessment\AsatReports;
 use App\Filament\Pages\Assessment\AsatSubmissionStatus;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
-use App\Filament\Pages\Assessment\AssessmentReportProgressPage;
 use App\Filament\Pages\Assessment\AssessmentMasterImport;
+use App\Filament\Pages\Assessment\AssessmentReportProgressPage;
 use App\Filament\Pages\Assessment\AssessmentSetupWizard;
 use App\Filament\Pages\Assessment\AssessmentTeachingMatrix;
 use App\Filament\Pages\Assessment\AstsHomeroomRecap;
@@ -28,17 +28,22 @@ use App\Filament\Pages\Perpustakaan\AnalisisLiterasiPage;
 use App\Filament\Pages\Perpustakaan\KelolaDispensasiPage;
 use App\Filament\Pages\Perpustakaan\RincianHarianKelasPage;
 use App\Filament\Pages\SarprasStickerSettings;
+use App\Filament\Resources\AccountCategoryResource;
+use App\Filament\Resources\AdminAccessChangeLogResource;
 use App\Filament\Resources\AssessmentAuditLogResource;
 use App\Filament\Resources\AssessmentPeriodResource;
 use App\Filament\Resources\AssessmentReportTemplateResource;
 use App\Filament\Resources\AssessmentSchemeResource;
 use App\Filament\Resources\AssessmentSubjectCategoryResource;
 use App\Filament\Resources\AssessmentSubjectResource;
+use App\Filament\Resources\BelajarIdAccountResource;
+use App\Filament\Resources\BelajarIdGuruResource;
 use App\Filament\Resources\BeritaResource;
 use App\Filament\Resources\BerkasGuruResource;
 use App\Filament\Resources\BerkasSiswaResource;
 use App\Filament\Resources\BkKasusResource;
 use App\Filament\Resources\BoardingArsipMtResource;
+use App\Filament\Resources\BoardingHafalanPointResource;
 use App\Filament\Resources\BoardingKeuanganSiswaResource;
 use App\Filament\Resources\BoardingKonselingMtResource;
 use App\Filament\Resources\BoardingPencapaianResource;
@@ -52,6 +57,10 @@ use App\Filament\Resources\EventTimelineResource;
 use App\Filament\Resources\GaleriResource;
 use App\Filament\Resources\GuruTendikResource;
 use App\Filament\Resources\JenisBerkasResource;
+use App\Filament\Resources\PengaturanResource;
+use App\Filament\Resources\PerpustakaanBukuResource;
+use App\Filament\Resources\PerpustakaanKategoriResource;
+use App\Filament\Resources\PerpustakaanLemariResource;
 use App\Filament\Resources\PerpustakaanLiterasiMaterialResource;
 use App\Filament\Resources\PrestasiResource;
 use App\Filament\Resources\ProfilSekolahResource;
@@ -68,6 +77,8 @@ use App\Filament\Resources\SurveiResource;
 use App\Filament\Resources\UksRecordResource;
 use App\Filament\Resources\UserResource;
 use App\Filament\Resources\VisiMisiResource;
+use App\Filament\Resources\WifiAccountResource;
+use App\Filament\Resources\WifiGuruResource;
 use App\Models\User;
 use Filament\Pages\Dashboard;
 use Illuminate\Support\Collection;
@@ -82,10 +93,29 @@ class AdminModuleAccess
     public const MANAGE = 'manage';
 
     /**
+     * Rekap SIGAP dulunya ikut prefix bk_kasus. Prefix ini memisahkannya agar
+     * halaman rekap bisa diatur sendiri tanpa membuka form Laporan SIGAP.
+     */
+    public const REKAP_SIGAP_PREFIX = 'bk_rekap_sigap';
+
+    /**
+     * Prefix baru yang dulunya menempel pada prefix lain. Akun lama tidak
+     * punya kuncinya di module_access_levels, jadi levelnya diwarisi dari
+     * prefix induk supaya menunya tidak hilang setelah pemisahan.
+     *
+     * @var array<string, string>
+     */
+    protected const LEGACY_PARENT_PREFIXES = [
+        self::REKAP_SIGAP_PREFIX => 'bk_kasus',
+    ];
+
+    /**
      * @var array<string, class-string>
      */
     protected const RESOURCE_MAP = [
         'users' => UserResource::class,
+        'pengaturan_situs' => PengaturanResource::class,
+        'riwayat_akses_divisi' => AdminAccessChangeLogResource::class,
         'data_siswa' => DataSiswaResource::class,
         'rombel' => RombelResource::class,
         'jenis_berkas' => JenisBerkasResource::class,
@@ -93,6 +123,11 @@ class AdminModuleAccess
         'guru_tendik' => GuruTendikResource::class,
         'berkas_guru' => BerkasGuruResource::class,
         'prestasi' => PrestasiResource::class,
+        'akun_wifi_siswa' => WifiAccountResource::class,
+        'akun_belajar_id_siswa' => BelajarIdAccountResource::class,
+        'akun_wifi_guru' => WifiGuruResource::class,
+        'akun_belajar_id_guru' => BelajarIdGuruResource::class,
+        'kategori_akun_guru' => AccountCategoryResource::class,
         'uks_records' => UksRecordResource::class,
         'boarding_rapot' => BoardingRapotResource::class,
         'boarding_pencapaian' => BoardingPencapaianResource::class,
@@ -102,6 +137,7 @@ class AdminModuleAccess
         'boarding_perizinan' => BoardingPerizinanSiswaResource::class,
         'catatan_bk' => CatatanBkResource::class,
         'bk_kasus' => BkKasusResource::class,
+        'bk_rekap_sigap' => RekapSigapPage::class,
         'survei' => SurveiResource::class,
         'proker_dashboard' => DashboardProker::class,
         'proker_bidang' => ProkerBidangResource::class,
@@ -131,13 +167,16 @@ class AdminModuleAccess
      * @var array<string, array<int, class-string>>
      */
     protected const ADDITIONAL_MODULE_CLASSES = [
-        'bk_kasus' => [
-            RekapSigapPage::class,
+        'boarding_pencapaian' => [
+            BoardingHafalanPointResource::class,
         ],
         'perpustakaan_literasi' => [
             AnalisisLiterasiPage::class,
             KelolaDispensasiPage::class,
             RincianHarianKelasPage::class,
+            PerpustakaanBukuResource::class,
+            PerpustakaanKategoriResource::class,
+            PerpustakaanLemariResource::class,
         ],
         'penilaian' => [
             AssessmentReportProgressPage::class,
@@ -173,6 +212,8 @@ class AdminModuleAccess
      */
     protected const MODULE_DESCRIPTIONS = [
         'users' => 'Kelola akun admin dan pengaturan akses pengguna.',
+        'pengaturan_situs' => 'Akses halaman Pengaturan Situs: identitas tampilan, logo, SEO, PWA, Google Drive, dan sinkron data server.',
+        'riwayat_akses_divisi' => 'Lihat audit trail perubahan akses divisi dan tugas tambahan tiap akun (hanya baca).',
         'data_siswa' => 'Lihat atau kelola data induk siswa.',
         'rombel' => 'Kelola master rombel yang dipakai pada data siswa dan filter siswa.',
         'jenis_berkas' => 'Atur master jenis berkas siswa/guru.',
@@ -180,15 +221,21 @@ class AdminModuleAccess
         'guru_tendik' => 'Lihat atau kelola data profil guru dan tendik.',
         'berkas_guru' => 'Akses dokumen dan berkas guru.',
         'prestasi' => 'Lihat atau kelola data prestasi siswa.',
+        'akun_wifi_siswa' => 'Kelola daftar akun WiFi siswa, termasuk import Excel dan sinkron dari aplikasi MikroTik.',
+        'akun_belajar_id_siswa' => 'Kelola daftar akun Belajar.id siswa dan import Excel-nya.',
+        'akun_wifi_guru' => 'Kelola daftar akun WiFi guru/tendik, termasuk import Excel dan sinkron dari aplikasi MikroTik.',
+        'akun_belajar_id_guru' => 'Kelola daftar akun Belajar.id guru/tendik dan import Excel-nya.',
+        'kategori_akun_guru' => 'Atur master kategori akun guru yang dipakai pada data akun Belajar.id guru.',
         'uks_records' => 'Akses rekam kunjungan dan layanan UKS.',
         'boarding_rapot' => 'Akses rapot boarding dan dokumen turunannya.',
-        'boarding_pencapaian' => 'Kelola target dan capaian boarding.',
+        'boarding_pencapaian' => 'Kelola target dan capaian boarding, termasuk master Materi Boarding.',
         'boarding_konseling' => 'Kelola catatan konseling boarding.',
         'boarding_keuangan' => 'Kelola keuangan siswa boarding.',
         'boarding_arsip' => 'Akses arsip dan dokumen boarding.',
         'boarding_perizinan' => 'Kelola perizinan keluar dan data kepulangan siswa boarding.',
         'catatan_bk' => 'Kelola catatan bimbingan konseling siswa.',
-        'bk_kasus' => 'Atur siapa yang dapat melihat atau mengisi laporan SIGAP, termasuk kasus multi-siswa, tindak lanjut, dan rekap per kelas.',
+        'bk_kasus' => 'Atur siapa yang dapat melihat atau mengisi laporan SIGAP, termasuk kasus multi-siswa dan tindak lanjut. Halaman Rekap SIGAP diatur terpisah.',
+        'bk_rekap_sigap' => 'Akses halaman Rekap SIGAP: rekap kasus per kelas, kelas tanpa catatan, dan filter periode. Tidak memberi hak mengisi Laporan SIGAP.',
         'survei' => 'Kelola survei sekolah, target responden, dan monitoring hasil pengisian.',
         'proker_dashboard' => 'Lihat dashboard ringkasan proker dan aksi cepat monitoring.',
         'proker_bidang' => 'Kelola master bidang proker dan penanggung jawabnya.',
@@ -218,6 +265,15 @@ class AdminModuleAccess
                 self::NONE => 'Sembunyikan',
                 self::VIEW => 'Lihat Saja',
                 self::MANAGE => 'Isi / Kelola Laporan',
+            ];
+        }
+
+        // Halaman murni baca (audit trail / rekap): tidak punya aksi
+        // create/edit/delete, jadi pilihan "Kelola Penuh" akan menyesatkan.
+        if (in_array($prefix, ['riwayat_akses_divisi', self::REKAP_SIGAP_PREFIX], true)) {
+            return [
+                self::NONE => 'Sembunyikan',
+                self::VIEW => 'Lihat Saja',
             ];
         }
 
@@ -270,13 +326,41 @@ class AdminModuleAccess
         $normalized = [];
 
         foreach (self::prefixes() as $prefix) {
-            $value = (string) ($levels[$prefix] ?? self::NONE);
+            $value = array_key_exists($prefix, $levels)
+                ? (string) $levels[$prefix]
+                : (string) (self::inheritedLegacyLevel($levels, $prefix) ?? self::NONE);
+
             $normalized[$prefix] = in_array($value, [self::NONE, self::VIEW, self::MANAGE], true)
                 ? $value
                 : self::NONE;
         }
 
         return $normalized;
+    }
+
+    /**
+     * Level warisan untuk prefix yang baru dipisahkan dari prefix induknya.
+     * Rekap SIGAP hanya halaman baca, jadi warisan dibatasi maksimal VIEW.
+     *
+     * @param  array<string, mixed>  $levels
+     */
+    protected static function inheritedLegacyLevel(array $levels, string $prefix): ?string
+    {
+        $parent = self::LEGACY_PARENT_PREFIXES[$prefix] ?? null;
+
+        if ($parent === null || ! array_key_exists($parent, $levels)) {
+            return null;
+        }
+
+        $parentLevel = (string) $levels[$parent];
+
+        if (! in_array($parentLevel, [self::VIEW, self::MANAGE], true)) {
+            return null;
+        }
+
+        return array_key_exists(self::MANAGE, self::levelOptions($prefix))
+            ? $parentLevel
+            : self::VIEW;
     }
 
     public static function resolveEffectiveLevel(User $user, string $prefix): string
@@ -295,12 +379,26 @@ class AdminModuleAccess
             }
         }
 
+        // Prefix hasil pemisahan: akun lama belum punya kuncinya, jadi ikut
+        // level prefix induk agar menunya tidak hilang mendadak.
+        if (is_array($storedLevels) && ! array_key_exists($prefix, $storedLevels)) {
+            if ($inherited = self::inheritedLegacyLevel($storedLevels, $prefix)) {
+                return $inherited;
+            }
+        }
+
         if ($user->can("{$prefix}.manage")) {
             return self::MANAGE;
         }
 
         if ($user->can("{$prefix}.view")) {
             return self::VIEW;
+        }
+
+        if ($parent = self::LEGACY_PARENT_PREFIXES[$prefix] ?? null) {
+            if ($user->can("{$parent}.manage") || $user->can("{$parent}.view")) {
+                return self::VIEW;
+            }
         }
 
         return self::NONE;
@@ -382,6 +480,13 @@ class AdminModuleAccess
 
         if (in_array("{$prefix}.view", $permissionNames, true)) {
             return self::VIEW;
+        }
+
+        // Prefix hasil pemisahan: role lama hanya punya permission induknya.
+        if ($parent = self::LEGACY_PARENT_PREFIXES[$prefix] ?? null) {
+            if (in_array("{$parent}.manage", $permissionNames, true) || in_array("{$parent}.view", $permissionNames, true)) {
+                return self::VIEW;
+            }
         }
 
         return self::NONE;
@@ -480,5 +585,26 @@ class AdminModuleAccess
         return collect(AdminNavigationSupport::availableNavigationItemOptions())
             ->reject(fn (string $label, string $class): bool => in_array($class, $moduleClasses, true) || $class === Dashboard::class)
             ->all();
+    }
+
+    /**
+     * Seluruh menu dan submenu yang benar-benar terdaftar di panel admin.
+     *
+     * @return array<string, string>
+     */
+    public static function navigationItemOptions(): array
+    {
+        $classes = collect([Dashboard::class])
+            ->merge(array_values(self::RESOURCE_MAP))
+            ->merge(AdminSchoolNavigation::classifiedClasses())
+            ->merge(array_keys(AdminNavigationSupport::availableNavigationItemOptions()))
+            ->unique()
+            ->values()
+            ->all();
+
+        return array_diff_key(
+            AdminNavigationSupport::optionsForClasses($classes),
+            [Dashboard::class => true],
+        );
     }
 }

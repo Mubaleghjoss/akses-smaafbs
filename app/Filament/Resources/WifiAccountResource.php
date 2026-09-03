@@ -2,10 +2,10 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Concerns\HasModulePermissions;
 use App\Filament\Resources\WifiAccountResource\Pages;
 use App\Models\AccountCategory;
 use App\Models\HotspotUser;
-use App\Support\Hotspot\HotspotAccessible;
 use App\Support\WifiAccount\WifiAccountSyncClient;
 use App\Support\WifiAccount\WifiAccountWorkbookImporter;
 use Filament\Actions;
@@ -21,9 +21,11 @@ use Throwable;
 
 class WifiAccountResource extends Resource
 {
-    use HotspotAccessible;
+    use HasModulePermissions;
 
     protected static ?string $model = HotspotUser::class;
+
+    protected static ?string $permissionPrefix = 'akun_wifi_siswa';
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-wifi';
 
@@ -41,26 +43,6 @@ class WifiAccountResource extends Resource
     public static function accountRole(): string
     {
         return static::$accountRole;
-    }
-
-    public static function canViewAny(): bool
-    {
-        return self::hotspotAccessGranted();
-    }
-
-    public static function canCreate(): bool
-    {
-        return self::hotspotAccessGranted();
-    }
-
-    public static function canEdit($record): bool
-    {
-        return self::hotspotAccessGranted();
-    }
-
-    public static function canDelete($record): bool
-    {
-        return self::hotspotAccessGranted();
     }
 
     public static function getEloquentQuery(): Builder
@@ -170,7 +152,7 @@ class WifiAccountResource extends Resource
                     ->color('primary')
                     ->modalHeading('Import Akun WiFi (jembatan)')
                     ->modalSubmitActionLabel('Proses Import')
-                    ->visible(fn (): bool => self::hotspotAccessGranted())
+                    ->visible(fn (): bool => static::canCreate())
                     ->form([
                         Forms\Components\FileUpload::make('berkas')
                             ->label('File Excel (USERNAME, PASSWORD, PROFIL, KELAS, ROLE)')
@@ -217,7 +199,7 @@ class WifiAccountResource extends Resource
                     ->label('Sinkron dari MikroTik')
                     ->icon('heroicon-o-arrow-path')
                     ->color('info')
-                    ->visible(fn (): bool => self::hotspotAccessGranted() && (bool) config('wifi_sync.enabled'))
+                    ->visible(fn (): bool => static::canCreate() && (bool) config('wifi_sync.enabled'))
                     ->requiresConfirmation()
                     ->modalHeading('Sinkron akun WiFi dari aplikasi MikroTik')
                     ->modalDescription('Menarik daftar akun hotspot (read-only), lalu memperbarui data lokal. Tidak menghapus akun.')

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssessmentType;
 use App\Filament\Pages\Assessment\AsasHub;
+use App\Filament\Pages\Assessment\AsasInputScores;
 use App\Filament\Pages\Assessment\AsatHub;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Assessment\AssessmentMasterImport;
@@ -383,6 +384,53 @@ class AssessmentAdminIntegrationTest extends TestCase
         $this->assertNotEmpty($preview['errors']);
         $this->assertStringContainsString('Header sheet MAPEL harus persis', implode(' ', $preview['errors']));
         $this->assertSame([], $preview['payload']);
+    }
+
+    public function test_assessment_setting_resources_follow_selected_settings_menu(): void
+    {
+        $staff = $this->createUser('assessment-settings-only', 'tu');
+        $staff->givePermissionTo('penilaian.period.manage');
+        $staff->forceFill([
+            'module_access_levels' => ['penilaian' => AdminModuleAccess::MANAGE],
+            'allowed_navigation_items' => [
+                AssessmentDashboard::class,
+                User::EXPLICIT_NAVIGATION_MARKER,
+            ],
+        ])->save();
+
+        $this->actingAs($staff);
+
+        $this->assertTrue(AssessmentDashboard::canAccess());
+        $this->assertTrue(AssessmentPeriodResource::canAccess());
+
+        $staff->forceFill([
+            'allowed_navigation_items' => [
+                AsasHub::class,
+                User::EXPLICIT_NAVIGATION_MARKER,
+            ],
+        ])->save();
+
+        $this->assertFalse(AssessmentPeriodResource::canAccess());
+    }
+
+    public function test_internal_assessment_pages_follow_selected_assessment_type_hub(): void
+    {
+        $teacher = $this->createUser('assessment-asas-only', 'guru_mapel');
+        $teacher->givePermissionTo('penilaian.input');
+        $teacher->forceFill([
+            'module_access_levels' => ['penilaian' => AdminModuleAccess::VIEW],
+            'allowed_navigation_items' => [
+                AsasHub::class,
+                User::EXPLICIT_NAVIGATION_MARKER,
+            ],
+        ])->save();
+
+        $this->actingAs($teacher);
+
+        $this->assertTrue(AsasHub::canAccess());
+        $this->assertTrue(AsasInputScores::canAccess());
+        $this->assertFalse(AstsHub::canAccess());
+        $this->assertFalse(AstsInputScores::canAccess());
     }
 
     public function test_feature_flag_module_menu_access_and_template_route_authorization(): void

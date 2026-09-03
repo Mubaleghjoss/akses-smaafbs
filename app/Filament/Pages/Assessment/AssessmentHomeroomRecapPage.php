@@ -144,6 +144,7 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
         return config('assessment.enabled')
             && Schema::hasTable('assessment_periods')
             && $user instanceof User
+            && $user->canAccessNavigationItem(static::navigationAccessClass())
             && (
                 $user->hasFullAdminAccess()
                 || (
@@ -480,8 +481,8 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
     }
 
     /**
-     * @param array<int, int> $studentIds
-     * @param array{header:string,bulk_label:string,input:string,max:int} $fieldDefinition
+     * @param  array<int, int>  $studentIds
+     * @param  array{header:string,bulk_label:string,input:string,max:int}  $fieldDefinition
      */
     protected function applyBulkStructuredItem(array $studentIds, array $fieldDefinition): void
     {

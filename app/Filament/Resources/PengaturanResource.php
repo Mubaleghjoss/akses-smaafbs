@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Concerns\HasModulePermissions;
 use App\Filament\Resources\PengaturanResource\Pages;
 use App\Models\Pengaturan;
 use Filament\Resources\Resource;
@@ -9,7 +10,11 @@ use Illuminate\Support\Facades\Schema as SchemaFacade;
 
 class PengaturanResource extends Resource
 {
+    use HasModulePermissions;
+
     protected static ?string $model = Pengaturan::class;
+
+    protected static ?string $permissionPrefix = 'pengaturan_situs';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-swatch';
 
@@ -28,7 +33,12 @@ class PengaturanResource extends Resource
 
     public static function canAccess(): bool
     {
-        return SchemaFacade::hasTable('pengaturan') && parent::canAccess();
+        return SchemaFacade::hasTable('pengaturan') && static::userCanModule('view');
+    }
+
+    public static function canViewAny(): bool
+    {
+        return SchemaFacade::hasTable('pengaturan') && static::userCanModule('view');
     }
 
     public static function getPages(): array

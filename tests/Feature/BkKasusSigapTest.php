@@ -2,10 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Bk\RekapSigapPage;
 use App\Filament\Resources\BkKasusResource;
 use App\Filament\Resources\BkKasusResource\Pages\CreateBkKasus;
 use App\Filament\Resources\BkKasusResource\Pages\EditBkKasus;
+use App\Filament\Resources\CatatanBkResource;
+use App\Filament\Resources\PerpustakaanBukuResource;
+use App\Filament\Resources\PerpustakaanLiterasiMaterialResource;
+use App\Filament\Resources\UserResource;
 use App\Models\BkKasus;
 use App\Models\DataSiswa;
 use App\Models\Rombel;
@@ -14,6 +19,7 @@ use App\Support\Admin\AdminModuleAccess;
 use App\Support\Bk\BkKasusSiswaSync;
 use App\Support\Bk\BkSigapRecap;
 use Filament\Facades\Filament;
+use Filament\Pages\Dashboard;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -80,6 +86,118 @@ class BkKasusSigapTest extends TestCase
 
         $this->assertTrue(BkKasusResource::canViewAny());
         $this->assertFalse(BkKasusResource::canCreate());
+    }
+
+    public function test_walas_bisa_dibatasi_hanya_ke_submenu_laporan_sigap(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Walas Lapor SIGAP Saja',
+            'username' => 'walas-lapor-sigap-saja',
+            'password' => bcrypt('password'),
+            'module_access_levels' => [
+                'bk_kasus' => AdminModuleAccess::MANAGE,
+                'catatan_bk' => AdminModuleAccess::MANAGE,
+            ],
+            'allowed_navigation_items' => [
+                Dashboard::class,
+                BkKasusResource::class,
+            ],
+        ]);
+        $user->assignRole('guru');
+
+        $this->actingAs($user);
+
+        $this->assertTrue(BkKasusResource::canViewAny());
+        $this->assertTrue(BkKasusResource::canCreate());
+        $this->assertFalse(RekapSigapPage::canAccess());
+        $this->assertFalse(CatatanBkResource::canViewAny());
+
+        $options = AdminModuleAccess::navigationItemOptions();
+        $this->assertArrayNotHasKey(Dashboard::class, $options);
+        $this->assertGreaterThanOrEqual(52, count($options));
+        $this->assertSame('Manajemen Sekolah -> Penilaian -> Pengaturan Penilaian', $options[AssessmentDashboard::class]);
+        $this->assertSame('Manajemen Sekolah -> BK -> Laporan SIGAP', $options[BkKasusResource::class]);
+        $this->assertSame('Manajemen Sekolah -> BK -> Rekap SIGAP', $options[RekapSigapPage::class]);
+        $this->assertSame('Manajemen Sekolah -> BK -> Catatan BK', $options[CatatanBkResource::class]);
+    }
+
+    public function test_pilihan_submenu_granular_disimpan_tanpa_membuka_seluruh_modul(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Walas Simpan SIGAP Saja',
+            'username' => 'walas-simpan-sigap-saja',
+            'password' => bcrypt('password'),
+        ]);
+        $user->assignRole('guru');
+
+        UserResource::syncScopedModuleConfiguration($user, [
+            'roles' => $user->roles->pluck('id')->all(),
+            'module_access_levels' => [
+                'bk_kasus' => AdminModuleAccess::MANAGE,
+                'catatan_bk' => AdminModuleAccess::MANAGE,
+            ],
+            'allowed_navigation_items' => [
+                Dashboard::class,
+                BkKasusResource::class,
+            ],
+        ]);
+
+        $user->refresh();
+
+        $this->assertTrue($user->hasExplicitNavigationSelection());
+        $this->assertSame([
+            Dashboard::class,
+            BkKasusResource::class,
+        ], $user->resolvedNavigationItems());
+        $this->assertTrue($user->canAccessNavigationItem(BkKasusResource::class));
+        $this->assertFalse($user->canAccessNavigationItem(RekapSigapPage::class));
+    }
+
+    public function test_submenu_perpustakaan_yang_tidak_dipilih_ditolak(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Petugas Literasi Terbatas',
+            'username' => 'literasi-terbatas',
+            'password' => bcrypt('password'),
+            'module_access_levels' => ['perpustakaan_literasi' => AdminModuleAccess::MANAGE],
+            'allowed_navigation_items' => [
+                PerpustakaanLiterasiMaterialResource::class,
+                User::EXPLICIT_NAVIGATION_MARKER,
+            ],
+        ]);
+        $user->assignRole('guru');
+
+        $this->actingAs($user);
+
+        $this->assertTrue($user->canAccessNavigationItem(PerpustakaanLiterasiMaterialResource::class));
+        $this->assertFalse(PerpustakaanBukuResource::canViewAny());
+    }
+
+    public function test_pilihan_granular_tetap_eksplisit_tanpa_dashboard(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Walas Tanpa Dashboard',
+            'username' => 'walas-tanpa-dashboard',
+            'password' => bcrypt('password'),
+        ]);
+        $user->assignRole('guru');
+
+        UserResource::syncScopedModuleConfiguration($user, [
+            'roles' => $user->roles->pluck('id')->all(),
+            'module_access_levels' => [
+                'bk_kasus' => AdminModuleAccess::MANAGE,
+                'catatan_bk' => AdminModuleAccess::MANAGE,
+            ],
+            'allowed_navigation_items' => [BkKasusResource::class],
+            'navigation_selection_explicit' => true,
+        ]);
+
+        $user->refresh();
+
+        $this->assertTrue($user->hasExplicitNavigationSelection());
+        $this->assertSame([BkKasusResource::class], $user->resolvedNavigationItems());
+        $this->assertFalse($user->canAccessNavigationItem(RekapSigapPage::class));
+        $this->assertFalse($user->canAccessNavigationItem(CatatanBkResource::class));
     }
 
     public function test_payload_sigap_tidak_bisa_menyisipkan_siswa_nonaktif(): void

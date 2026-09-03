@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Concerns\HasModulePermissions;
 use App\Filament\Resources\AdminAccessChangeLogResource\Pages;
 use App\Models\AdminAccessChangeLog;
 use App\Support\Admin\AdminAccessChangeLogSupport;
@@ -17,7 +18,11 @@ use Illuminate\Database\Eloquent\Builder;
 
 class AdminAccessChangeLogResource extends Resource
 {
+    use HasModulePermissions;
+
     protected static ?string $model = AdminAccessChangeLog::class;
+
+    protected static ?string $permissionPrefix = 'riwayat_akses_divisi';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-clock';
 
@@ -137,7 +142,7 @@ class AdminAccessChangeLogResource extends Resource
 
     public static function canViewAny(): bool
     {
-        return auth()->user()?->hasFullAdminAccess() ?? false;
+        return static::userCanModule('view');
     }
 
     public static function canCreate(): bool

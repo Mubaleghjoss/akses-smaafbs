@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Exports\WifiAccountImportTemplateExport;
+use App\Filament\Resources\WifiAccountResource;
+use App\Filament\Resources\WifiGuruResource;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Response;
@@ -18,8 +20,8 @@ class WifiAccountImportTemplateController extends Controller
         abort_unless($user instanceof User, Response::HTTP_FORBIDDEN);
         abort_unless(
             $user->hasFullAdminAccess()
-            || in_array(\App\Filament\Resources\WifiAccountResource::class, (array) ($user->allowed_navigation_items ?? []), true)
-            || in_array(\App\Filament\Resources\WifiGuruResource::class, (array) ($user->allowed_navigation_items ?? []), true),
+            || WifiAccountResource::canViewAny()
+            || WifiGuruResource::canViewAny(),
             Response::HTTP_FORBIDDEN
         );
 

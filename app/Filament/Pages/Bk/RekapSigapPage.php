@@ -24,7 +24,7 @@ class RekapSigapPage extends Page
 
     protected static ?int $navigationSort = 35;
 
-    protected static ?string $permissionPrefix = 'bk_kasus';
+    protected static ?string $permissionPrefix = 'bk_rekap_sigap';
 
     protected string $view = 'filament.pages.bk.rekap-sigap';
 
@@ -184,6 +184,10 @@ class RekapSigapPage extends Page
 
         if ($user->hasFullAdminAccess()) {
             return true;
+        }
+
+        if (! $user->canAccessNavigationItem(static::class)) {
+            return false;
         }
 
         $prefix = static::$permissionPrefix;

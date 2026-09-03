@@ -16,7 +16,24 @@ class AdminNavigationSupport
 
     public static function availableNavigationItemOptions(?Panel $panel = null): array
     {
-        return self::definitions($panel)
+        return self::optionsForDefinitions(self::definitions($panel));
+    }
+
+    /** @param array<int, class-string> $classes */
+    public static function optionsForClasses(array $classes): array
+    {
+        return self::optionsForDefinitions(
+            collect($classes)
+                ->filter(fn (string $class): bool => class_exists($class))
+                ->unique()
+                ->map(fn (string $class): array => self::definitionForClass($class))
+                ->values(),
+        );
+    }
+
+    protected static function optionsForDefinitions(Collection $definitions): array
+    {
+        return $definitions
             ->sortBy(fn (array $definition): string => $definition['group_label'].' '.($definition['parent'] ?? '').' '.$definition['label'])
             ->mapWithKeys(fn (array $definition): array => [
                 $definition['class'] => collect([

@@ -72,6 +72,10 @@ trait HasModulePermissions
             return true;
         }
 
+        if (! $user->canAccessNavigationItem(static::class)) {
+            return false;
+        }
+
         if (blank($prefix)) {
             return false;
         }

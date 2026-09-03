@@ -2,11 +2,11 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Concerns\HasModulePermissions;
 use App\Filament\Resources\BelajarIdAccountResource\Pages;
 use App\Models\AccountCategory;
 use App\Models\BelajarIdAccount;
 use App\Support\BelajarId\BelajarIdWorkbookImporter;
-use App\Support\Hotspot\HotspotAccessible;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Notifications\Notification;
@@ -20,7 +20,9 @@ use Throwable;
 
 class BelajarIdAccountResource extends Resource
 {
-    use HotspotAccessible;
+    use HasModulePermissions;
+
+    protected static ?string $permissionPrefix = 'akun_belajar_id_siswa';
 
     protected static ?string $model = BelajarIdAccount::class;
 
@@ -40,26 +42,6 @@ class BelajarIdAccountResource extends Resource
     public static function accountRole(): string
     {
         return static::$accountRole;
-    }
-
-    public static function canViewAny(): bool
-    {
-        return self::hotspotAccessGranted();
-    }
-
-    public static function canCreate(): bool
-    {
-        return self::hotspotAccessGranted();
-    }
-
-    public static function canEdit($record): bool
-    {
-        return self::hotspotAccessGranted();
-    }
-
-    public static function canDelete($record): bool
-    {
-        return self::hotspotAccessGranted();
     }
 
     public static function getEloquentQuery(): Builder
@@ -155,7 +137,7 @@ class BelajarIdAccountResource extends Resource
                     ->color('primary')
                     ->modalHeading('Import Akun Belajar.id')
                     ->modalSubmitActionLabel('Proses Import')
-                    ->visible(fn (): bool => self::hotspotAccessGranted())
+                    ->visible(fn (): bool => static::canCreate())
                     ->form([
                         Forms\Components\FileUpload::make('berkas')
                             ->label('File Excel (kolom: NAMA, STATUS, EMAIL, PASSWORD)')

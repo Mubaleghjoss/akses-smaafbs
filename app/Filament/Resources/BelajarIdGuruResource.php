@@ -10,6 +10,8 @@ use App\Filament\Resources\BelajarIdGuruResource\Pages;
  */
 class BelajarIdGuruResource extends BelajarIdAccountResource
 {
+    protected static ?string $permissionPrefix = 'akun_belajar_id_guru';
+
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-academic-cap';
 
     protected static ?string $navigationLabel = 'Data Akun Belajar.id';

@@ -2,9 +2,9 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Concerns\HasModulePermissions;
 use App\Filament\Resources\AccountCategoryResource\Pages;
 use App\Models\AccountCategory;
-use App\Support\Hotspot\HotspotAccessible;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Resources\Resource;
@@ -14,7 +14,9 @@ use Filament\Tables\Table;
 
 class AccountCategoryResource extends Resource
 {
-    use HotspotAccessible;
+    use HasModulePermissions;
+
+    protected static ?string $permissionPrefix = 'kategori_akun_guru';
 
     protected static ?string $model = AccountCategory::class;
 
@@ -27,26 +29,6 @@ class AccountCategoryResource extends Resource
     protected static ?string $modelLabel = 'Kategori Akun';
 
     protected static ?string $pluralModelLabel = 'Kategori Akun Guru';
-
-    public static function canViewAny(): bool
-    {
-        return self::hotspotAccessGranted();
-    }
-
-    public static function canCreate(): bool
-    {
-        return self::hotspotAccessGranted();
-    }
-
-    public static function canEdit($record): bool
-    {
-        return self::hotspotAccessGranted();
-    }
-
-    public static function canDelete($record): bool
-    {
-        return self::hotspotAccessGranted();
-    }
 
     public static function form(Schema $schema): Schema
     {

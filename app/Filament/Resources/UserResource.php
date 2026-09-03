@@ -20,6 +20,7 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Forms;
 use Filament\Notifications\Notification;
+use Filament\Pages\Dashboard;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Components\Grid;
@@ -371,8 +372,8 @@ class UserResource extends Resource
 
     protected static function advancedAccessSection(): Section
     {
-        return Section::make('Lanjutan · Menu Khusus')
-            ->description('Opsional. Gunakan hanya jika perlu menampilkan halaman khusus non-CRUD di sidebar. Untuk modul CRUD, gunakan matrix akses modul di atas.')
+        return Section::make('Menu & Submenu per Akun')
+            ->description('Pilih seluruh menu dan submenu bisnis yang boleh tampil dan dibuka oleh akun ini. Kemampuan Lihat atau Kelola tetap mengikuti matrix akses modul di atas.')
             ->compact()
             ->collapsible()
             ->collapsed()
@@ -380,26 +381,24 @@ class UserResource extends Resource
                 Forms\Components\Placeholder::make('sidebar_preview')
                     ->label('Ringkasan Sidebar')
                     ->content(function (Get $get): string {
-                        $moduleAccessLevels = AdminModuleAccess::normalizeLevels($get('module_access_levels') ?? static::defaultModuleAccessLevelsSnapshot());
-                        $advancedItems = collect($get('allowed_navigation_items') ?? [])
+                        $selectedItems = collect($get('allowed_navigation_items') ?? [])
                             ->map(fn ($item): string => trim((string) $item))
                             ->filter()
                             ->all();
-
-                        $groups = AdminModuleAccess::deriveNavigationGroups(
-                            AdminModuleAccess::deriveNavigationItems($moduleAccessLevels, $advancedItems),
-                        );
+                        $groups = AdminModuleAccess::deriveNavigationGroups($selectedItems);
 
                         return $groups === []
                             ? 'Sidebar akan kosong selain dashboard.'
                             : 'Sidebar akan menampilkan grup: '.collect($groups)->implode(', ');
                     })
                     ->columnSpanFull(),
+                Forms\Components\Hidden::make('navigation_selection_explicit')
+                    ->default(true),
                 Forms\Components\CheckboxList::make('allowed_navigation_items')
-                    ->label('Menu Khusus Non-CRUD')
-                    ->options(fn (): array => static::advancedNavigationItemOptionsSnapshot())
+                    ->label('Menu & Submenu yang Ditampilkan')
+                    ->options(fn (): array => static::navigationItemOptionsSnapshot())
                     ->columns(['default' => 1, 'md' => 2])
-                    ->helperText('Biarkan kosong bila sidebar cukup mengikuti matrix akses modul.')
+                    ->helperText('Pilih setiap menu atau submenu yang boleh tampil dan dibuka akun. Level akses modul di atas tetap menentukan Lihat atau Kelola.')
                     ->columnSpanFull(),
             ]);
     }
@@ -433,6 +432,12 @@ class UserResource extends Resource
     protected static function advancedNavigationItemOptionsSnapshot(): array
     {
         return static::$advancedNavigationItemOptionsCache ??= AdminModuleAccess::advancedNavigationItemOptions();
+    }
+
+    /** @return array<string, string> */
+    protected static function navigationItemOptionsSnapshot(): array
+    {
+        return AdminModuleAccess::navigationItemOptions();
     }
 
     public static function table(Table $table): Table
@@ -1225,12 +1230,26 @@ class UserResource extends Resource
             $baseLevels,
             $state['module_access_levels'] ?? [],
         ));
-        $advancedItems = collect($state['allowed_navigation_items'] ?? [])
+        $selectableNavigationClasses = [
+            ...array_keys(AdminModuleAccess::navigationItemOptions()),
+            Dashboard::class,
+        ];
+        $selectedItems = collect($state['allowed_navigation_items'] ?? [])
             ->map(fn ($item): string => trim((string) $item))
             ->filter()
-            ->intersect(array_keys(AdminModuleAccess::advancedNavigationItemOptions()))
+            ->intersect($selectableNavigationClasses)
             ->values()
             ->all();
+
+        $explicitSelection = (bool) ($state['navigation_selection_explicit'] ?? false);
+
+        if (! $explicitSelection && ! in_array(Dashboard::class, $selectedItems, true)) {
+            $selectedItems = AdminModuleAccess::deriveNavigationItems($managedLevels, $selectedItems);
+        }
+
+        $storedItems = $explicitSelection
+            ? [...$selectedItems, User::EXPLICIT_NAVIGATION_MARKER]
+            : $selectedItems;
 
         $remainingPermissionNames = $user->permissions()
             ->pluck('name')
@@ -1240,9 +1259,7 @@ class UserResource extends Resource
 
         $user->syncPermissions($remainingPermissionNames);
 
-        $resolvedItems = $roleNames->contains('admin')
-            ? []
-            : AdminModuleAccess::deriveNavigationItems($managedLevels, $advancedItems);
+        $resolvedItems = $roleNames->contains('admin') ? [] : $selectedItems;
         $resolvedGroups = $roleNames->contains('admin')
             ? []
             : AdminModuleAccess::deriveNavigationGroups($resolvedItems);
@@ -1250,7 +1267,7 @@ class UserResource extends Resource
         $user->forceFill([
             'module_access_levels' => $managedLevels,
             'allowed_navigation_groups' => $resolvedGroups,
-            'allowed_navigation_items' => $advancedItems,
+            'allowed_navigation_items' => $roleNames->contains('admin') ? [] : $storedItems,
         ])->saveQuietly();
     }
 

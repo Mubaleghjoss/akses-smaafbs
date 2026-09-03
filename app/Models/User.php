@@ -7,6 +7,7 @@ use App\Support\Admin\Dashboard\DashboardCacheSupport;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasAvatar;
+use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -23,6 +24,8 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, HasRoles, Notifiable;
+
+    public const EXPLICIT_NAVIGATION_MARKER = '__explicit_navigation_v1__';
 
     public const BOARDING_PAMONG_ROLES = [
         'pamong_putra',
@@ -356,16 +359,36 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
             return $this->resolvedNavigationItemsCache = [];
         }
 
-        $advancedItems = collect($this->allowed_navigation_items ?? [])
+        $selectedItems = collect($this->allowed_navigation_items ?? [])
             ->map(fn ($class): string => trim((string) $class))
-            ->filter()
+            ->filter(fn (string $class): bool => filled($class) && $class !== self::EXPLICIT_NAVIGATION_MARKER)
             ->values()
             ->all();
 
+        if ($this->hasExplicitNavigationSelection()) {
+            return $this->resolvedNavigationItemsCache = $selectedItems;
+        }
+
         return $this->resolvedNavigationItemsCache = AdminModuleAccess::deriveNavigationItems(
             AdminModuleAccess::effectiveLevels($this),
-            $advancedItems,
+            $selectedItems,
         );
+    }
+
+    public function hasExplicitNavigationSelection(): bool
+    {
+        return collect($this->allowed_navigation_items ?? [])->contains(
+            fn ($item): bool => in_array($item, [self::EXPLICIT_NAVIGATION_MARKER, Dashboard::class], true),
+        );
+    }
+
+    public function canAccessNavigationItem(string $class): bool
+    {
+        if ($this->hasFullAdminAccess() || ! $this->hasExplicitNavigationSelection()) {
+            return true;
+        }
+
+        return in_array($class, (array) ($this->allowed_navigation_items ?? []), true);
     }
 
     public function explicitModuleAccessLevels(): array
@@ -467,4 +490,3 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
             ->all();
     }
 }
-

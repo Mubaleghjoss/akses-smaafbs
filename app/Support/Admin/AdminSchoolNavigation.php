@@ -155,6 +155,16 @@ class AdminSchoolNavigation
             || array_key_exists($class, self::CLASS_GROUP_MAP);
     }
 
+    /** @return array<int, class-string> */
+    public static function classifiedClasses(): array
+    {
+        return collect(array_keys(self::CLASS_PARENT_MAP))
+            ->merge(array_keys(self::CLASS_GROUP_MAP))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     /**
      * Halaman Penilaian yang MUNCUL di sidebar.
      *

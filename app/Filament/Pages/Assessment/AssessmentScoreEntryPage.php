@@ -77,6 +77,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
         return config('assessment.enabled')
             && Schema::hasTable('assessment_periods')
             && $user instanceof User
+            && $user->canAccessNavigationItem(static::navigationAccessClass())
             && (
                 $user->hasFullAdminAccess()
                 || (

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Exports\BelajarIdImportTemplateExport;
+use App\Filament\Resources\BelajarIdAccountResource;
+use App\Filament\Resources\BelajarIdGuruResource;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Response;
@@ -18,8 +20,8 @@ class BelajarIdImportTemplateController extends Controller
         abort_unless($user instanceof User, Response::HTTP_FORBIDDEN);
         abort_unless(
             $user->hasFullAdminAccess()
-            || in_array(\App\Filament\Resources\BelajarIdAccountResource::class, (array) ($user->allowed_navigation_items ?? []), true)
-            || in_array(\App\Filament\Resources\BelajarIdGuruResource::class, (array) ($user->allowed_navigation_items ?? []), true),
+            || BelajarIdAccountResource::canViewAny()
+            || BelajarIdGuruResource::canViewAny(),
             Response::HTTP_FORBIDDEN
         );
 

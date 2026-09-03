@@ -10,6 +10,8 @@ use App\Filament\Resources\WifiGuruResource\Pages;
  */
 class WifiGuruResource extends WifiAccountResource
 {
+    protected static ?string $permissionPrefix = 'akun_wifi_guru';
+
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-wifi';
 
     protected static ?string $navigationLabel = 'Data Akun WiFi';
