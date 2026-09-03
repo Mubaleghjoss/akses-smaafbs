@@ -9,6 +9,7 @@ use App\Filament\Resources\BkKasusResource\Pages;
 use App\Models\BkKasus;
 use App\Models\DataSiswa;
 use App\Models\Rombel;
+use App\Models\User;
 use App\Support\Bk\BkKasusSiswaSync;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
@@ -56,6 +57,49 @@ class BkKasusResource extends Resource
         return SchemaFacade::hasTable('data_siswa')
             && SchemaFacade::hasTable('bk_kasus')
             && SchemaFacade::hasTable('bk_kasus_siswa');
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+        $user = auth()->user();
+
+        if ($user instanceof User && $user->usesGuruPersonalScope()) {
+            $query->where('created_by', $user->getKey());
+        }
+
+        return $query;
+    }
+
+    public static function canView($record): bool
+    {
+        return static::userCanModule('view') && static::userCanAccessRecord($record);
+    }
+
+    public static function canEdit($record): bool
+    {
+        return static::userCanModule('manage') && static::userCanAccessRecord($record);
+    }
+
+    public static function canDelete($record): bool
+    {
+        return static::userCanModule('manage') && static::userCanAccessRecord($record);
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        $user = auth()->user();
+
+        return static::userCanModule('manage')
+            && ! ($user instanceof User && $user->usesGuruPersonalScope());
+    }
+
+    protected static function userCanAccessRecord($record): bool
+    {
+        $user = auth()->user();
+
+        return ! ($user instanceof User && $user->usesGuruPersonalScope())
+            || (int) $record->created_by === (int) $user->getKey();
     }
 
     public static function form(Schema $schema): Schema

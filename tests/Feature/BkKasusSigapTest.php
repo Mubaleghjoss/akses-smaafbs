@@ -70,6 +70,59 @@ class BkKasusSigapTest extends TestCase
             ->assertOk();
     }
 
+    public function test_guru_hanya_melihat_laporan_sigap_yang_dibuat_akunnya_sedangkan_admin_melihat_semua(): void
+    {
+        $pelapor = User::query()->create([
+            'name' => 'Guru Pelapor SIGAP',
+            'username' => 'guru-pelapor-sigap',
+            'password' => bcrypt('password'),
+            'module_access_levels' => ['bk_kasus' => AdminModuleAccess::MANAGE],
+        ]);
+        $pelapor->assignRole('guru');
+
+        $guruLain = User::query()->create([
+            'name' => 'Guru Pelapor Lain',
+            'username' => 'guru-pelapor-lain',
+            'password' => bcrypt('password'),
+            'module_access_levels' => ['bk_kasus' => AdminModuleAccess::MANAGE],
+        ]);
+        $guruLain->assignRole('guru');
+
+        $laporanMilikPelapor = BkKasus::query()->create([
+            'tanggal_kasus' => '2026-09-03',
+            'judul_kasus' => 'Laporan milik pelapor',
+            'keterangan_kasus' => 'Hanya boleh terlihat oleh akun pembuatnya.',
+            'status_tindak_lanjut' => BkKasus::STATUS_BELUM,
+            'created_by' => $pelapor->id,
+        ]);
+        $laporanGuruLain = BkKasus::query()->create([
+            'tanggal_kasus' => '2026-09-03',
+            'judul_kasus' => 'Laporan milik guru lain',
+            'keterangan_kasus' => 'Tidak boleh terlihat oleh pelapor pertama.',
+            'status_tindak_lanjut' => BkKasus::STATUS_BELUM,
+            'created_by' => $guruLain->id,
+        ]);
+
+        $this->actingAs($pelapor);
+
+        $this->assertSame([
+            $laporanMilikPelapor->id,
+        ], BkKasusResource::getEloquentQuery()->orderBy('id')->pluck('id')->all());
+        $this->assertTrue(BkKasusResource::canView($laporanMilikPelapor));
+        $this->assertFalse(BkKasusResource::canView($laporanGuruLain));
+        $this->assertFalse(BkKasusResource::canEdit($laporanGuruLain));
+        $this->assertFalse(BkKasusResource::canDelete($laporanGuruLain));
+        $this->assertFalse(BkKasusResource::canDeleteAny());
+
+        $admin = $this->makeAdmin();
+        $this->actingAs($admin);
+
+        $this->assertEqualsCanonicalizing([
+            $laporanMilikPelapor->id,
+            $laporanGuruLain->id,
+        ], BkKasusResource::getEloquentQuery()->pluck('id')->all());
+    }
+
     public function test_akun_lihat_saja_tidak_bisa_mengisi_laporan_sigap(): void
     {
         $user = User::query()->create([
