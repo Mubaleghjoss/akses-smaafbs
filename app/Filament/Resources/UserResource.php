@@ -94,13 +94,6 @@ class UserResource extends Resource
 
     protected static ?string $permissionPrefix = 'users';
 
-    protected const GURU_COPYABLE_PERMISSION_PREFIXES = [
-        'guru_tendik',
-        'berkas_guru',
-        'data_siswa',
-        'prestasi',
-    ];
-
     public static function form(Schema $schema): Schema
     {
         return $schema
@@ -1201,12 +1194,11 @@ class UserResource extends Resource
 
     public static function extractGuruAccessState(User $user): array
     {
-        $moduleAccessLevels = collect(AdminModuleAccess::effectiveLevels($user))
-            ->filter(fn (string $level, string $prefix): bool => in_array($prefix, static::GURU_COPYABLE_PERMISSION_PREFIXES, true))
-            ->all();
-
         return [
-            'module_access_levels' => $moduleAccessLevels,
+            'roles' => static::roleIdsForUser($user),
+            'module_access_levels' => AdminModuleAccess::effectiveLevels($user),
+            'allowed_navigation_items' => $user->allowed_navigation_items ?? [],
+            'navigation_selection_explicit' => $user->hasExplicitNavigationSelection(),
         ];
     }
 
@@ -1231,29 +1223,8 @@ class UserResource extends Resource
         }
 
         DB::transaction(function () use ($source, $target): void {
-            $state = static::extractGuruAccessState($source);
-            $mergedLevels = AdminModuleAccess::normalizeLevels(array_merge(
-                AdminModuleAccess::effectiveLevels($target),
-                $state['module_access_levels'],
-            ));
-
-            static::syncScopedModuleConfiguration($target, [
-                'roles' => static::roleIdsForUser($target),
-                'module_access_levels' => $mergedLevels,
-                'allowed_navigation_items' => $target->allowed_navigation_items ?? [],
-            ]);
+            static::syncScopedModuleConfiguration($target, static::extractGuruAccessState($source));
         });
-    }
-
-    protected static function isGuruCopyablePermissionName(string $permissionName): bool
-    {
-        foreach (static::GURU_COPYABLE_PERMISSION_PREFIXES as $prefix) {
-            if (str_starts_with($permissionName, $prefix.'.')) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     public static function syncScopedModuleConfiguration(User $user, array $state): void

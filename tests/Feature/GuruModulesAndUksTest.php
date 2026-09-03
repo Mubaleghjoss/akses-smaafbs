@@ -7,6 +7,7 @@ use App\Exports\GuruTendikImportTemplateExport;
 use App\Exports\UksRecordExport;
 use App\Exports\UksRecordImportTemplateExport;
 use App\Filament\Resources\BerkasGuruResource;
+use App\Filament\Resources\BkKasusResource;
 use App\Filament\Resources\DataSiswaResource;
 use App\Filament\Resources\DataSiswaResource\Pages\ManageDataSiswas;
 use App\Filament\Resources\GuruTendikResource;
@@ -342,7 +343,15 @@ class GuruModulesAndUksTest extends TestCase
                 'guru_tendik' => AdminModuleAccess::VIEW,
                 'berkas_guru' => AdminModuleAccess::VIEW,
                 'data_siswa' => AdminModuleAccess::VIEW,
+                'bk_kasus' => AdminModuleAccess::MANAGE,
             ],
+            'allowed_navigation_items' => [
+                GuruTendikResource::class,
+                BerkasGuruResource::class,
+                DataSiswaResource::class,
+                BkKasusResource::class,
+            ],
+            'navigation_selection_explicit' => true,
         ]);
 
         $targetUser = User::query()->create([
@@ -364,9 +373,12 @@ class GuruModulesAndUksTest extends TestCase
         $this->assertSame($guruTarget->id, $targetUser->guru_tendik_id);
         $this->assertSame(['XI.I / 2025-2026'], $targetUser->guruWalasScopes());
         $this->assertTrue($targetUser->canViewModule('data_siswa'));
-        $this->assertTrue($targetUser->canViewModule('users'));
+        $this->assertTrue($targetUser->canManageModule('bk_kasus'));
+        $this->assertFalse($targetUser->canViewModule('users'));
         $this->assertContains('Manajemen Sekolah', $targetUser->resolvedNavigationGroups());
         $this->assertContains(DataSiswaResource::class, $targetUser->resolvedNavigationItems());
+        $this->assertContains(BkKasusResource::class, $targetUser->resolvedNavigationItems());
+        $this->assertTrue($targetUser->hasExplicitNavigationSelection());
     }
 
     public function test_view_only_module_access_blocks_destructive_actions(): void
