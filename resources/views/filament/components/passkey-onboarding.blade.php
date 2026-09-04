@@ -1,8 +1,12 @@
 @php
+    use Illuminate\Support\Facades\Schema;
+
+    $user = auth()->user();
     $showPasskeyOnboarding = config('webauthn.enabled')
         && request()->routeIs('filament.admin.pages.dashboard')
-        && auth()->check()
-        && ! auth()->user()->webAuthnCredentials()->whereNull('revoked_at')->whereNotNull('credential_public_key')->whereNotNull('verified_at')->exists();
+        && $user
+        && Schema::hasTable('webauthn_credentials')
+        && ! $user->webAuthnCredentials()->whereNull('revoked_at')->whereNotNull('credential_public_key')->whereNotNull('verified_at')->exists();
 @endphp
 
 @if ($showPasskeyOnboarding)
