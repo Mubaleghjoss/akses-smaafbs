@@ -10,17 +10,20 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
 use Spatie\Permission\Models\Role;
 use Tests\Feature\Concerns\BootstrapsAdminFeatureTables;
+use Tests\Feature\Concerns\BootstrapsAssessmentTables;
 use Tests\TestCase;
 
 class AdminResponsiveLimiterCoexistenceTest extends TestCase
 {
     use BootstrapsAdminFeatureTables;
+    use BootstrapsAssessmentTables;
 
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->bootstrapAdminFeatureTables();
+        $this->bootstrapAssessmentTables();
     }
 
     public function test_endpoint_protection_matrix_explicitly_declares_admin_async_exemption(): void
