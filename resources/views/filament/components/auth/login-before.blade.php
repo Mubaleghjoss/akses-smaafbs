@@ -6,28 +6,29 @@
     hidden
 >
     <div class="admin-login-install__body">
+        <div class="admin-login-install__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="4" y="3" width="16" height="18" rx="2.5" />
+                <path d="M9 7h6M10 17h4" />
+                <path d="M12 10v4m0 0 2-2m-2 2-2-2" />
+            </svg>
+        </div>
         <div class="admin-login-install__content">
+            <strong>Gunakan aplikasi SMA AFBS</strong>
             <div class="admin-login-install__text">
-                Install aplikasi admin di perangkat ini untuk akses yang lebih cepat.
+                Install untuk akses admin yang lebih cepat dan nyaman.
             </div>
         </div>
 
         <div class="admin-login-install__actions">
-            <button
-                type="button"
-                data-pwa-install-trigger
-                class="admin-login-install__button"
-            >
-                Install App
+            <button type="button" data-pwa-install-trigger class="admin-login-install__button">
+                <span>Install App</span>
             </button>
-            <button
-                type="button"
-                data-pwa-install-close
-                class="admin-login-install__close"
-                aria-label="Tutup"
-                onclick="if (window.adminLoginPwaInstall?.dismiss) { window.adminLoginPwaInstall.dismiss(this); } else { this.closest('[data-pwa-install-root]')?.classList.add('hidden'); this.closest('[data-pwa-install-root]')?.setAttribute('hidden', 'hidden'); try { window.localStorage.setItem('admin-login-install-dismissed-v3', '1'); } catch (_) {} }"
-            >
-                Tutup
+            <button type="button" data-pwa-install-close class="admin-login-install__close" aria-label="Tutup">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="m5 5 10 10M15 5 5 15" />
+                </svg>
+                <span class="sr-only">Tutup</span>
             </button>
         </div>
     </div>
@@ -73,9 +74,8 @@
                 } catch (_) {}
             };
 
-            window.adminLoginPwaInstall = {
-                dismiss,
-            };
+            window.adminLoginPwaInstall = { dismiss };
+            root.querySelector('[data-pwa-install-close]')?.addEventListener('click', dismiss);
 
             if ('serviceWorker' in navigator && window.isSecureContext) {
                 window.addEventListener('load', () => {

@@ -316,6 +316,34 @@ html.dark .fi-panel-admin,
     color: #ffe4e6 !important;
 }
 
+.fi-panel-admin .admin-login-install {
+    display: none;
+    width: 100%;
+    margin-bottom: 1rem;
+    border: 1px solid color-mix(in srgb, var(--auth-accent) 24%, var(--auth-card-border));
+    border-radius: 1rem;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--auth-accent) 9%, var(--auth-card)), var(--auth-card));
+    box-shadow: 0 16px 32px -28px rgba(2, 6, 23, 0.8);
+    color: var(--auth-ink);
+    overflow: hidden;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.fi-panel-admin .admin-login-install:not([hidden]) { display: block; }
+.fi-panel-admin .admin-login-install__body { display: grid; grid-template-columns: 2.35rem minmax(0, 1fr) auto; align-items: center; gap: 0.7rem; padding: 0.75rem; }
+.fi-panel-admin .admin-login-install__icon { display: grid; width: 2.35rem; height: 2.35rem; place-items: center; border-radius: 0.75rem; background: var(--auth-button); color: var(--auth-button-ink); }
+.fi-panel-admin .admin-login-install__icon svg { width: 1.3rem; height: 1.3rem; }
+.fi-panel-admin .admin-login-install__content { min-width: 0; }
+.fi-panel-admin .admin-login-install__content strong { display: block; color: var(--auth-ink); font-size: 0.8rem; font-weight: 850; }
+.fi-panel-admin .admin-login-install__text { margin-top: 0.15rem; color: var(--auth-muted); font-size: 0.72rem; line-height: 1.4; }
+.fi-panel-admin .admin-login-install__actions { display: flex; align-items: center; gap: 0.35rem; }
+.fi-panel-admin .admin-login-install__button { min-height: 2.1rem; padding: 0.45rem 0.8rem; border: 0; border-radius: 999px; background: var(--auth-accent); color: #fff; cursor: pointer; font-size: 0.72rem; font-weight: 800; white-space: nowrap; transition: filter 0.18s ease, transform 0.18s ease; }
+.fi-panel-admin .admin-login-install__button:hover, .fi-panel-admin .admin-login-install__button:focus-visible { filter: brightness(0.94); transform: translateY(-1px); }
+.fi-panel-admin .admin-login-install__button:focus-visible, .fi-panel-admin .admin-login-install__close:focus-visible { outline: 3px solid var(--auth-ring); outline-offset: 2px; }
+.fi-panel-admin .admin-login-install__close { display: grid; width: 1.7rem; height: 1.7rem; place-items: center; border: 0; background: transparent; color: var(--auth-muted); cursor: pointer; }
+.fi-panel-admin .admin-login-install__close:hover { color: var(--auth-ink); }
+.fi-panel-admin .admin-login-install__close svg { width: 0.9rem; height: 0.9rem; }
+.fi-panel-admin .admin-login-install.is-loading .admin-login-install__button { cursor: wait; opacity: 0.68; }
+
 @media (max-width: 640px) {
     .fi-panel-admin .fi-simple-layout {
         padding: 1rem;
@@ -333,4 +361,7 @@ html.dark .fi-panel-admin,
     .fi-panel-admin .admin-login-alert {
         padding: 0.75rem;
     }
+
+    .fi-panel-admin .admin-login-install__body { grid-template-columns: 2.2rem minmax(0, 1fr) auto; gap: 0.55rem; padding: 0.65rem; }
+    .fi-panel-admin .admin-login-install__button { padding-inline: 0.65rem; }
 }
