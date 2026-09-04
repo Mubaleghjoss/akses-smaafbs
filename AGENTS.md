@@ -1,50 +1,151 @@
-# Project Rules
+# SMA AFBS — Hermes + Pi Operating Rules
 
-## Literacy Numeracy
+## Project identity
+Project utama:
+`/home/hermesadmin/projects/akses-smaafbs`
 
-- Before changing the literacy/numeracy module, read `docs/literacy-numeracy/README.md` and the linked document for the subsystem being changed.
-- Keep submit queue work, question types, scoring, similarity analysis, and the school-network monitor compatible with the invariants documented there.
+Runtime staging:
+`/var/www/app-smaafbs-staging`
 
-## Penilaian ASTS–ASAS
+Production runtime:
+`/var/www/app-smaafbs-production`
 
-- Before changing the assessment module, read `docs/assessment/README.md` and the linked document for the subsystem being changed.
-- Preserve period-scoped data, immutable report snapshots, optimistic locking, private PDF storage, explicit action authorization, and Literasi-first queue priority.
-- Do not use `guru_mapel_label`, `guru_walas_scope`, legacy `kelas`, or `boarding_rapots` as an assessment transaction source.
-- Never expose report files through the public disk or webroot.
+Staging URL:
+`https://staging-app.smaafbs.sch.id`
 
-## Admin UI responsiveness
+## Coding workflow
+Untuk pekerjaan coding, debugging, refactor, UI, Laravel, test, atau analisis source:
+- Hermes bertindak sebagai orchestrator.
+- Gunakan Pi untuk pekerjaan coding.
+- Default pekerjaan coding normal: Pi level MENENGAH.
+- Gunakan level RINGAN untuk perubahan kecil.
+- Gunakan MENENGAH-BERAT untuk perubahan lintas banyak file.
+- Gunakan BERAT hanya untuk pekerjaan arsitektural atau kompleks.
+- Analisis sebelum mengubah file.
+- Kerjakan hanya di project workspace.
+- Jangan edit runtime staging atau production secara langsung.
 
-- Every admin feature in `/admin` must be usable on phone-width screens.
-- “Usable” means: no page-level horizontal overflow, primary actions remain reachable, forms remain readable, and CRUD modals stay inside the viewport.
-- New multi-column admin forms must default to one column on small screens and only expand at larger breakpoints.
-- New admin tables must define a mobile behavior: wrapped actions, scroll-safe content, and low-priority columns hidden, toggleable, or otherwise de-emphasized on narrow screens.
-- New custom Filament pages/widgets must prefer shared panel styling and shared conventions over one-off CSS hacks.
-- Any admin UI update is incomplete until mobile behavior has been checked for list, form, modal, and empty/loading states.
+## Source safety
+Sebelum mengubah kode:
+1. cek `git status`
+2. cek branch
+3. jangan menimpa perubahan lama yang belum jelas asalnya
+4. jika ada perubahan tak terduga, laporkan dulu
 
-## Admin dashboard chart behavior
+Jangan otomatis:
+- force push
+- reset --hard
+- git clean
+- menghapus branch
+- menghapus backup
 
-- Interactive admin charts must use a consistent click behavior: clicking a chart segment/bar should open the relevant admin list already filtered to the clicked data point.
-- If a chart does not have a meaningful filtered-list destination, keep it explicitly informational instead of forcing weak drilldown behavior.
-- Prefer stable, page-owned query parameters or page-owned state translation over fragile direct widget hacks when applying chart-driven filters.
-- Admin pages with multiple charts should provide a consistent shared control for showing/hiding diagram sections when the page density would otherwise feel noisy.
-- New dashboard/chart work is incomplete until chart clicks and filtered landing behavior have been manually verified in the target admin page.
+## Testing
+Setelah perubahan:
+- jalankan test yang paling relevan terlebih dahulu
+- jangan menganggap legacy test failure sebagai regresi baru
+- baseline-aware gate:
+  `~/bin/test-app-smaafbs-baseline`
 
-## Change policy
+Sebelum deploy staging wajib melewati:
+`~/bin/deploy-app-staging check`
 
-- Prefer shared Filament-compatible solutions first.
-- Do not edit vendor files to achieve responsiveness.
-- If a screen needs a special mobile treatment, keep it local and explain why the shared pattern was not enough.
+Jika muncul kegagalan baru di luar baseline:
+STOP dan laporkan.
 
-## Hotspot MikroTik (hasil-hermes integration)
+## Database safety
+Jangan pernah otomatis menjalankan:
+- migrate:fresh
+- migrate:reset
+- db:wipe
+- DROP DATABASE
+- DROP TABLE
+- perubahan APP_KEY
+- mengganti database production
 
-- Kredensial router: env `HOTSPOT_MT_*` (~/.env lokal, JANGAN di-commit).
-- Service: `App\Services\RouterOS` (klien API), `HotspotManager` (user/profil), `HotspotBlocker` (blokir/kesehatan).
-- Menu di PANEL ADMIN (`/admin`), grup **Manajemen Sekolah → parent "IT SMA AFBS"**:
-  `Monitor` (halaman), `HotspotUserResource` (Akun Hotspot), `BlockedDomainResource` (Blokir Situs) —
-  mapping ada di `App\Support\Admin\AdminSchoolNavigation` (CLASS_PARENT_MAP).
-- AKSES: hanya role admin penuh (admin/guru_admin/super_admin) atau user yang diberi
-  item ini lewat kolom `allowed_navigation_items` di UserResource. Gate: trait
-  `App\Support\Hotspot\HotspotAccessible` (canViewAny/canAccess).
-- Router = sumber kebenaran akun; tabel `hotspot_users` adalah MIRROR lokal (pola Mikhmon).
-- Address-list `blocklist` + komentar firewall `hasil-hermes-block/-dns-lock/-dns-lock2` (config/hotspot.php).
-- Migrasi integrasi: `database/migrations/2026_08_18_0000*` — jangan diubah tanpa perlu.
+Jangan menjalankan migration ke production tanpa persetujuan eksplisit.
+
+Staging database:
+`smaafbs_staging`
+
+## Deployment rules
+Permintaan biasa seperti:
+"perbaiki", "buat", "ubah", "refactor", "cek", "analisa"
+
+BERARTI:
+coding + test saja.
+JANGAN deploy.
+
+Hanya deploy jika user secara eksplisit mengatakan:
+"deploy staging"
+
+Untuk deploy staging gunakan:
+`~/bin/deploy-app-staging deploy`
+
+Sebelum deploy:
+- git working tree harus bersih
+- safety check harus lulus
+- baseline test gate tidak boleh memiliki kegagalan baru
+- migration tidak boleh Pending
+
+Jika deploy gagal:
+- jangan memaksa
+- biarkan rollback berjalan
+- laporkan penyebabnya
+
+Production tidak boleh dideploy hanya karena user mengatakan "deploy".
+Untuk production harus ada perintah eksplisit:
+"deploy production"
+
+Dan sebelum production:
+- tampilkan ringkasan perubahan
+- tampilkan hasil test
+- tampilkan risiko
+- minta persetujuan final
+
+## Staging health
+Smoke test yang benar:
+- HOME = HTTP 200
+- ADMIN = HTTP 302
+
+Host:
+`staging-app.smaafbs.sch.id`
+
+## Git behavior
+Pi boleh mengubah source dan menjalankan test.
+
+Jangan push GitHub otomatis kecuali diminta.
+
+Setelah pekerjaan selesai selalu laporkan:
+- ringkasan perubahan
+- file yang diubah
+- test yang dijalankan
+- hasil test
+- git status
+- apakah siap untuk staging
+
+## Telegram shorthand
+Jika user mengatakan:
+
+"Pi, perbaiki X"
+→ gunakan Pi, edit source, test terkait, jangan deploy.
+
+"cek X"
+→ analisis dulu, jangan mengubah file kecuali memang diminta.
+
+"deploy staging"
+→ lakukan safety check dan deploy staging saja.
+
+"status"
+→ laporkan branch, commit, git status, staging health, dan proses relevan.
+
+## Absolute prohibitions
+Tanpa persetujuan eksplisit jangan:
+- menyentuh Rumahweb production
+- mengganti DNS
+- restart service production
+- mengubah firewall
+- mengubah SSH
+- menghapus database
+- menghapus storage
+- mengubah APP_KEY
+- mengirim secret ke Telegram/log
