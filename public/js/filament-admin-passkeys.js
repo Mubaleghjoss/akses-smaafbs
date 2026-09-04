@@ -69,6 +69,27 @@
         await new Promise((resolve) => window.setTimeout(resolve, 500));
     };
 
+    const getPasskeyWithTimeout = async (credentialRequest, timeoutMs = 28000) => {
+        const controller = new AbortController();
+        let timedOut = false;
+        const timeout = window.setTimeout(() => {
+            timedOut = true;
+            controller.abort();
+        }, timeoutMs);
+
+        try {
+            // Android Credential Manager can leave this promise pending after its sheet closes.
+            return await navigator.credentials.get({ ...credentialRequest, signal: controller.signal });
+        } catch (error) {
+            if (timedOut) {
+                throw new DOMException('Waktu verifikasi passkey habis.', 'TimeoutError');
+            }
+            throw error;
+        } finally {
+            window.clearTimeout(timeout);
+        }
+    };
+
     const reportClientFailure = async ($wire, challengeId, errorCode) => {
         try {
             await $wire.reportPasskeyClientFailure(challengeId, errorCode);
@@ -78,8 +99,8 @@
     };
 
     const friendlyError = (error) => {
-        if (error?.name === 'NotAllowedError' || error?.name === 'AbortError') {
-            return 'Permintaan passkey dibatalkan atau waktunya habis. Anda dapat mencoba lagi.';
+        if (error?.name === 'NotAllowedError' || error?.name === 'AbortError' || error?.name === 'TimeoutError') {
+            return "Waktu verifikasi habis atau dialog ditutup. Sentuh 'Coba Passkey Lagi' atau gunakan username & password.";
         }
 
         if (error?.name === 'InvalidStateError') {
@@ -147,7 +168,7 @@
                         }
 
                         try {
-                            const assertion = await navigator.credentials.get(credentialRequest);
+                            const assertion = await getPasskeyWithTimeout(credentialRequest);
 
                             if (!assertion) throw new DOMException('Passkey dibatalkan.', 'AbortError');
 
@@ -192,9 +213,13 @@
                     this.localMessage = friendlyError(error);
                     this.messageTone = 'error';
                     this.canRetry = true;
-                    if (error?.name === 'NotAllowedError' || error?.name === 'AbortError') {
+                    if (error?.name === 'NotAllowedError' || error?.name === 'AbortError' || error?.name === 'TimeoutError') {
                         this.messageTone = 'info';
-                        await $wire.cancelPasskeyLogin();
+                        try {
+                            await $wire.cancelPasskeyLogin();
+                        } catch (cancelError) {
+                            console.debug('Passkey challenge cancellation was skipped', cancelError);
+                        }
                     }
                 } finally {
                     this.isProcessing = false;
