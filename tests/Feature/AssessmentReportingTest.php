@@ -29,6 +29,7 @@ use App\Models\Assessment\Semester;
 use App\Models\Assessment\StudentSubjectResult;
 use App\Models\Assessment\Subject;
 use App\Models\User;
+use App\Support\Assessment\AssessmentActionFailureNotification;
 use App\Support\Assessment\Reporting\AssessmentReportQueueGate;
 use App\Support\Assessment\Reporting\AssessmentReportLayout;
 use App\Support\Assessment\Reporting\AssessmentReportPreflight;
@@ -59,6 +60,7 @@ use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Symfony\Component\HttpKernel\Exception\GoneHttpException;
 use Tests\TestCase;
+use ZipArchive;
 
 class AssessmentReportingTest extends TestCase
 {
@@ -1093,8 +1095,9 @@ class AssessmentReportingTest extends TestCase
             'template' => $template->getKey(),
         ]))
             ->assertOk()
-            ->assertSee('Pipeline PDF ringan')
-            ->assertSee('Hentikan Semua Antrean PDF')
+            ->assertSee('Preview Semua Rapor Kelas Ini')
+            ->assertSee('Download ZIP Rapor Kelas Ini')
+            ->assertSee('Opsi lanjutan administrasi PDF dan revisi')
             ->assertSee('Atur Guru Mapel')
             ->assertSee('Atur Wali Kelas')
             ->assertSee('Lihat Detail Template')
@@ -1140,6 +1143,113 @@ class AssessmentReportingTest extends TestCase
             ->assertOk()
             ->assertHeader('Content-Type', 'application/pdf');
         $this->assertStringContainsString('no-store', (string) $previewResponse->headers->get('Cache-Control'));
+    }
+
+    public function test_report_authorization_failure_links_to_period_report_access_help(): void
+    {
+        [$period] = $this->reportingFoundation();
+        $this->actingAs(User::query()->findOrFail(99));
+
+        $notification = AssessmentActionFailureNotification::make(
+            new AuthorizationException('This action is unauthorized.'),
+            'Mulai Ulang dengan Revisi Baru',
+            $period,
+        )->toArray();
+
+        $this->assertSame('Cek Hak Akses Cetak Rapor', $notification['actions'][0]['label']);
+        $this->assertSame(
+            AstsReports::getUrl(['period' => $period->getKey()]),
+            $notification['actions'][0]['url'],
+        );
+        $this->assertStringContainsString('hak untuk mengubah revisi', (string) $notification['body']);
+    }
+
+    public function test_zip_export_failure_notification_returns_to_the_selected_report_period(): void
+    {
+        [$period] = $this->reportingFoundation();
+        $this->actingAs(User::query()->findOrFail(99));
+
+        $notification = AssessmentActionFailureNotification::make(
+            new RuntimeException('Ekstensi ZIP PHP belum aktif.'),
+            'Download ZIP Rapor Kelas Ini',
+            $period,
+        )->toArray();
+
+        $this->assertSame('Buka Cetak Rapor Periode Ini', $notification['actions'][0]['label']);
+        $this->assertSame(AstsReports::getUrl(['period' => $period->getKey()]), $notification['actions'][0]['url']);
+    }
+
+    public function test_class_preview_lists_each_student_without_scheduling_pdf_jobs(): void
+    {
+        Queue::fake();
+        [$period, $rombel, $students, $template] = $this->reportingFoundation(studentCount: 2);
+        $snapshot = $this->snapshot($period, $students[0], $template, 1);
+        $this->actingAs(User::query()->findOrFail(99));
+
+        $page = Livewire::test(AstsReports::class)
+            ->set('periodId', $period->getKey())
+            ->set('templateId', $template->getKey())
+            ->set('previewClassId', $rombel->getKey());
+
+        $rows = $page->instance()->getClassPreviewRows();
+
+        $this->assertCount(2, $rows);
+        $this->assertSame('Snapshot revisi terbaru', $rows[0]['source']);
+        $this->assertSame(route('assessment.reports.preview', $snapshot), $rows[0]['preview_url']);
+        $this->assertSame('Pratinjau langsung', $rows[1]['source']);
+        $this->assertSame(route('assessment.reports.live-preview', [
+            'assessmentPeriod' => $period->getKey(),
+            'reportTemplate' => $template->getKey(),
+            'periodStudent' => $students[1]->getKey(),
+        ]), $rows[1]['preview_url']);
+        $page->assertSee('Preview Semua Rapor Kelas Ini');
+        Queue::assertNothingPushed();
+    }
+
+    public function test_class_report_zip_download_renders_each_student_without_queue_or_jobs(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        [$period, $rombel, $students, $template] = $this->reportingFoundation(studentCount: 2);
+        $this->snapshot($period, $students[0], $template, 1);
+        $this->actingAs(User::query()->findOrFail(99));
+
+        $response = $this->get(route('assessment.reports.class.zip', [
+            'assessmentPeriod' => $period,
+            'reportTemplate' => $template,
+            'periodRombel' => $rombel,
+        ]));
+
+        $response->assertOk()->assertHeader('Content-Type', 'application/zip');
+        $this->assertStringContainsString('rapor-asts-asts-2526-ganjil-xi-1.zip', (string) $response->headers->get('Content-Disposition'));
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($response->baseResponse->getFile()->getPathname()) === true);
+        $this->assertSame(2, $zip->numFiles);
+        $this->assertStringEndsWith('.pdf', (string) $zip->getNameIndex(0));
+        $this->assertStringStartsWith('%PDF', (string) $zip->getFromIndex(0));
+        $zip->close();
+        Queue::assertNothingPushed();
+        $this->assertDatabaseCount('jobs', 0);
+    }
+
+    public function test_class_report_zip_rejects_a_class_from_another_period(): void
+    {
+        [$period, $rombel, , $template] = $this->reportingFoundation();
+        $otherPeriod = $period->replicate();
+        $otherPeriod->code = 'ASAS-2526-GANJIL';
+        $otherPeriod->name = 'ASAS 2025/2026 Ganjil';
+        $otherPeriod->type = AssessmentType::ASAS;
+        $otherPeriod->save();
+        $otherRombel = $rombel->replicate();
+        $otherRombel->assessment_period_id = $otherPeriod->getKey();
+        $otherRombel->save();
+        $this->actingAs(User::query()->findOrFail(99));
+
+        $this->get(route('assessment.reports.class.zip', [
+            'assessmentPeriod' => $period,
+            'reportTemplate' => $template,
+            'periodRombel' => $otherRombel,
+        ]))->assertNotFound();
     }
 
     public function test_live_preview_remains_available_when_preflight_is_incomplete_without_creating_jobs_or_snapshots(): void

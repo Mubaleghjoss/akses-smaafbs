@@ -116,6 +116,18 @@
                     </div>
                 </div>
                 <div class="assessment-report-preview-row">
+                    <label><span>Kelas untuk preview massal</span>
+                        <select wire:model.live="previewClassId">
+                            <option value="">Pilih kelas</option>
+                            @foreach ($this->getClassOptions() as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach
+                        </select>
+                    </label>
+                    @if ($previewClassId)
+                        <x-filament::button color="gray" x-on:click="$dispatch('open-modal', { id: 'assessment-class-preview-modal' })" icon="heroicon-o-rectangle-stack">Preview Semua Rapor Kelas Ini</x-filament::button>
+                        @if ($this->classZipUrl())
+                            <x-filament::button tag="a" href="{{ $this->classZipUrl() }}" color="primary" icon="heroicon-o-archive-box-arrow-down">Download ZIP Rapor Kelas Ini</x-filament::button>
+                        @endif
+                    @endif
                     <label><span>Siswa</span>
                         <select wire:model.live="previewStudentId">
                             <option value="">Pilih siswa</option>
@@ -132,6 +144,9 @@
         </section>
 
         @php($run = $this->getGenerationRun())
+        @if ($this->canUseAdvancedReportPipeline())
+            <details class="assessment-report-card">
+                <summary class="assessment-report-inline-note">Opsi lanjutan administrasi PDF dan revisi</summary>
         @if ($this->canGenerateReports())
             <section class="assessment-report-card is-step">
                 <span class="assessment-report-step">2</span>
@@ -250,6 +265,9 @@
             </div>
         </section>
 
+            </details>
+        @endif
+
         @if ($latestShareUrl)
             <section x-data="{ copied:false }" class="assessment-report-share-result">
                 <h2>Tautan sementara baru</h2>
@@ -320,6 +338,30 @@
             </div>
         </section>
 
+        <x-filament::modal id="assessment-class-preview-modal" width="lg">
+            <x-slot name="heading">Preview semua rapor kelas</x-slot>
+            <x-slot name="description">Membuka daftar rapor satu per satu. Ini tidak membuat snapshot, job PDF kelas, atau antrean baru.</x-slot>
+            <div class="assessment-report-student-list">
+                @forelse ($this->getClassPreviewRows() as $row)
+                    <article>
+                        <div class="assessment-report-student-copy">
+                            <strong>{{ $row['student'] }}</strong>
+                            <span>{{ $row['source'] }}</span>
+                        </div>
+                        <div class="assessment-report-student-actions">
+                            <x-filament::button tag="a" href="{{ $row['preview_url'] }}" target="_blank" size="sm" color="gray" icon="heroicon-o-eye">Preview Rapor</x-filament::button>
+                        </div>
+                    </article>
+                @empty
+                    <div class="assessment-report-empty">Tidak ada siswa aktif pada kelas yang dipilih.</div>
+                @endforelse
+            </div>
+            <x-slot name="footerActions">
+                <x-filament::button color="gray" x-on:click="$dispatch('close-modal', { id: 'assessment-class-preview-modal' })">Selesai</x-filament::button>
+            </x-slot>
+        </x-filament::modal>
+
+        @if ($this->canUseAdvancedReportPipeline())
         <x-filament::modal id="assessment-stop-reports-modal" width="lg">
             <x-slot name="heading">Hentikan Semua Antrean PDF</x-slot>
             <x-slot name="description">Hanya queue assessment-reports yang dibersihkan. Queue Literasi dan default tidak disentuh; snapshot siswa tetap aman.</x-slot>
@@ -342,5 +384,6 @@
                 <x-filament::button color="warning" wire:click="restartWithNewRevision" wire:confirm="Siapkan revisi baru dan hentikan seluruh revisi terbuka untuk periode serta template ini?">Ya, Siapkan Revisi Baru</x-filament::button>
             </x-slot>
         </x-filament::modal>
+        @endif
     </div>
 </x-filament-panels::page>

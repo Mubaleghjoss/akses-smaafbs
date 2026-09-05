@@ -68,6 +68,8 @@ abstract class AssessmentReportsPage extends AssessmentPage
 
     public ?int $previewStudentId = null;
 
+    public ?int $previewClassId = null;
+
     public string $stopReason = '';
 
     public function mount(): void
@@ -247,9 +249,18 @@ abstract class AssessmentReportsPage extends AssessmentPage
     {
         $period = $this->selectedPeriod();
 
-        return $period
-            ? $period->periodRombels()->orderBy('rombel_name_snapshot')->pluck('rombel_name_snapshot', 'id')->all()
-            : [];
+        if (! $period) {
+            return [];
+        }
+
+        $query = $period->periodRombels()->orderBy('rombel_name_snapshot');
+        $visibleClassIds = $this->visiblePeriodRombelIds();
+
+        if ($visibleClassIds !== null) {
+            $query->whereIn('id', $visibleClassIds);
+        }
+
+        return $query->pluck('rombel_name_snapshot', 'id')->all();
     }
 
     public function getPreviewOptions(): array
@@ -258,8 +269,19 @@ abstract class AssessmentReportsPage extends AssessmentPage
             return [];
         }
 
-        return $this->selectedPeriod()?->students()
-            ->where('is_active', true)
+        $students = $this->selectedPeriod()?->students()
+            ->where('is_active', true);
+
+        if (! $students) {
+            return [];
+        }
+
+        $visibleClassIds = $this->visiblePeriodRombelIds();
+        if ($visibleClassIds !== null) {
+            $students->whereIn('assessment_period_rombel_id', $visibleClassIds);
+        }
+
+        return $students
             ->orderBy('rombel_name_snapshot')
             ->orderBy('student_name_snapshot')
             ->get()
@@ -278,6 +300,68 @@ abstract class AssessmentReportsPage extends AssessmentPage
                 'periodStudent' => $this->previewStudentId,
             ])
             : null;
+    }
+
+    public function classZipUrl(): ?string
+    {
+        return $this->periodId && $this->templateId && $this->previewClassId
+            && array_key_exists($this->previewClassId, $this->getClassOptions())
+            ? route('assessment.reports.class.zip', [
+                'assessmentPeriod' => $this->periodId,
+                'reportTemplate' => $this->templateId,
+                'periodRombel' => $this->previewClassId,
+            ])
+            : null;
+    }
+
+    public function canUseAdvancedReportPipeline(): bool
+    {
+        return auth()->user() instanceof User && auth()->user()->hasFullAdminAccess();
+    }
+
+    /**
+     * @return array<int, array{student:string,preview_url:string,source:string}>
+     */
+    public function getClassPreviewRows(): array
+    {
+        if (! $this->periodId || ! $this->templateId || ! $this->previewClassId
+            || ! array_key_exists($this->previewClassId, $this->getClassOptions())) {
+            return [];
+        }
+
+        $snapshots = $this->snapshotQuery()
+            ->whereHas('student', fn ($students) => $students
+                ->where('assessment_period_rombel_id', $this->previewClassId)
+                ->where('is_active', true))
+            ->with('student')
+            ->orderByDesc('revision')
+            ->orderByDesc('id')
+            ->get()
+            ->unique('assessment_period_student_id')
+            ->keyBy('assessment_period_student_id');
+
+        return $this->selectedPeriod()?->students()
+            ->where('assessment_period_rombel_id', $this->previewClassId)
+            ->where('is_active', true)
+            ->orderBy('student_name_snapshot')
+            ->get()
+            ->map(function ($student) use ($snapshots): array {
+                $snapshot = $snapshots->get($student->getKey());
+
+                return [
+                    'student' => (string) $student->student_name_snapshot,
+                    'preview_url' => $snapshot
+                        ? route('assessment.reports.preview', ['reportSnapshot' => $snapshot])
+                        : route('assessment.reports.live-preview', [
+                            'assessmentPeriod' => $this->periodId,
+                            'reportTemplate' => $this->templateId,
+                            'periodStudent' => $student->getKey(),
+                        ]),
+                    'source' => $snapshot ? 'Snapshot revisi terbaru' : 'Pratinjau langsung',
+                ];
+            })
+            ->values()
+            ->all() ?? [];
     }
 
     public function prepareRevision(): void
@@ -376,7 +460,6 @@ abstract class AssessmentReportsPage extends AssessmentPage
 
     public function restartWithNewRevision(): void
     {
-        $this->authorizeAssessment('penilaian.report.generate');
         $period = $this->selectedPeriod();
         $template = $this->selectedTemplate();
 
@@ -387,6 +470,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
         }
 
         try {
+            $this->authorizeAssessment('penilaian.report.generate');
             $cancelled = app(CancelOpenReportRevisionsAction::class)->execute(
                 auth()->user(),
                 $period,
@@ -816,6 +900,9 @@ abstract class AssessmentReportsPage extends AssessmentPage
         $classIds = array_map('intval', array_keys($this->getClassOptions()));
         if ($this->selectedClassIds === [] && $classIds !== []) {
             $this->selectedClassIds = [$classIds[0]];
+        }
+        if (! $this->previewClassId || ! in_array($this->previewClassId, $classIds, true)) {
+            $this->previewClassId = $classIds[0] ?? null;
         }
 
         $previewIds = array_map('intval', array_keys($this->getPreviewOptions()));

@@ -732,6 +732,86 @@ class AssessmentTeacherExperienceTest extends TestCase
         );
     }
 
+    public function test_bulk_verification_blocker_links_to_its_filtered_submission_status(): void
+    {
+        Role::findOrCreate('admin', 'web');
+        $admin = User::query()->create([
+            'name' => 'Admin Penilaian',
+            'username' => 'admin-filtered-blocker',
+            'password' => 'test-password',
+        ]);
+        $admin->assignRole('admin');
+        $period = AssessmentPeriod::factory()->asts()->create([
+            'status' => AssessmentPeriodStatus::VERIFICATION,
+        ]);
+        $rombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'rombel_name_snapshot' => 'X 1',
+        ]);
+        $otherRombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'rombel_name_snapshot' => 'X 2',
+        ]);
+        $physics = Subject::factory()->create(['name' => 'Fisika']);
+        $math = Subject::factory()->create(['name' => 'Matematika']);
+        $blocker = AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'assessment_subject_id' => $physics->getKey(),
+            'rombel_name_snapshot' => 'X 1',
+            'subject_name_snapshot' => 'Fisika',
+            'status' => AssignmentStatus::DRAFT,
+        ]);
+        AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'assessment_subject_id' => $math->getKey(),
+            'rombel_name_snapshot' => 'X 1',
+            'subject_name_snapshot' => 'Matematika',
+            'status' => AssignmentStatus::DRAFT,
+        ]);
+        AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $otherRombel->getKey(),
+            'assessment_subject_id' => $physics->getKey(),
+            'rombel_name_snapshot' => 'X 2',
+            'subject_name_snapshot' => 'Fisika',
+            'status' => AssignmentStatus::DRAFT,
+        ]);
+
+        $this->actingAs($admin);
+        $notification = AssessmentActionFailureNotification::make(
+            ValidationException::withMessages([
+                'assignments' => 'X 1 · Fisika belum berstatus Dikirim.',
+            ]),
+            'Verifikasi Penugasan Terpilih',
+            $period,
+            $blocker,
+        )->toArray();
+
+        $this->assertSame('Lihat X 1 · Fisika yang belum dikirim', $notification['actions'][0]['label']);
+        $this->assertSame(
+            AstsSubmissionStatus::getUrl([
+                'period' => $period->getKey(),
+                'rombel' => $rombel->getKey(),
+                'subject' => $physics->getKey(),
+                'status' => AssignmentStatus::DRAFT->value,
+            ]),
+            $notification['actions'][0]['url'],
+        );
+
+        $status = Livewire::actingAs($admin)
+            ->test(AstsSubmissionStatus::class)
+            ->set('periodId', $period->getKey())
+            ->set('activeRombelId', $rombel->getKey())
+            ->set('subjectId', $physics->getKey())
+            ->set('statusFilter', AssignmentStatus::DRAFT->value);
+
+        $rows = $status->instance()->getAssignmentRows();
+        $this->assertCount(1, $rows);
+        $this->assertSame($blocker->getKey(), $rows[0]['id']);
+    }
+
     public function test_assessment_failure_notification_is_persistent_and_links_to_period_aware_repair_page(): void
     {
         $teacher = $this->teacher(348);

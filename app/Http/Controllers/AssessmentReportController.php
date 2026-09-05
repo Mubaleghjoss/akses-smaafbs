@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Assessment\AuditLog;
 use App\Models\Assessment\ClassReportArtifact;
 use App\Models\Assessment\AssessmentPeriod;
+use App\Models\Assessment\AssessmentPeriodRombel;
 use App\Models\Assessment\AssessmentPeriodStudent;
 use App\Models\Assessment\ReportSnapshot;
 use App\Models\Assessment\ReportTemplate;
@@ -20,7 +21,10 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use ZipArchive;
 
 class AssessmentReportController extends Controller
 {
@@ -35,6 +39,7 @@ class AssessmentReportController extends Controller
         $this->abortUnlessEnabled();
         Gate::authorize('view', $assessmentPeriod);
         Gate::authorize('view', $reportTemplate);
+        Gate::authorize('view', $periodStudent);
         abort_unless((int) $periodStudent->assessment_period_id === (int) $assessmentPeriod->getKey(), 404);
 
         $periodType = $assessmentPeriod->type instanceof \BackedEnum
@@ -165,6 +170,81 @@ class AssessmentReportController extends Controller
         );
     }
 
+    public function downloadClassZip(
+        AssessmentPeriod $assessmentPeriod,
+        ReportTemplate $reportTemplate,
+        AssessmentPeriodRombel $periodRombel,
+        AssessmentReportRenderer $renderer,
+        AssessmentReportRenderGate $renderGate,
+        BuildAssessmentReportPreviewSnapshot $builder,
+    ): BinaryFileResponse|Response {
+        $this->abortUnlessEnabled();
+        Gate::authorize('view', $assessmentPeriod);
+        Gate::authorize('view', $reportTemplate);
+        Gate::authorize('view', $periodRombel);
+        abort_unless((int) $periodRombel->assessment_period_id === (int) $assessmentPeriod->getKey(), 404);
+        $this->abortUnlessMatchingTemplate($assessmentPeriod, $reportTemplate);
+
+        $students = AssessmentPeriodStudent::query()
+            ->where('assessment_period_id', $assessmentPeriod->getKey())
+            ->where('assessment_period_rombel_id', $periodRombel->getKey())
+            ->where('is_active', true)
+            ->orderBy('student_name_snapshot')
+            ->get();
+        abort_if($students->isEmpty(), 404, 'Tidak ada siswa aktif pada kelas ini.');
+
+        foreach ($students as $student) {
+            Gate::authorize('view', $student);
+        }
+
+        $snapshots = ReportSnapshot::query()
+            ->where('assessment_period_id', $assessmentPeriod->getKey())
+            ->where('assessment_report_template_id', $reportTemplate->getKey())
+            ->whereIn('assessment_period_student_id', $students->modelKeys())
+            ->orderByDesc('revision')
+            ->orderByDesc('id')
+            ->get()
+            ->unique('assessment_period_student_id')
+            ->keyBy('assessment_period_student_id');
+
+        $zipPath = tempnam(storage_path('app'), 'rapor-kelas-');
+        abort_if($zipPath === false, Response::HTTP_INTERNAL_SERVER_ERROR, 'Tidak bisa membuat file ZIP sementara.');
+
+        try {
+            $renderGate->run(function () use ($zipPath, $students, $snapshots, $assessmentPeriod, $reportTemplate, $builder, $renderer): void {
+                abort_unless(class_exists(ZipArchive::class), Response::HTTP_INTERNAL_SERVER_ERROR, 'Ekstensi ZIP PHP belum aktif.');
+
+                $zip = new ZipArchive();
+                abort_if($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true, Response::HTTP_INTERNAL_SERVER_ERROR, 'Tidak bisa membuat file ZIP rapor.');
+
+                try {
+                    $usedNames = [];
+                    foreach ($students as $student) {
+                        $snapshot = $snapshots->get($student->getKey())
+                            ?? $builder->build($assessmentPeriod, $reportTemplate, $student);
+                        $filename = $this->uniqueZipEntryName((string) $student->student_name_snapshot, $usedNames);
+                        $zip->addFromString($filename, $renderer->renderStudent($snapshot));
+                    }
+                } finally {
+                    $zip->close();
+                }
+            });
+        } catch (AssessmentReportRenderBusy $exception) {
+            @unlink($zipPath);
+
+            return $this->busyResponse($exception);
+        } catch (\Throwable $exception) {
+            @unlink($zipPath);
+
+            throw $exception;
+        }
+
+        return response()->download($zipPath, $this->classZipFilename($assessmentPeriod, $periodRombel), [
+            'Content-Type' => 'application/zip',
+            ...$this->downloadHeaders(),
+        ])->deleteFileAfterSend(true);
+    }
+
     public function downloadShared(
         Request $request,
         string $token,
@@ -205,6 +285,43 @@ class AssessmentReportController extends Controller
     private function abortUnlessEnabled(): void
     {
         abort_unless((bool) config('assessment.enabled', false), 404);
+    }
+
+    private function abortUnlessMatchingTemplate(AssessmentPeriod $period, ReportTemplate $template): void
+    {
+        $periodType = $period->type instanceof \BackedEnum ? $period->type->value : (string) $period->type;
+        $templateType = $template->type instanceof \BackedEnum ? $template->type->value : (string) $template->type;
+
+        abort_unless($periodType === $templateType, 422);
+    }
+
+    /** @param array<string, true> $usedNames */
+    private function uniqueZipEntryName(string $studentName, array &$usedNames): string
+    {
+        $base = Str::slug($studentName) ?: 'siswa';
+        $filename = $base.'.pdf';
+        $suffix = 2;
+
+        while (isset($usedNames[$filename])) {
+            $filename = $base.'-'.$suffix.'.pdf';
+            $suffix++;
+        }
+
+        $usedNames[$filename] = true;
+
+        return $filename;
+    }
+
+    private function classZipFilename(AssessmentPeriod $period, AssessmentPeriodRombel $rombel): string
+    {
+        $type = $period->type instanceof \BackedEnum ? $period->type->value : (string) $period->type;
+
+        return sprintf(
+            'rapor-%s-%s-%s.zip',
+            Str::slug($type) ?: 'penilaian',
+            Str::slug((string) $period->code) ?: 'periode',
+            Str::slug((string) $rombel->rombel_name_snapshot) ?: 'kelas',
+        );
     }
 
     private function abortUnlessValid(

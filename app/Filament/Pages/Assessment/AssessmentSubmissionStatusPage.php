@@ -42,6 +42,9 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
     #[Url(as: 'rombel')]
     public ?int $activeRombelId = null;
 
+    #[Url(as: 'subject')]
+    public ?int $subjectId = null;
+
     /** @var array<int, int|string> */
     public array $selectedAssignmentIds = [];
 
@@ -89,6 +92,11 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
     }
 
     public function updatedStatusFilter(): void
+    {
+        $this->selectedAssignmentIds = [];
+    }
+
+    public function updatedSubjectId(): void
     {
         $this->selectedAssignmentIds = [];
     }
@@ -223,12 +231,15 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
     public function verifySelectedAssignments(): void
     {
         $this->authorizeAssessment('penilaian.verify');
+        $blockingAssignment = null;
 
         try {
             $assignments = $this->selectedScopedAssignments();
-            DB::transaction(function () use ($assignments): void {
+            DB::transaction(function () use ($assignments, &$blockingAssignment): void {
                 foreach ($assignments as $assignment) {
                     if ($this->assignmentStatus($assignment) !== AssignmentStatus::SUBMITTED) {
+                        // Keep the first blocker so the repair link opens its exact class and subject.
+                        $blockingAssignment = $assignment;
                         throw ValidationException::withMessages([
                             'assignments' => "{$assignment->rombel_name_snapshot} · {$assignment->subject_name_snapshot} belum berstatus Dikirim.",
                         ]);
@@ -249,6 +260,7 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
                 $exception,
                 'Verifikasi Penugasan Terpilih',
                 AssessmentPeriod::query()->find($this->periodId),
+                $blockingAssignment,
             );
         }
     }
@@ -359,6 +371,10 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
 
         if ($this->statusFilter !== 'all' && array_key_exists($this->statusFilter, AssignmentStatus::options())) {
             $query->where('status', $this->statusFilter);
+        }
+
+        if ($this->subjectId) {
+            $query->where('assessment_subject_id', $this->subjectId);
         }
 
         return $query

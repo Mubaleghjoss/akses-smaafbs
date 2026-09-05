@@ -6,8 +6,10 @@ use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Resources\AssessmentReportTemplateResource;
 use App\Filament\Resources\AssessmentSchemeResource;
 use App\Models\Assessment\AssessmentPeriod;
+use App\Models\Assessment\AssessmentPeriodAssignment;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -19,17 +21,19 @@ final class AssessmentActionFailureNotification
         Throwable $exception,
         string $actionTitle,
         ?AssessmentPeriod $period = null,
+        ?AssessmentPeriodAssignment $blockingAssignment = null,
     ): Notification {
-        return self::make($exception, $actionTitle, $period)->send();
+        return self::make($exception, $actionTitle, $period, $blockingAssignment)->send();
     }
 
     public static function make(
         Throwable $exception,
         string $actionTitle,
         ?AssessmentPeriod $period = null,
+        ?AssessmentPeriodAssignment $blockingAssignment = null,
     ): Notification {
         $detail = self::safeDetail($exception);
-        $repair = self::repairAction($exception, $detail, $period);
+        $repair = self::repairAction($exception, $detail, $actionTitle, $period, $blockingAssignment);
 
         return Notification::make()
             ->title('Aksi ditolak: '.$actionTitle)
@@ -50,14 +54,31 @@ final class AssessmentActionFailureNotification
     private static function repairAction(
         Throwable $exception,
         string $detail,
+        string $actionTitle,
         ?AssessmentPeriod $period,
+        ?AssessmentPeriodAssignment $blockingAssignment,
     ): array {
         $keys = $exception instanceof ValidationException
             ? implode(' ', array_keys($exception->errors()))
             : '';
-        $context = Str::lower($keys.' '.$detail);
+        $context = Str::lower($keys.' '.$detail.' '.$actionTitle);
         $periodId = $period?->getKey();
         $type = AssessmentPageMap::normalizeType($period?->type);
+
+        // Authorization failures need an access-specific destination, rather
+        // than being mistaken for a missing report-data condition.
+        if ($period && $exception instanceof AuthorizationException) {
+            $page = AssessmentPageMap::page($type, 'reports');
+
+            if ($page::canAccess()) {
+                return [
+                    'label' => 'Cek Hak Akses Cetak Rapor',
+                    'url' => $page::getUrl(['period' => $periodId]),
+                    'icon' => 'heroicon-o-lock-closed',
+                    'solution' => 'Anda belum memiliki hak untuk mengubah revisi atau antrean PDF. Buka cetak rapor periode ini untuk memeriksa proses yang tersedia, atau minta admin/kurikulum memberikan hak akses cetak rapor.',
+                ];
+            }
+        }
 
         if (self::containsAny($context, [
             'scheme', 'skema', 'komponen', 'bobot',
@@ -77,6 +98,27 @@ final class AssessmentActionFailureNotification
         ])) {
             $page = AssessmentPageMap::page($type, 'status');
             if ($page::canAccess()) {
+                if ($blockingAssignment) {
+                    $status = $blockingAssignment->status instanceof \BackedEnum
+                        ? $blockingAssignment->status->value
+                        : (string) $blockingAssignment->status;
+                    $statusLabel = $status === 'draft' ? 'belum dikirim' : 'belum valid';
+                    $rombel = (string) $blockingAssignment->rombel_name_snapshot;
+                    $subject = (string) $blockingAssignment->subject_name_snapshot;
+
+                    return [
+                        'label' => "Lihat {$rombel} · {$subject} yang {$statusLabel}",
+                        'url' => $page::getUrl([
+                            'period' => $periodId,
+                            'rombel' => $blockingAssignment->assessment_period_rombel_id,
+                            'subject' => $blockingAssignment->assessment_subject_id,
+                            'status' => $status,
+                        ]),
+                        'icon' => 'heroicon-o-clipboard-document-check',
+                        'solution' => 'Buka penugasan yang menghambat, perbaiki atau kirimkan, lalu jalankan aksi kembali.',
+                    ];
+                }
+
                 return [
                     'label' => 'Buka Status Pengumpulan',
                     'url' => $page::getUrl(['period' => $periodId]),
@@ -125,15 +167,15 @@ final class AssessmentActionFailureNotification
         }
 
         if ($period && self::containsAny($context, [
-            'report', 'reports', 'rapor', 'pdf', 'snapshot', 'revisi', 'cache', 'antrean',
+            'report', 'reports', 'rapor', 'pdf', 'snapshot', 'revisi', 'cache', 'antrean', 'zip', 'export', 'download',
         ])) {
             $page = AssessmentPageMap::page($type, 'reports');
             if ($page::canAccess()) {
                 return [
-                    'label' => 'Buka Proses Rapor',
+                    'label' => 'Buka Cetak Rapor Periode Ini',
                     'url' => $page::getUrl(['period' => $periodId]),
                     'icon' => 'heroicon-o-printer',
-                    'solution' => 'Periksa kelengkapan, status revisi, dan antrean PDF pada periode ini sebelum mencoba kembali.',
+                    'solution' => 'Buka Cetak Rapor pada periode ini, pilih kelas terkait, lalu coba kembali export ZIP atau pratinjaunya.',
                 ];
             }
         }
