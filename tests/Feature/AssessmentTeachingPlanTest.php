@@ -103,7 +103,7 @@ class AssessmentTeachingPlanTest extends TestCase
             ->assertSuccessful();
 
         $this->assertSame(19, Subject::query()->count());
-        $this->assertSame(99, TeachingAssignment::query()->where('is_active', true)->count());
+        $this->assertSame(100, TeachingAssignment::query()->where('is_active', true)->count());
         $this->assertFalse($oldAssignment->fresh()->is_active);
         $this->assertSame(3, SubjectCategory::query()->count());
         $this->assertSame(2, SubjectCategory::query()->where('is_active', true)->count());
@@ -125,10 +125,51 @@ class AssessmentTeachingPlanTest extends TestCase
             'is_active' => true,
         ]);
 
+        $mulky = GuruTendik::query()->where('nama', 'Mulky Fauzan, S.T., M.M.')->firstOrFail();
+        $kholifin = GuruTendik::query()->where('nama', 'Kholifin Hilman Suharno, S.Pd.')->firstOrFail();
+        $menik = GuruTendik::query()->where('nama', 'Menik Putri Lestari, S.T.')->firstOrFail();
+        $sejarahIndonesia = Subject::query()->where('code', 'SEJ-IND')->firstOrFail();
+        $matematikaTingkatLanjut = Subject::query()->where('code', 'MTK-TL')->firstOrFail();
+        $xii1 = Rombel::query()->where('nama', 'XII 1')->firstOrFail();
+        $xii2 = Rombel::query()->where('nama', 'XII 2')->firstOrFail();
+
+        foreach ([$xii1, $xii2] as $rombel) {
+            $this->assertDatabaseHas('assessment_teaching_assignments', [
+                'assessment_subject_id' => $sejarahIndonesia->getKey(),
+                'rombel_id' => $rombel->getKey(),
+                'teacher_id' => $mulky->getKey(),
+                'is_active' => true,
+            ]);
+            $this->assertDatabaseMissing('assessment_teaching_assignments', [
+                'assessment_subject_id' => $sejarahIndonesia->getKey(),
+                'rombel_id' => $rombel->getKey(),
+                'teacher_id' => $kholifin->getKey(),
+                'is_active' => true,
+            ]);
+        }
+
+        $this->assertSame(['TIK'], TeachingAssignment::query()
+            ->where('teacher_id', $kholifin->getKey())
+            ->where('is_active', true)
+            ->with('subject:id,code')
+            ->get()
+            ->pluck('subject.code')
+            ->unique()
+            ->values()
+            ->all());
+        foreach ([$xi1, $xii1] as $rombel) {
+            $this->assertDatabaseHas('assessment_teaching_assignments', [
+                'assessment_subject_id' => $matematikaTingkatLanjut->getKey(),
+                'rombel_id' => $rombel->getKey(),
+                'teacher_id' => $menik->getKey(),
+                'is_active' => true,
+            ]);
+        }
+
         $firstCount = TeachingAssignment::query()->count();
         $this->artisan('assessment:teaching-plan-2026', ['--apply' => true])->assertSuccessful();
         $this->assertSame($firstCount, TeachingAssignment::query()->count());
-        $this->assertSame(99, TeachingAssignment::query()->where('is_active', true)->count());
+        $this->assertSame(100, TeachingAssignment::query()->where('is_active', true)->count());
     }
 
     public function test_apply_stops_before_writing_when_one_linked_teacher_is_missing(): void
@@ -229,7 +270,7 @@ class AssessmentTeachingPlanTest extends TestCase
         app(SyncOpenPeriodSubjectAssignmentsAction::class)->execute($actor, $subject, $period->fresh());
     }
 
-    public function test_bulk_sync_uses_one_default_scheme_and_turns_19_subjects_and_99_plots_into_period_assignments(): void
+    public function test_bulk_sync_uses_one_default_scheme_and_turns_19_subjects_and_100_plots_into_period_assignments(): void
     {
         $this->artisan('assessment:teaching-plan-2026', ['--apply' => true])->assertSuccessful();
         $adminRole = Role::findOrCreate('admin', 'web');
@@ -245,8 +286,8 @@ class AssessmentTeachingPlanTest extends TestCase
         $period = AssessmentPeriod::query()->create([
             'assessment_academic_year_id' => $semester->assessment_academic_year_id,
             'assessment_semester_id' => $semester->getKey(),
-            'code' => 'ASTS-BULK-99',
-            'name' => 'ASTS Bulk 99',
+            'code' => 'ASTS-BULK-100',
+            'name' => 'ASTS Bulk 100',
             'type' => AssessmentType::ASTS,
             'status' => AssessmentPeriodStatus::OPEN,
             'settings' => ['rombel_ids' => Rombel::query()->pluck('id')->all()],
@@ -336,8 +377,8 @@ class AssessmentTeachingPlanTest extends TestCase
         $preview = $sync->preview($period, $subjectIds, $source->getKey());
         $this->assertSame(19, $preview['subject_count']);
         $this->assertSame(7, $preview['class_count']);
-        $this->assertSame(99, $preview['plotting_count']);
-        $this->assertSame(92, $preview['created']);
+        $this->assertSame(100, $preview['plotting_count']);
+        $this->assertSame(93, $preview['created']);
         $this->assertSame(7, $preview['unchanged']);
         $this->assertSame(7, $preview['protected']);
         $this->assertTrue($preview['default_scheme_created']);
@@ -364,11 +405,11 @@ class AssessmentTeachingPlanTest extends TestCase
         $blockedAccount->assignRole($adminRole);
 
         $summary = $sync->execute($actor, $period, $subjectIds, $source->getKey());
-        $this->assertSame(92, $summary['created']);
+        $this->assertSame(93, $summary['created']);
         $this->assertSame(0, $summary['updated']);
         $this->assertSame(7, $summary['unchanged']);
         $this->assertSame(7, $summary['protected']);
-        $this->assertSame(99, AssessmentPeriodAssignment::query()->where('assessment_period_id', $period->getKey())->count());
+        $this->assertSame(100, AssessmentPeriodAssignment::query()->where('assessment_period_id', $period->getKey())->count());
         $this->assertEqualsCanonicalizing($originalAssignmentIds, AssessmentPeriodAssignment::query()->whereIn('id', $originalAssignmentIds)->pluck('id')->map(fn ($id): int => (int) $id)->all());
         $this->assertSame(7, AssessmentPeriodAssignment::query()->whereIn('id', $originalAssignmentIds)->where('teacher_id', $legacyTeacher->getKey())->count());
 
@@ -397,7 +438,7 @@ class AssessmentTeachingPlanTest extends TestCase
         $second = $sync->execute($actor, $period->fresh(), $subjectIds);
         $this->assertSame(0, $second['created']);
         $this->assertSame(0, $second['updated']);
-        $this->assertSame(99, $second['unchanged']);
+        $this->assertSame(100, $second['unchanged']);
         $this->assertSame(7, $second['protected']);
         $this->assertSame(2, AssessmentScheme::query()->where('assessment_period_id', $period->getKey())->count());
     }

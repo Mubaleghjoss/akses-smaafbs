@@ -349,7 +349,6 @@ class ApplyAssessmentTeachingPlan2026 extends Command
             ],
             'Kholifin Hilman Suharno' => [
                 'TIK' => ['PILIHAN' => $this->classNames()],
-                'SEJ-IND' => ['PILIHAN' => ['XII 1', 'XII 2']],
             ],
             'Komariyah' => [
                 'KIM' => ['PILIHAN' => ['X 1', 'X 2', 'XI 1', 'XII 1', 'XII 3']],
@@ -358,7 +357,8 @@ class ApplyAssessmentTeachingPlan2026 extends Command
             'M. Fandakir' => ['EKO' => ['PILIHAN' => ['X 1', 'X 2', 'XI 2', 'XII 2', 'XII 3']]],
             'Menik Putri Lestari' => [
                 'MTK' => ['PILIHAN' => ['X 1', 'X 2'], 'WAJIB' => ['XI 1', 'XI 2', 'XII 1', 'XII 2', 'XII 3']],
-                'MTK-TL' => ['PILIHAN' => ['XI 1']],
+                // Dokumen resmi bertanda tangan 13 Juli 2026: MTK-TL JML 8 JP.
+                'MTK-TL' => ['PILIHAN' => ['XI 1', 'XII 1']],
             ],
             'Zahki Maulana' => [
                 'SBD' => ['WAJIB' => ['XI 1', 'XI 2', 'XII 1', 'XII 2', 'XII 3']],
@@ -366,7 +366,8 @@ class ApplyAssessmentTeachingPlan2026 extends Command
             ],
             'Mulky Fauzan' => [
                 'SEJ-TL' => ['PILIHAN' => ['XI 2']],
-                'SEJ-IND' => ['PILIHAN' => ['X 1', 'X 2', 'XII 3'], 'WAJIB' => ['XI 1', 'XI 2']],
+                // Dokumen resmi bertanda tangan 13 Juli 2026: SEJ-IND JML 14 JP.
+                'SEJ-IND' => ['PILIHAN' => ['X 1', 'X 2', 'XII 1', 'XII 2', 'XII 3'], 'WAJIB' => ['XI 1', 'XI 2']],
                 'BIG-TL' => ['PILIHAN' => ['XII 2']],
             ],
             'Nurul Afifah' => [
