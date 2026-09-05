@@ -9964,3 +9964,26 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .dark .assessment-report-progress__empty-description,.dark .assessment-report-progress__empty-footnote,.fi-theme-dark .assessment-report-progress__empty-description,.fi-theme-dark .assessment-report-progress__empty-footnote { color:#cbd5e1; }
 .dark .assessment-report-progress__empty-action,.fi-theme-dark .assessment-report-progress__empty-action { border-color:#166534; background:#14532d; color:#dcfce7; }
 @media (max-width:640px) { .assessment-report-progress__path { overflow-x:auto; grid-template-columns:repeat(8,minmax(6.5rem,1fr)); padding-bottom:.25rem; } }
+
+/* Score entry: its Blade utility classes are not part of the admin stylesheet. */
+.dark .assessment-score-page,
+.fi-theme-dark .assessment-score-page {
+    color: #f8fafc;
+}
+
+.dark .assessment-score-page .assessment-score-field label,
+.fi-theme-dark .assessment-score-page .assessment-score-field label {
+    color: #e2e8f0;
+}
+
+.dark .assessment-score-page .assessment-score-field small,
+.dark .assessment-score-page .assessment-bulk-card small,
+.fi-theme-dark .assessment-score-page .assessment-score-field small,
+.fi-theme-dark .assessment-score-page .assessment-bulk-card small {
+    color: #cbd5e1;
+}
+
+.dark .assessment-score-page .asmt-typebar__tab,
+.fi-theme-dark .assessment-score-page .asmt-typebar__tab {
+    color: #e2e8f0;
+}

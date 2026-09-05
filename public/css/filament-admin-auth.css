@@ -81,7 +81,7 @@ html.dark .fi-panel-admin,
     margin-bottom: 0.35rem;
 }
 
-.fi-panel-admin .fi-logo {
+.fi-panel-admin .fi-simple-layout .fi-logo {
     background: transparent !important;
     border-radius: 0;
     box-shadow: none;
@@ -89,8 +89,8 @@ html.dark .fi-panel-admin,
     padding: 0;
 }
 
-.fi-panel-admin .fi-logo img,
-.fi-panel-admin .fi-logo svg {
+.fi-panel-admin .fi-simple-layout .fi-logo img,
+.fi-panel-admin .fi-simple-layout .fi-logo svg {
     max-height: 3rem;
     object-fit: contain;
 }
@@ -111,12 +111,12 @@ html.dark .fi-panel-admin,
 
 .fi-panel-admin .fi-simple-page-content,
 .fi-panel-admin .fi-simple-page-content :where(p, span, div, label, a, small, strong),
-.fi-panel-admin .fi-fo,
-.fi-panel-admin .fi-fo :where(p, span, div, label, small, strong),
-.fi-panel-admin .fi-fo-field-label,
-.fi-panel-admin .fi-fo-field-label *,
-.fi-panel-admin .fi-checkbox label,
-.fi-panel-admin .fi-checkbox span {
+.fi-panel-admin .fi-simple-layout .fi-fo,
+.fi-panel-admin .fi-simple-layout .fi-fo :where(p, span, div, label, small, strong),
+.fi-panel-admin .fi-simple-layout .fi-fo-field-label,
+.fi-panel-admin .fi-simple-layout .fi-fo-field-label *,
+.fi-panel-admin .fi-simple-layout .fi-checkbox label,
+.fi-panel-admin .fi-simple-layout .fi-checkbox span {
     color: var(--auth-ink) !important;
 }
 
@@ -124,19 +124,19 @@ html.dark .fi-panel-admin,
     color: var(--auth-muted) !important;
 }
 
-.fi-panel-admin .fi-fo-field-label {
+.fi-panel-admin .fi-simple-layout .fi-fo-field-label {
     font-size: 0.82rem;
     font-weight: 750;
 }
 
-.fi-panel-admin .fi-input-wrp,
-.fi-panel-admin .fi-select-input,
-.fi-panel-admin .fi-input,
-.fi-panel-admin .fi-input-wrp-content-ctn {
+.fi-panel-admin .fi-simple-layout .fi-input-wrp,
+.fi-panel-admin .fi-simple-layout .fi-select-input,
+.fi-panel-admin .fi-simple-layout .fi-input,
+.fi-panel-admin .fi-simple-layout .fi-input-wrp-content-ctn {
     border-radius: 1rem;
 }
 
-.fi-panel-admin .fi-input-wrp {
+.fi-panel-admin .fi-simple-layout .fi-input-wrp {
     border: 1px solid var(--auth-input-border) !important;
     background: var(--auth-input) !important;
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
@@ -144,29 +144,29 @@ html.dark .fi-panel-admin,
     transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
-.fi-panel-admin .fi-input-wrp:focus-within {
+.fi-panel-admin .fi-simple-layout .fi-input-wrp:focus-within {
     border-color: color-mix(in srgb, var(--auth-accent) 58%, var(--auth-input-border)) !important;
     box-shadow: 0 0 0 4px var(--auth-ring);
 }
 
-.fi-panel-admin .fi-input,
-.fi-panel-admin .fi-select-input {
+.fi-panel-admin .fi-simple-layout .fi-input,
+.fi-panel-admin .fi-simple-layout .fi-select-input {
     min-height: 3rem;
     background: transparent !important;
     color: var(--auth-ink) !important;
 }
 
-.fi-panel-admin .fi-input::placeholder {
+.fi-panel-admin .fi-simple-layout .fi-input::placeholder {
     color: color-mix(in srgb, var(--auth-muted) 74%, transparent) !important;
 }
 
-.fi-panel-admin .fi-icon-btn,
-.fi-panel-admin .fi-input-wrp button,
-.fi-panel-admin .fi-input-wrp svg {
+.fi-panel-admin .fi-simple-layout .fi-icon-btn,
+.fi-panel-admin .fi-simple-layout .fi-input-wrp button,
+.fi-panel-admin .fi-simple-layout .fi-input-wrp svg {
     color: var(--auth-muted) !important;
 }
 
-.fi-panel-admin .fi-checkbox-input {
+.fi-panel-admin .fi-simple-layout .fi-checkbox-input {
     width: 1.05rem;
     height: 1.05rem;
     border-color: var(--auth-input-border) !important;
@@ -174,12 +174,12 @@ html.dark .fi-panel-admin,
     accent-color: var(--auth-button);
 }
 
-.fi-panel-admin .fi-btn,
-.fi-panel-admin .fi-ac-btn-action {
+.fi-panel-admin .fi-simple-layout .fi-btn,
+.fi-panel-admin .fi-simple-layout .fi-ac-btn-action {
     border-radius: 999px !important;
 }
 
-.fi-panel-admin .fi-ac-btn-action {
+.fi-panel-admin .fi-simple-layout .fi-ac-btn-action {
     border: 0 !important;
     background: var(--auth-button) !important;
     color: var(--auth-button-ink) !important;
@@ -188,21 +188,21 @@ html.dark .fi-panel-admin,
     transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
 }
 
-.fi-panel-admin .fi-ac-btn-action:hover,
-.fi-panel-admin .fi-ac-btn-action:focus-visible {
+.fi-panel-admin .fi-simple-layout .fi-ac-btn-action:hover,
+.fi-panel-admin .fi-simple-layout .fi-ac-btn-action:focus-visible {
     color: var(--auth-button-ink) !important;
     filter: brightness(1.03);
     transform: translateY(-1px);
     box-shadow: 0 22px 40px -22px rgba(2, 6, 23, 0.8);
 }
 
-.fi-panel-admin .fi-ac-btn-action,
-.fi-panel-admin .fi-ac-btn-action *,
-.fi-panel-admin .fi-ac-btn-action .fi-btn-label {
+.fi-panel-admin .fi-simple-layout .fi-ac-btn-action,
+.fi-panel-admin .fi-simple-layout .fi-ac-btn-action *,
+.fi-panel-admin .fi-simple-layout .fi-ac-btn-action .fi-btn-label {
     color: var(--auth-button-ink) !important;
 }
 
-.fi-panel-admin a:not(.fi-ac-btn-action) {
+.fi-panel-admin .fi-simple-layout a:not(.fi-ac-btn-action) {
     color: color-mix(in srgb, var(--auth-accent) 68%, var(--auth-ink)) !important;
 }
 
@@ -292,17 +292,17 @@ html.dark .fi-panel-admin,
     line-height: 1.5;
 }
 
-.fi-panel-admin .fi-fo-field-wrp-error-message,
-.fi-panel-admin [data-validation-error] {
+.fi-panel-admin .fi-simple-layout .fi-fo-field-wrp-error-message,
+.fi-panel-admin .fi-simple-layout [data-validation-error] {
     color: #be123c !important;
     font-size: 0.78rem;
     font-weight: 750;
     line-height: 1.45;
 }
 
-.fi-panel-admin .fi-input-wrp.fi-invalid,
-.fi-panel-admin .fi-input-wrp:has(input[aria-invalid="true"]),
-.fi-panel-admin .fi-input-wrp:has(select[aria-invalid="true"]) {
+.fi-panel-admin .fi-simple-layout .fi-input-wrp.fi-invalid,
+.fi-panel-admin .fi-simple-layout .fi-input-wrp:has(input[aria-invalid="true"]),
+.fi-panel-admin .fi-simple-layout .fi-input-wrp:has(select[aria-invalid="true"]) {
     border-color: rgba(225, 29, 72, 0.65) !important;
     box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.12);
 }
