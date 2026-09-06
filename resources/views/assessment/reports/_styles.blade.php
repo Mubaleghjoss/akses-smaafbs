@@ -28,7 +28,7 @@
     .empty-row { color: #6b7280; text-align: center; }
     .section-title { margin: 7px 0 3px; font-size: 10px; font-weight: 700; }
     .summary-table th { width: 27%; background: #f3f4f6; text-align: left; }
-    .summary-table--attendance th { width: 18%; } .summary-table--attendance td { width: 15.333%; text-align: center; white-space: nowrap; }
+    .summary-table--attendance td { white-space: nowrap; }
     .attendance-value { display: inline-block; white-space: nowrap; }
     .report-writing-space { height: 46px; max-height: 46px; overflow: hidden; vertical-align: top; }
     .signatures { width: 100%; border-collapse: collapse; margin-top: 14px; page-break-inside: avoid; }

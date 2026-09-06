@@ -30,7 +30,7 @@
     $compactList = fn (array $items): string => \Illuminate\Support\Str::limit(collect($items)->map(fn ($item) => is_array($item) ? data_get($item, 'name', '-').' - '.data_get($item, 'description', data_get($item, 'grade', data_get($item, 'level', '-'))) : (string) $item)->implode('; ') ?: '-', 380);
 @endphp
 
-<div class="report-footer">Dengan Teladan Menjadi Mulia &middot; Rapor {{ $reportKind }} &middot; Tahun Pelajaran {{ $academicYear }}</div>
+<div class="report-footer">Dengan Teladan Menjadi Mulia &middot; Rapor {{ $reportKind }} {{ data_get($school, 'name', 'SMA Al Furqon Boarding School') }}&middot; Tahun Pelajaran {{ $academicYear }}</div>
 
 <section class="report-page report-page--scores">
     <table class="letterhead"><tr>
@@ -68,7 +68,7 @@
 
 <section class="report-page report-page--summary">
     <p class="section-title">Ketidakhadiran</p>
-    <table class="summary-table summary-table--attendance"><tr><th>Sakit</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'sick_days', 0) }}&nbsp;hari</span></td><th>Izin</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'permission_days', 0) }}&nbsp;hari</span></td><th>Tanpa Keterangan</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'absent_days', 0) }}&nbsp;hari</span></td></tr></table>
+    <table class="summary-table summary-table--attendance"><tr><th>Sakit</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'sick_days', 0) }}&nbsp;hari</span></td></tr><tr><th>Izin</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'permission_days', 0) }}&nbsp;hari</span></td></tr><tr><th>Tanpa Keterangan</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'absent_days', 0) }}&nbsp;hari</span></td></tr></table>
     <p class="section-title">Sikap</p>
     <table class="summary-table"><tr><th>Spiritual</th><td>{{ \Illuminate\Support\Str::limit((string) data_get($homeroom, 'spiritual_description', data_get($homeroom, 'spiritual_predicate', '-')), 180) ?: '-' }}</td></tr><tr><th>Sosial</th><td>{{ \Illuminate\Support\Str::limit((string) data_get($homeroom, 'social_description', data_get($homeroom, 'social_predicate', '-')), 180) ?: '-' }}</td></tr></table>
     <p class="section-title">Ekstrakurikuler dan Prestasi</p>
@@ -77,5 +77,5 @@
     </table>
     <p class="section-title">Catatan Wali Kelas</p>
     <table class="summary-table"><tr><td class="report-writing-space">{{ $note }}</td></tr></table>
-    <table class="signatures"><tr>@forelse ($signatures as $signature)<td><div>{{ data_get($signature, 'place_date', data_get($period, 'report_date', '')) }}</div><div>{{ data_get($signature, 'label', 'Mengetahui') }}</div><div class="signature-space"></div><div class="signature-name">{{ data_get($signature, 'name', '-') }}</div>@if (filled(data_get($signature, 'identifier')))<div>{{ data_get($signature, 'identifier') }}</div>@endif</td>@empty<td><div>&nbsp;</div><div>Wali Kelas</div><div class="signature-space"></div><div class="signature-name">&nbsp;</div></td>@endforelse</tr></table>
+    <table class="signatures"><tr>@forelse ($signatures as $signature)<td><div>{{ data_get($signature, 'place_date', data_get($period, 'report_date', '')) }}</div><div>{{ data_get($signature, 'label', 'Mengetahui') }}</div><div class="signature-space"></div><div class="signature-name">{{ filled(data_get($signature, 'name')) ? data_get($signature, 'name') : '........................' }}</div>@if (filled(data_get($signature, 'identifier')))<div>{{ data_get($signature, 'identifier') }}</div>@endif</td>@empty<td><div>&nbsp;</div><div>Wali Kelas</div><div class="signature-space"></div><div class="signature-name">&nbsp;</div></td>@endforelse</tr></table>
 </section>
