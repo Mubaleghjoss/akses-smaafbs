@@ -41,4 +41,30 @@
     .signature-name { display: block; min-height: 14px; border-bottom: 1px solid #111827; font-weight: 700; white-space: nowrap; }
     .signature-name--blank { font-weight: 400; letter-spacing: 0.5px; }
     .signature-identifier { min-height: 12px; }
+
+    .letterhead--asts { margin-bottom: 2px; }
+    .letterhead--asts .letterhead__logo { width: 58px; }
+    .letterhead--asts .letterhead__logo img { max-width: 48px; max-height: 48px; }
+    .letterhead__foundation { margin: 0; font-size: 11px; font-weight: 700; }
+    .letterhead--asts .letterhead__school-name { font-size: 15px; }
+    .letterhead-rule--asts { border-top-width: 2.5px; margin-bottom: 7px; }
+    .report-page--asts-scores .report-subtitle { margin-bottom: 6px; }
+    .asts-kktp-title { margin: 0 0 3px; font-size: 9.5px; font-weight: 700; }
+    .asts-kktp { width: 100%; border-collapse: collapse; margin-bottom: 7px; text-align: center; }
+    .asts-kktp th, .asts-kktp td { padding: 2.5px 4px; border: 1px solid #4b5563; }
+    .asts-kktp th { background: #e5e7eb; }
+    .asts-kktp th span { font-size: 7.6px; font-weight: 400; }
+    .asts-subject-group { margin: 6px 0 2px; font-size: 9.5px; font-weight: 700; }
+    .asts-scores { margin-bottom: 4px; }
+    .asts-summary-grid { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 10px; }
+    .asts-summary-grid > tbody > tr > td { width: 50%; padding: 0 5px; vertical-align: top; }
+    .asts-summary-grid > tbody > tr > td:first-child { padding-left: 0; }
+    .asts-summary-grid > tbody > tr > td:last-child { padding-right: 0; }
+    .asts-summary-grid .section-title { margin-top: 0; }
+    .asts-extracurricular th, .asts-extracurricular td { text-align: center; }
+    .asts-extracurricular th:nth-child(2), .asts-extracurricular td:nth-child(2) { text-align: left; }
+    .asts-extracurricular th:first-child { width: 27px; }
+    .asts-extracurricular th:last-child { width: 48px; }
+    .asts-signatures { margin-top: 34px; }
+    .asts-signatures td { width: 50%; }
 </style>

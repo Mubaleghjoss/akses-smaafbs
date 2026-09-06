@@ -795,6 +795,55 @@ class AssessmentReportingTest extends TestCase
         }
     }
 
+    public function test_asts_uses_two_page_score_and_homeroom_layout_without_competency_descriptions(): void
+    {
+        $snapshot = [
+            'school' => ['name' => 'SMA AFBS'],
+            'period' => ['academic_year' => 'Demo 2025/2026', 'semester' => 'Ganjil'],
+            'student' => ['name' => 'Siswa Uji', 'class_name' => 'XI IPA 1'],
+            'subjects' => [
+                // Deliberately stale predicates verify ASTS uses the displayed KKTP scale.
+                ['name' => 'Nilai 69', 'final_score' => 69, 'predicate' => 'A', 'description' => 'Tidak boleh tampil.', 'group_code' => 'WAJIB'],
+                ['name' => 'Nilai 70', 'final_score' => 70, 'predicate' => 'D', 'description' => 'Tidak boleh tampil.', 'group_code' => 'WAJIB'],
+                ['name' => 'Nilai 75', 'final_score' => 75, 'predicate' => 'A', 'description' => 'Tidak boleh tampil.', 'group_code' => 'WAJIB'],
+                ['name' => 'Nilai 76', 'final_score' => 76, 'predicate' => 'C', 'description' => 'Tidak boleh tampil.', 'group_code' => 'WAJIB'],
+                ['name' => 'Nilai 85', 'final_score' => 85, 'predicate' => 'D', 'description' => 'Tidak boleh tampil.', 'group_code' => 'WAJIB'],
+                ['name' => 'Nilai 86', 'final_score' => 86, 'predicate' => 'C', 'description' => 'Tidak boleh tampil.', 'group_code' => 'WAJIB'],
+                ['name' => 'Matematika', 'final_score' => 90, 'predicate' => 'D', 'description' => 'Tidak boleh tampil.', 'group_code' => 'WAJIB'],
+                ['name' => 'Biologi Lanjut', 'final_score' => 82, 'predicate' => 'A', 'description' => 'Tidak boleh tampil.', 'group_code' => 'PILIHAN'],
+            ],
+            'homeroom' => [
+                'sick_days' => 1,
+                'extracurricular_data' => [['name' => 'Pramuka', 'description' => 'Baik']],
+            ],
+            'signatures' => [
+                ['label' => 'Orang Tua/Wali', 'name' => '-'],
+                ['label' => 'Wali Kelas', 'name' => 'Ibu Wali', 'place_date' => 'Tangerang, 10 Oktober 2026'],
+                ['label' => 'Kepala Sekolah', 'name' => 'Tidak Boleh Tampil'],
+            ],
+        ];
+
+        $html = view('assessment.reports.asts', [
+            'snapshot' => $snapshot,
+            'templateSettings' => [],
+            'pdfMode' => false,
+        ])->render();
+
+        $this->assertStringContainsString('Tabel Interval berdasarkan KKTP', $html);
+        foreach ([69 => 'D', 70 => 'C', 75 => 'C', 76 => 'B', 85 => 'B', 86 => 'A'] as $score => $predicate) {
+            $this->assertMatchesRegularExpression('/'.$score.'<\/td><td class="scores__predicate">'.$predicate.'<\/td>/', $html);
+        }
+        $this->assertStringContainsString('Kelompok Umum', $html);
+        $this->assertStringContainsString('Kelompok Pilihan', $html);
+        $this->assertStringContainsString('Ekstrakurikuler', $html);
+        $this->assertStringContainsString('asts-signatures', $html);
+        $this->assertStringContainsString('(................................................)', $html);
+        $this->assertStringNotContainsString('Capaian Kompetensi', $html);
+        $this->assertStringNotContainsString('Tidak boleh tampil.', $html);
+        $this->assertStringNotContainsString('Kepala Sekolah', $html);
+        $this->assertSame(1, substr_count($html, '<div class="report-page-break"></div>'));
+    }
+
     public function test_streamed_student_report_download_creates_no_permanent_pdf_file(): void
     {
         Storage::fake('local');

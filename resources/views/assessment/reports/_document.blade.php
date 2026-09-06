@@ -1,4 +1,10 @@
 @php
+    $reportKind = strtoupper($reportKind);
+@endphp
+@if ($reportKind === 'ASTS')
+    @include('assessment.reports._document-asts', ['reportKind' => $reportKind])
+@else
+@php
     $school = is_array(data_get($snapshot, 'school')) ? data_get($snapshot, 'school') : [];
     $period = is_array(data_get($snapshot, 'period')) ? data_get($snapshot, 'period') : [];
     $student = is_array(data_get($snapshot, 'student')) ? data_get($snapshot, 'student') : [];
@@ -92,3 +98,4 @@
         <tr class="signature-names">@foreach ($signatureColumns as $signature)<td><div class="signature-name{{ data_get($signature, 'name') === '-' ? ' signature-name--blank' : '' }}">{{ filled(data_get($signature, 'name')) && data_get($signature, 'name') !== '-' ? data_get($signature, 'name') : '................................................' }}</div>@if (filled(data_get($signature, 'identifier')))<div class="signature-identifier">{{ data_get($signature, 'identifier') }}</div>@endif</td>@endforeach</tr>
     </table>
 </section>
+@endif
