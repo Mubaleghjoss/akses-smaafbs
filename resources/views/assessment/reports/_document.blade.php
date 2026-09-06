@@ -89,6 +89,6 @@
         @if ($signatureDate)<tr><td class="signature-date" colspan="{{ count($signatureColumns) }}">{{ $signatureDate }}</td></tr>@endif
         <tr class="signature-labels">@foreach ($signatureColumns as $signature)<td>{{ data_get($signature, 'label', 'Mengetahui') }}</td>@endforeach</tr>
         <tr class="signature-spaces">@foreach ($signatureColumns as $signature)<td><div class="signature-space"></div></td>@endforeach</tr>
-        <tr class="signature-names">@foreach ($signatureColumns as $signature)<td><div class="signature-name{{ data_get($signature, 'name') === '-' ? ' signature-name--blank' : '' }}">{{ filled(data_get($signature, 'name')) && data_get($signature, 'name') !== '-' ? data_get($signature, 'name') : '..................................' }}</div>@if (filled(data_get($signature, 'identifier')))<div class="signature-identifier">{{ data_get($signature, 'identifier') }}</div>@endif</td>@endforeach</tr>
+        <tr class="signature-names">@foreach ($signatureColumns as $signature)<td><div class="signature-name{{ data_get($signature, 'name') === '-' ? ' signature-name--blank' : '' }}">{{ filled(data_get($signature, 'name')) && data_get($signature, 'name') !== '-' ? data_get($signature, 'name') : '................................................' }}</div>@if (filled(data_get($signature, 'identifier')))<div class="signature-identifier">{{ data_get($signature, 'identifier') }}</div>@endif</td>@endforeach</tr>
     </table>
 </section>
