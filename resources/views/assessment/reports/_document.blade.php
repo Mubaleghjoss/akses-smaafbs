@@ -77,5 +77,18 @@
     </table>
     <p class="section-title">Catatan Wali Kelas</p>
     <table class="summary-table"><tr><td class="report-writing-space">{{ $note }}</td></tr></table>
-    <table class="signatures"><tr>@forelse ($signatures as $signature)<td><div>{{ data_get($signature, 'place_date', data_get($period, 'report_date', '')) }}</div><div>{{ data_get($signature, 'label', 'Mengetahui') }}</div><div class="signature-space"></div><div class="signature-name">{{ filled(data_get($signature, 'name')) ? data_get($signature, 'name') : '........................' }}</div>@if (filled(data_get($signature, 'identifier')))<div>{{ data_get($signature, 'identifier') }}</div>@endif</td>@empty<td><div>&nbsp;</div><div>Wali Kelas</div><div class="signature-space"></div><div class="signature-name">&nbsp;</div></td>@endforelse</tr></table>
+    @php
+        $signatureColumns = count($signatures) > 0 ? array_values($signatures) : [
+            ['label' => 'Orang Tua/Wali', 'name' => '-'],
+            ['label' => 'Wali Kelas', 'name' => '-'],
+            ['label' => 'Kepala Sekolah', 'name' => '-'],
+        ];
+        $signatureDate = collect($signatureColumns)->pluck('place_date')->filter()->first();
+    @endphp
+    <table class="signatures">
+        @if ($signatureDate)<tr><td class="signature-date" colspan="{{ count($signatureColumns) }}">{{ $signatureDate }}</td></tr>@endif
+        <tr class="signature-labels">@foreach ($signatureColumns as $signature)<td>{{ data_get($signature, 'label', 'Mengetahui') }}</td>@endforeach</tr>
+        <tr class="signature-spaces">@foreach ($signatureColumns as $signature)<td><div class="signature-space"></div></td>@endforeach</tr>
+        <tr class="signature-names">@foreach ($signatureColumns as $signature)<td><div class="signature-name{{ data_get($signature, 'name') === '-' ? ' signature-name--blank' : '' }}">{{ filled(data_get($signature, 'name')) && data_get($signature, 'name') !== '-' ? data_get($signature, 'name') : '..................................' }}</div>@if (filled(data_get($signature, 'identifier')))<div class="signature-identifier">{{ data_get($signature, 'identifier') }}</div>@endif</td>@endforeach</tr>
+    </table>
 </section>
