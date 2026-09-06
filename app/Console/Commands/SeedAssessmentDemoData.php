@@ -429,7 +429,11 @@ class SeedAssessmentDemoData extends Command
 
     private function buatTemplate(AssessmentType $type): ReportTemplate
     {
-        return ReportTemplate::query()->updateOrCreate(['code' => 'DEMO-'.strtoupper($type->value).'-STANDARD', 'version' => 1], ['type' => $type, 'name' => 'Demo Template '.strtoupper($type->value), 'view_path' => $type === AssessmentType::ASTS ? 'assessment.reports.asts' : 'assessment.reports.asas', 'settings' => ['school_name' => 'SMA Al Furqon Boarding School', 'place' => 'Tangerang', 'principal_name' => 'Demo Kepala Sekolah SMA AFBS', 'show_predicate' => true, 'show_description' => true, 'demo_owner' => self::MARKER], 'is_active' => true]);
+        return ReportTemplate::query()->updateOrCreate(['code' => 'DEMO-'.strtoupper($type->value).'-STANDARD', 'version' => 1], ['type' => $type, 'name' => 'Demo Template '.strtoupper($type->value), 'view_path' => match ($type) {
+            AssessmentType::ASTS => 'assessment.reports.asts',
+            AssessmentType::ASAS => 'assessment.reports.asas',
+            AssessmentType::ASAT => 'assessment.reports.asat',
+        }, 'settings' => ['school_name' => 'SMA Al Furqon Boarding School', 'place' => 'Tangerang', 'principal_name' => 'Demo Kepala Sekolah SMA AFBS', 'show_predicate' => true, 'show_description' => true, 'demo_owner' => self::MARKER], 'is_active' => true]);
     }
 
     private function cetak(AssessmentPeriod $period, ReportTemplate $template, User $actor): array

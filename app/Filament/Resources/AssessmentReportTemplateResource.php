@@ -78,12 +78,13 @@ class AssessmentReportTemplateResource extends Resource
         $expectedView = match ($type) {
             AssessmentType::ASTS => 'assessment.reports.asts',
             AssessmentType::ASAS => 'assessment.reports.asas',
+            AssessmentType::ASAT => 'assessment.reports.asat',
             default => null,
         };
 
         if (! $type || ($data['view_path'] ?? null) !== $expectedView) {
             throw ValidationException::withMessages([
-                'data.view_path' => 'Layout rapor harus sesuai dengan jenis ASTS atau ASAS yang dipilih.',
+                'data.view_path' => 'Layout rapor harus sesuai dengan jenis ASTS, ASAS, atau ASAT yang dipilih.',
             ]);
         }
 
@@ -145,6 +146,7 @@ class AssessmentReportTemplateResource extends Resource
                         ->options([
                             'assessment.reports.asts' => 'Standar ASTS A4',
                             'assessment.reports.asas' => 'Standar ASAS A4',
+                            'assessment.reports.asat' => 'Standar ASAT A4',
                         ])
                         ->required()
                         ->native(false),

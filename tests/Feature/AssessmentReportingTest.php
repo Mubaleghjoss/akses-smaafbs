@@ -764,6 +764,37 @@ class AssessmentReportingTest extends TestCase
         }
     }
 
+    public function test_all_report_views_use_sumative_titles_two_page_structure_and_school_footer(): void
+    {
+        $snapshot = [
+            'school' => ['name' => 'SMA AFBS'],
+            'period' => ['academic_year' => '2025/2026', 'semester' => 'GANJIL'],
+            'student' => ['name' => 'Siswa Uji'],
+            'subjects' => [['name' => 'Matematika', 'final_score' => 90]],
+            'homeroom' => ['homeroom_note' => str_repeat('Catatan wali kelas. ', 100)],
+            'signatures' => [],
+        ];
+
+        foreach ([
+            'ASTS' => 'ASESMEN SUMATIF TENGAH SEMESTER (ASTS)',
+            'ASAS' => 'ASESMEN SUMATIF AKHIR SEMESTER (ASAS)',
+            'ASAT' => 'ASESMEN SUMATIF AKHIR TAHUN (ASAT)',
+        ] as $kind => $expectedTitle) {
+            $html = view('assessment.reports.'.strtolower($kind), [
+                'snapshot' => $snapshot,
+                'templateSettings' => ['report_title' => 'Judul lama tidak boleh dipakai'],
+                'pdfMode' => false,
+            ])->render();
+
+            $this->assertStringContainsString($expectedTitle, $html);
+            $this->assertStringContainsString('Dengan Teladan Menjadi Mulia', $html);
+            $this->assertStringContainsString('Tahun Pelajaran 2025/2026', $html);
+            $this->assertStringContainsString('report-page-break', $html);
+            $this->assertStringNotContainsString('Dokumen snapshot', $html);
+            $this->assertStringNotContainsString('Template v', $html);
+        }
+    }
+
     public function test_streamed_student_report_download_creates_no_permanent_pdf_file(): void
     {
         Storage::fake('local');

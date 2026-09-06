@@ -18,6 +18,7 @@ class AssessmentReportRenderer
     private const ALLOWED_VIEWS = [
         'assessment.reports.asts' => 'assessment.reports.asts',
         'assessment.reports.asas' => 'assessment.reports.asas',
+        'assessment.reports.asat' => 'assessment.reports.asat',
     ];
 
     public function renderStudent(ReportSnapshot $snapshot): string
@@ -81,11 +82,16 @@ class AssessmentReportRenderer
             $template->view_path,
         ));
 
+        $type = strtoupper((string) data_get($snapshot, 'period.type', $template->type));
+
+        // ASAT lama dapat memakai template ASAS, tetapi isi dokumennya tetap ASAT.
+        if ($type === 'ASAT') {
+            return 'assessment.reports.asat';
+        }
+
         if (isset(self::ALLOWED_VIEWS[$configured])) {
             return self::ALLOWED_VIEWS[$configured];
         }
-
-        $type = strtoupper((string) data_get($snapshot, 'period.type', $template->type));
 
         return match ($type) {
             'ASTS' => 'assessment.reports.asts',
