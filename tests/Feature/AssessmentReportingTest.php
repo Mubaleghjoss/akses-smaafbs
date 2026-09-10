@@ -790,6 +790,12 @@ class AssessmentReportingTest extends TestCase
             $this->assertStringContainsString('Dengan Teladan Menjadi Mulia', $html);
             $this->assertStringContainsString('Tahun Pelajaran 2025/2026', $html);
             $this->assertStringContainsString('report-page-break', $html);
+            $this->assertStringContainsString('font-family: "Times New Roman", Times, serif', $html);
+            $this->assertStringNotContainsString('Gill Sans MT', $html);
+            $this->assertStringContainsString('font-size: 12px', $html);
+            $this->assertStringContainsString('font-size: 13px', $html);
+            $this->assertStringContainsString('font-size: 14px', $html);
+            $this->assertStringContainsString('font-size: 10px', $html);
             $this->assertStringNotContainsString('Dokumen snapshot', $html);
             $this->assertStringNotContainsString('Template v', $html);
         }
