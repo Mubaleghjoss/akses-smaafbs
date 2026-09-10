@@ -792,10 +792,13 @@ class AssessmentReportingTest extends TestCase
             $this->assertStringContainsString('report-page-break', $html);
             $this->assertStringContainsString('font-family: "Times New Roman", Times, serif', $html);
             $this->assertStringNotContainsString('Gill Sans MT', $html);
-            $this->assertStringContainsString('font-size: 12px', $html);
-            $this->assertStringContainsString('font-size: 13px', $html);
-            $this->assertStringContainsString('font-size: 14px', $html);
-            $this->assertStringContainsString('font-size: 10px', $html);
+            $this->assertStringContainsString('font-size: 12pt', $html);
+            $this->assertStringContainsString('font-size: 13pt', $html);
+            $this->assertStringContainsString('font-size: 14pt', $html);
+            $this->assertStringContainsString('font-size: 10pt', $html);
+            $this->assertStringNotContainsString('font-size: 9', $html);
+            $this->assertStringNotContainsString('font-size: 9.4px', $html);
+            $this->assertStringNotContainsString('font-size: 9.5px', $html);
             $this->assertStringNotContainsString('Dokumen snapshot', $html);
             $this->assertStringNotContainsString('Template v', $html);
         }
