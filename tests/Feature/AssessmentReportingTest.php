@@ -804,6 +804,41 @@ class AssessmentReportingTest extends TestCase
         }
     }
 
+    public function test_asas_and_asat_render_manual_homeroom_sections_and_only_asas_shows_promotion_status(): void
+    {
+        $snapshot = [
+            'school' => ['name' => 'SMA AFBS'],
+            'period' => ['academic_year' => '2025/2026', 'semester' => 'GENAP', 'collect_promotion_status' => true],
+            'student' => ['name' => 'Siswa Uji', 'class_name' => 'XI 1'],
+            'subjects' => [['name' => 'Matematika', 'final_score' => 90, 'predicate' => 'A', 'description' => 'Menguasai kompetensi numerasi.']],
+            'homeroom' => [
+                'kokurikuler' => 'Aktif dalam projek kokurikuler.',
+                'extracurricular_data' => [['name' => 'Pramuka', 'description' => 'Baik']],
+                'achievement_data' => [['name' => 'Juara Kelas', 'description' => 'Tingkat sekolah']],
+                'homeroom_note' => 'Pertahankan semangat belajar.',
+                'promotion_status' => 'Naik Kelas',
+            ],
+            'signatures' => [],
+        ];
+
+        $asas = view('assessment.reports.asas', ['snapshot' => $snapshot, 'templateSettings' => [], 'pdfMode' => false])->render();
+        $asat = view('assessment.reports.asat', ['snapshot' => $snapshot, 'templateSettings' => [], 'pdfMode' => false])->render();
+
+        foreach ([$asas, $asat] as $html) {
+            foreach (['Capaian Kompetensi', 'B. Kokurikuler', 'C. Ekstrakurikuler', 'E. Prestasi', 'F. Ketidakhadiran', 'G. Catatan Wali Kelas'] as $text) {
+                $this->assertStringContainsString($text, $html);
+            }
+            $this->assertSame(1, substr_count($html, '<div class="report-page-break"></div>'));
+            $this->assertStringContainsString('font-family: "Times New Roman", Times, serif', $html);
+        }
+
+        $this->assertStringContainsString('Keterangan Naik Kelas', $asas);
+        $this->assertStringContainsString('Naik Kelas', $asas);
+        $this->assertStringNotContainsString('Keterangan Naik Kelas', $asat);
+        $this->assertStringNotContainsString('Status Semester', $asat);
+        $this->assertStringNotContainsString('Naik Kelas', $asat);
+    }
+
     public function test_asts_uses_two_page_score_and_homeroom_layout_without_competency_descriptions(): void
     {
         $snapshot = [

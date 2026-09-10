@@ -30,6 +30,9 @@
     .scores__predicate { width: 55px; text-align: center; } .scores__description { font-size: 12pt; line-height: 1.15; }
     .empty-row { color: #6b7280; text-align: center; }
     .section-title { margin: 7px 0 3px; font-size: 12pt; font-weight: 700; }
+    .report-page-one-section { margin-top: 5px; }
+    .kokurikuler-table td { min-height: 34px; }
+    .manual-writing-space { height: 38px; vertical-align: top; }
     .summary-table th { width: 27%; background: #f3f4f6; text-align: left; }
     .summary-table--attendance td { white-space: nowrap; }
     .attendance-value { display: inline-block; white-space: nowrap; }

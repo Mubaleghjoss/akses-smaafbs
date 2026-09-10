@@ -79,6 +79,12 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
             'input' => 'items',
             'max' => 4000,
         ],
+        'kokurikuler' => [
+            'header' => 'Kokurikuler',
+            'bulk_label' => 'Kokurikuler',
+            'input' => 'text',
+            'max' => 2000,
+        ],
         'achievement_items' => [
             'header' => 'Prestasi',
             'bulk_label' => 'Prestasi',
@@ -249,7 +255,8 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
                 'social_predicate' => $report?->social_predicate,
                 'social_description' => $report?->social_description,
                 'extracurricular_items' => $this->normalizeStructuredItems($report?->extracurricular_data),
-                'achievement_items' => $this->normalizeStructuredItems($report?->achievement_data),
+                'achievement_items' => $this->normalizeStructuredItems(data_get($report?->achievement_data, 'items', $report?->achievement_data)),
+                'kokurikuler' => trim((string) data_get($report?->achievement_data, 'kokurikuler', '')),
                 'homeroom_note' => $report?->homeroom_note,
                 'promotion_status' => $report?->promotion_status,
             ];
@@ -686,7 +693,12 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
                             ? trim((string) $row['social_description'])
                             : null,
                         'extracurricular_data' => $this->normalizeStructuredItems($row['extracurricular_items'] ?? [], true),
-                        'achievement_data' => $this->normalizeStructuredItems($row['achievement_items'] ?? [], true),
+                        'achievement_data' => filled($row['kokurikuler'] ?? null)
+                            ? [
+                                'items' => $this->normalizeStructuredItems($row['achievement_items'] ?? [], true),
+                                'kokurikuler' => trim($row['kokurikuler']),
+                            ]
+                            : $this->normalizeStructuredItems($row['achievement_items'] ?? [], true),
                         'homeroom_note' => filled($row['homeroom_note'] ?? null) ? trim($row['homeroom_note']) : null,
                         'promotion_status' => $collectPromotionStatus && filled($row['promotion_status'] ?? null)
                             ? trim($row['promotion_status'])

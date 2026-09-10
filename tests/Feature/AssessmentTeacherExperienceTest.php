@@ -503,6 +503,7 @@ class AssessmentTeacherExperienceTest extends TestCase
             'Predikat Sosial',
             'Deskripsi Sosial',
             'Ekstrakurikuler',
+            'Kokurikuler',
             'Prestasi',
             'Catatan Wali',
         ];
@@ -515,6 +516,7 @@ class AssessmentTeacherExperienceTest extends TestCase
             'social_predicate',
             'social_description',
             'extracurricular_items',
+            'kokurikuler',
             'achievement_items',
             'homeroom_note',
         ];

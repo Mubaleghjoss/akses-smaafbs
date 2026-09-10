@@ -281,7 +281,8 @@ class CreateReportSnapshotsAction
                             'social_predicate' => $homeroom?->social_predicate,
                             'social_description' => $homeroom?->social_description,
                             'extracurricular_data' => $this->decodeJson($homeroom?->extracurricular_data),
-                            'achievement_data' => $this->decodeJson($homeroom?->achievement_data),
+                            'achievement_data' => $this->achievementItems($homeroom?->achievement_data),
+                            'kokurikuler' => $this->kokurikulerNote($homeroom?->achievement_data),
                             'homeroom_note' => $homeroom?->homeroom_note,
                             'promotion_status' => $collectPromotionStatus
                                 ? $homeroom?->promotion_status
@@ -565,6 +566,21 @@ class CreateReportSnapshotsAction
     /**
      * @return array<int|string, mixed>
      */
+    /** @return array<int, mixed> */
+    private function achievementItems(mixed $value): array
+    {
+        $data = $this->decodeJson($value);
+
+        return is_array(data_get($data, 'items')) ? data_get($data, 'items') : $data;
+    }
+
+    private function kokurikulerNote(mixed $value): ?string
+    {
+        $note = trim((string) data_get($this->decodeJson($value), 'kokurikuler', ''));
+
+        return $note !== '' ? $note : null;
+    }
+
     private function decodeJson(mixed $value): array
     {
         if (is_array($value)) {

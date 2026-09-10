@@ -122,7 +122,8 @@ final class BuildAssessmentReportPreviewSnapshot
                     'social_predicate' => $homeroom?->social_predicate,
                     'social_description' => $homeroom?->social_description,
                     'extracurricular_data' => $homeroom?->extracurricular_data ?? [],
-                    'achievement_data' => $homeroom?->achievement_data ?? [],
+                    'achievement_data' => $this->achievementItems($homeroom?->achievement_data),
+                    'kokurikuler' => $this->kokurikulerNote($homeroom?->achievement_data),
                     'homeroom_note' => $homeroom?->homeroom_note,
                     'promotion_status' => $homeroom?->promotion_status,
                 ],
@@ -140,6 +141,22 @@ final class BuildAssessmentReportPreviewSnapshot
                 ],
             ],
         ]);
+    }
+
+    /** @return array<int, mixed> */
+    private function achievementItems(mixed $value): array
+    {
+        $data = is_array($value) ? $value : (json_decode((string) $value, true) ?: []);
+
+        return is_array(data_get($data, 'items')) ? data_get($data, 'items') : $data;
+    }
+
+    private function kokurikulerNote(mixed $value): ?string
+    {
+        $data = is_array($value) ? $value : (json_decode((string) $value, true) ?: []);
+        $note = trim((string) data_get($data, 'kokurikuler', ''));
+
+        return $note !== '' ? $note : null;
     }
 
     /**

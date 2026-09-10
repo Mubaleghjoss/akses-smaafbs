@@ -31,8 +31,11 @@
     $achievements = data_get($homeroom, 'achievements', data_get($homeroom, 'achievement_data', []));
     $extracurricular = is_array($extracurricular) ? $extracurricular : [];
     $achievements = is_array($achievements) ? $achievements : [];
+    $kokurikuler = trim(strip_tags((string) data_get($homeroom, 'kokurikuler', '-')));
+    $kokurikuler = $kokurikuler !== '' && $kokurikuler !== '-' ? \Illuminate\Support\Str::limit($kokurikuler, 420) : 'Diisi manual oleh wali kelas.';
     $note = trim(strip_tags((string) data_get($homeroom, 'note', data_get($homeroom, 'homeroom_note', '-'))));
     $note = $note !== '' ? \Illuminate\Support\Str::limit($note, 650) : '-';
+    $showPromotionStatus = $reportKind === 'ASAS' && (bool) data_get($period, 'collect_promotion_status', true) && filled(data_get($homeroom, 'promotion_status'));
     $compactList = fn (array $items): string => \Illuminate\Support\Str::limit(collect($items)->map(fn ($item) => is_array($item) ? data_get($item, 'name', '-').' - '.data_get($item, 'description', data_get($item, 'grade', data_get($item, 'level', '-'))) : (string) $item)->implode('; ') ?: '-', 380);
 @endphp
 
@@ -68,21 +71,24 @@
             @if ($showDescription)<td class="scores__description">{{ \Illuminate\Support\Str::limit((string) data_get($subject, 'description', '-'), 145) }}</td>@endif
         </tr>@empty<tr><td class="empty-row" colspan="{{ $scoreColumnCount }}">Belum ada hasil mata pelajaran pada snapshot ini.</td></tr>@endforelse
     </tbody></table>
+    <p class="section-title report-page-one-section">B. Kokurikuler</p>
+    <table class="summary-table kokurikuler-table"><tr><td class="manual-writing-space">{{ $kokurikuler }}</td></tr></table>
 </section>
 
 <div class="report-page-break"></div>
 
 <section class="report-page report-page--summary">
-    <p class="section-title">Ketidakhadiran</p>
-    <table class="summary-table summary-table--attendance"><tr><th>Sakit</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'sick_days', 0) }}&nbsp;hari</span></td></tr><tr><th>Izin</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'permission_days', 0) }}&nbsp;hari</span></td></tr><tr><th>Tanpa Keterangan</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'absent_days', 0) }}&nbsp;hari</span></td></tr></table>
-    <p class="section-title">Sikap</p>
+    <p class="section-title">C. Ekstrakurikuler</p>
+    <table class="summary-table"><tr><th>Ekstrakurikuler</th><td>{{ $compactList($extracurricular) }}</td></tr></table>
+    <p class="section-title">D. Sikap</p>
     <table class="summary-table"><tr><th>Spiritual</th><td>{{ \Illuminate\Support\Str::limit((string) data_get($homeroom, 'spiritual_description', data_get($homeroom, 'spiritual_predicate', '-')), 180) ?: '-' }}</td></tr><tr><th>Sosial</th><td>{{ \Illuminate\Support\Str::limit((string) data_get($homeroom, 'social_description', data_get($homeroom, 'social_predicate', '-')), 180) ?: '-' }}</td></tr></table>
-    <p class="section-title">Ekstrakurikuler dan Prestasi</p>
-    <table class="summary-table"><tr><th>Ekstrakurikuler</th><td>{{ $compactList($extracurricular) }}</td></tr><tr><th>Prestasi</th><td>{{ $compactList($achievements) }}</td></tr>
-        @if (filled(data_get($homeroom, 'promotion_status')))<tr><th>Status Semester</th><td>{{ data_get($homeroom, 'promotion_status') }}</td></tr>@endif
-    </table>
-    <p class="section-title">Catatan Wali Kelas</p>
+    <p class="section-title">E. Prestasi</p>
+    <table class="summary-table"><tr><th>Prestasi</th><td>{{ $compactList($achievements) }}</td></tr></table>
+    <p class="section-title">F. Ketidakhadiran</p>
+    <table class="summary-table summary-table--attendance"><tr><th>Sakit</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'sick_days', 0) }}&nbsp;hari</span></td></tr><tr><th>Izin</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'permission_days', 0) }}&nbsp;hari</span></td></tr><tr><th>Tanpa Keterangan</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'absent_days', 0) }}&nbsp;hari</span></td></tr></table>
+    <p class="section-title">G. Catatan Wali Kelas</p>
     <table class="summary-table"><tr><td class="report-writing-space">{{ $note }}</td></tr></table>
+    @if ($showPromotionStatus)<p class="section-title">Keterangan Naik Kelas</p><table class="summary-table"><tr><td>{{ data_get($homeroom, 'promotion_status') }}</td></tr></table>@endif
     @php
         $signatureColumns = count($signatures) > 0 ? array_values($signatures) : [
             ['label' => 'Orang Tua/Wali', 'name' => '-'],

@@ -11,6 +11,7 @@ use App\Models\Assessment\AssessmentPeriodAssignment;
 use App\Models\Assessment\AssessmentPeriodStudent;
 use App\Models\Assessment\AssessmentScore;
 use App\Models\Assessment\ClassReportArtifact;
+use App\Models\Assessment\HomeroomReport;
 use App\Models\Assessment\ReportSnapshot;
 use App\Models\Assessment\Semester;
 use App\Models\Assessment\StudentSubjectResult;
@@ -154,6 +155,24 @@ class AssessmentDemoDataTest extends TestCase
                 $this->assertStringStartsWith('%PDF', Storage::disk('local')->get($artifact->pdf_path));
             }
         }
+    }
+
+    public function test_demo_asas_and_asat_include_manual_homeroom_data_without_asat_promotion_status(): void
+    {
+        Storage::fake('local');
+        $this->jalankanPenuh();
+
+        $asas = AssessmentPeriod::query()->where('type', 'asas')->firstOrFail();
+        $asat = AssessmentPeriod::query()->where('type', 'asat')->firstOrFail();
+        $asasReport = HomeroomReport::query()->where('assessment_period_id', $asas->id)->firstOrFail();
+        $asatReport = HomeroomReport::query()->where('assessment_period_id', $asat->id)->firstOrFail();
+
+        $this->assertSame('Naik Kelas', $asasReport->promotion_status);
+        $this->assertNull($asatReport->promotion_status);
+        $this->assertNotEmpty(data_get($asasReport->achievement_data, 'kokurikuler'));
+        $this->assertNotEmpty(data_get($asatReport->achievement_data, 'kokurikuler'));
+        $this->assertNotEmpty(data_get($asasReport->achievement_data, 'items'));
+        $this->assertNotEmpty(data_get($asatReport->achievement_data, 'items'));
     }
 
     public function test_hak_akses_mengikuti_matriks_resmi_dan_peran_gabungan(): void

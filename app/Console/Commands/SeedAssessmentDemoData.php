@@ -233,7 +233,7 @@ class SeedAssessmentDemoData extends Command
             'code' => $periodCode, 'name' => 'Demo '.strtoupper($type->value).' '.$yearText.' '.ucfirst(strtolower($semesterKind)),
             'type' => $type, 'status' => AssessmentPeriodStatus::OPEN, 'entry_start_at' => now()->subDay(), 'entry_end_at' => now()->addDay(),
             'report_date' => $semesterKind === 'GANJIL' ? "{$startYear}-12-20" : "{$endYear}-06-20",
-            'settings' => ['collect_promotion_status' => $type !== AssessmentType::ASTS, 'demo_owner' => self::MARKER], 'created_by' => $kurikulum->getKey(),
+            'settings' => ['collect_promotion_status' => $type === AssessmentType::ASAS, 'demo_owner' => self::MARKER], 'created_by' => $kurikulum->getKey(),
         ]);
         [$categories, $subjects] = $this->buatMapel();
         $rombels = $this->buatRombelDanSiswa($period, $studentCount);
@@ -422,7 +422,7 @@ class SeedAssessmentDemoData extends Command
             $source = HomeroomAssignment::query()->updateOrCreate(['assessment_semester_id' => $semester->getKey(), 'rombel_id' => $rombel->source_rombel_id], ['teacher_id' => $wali->guru_tendik_id, 'teacher_name_snapshot' => $name, 'rombel_name_snapshot' => $class, 'is_active' => true]);
             AssessmentPeriodHomeroom::query()->create(['assessment_period_id' => $period->getKey(), 'assessment_period_rombel_id' => $rombel->getKey(), 'source_homeroom_assignment_id' => $source->getKey(), 'teacher_id' => $wali->guru_tendik_id, 'teacher_name_snapshot' => $name, 'rombel_name_snapshot' => $class]);
             foreach ($period->students()->where('assessment_period_rombel_id', $rombel->getKey())->get() as $index => $student) {
-                HomeroomReport::query()->create(['assessment_period_id' => $period->getKey(), 'assessment_period_student_id' => $student->getKey(), 'sick_days' => $index % 3, 'permission_days' => $index % 2, 'absent_days' => 0, 'spiritual_predicate' => 'Baik', 'spiritual_description' => 'Konsisten menjalankan ibadah dan menunjukkan rasa syukur.', 'social_predicate' => 'Baik', 'social_description' => 'Santun, peduli, dan mampu bekerja sama.', 'extracurricular_data' => [['name' => 'Pramuka', 'predicate' => 'Baik']], 'achievement_data' => [], 'homeroom_note' => 'Pertahankan semangat belajar dan akhlak baik.', 'promotion_status' => 'naik', 'updated_by' => $wali->getKey()]);
+                HomeroomReport::query()->create(['assessment_period_id' => $period->getKey(), 'assessment_period_student_id' => $student->getKey(), 'sick_days' => $index % 3, 'permission_days' => $index % 2, 'absent_days' => 0, 'spiritual_predicate' => 'Baik', 'spiritual_description' => 'Konsisten menjalankan ibadah dan menunjukkan rasa syukur.', 'social_predicate' => 'Baik', 'social_description' => 'Santun, peduli, dan mampu bekerja sama.', 'extracurricular_data' => [['name' => 'Pramuka', 'predicate' => 'Baik']], 'achievement_data' => ['items' => [['name' => 'Juara Kelas', 'description' => 'Semester berjalan']], 'kokurikuler' => 'Aktif mengikuti projek kokurikuler dan menunjukkan kerja sama yang baik.'], 'homeroom_note' => 'Pertahankan semangat belajar dan akhlak baik.', 'promotion_status' => $period->type === AssessmentType::ASAS ? 'Naik Kelas' : null, 'updated_by' => $wali->getKey()]);
             }
         }
     }
