@@ -49,9 +49,6 @@
         <td class="identity__label">Jenis Laporan</td><td class="identity__separator">:</td><td>ASTS</td>
     </tr></table>
 
-    <p class="asts-kktp-title">Tabel Interval berdasarkan KKTP</p>
-    <table class="asts-kktp"><thead><tr><th>KKTP</th><th colspan="4">Predikat</th></tr><tr><th>81</th><th>D<br><span>Kurang</span></th><th>C<br><span>Cukup</span></th><th>B<br><span>Baik</span></th><th>A<br><span>Sangat Baik</span></th></tr></thead><tbody><tr><td>Interval Nilai</td><td>&lt;70</td><td>70-75</td><td>76-85</td><td>86-100</td></tr></tbody></table>
-
     @foreach ($subjectGroups as $groupName => $groupSubjects)
         @if ($usesChoiceGroups || $loop->first)<p class="asts-subject-group">{{ $groupName }}</p>@endif
         <table class="scores asts-scores"><thead><tr><th class="scores__number">No.</th><th>Mata Pelajaran</th><th class="scores__score">Nilai</th><th class="scores__predicate">Predikat</th></tr></thead><tbody>
@@ -59,12 +56,23 @@
             @empty<tr><td class="empty-row" colspan="4">Belum ada mata pelajaran pada kelompok ini.</td></tr>@endforelse
         </tbody></table>
     @endforeach
+
+    <p class="asts-kktp-title">Tabel Interval berdasarkan KKTP</p>
+    <table class="asts-kktp"><thead><tr><th>KKTP</th><th colspan="4">Predikat</th></tr><tr><th>81</th><th>D<br><span>Kurang</span></th><th>C<br><span>Cukup</span></th><th>B<br><span>Baik</span></th><th>A<br><span>Sangat Baik</span></th></tr></thead><tbody><tr><td>Interval Nilai</td><td>&lt;70</td><td>70-75</td><td>76-85</td><td>86-100</td></tr></tbody></table>
 </section>
 
 <div class="report-page-break"></div>
 
 <section class="report-page report-page--asts-summary">
     @include($letterhead)
+    <p class="asts-summary-title">LAPORAN ASTS</p>
+    <table class="identity asts-summary-identity"><tr>
+        <td class="identity__label">Nama Siswa</td><td class="identity__separator">:</td><td>{{ data_get($student, 'name', '-') }}</td>
+        <td class="identity__label">Kelas</td><td class="identity__separator">:</td><td>{{ $className ?: '-' }}</td>
+    </tr><tr>
+        <td class="identity__label">NIS / NISN</td><td class="identity__separator">:</td><td>{{ data_get($student, 'nis', '-') }} / {{ data_get($student, 'nisn', '-') }}</td>
+        <td class="identity__label">Jenis Laporan</td><td class="identity__separator">:</td><td>ASTS</td>
+    </tr></table>
     <table class="asts-summary-grid"><tr><td>
         <p class="section-title">Ketidakhadiran</p>
         <table class="summary-table summary-table--attendance"><tr><th>Sakit</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'sick_days', 0) }}&nbsp;hari</span></td></tr><tr><th>Izin</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'permission_days', 0) }}&nbsp;hari</span></td></tr><tr><th>Tanpa Keterangan</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'absent_days', 0) }}&nbsp;hari</span></td></tr></table>

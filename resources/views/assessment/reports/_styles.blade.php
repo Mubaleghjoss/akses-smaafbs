@@ -48,15 +48,24 @@
     .letterhead__foundation { margin: 0; font-size: 11px; font-weight: 700; }
     .letterhead--asts .letterhead__school-name { font-size: 15px; }
     .letterhead-rule--asts { border-top-width: 2.5px; margin-bottom: 7px; }
-    .report-page--asts-scores .report-subtitle { margin-bottom: 6px; }
-    .asts-kktp-title { margin: 0 0 3px; font-size: 9.5px; font-weight: 700; }
-    .asts-kktp { width: 100%; border-collapse: collapse; margin-bottom: 7px; text-align: center; }
-    .asts-kktp th, .asts-kktp td { padding: 2.5px 4px; border: 1px solid #4b5563; }
+    /* Keep ASTS dense enough for its fixed two-page paper layout without changing other reports. */
+    .report-page--asts-scores .report-title { font-size: 12.2px; }
+    .report-page--asts-scores .report-subtitle { margin: 1px 0 4px; font-size: 8.5px; }
+    .report-page--asts-scores .identity { margin-bottom: 4px; }
+    .report-page--asts-scores .identity td { padding-top: 1px; padding-bottom: 1px; }
+    .report-page--asts-scores .scores th, .report-page--asts-scores .scores td { padding: 2.5px 4px; line-height: 1.18; }
+    .asts-kktp-title { margin: 3px 0 2px; font-size: 9px; font-weight: 700; }
+    .asts-kktp { width: 100%; border-collapse: collapse; margin-bottom: 3px; text-align: center; }
+    .asts-kktp th, .asts-kktp td { padding: 2px 3px; border: 1px solid #4b5563; line-height: 1.15; }
     .asts-kktp th { background: #e5e7eb; }
-    .asts-kktp th span { font-size: 7.6px; font-weight: 400; }
-    .asts-subject-group { margin: 6px 0 2px; font-size: 9.5px; font-weight: 700; }
-    .asts-scores { margin-bottom: 4px; }
-    .asts-summary-grid { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 10px; }
+    .asts-kktp th span { font-size: 7.3px; font-weight: 400; }
+    .asts-subject-group { margin: 4px 0 1px; font-size: 9px; font-weight: 700; }
+    .asts-scores { margin-bottom: 2px; }
+    .report-page--asts-summary .letterhead--asts { margin-bottom: 1px; }
+    .asts-summary-title { margin: 0 0 2px; text-align: center; font-size: 10px; font-weight: 700; }
+    .asts-summary-identity { margin-bottom: 5px; }
+    .asts-summary-identity td { padding-top: 1px; padding-bottom: 1px; font-size: 8.5px; }
+    .asts-summary-grid { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 5px; }
     .asts-summary-grid > tbody > tr > td { width: 50%; padding: 0 5px; vertical-align: top; }
     .asts-summary-grid > tbody > tr > td:first-child { padding-left: 0; }
     .asts-summary-grid > tbody > tr > td:last-child { padding-right: 0; }
@@ -65,6 +74,7 @@
     .asts-extracurricular th:nth-child(2), .asts-extracurricular td:nth-child(2) { text-align: left; }
     .asts-extracurricular th:first-child { width: 27px; }
     .asts-extracurricular th:last-child { width: 48px; }
-    .asts-signatures { margin-top: 34px; }
+    .asts-signatures { margin-top: 24px; }
+    .asts-signatures .signature-space { height: 36px; }
     .asts-signatures td { width: 50%; }
 </style>

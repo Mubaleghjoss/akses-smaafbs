@@ -830,6 +830,18 @@ class AssessmentReportingTest extends TestCase
         ])->render();
 
         $this->assertStringContainsString('Tabel Interval berdasarkan KKTP', $html);
+        $this->assertLessThan(
+            strpos($html, 'Tabel Interval berdasarkan KKTP'),
+            strpos($html, 'class="scores asts-scores"'),
+            'KKTP must follow the ASTS score table.',
+        );
+        [$scorePage, $summaryPage] = explode('<div class="report-page-break"></div>', $html, 2);
+        $this->assertStringContainsString('Nama Siswa', $summaryPage);
+        $this->assertStringContainsString('NIS / NISN', $summaryPage);
+        $this->assertStringContainsString('Kelas', $summaryPage);
+        $this->assertStringContainsString('Jenis Laporan', $summaryPage);
+        $this->assertStringContainsString('ASTS', $summaryPage);
+        $this->assertStringContainsString('class="scores asts-scores"', $scorePage);
         foreach ([69 => 'D', 70 => 'C', 75 => 'C', 76 => 'B', 85 => 'B', 86 => 'A'] as $score => $predicate) {
             $this->assertMatchesRegularExpression('/'.$score.'<\/td><td class="scores__predicate">'.$predicate.'<\/td>/', $html);
         }
