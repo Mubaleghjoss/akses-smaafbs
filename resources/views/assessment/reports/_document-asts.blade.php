@@ -65,7 +65,7 @@
 
 <section class="report-page report-page--asts-summary">
     @include($letterhead)
-    <p class="asts-summary-title">LAPORAN ASTS</p>
+    <h1 class="report-title">LAPORAN HASIL ASESMEN SUMATIF TENGAH SEMESTER (ASTS)</h1>
     <table class="identity asts-summary-identity"><tr>
         <td class="identity__label">Nama Siswa</td><td class="identity__separator">:</td><td>{{ data_get($student, 'name', '-') }}</td>
         <td class="identity__label">Kelas</td><td class="identity__separator">:</td><td>{{ $className ?: '-' }}</td>

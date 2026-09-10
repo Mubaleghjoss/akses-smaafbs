@@ -78,6 +78,7 @@
     .asts-extracurricular th:first-child { width: 27px; }
     .asts-extracurricular th:last-child { width: 48px; }
     .asts-signatures { margin-top: 24px; }
-    .asts-signatures .signature-space { height: 36px; }
+    /* Leave room for handwritten signatures on the ASTS summary page. */
+    .asts-signatures .signature-space { height: 64px; }
     .asts-signatures td { width: 50%; }
 </style>
