@@ -39,7 +39,7 @@
     .report-writing-space { height: 46px; max-height: 46px; overflow: hidden; vertical-align: top; }
     .signatures { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 14px; page-break-inside: avoid; }
     .signatures td { width: 33.333%; padding: 0 6px; text-align: center; vertical-align: top; }
-    .signature-date { padding-bottom: 2px !important; }
+    .signature-date { margin-bottom: 2px; }
     .signature-labels td { height: 16px; font-weight: 400; }
     .signature-spaces td { padding-top: 0; padding-bottom: 0; }
     .signature-space { height: 42px; }
@@ -49,8 +49,8 @@
     .signatures--stacked .signature-space--principal { height: 72px; }
     .signature-labels--principal td { padding-top: 8px; }
     .signature-names td { vertical-align: bottom; }
-    .signature-name { display: block; min-height: 14px; border-bottom: 1px solid #111827; font-weight: 700; white-space: nowrap; }
-    .signature-name--blank { font-weight: 400; letter-spacing: 0.5px; }
+    .signature-name { display: inline-block; min-height: 14px; padding: 0 3px; border-bottom: 1px solid #111827; font-weight: 700; white-space: nowrap; }
+    .signature-name--blank { border-bottom: 0; font-weight: 400; letter-spacing: 0.5px; }
     .signature-identifier { min-height: 12px; }
 
     .letterhead--asts { margin-bottom: 2px; }

@@ -121,8 +121,7 @@
         };
     @endphp
     <table class="signatures signatures--stacked">
-        @if ($signatureDate)<tr><td class="signature-date" colspan="2">{{ $signatureDate }}</td></tr>@endif
-        <tr class="signature-labels"><td>{{ data_get($signatureParent, 'label', 'Orang Tua/Wali') }}</td><td>{{ data_get($signatureHomeroom, 'label', 'Wali Kelas') }}</td></tr>
+        <tr class="signature-labels"><td>{{ data_get($signatureParent, 'label', 'Orang Tua/Wali') }}</td><td><div class="signature-date">{{ $signatureDate ?: 'Tangerang, ....................' }}</div>{{ data_get($signatureHomeroom, 'label', 'Wali Kelas') }}</td></tr>
         <tr class="signature-spaces"><td><div class="signature-space signature-space--manual"></div></td><td><div class="signature-space signature-space--manual"></div></td></tr>
         <tr class="signature-names"><td>@php($rendered = $renderSignature($signatureParent))<div class="signature-name{{ $rendered['blank'] ? ' signature-name--blank' : '' }}">{{ $rendered['name'] }}</div>@if (filled(data_get($signatureParent, 'identifier')))<div class="signature-identifier">{{ data_get($signatureParent, 'identifier') }}</div>@endif</td><td>@php($rendered = $renderSignature($signatureHomeroom))<div class="signature-name{{ $rendered['blank'] ? ' signature-name--blank' : '' }}">{{ $rendered['name'] }}</div>@if (filled(data_get($signatureHomeroom, 'identifier')))<div class="signature-identifier">{{ data_get($signatureHomeroom, 'identifier') }}</div>@endif</td></tr>
         <tr class="signature-labels signature-labels--principal"><td colspan="2">{{ data_get($signaturePrincipal, 'label', 'Kepala Sekolah') }}</td></tr>
