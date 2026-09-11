@@ -43,6 +43,11 @@
     .signature-labels td { height: 16px; font-weight: 400; }
     .signature-spaces td { padding-top: 0; padding-bottom: 0; }
     .signature-space { height: 42px; }
+    .signatures--stacked { margin-top: 10px; }
+    .signatures--stacked td { width: 50%; }
+    .signatures--stacked .signature-space--manual { height: 100px; }
+    .signatures--stacked .signature-space--principal { height: 72px; }
+    .signature-labels--principal td { padding-top: 8px; }
     .signature-names td { vertical-align: bottom; }
     .signature-name { display: block; min-height: 14px; border-bottom: 1px solid #111827; font-weight: 700; white-space: nowrap; }
     .signature-name--blank { font-weight: 400; letter-spacing: 0.5px; }

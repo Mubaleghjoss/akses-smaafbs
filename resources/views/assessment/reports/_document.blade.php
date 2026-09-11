@@ -95,13 +95,39 @@
             ['label' => 'Wali Kelas', 'name' => '-'],
             ['label' => 'Kepala Sekolah', 'name' => '-'],
         ];
+        // Normalize by label so the approved layout is stable even when snapshot order changes.
+        $signatureFor = function (string $type) use ($signatureColumns): array {
+            foreach ($signatureColumns as $signature) {
+                $label = strtolower(trim((string) data_get($signature, 'label', '')));
+                $matches = match ($type) {
+                    'parent' => str_contains($label, 'orang tua') || str_contains($label, 'ortu') || str_contains($label, 'wali murid'),
+                    'homeroom' => str_contains($label, 'wali kelas') || str_contains($label, 'homeroom'),
+                    'principal' => str_contains($label, 'kepala sekolah') || str_contains($label, 'principal'),
+                    default => false,
+                };
+                if ($matches) {
+                    return $signature;
+                }
+            }
+            return ['label' => $type === 'parent' ? 'Orang Tua/Wali' : ($type === 'homeroom' ? 'Wali Kelas' : 'Kepala Sekolah'), 'name' => '-'];
+        };
+        $signatureParent = $signatureFor('parent');
+        $signatureHomeroom = $signatureFor('homeroom');
+        $signaturePrincipal = $signatureFor('principal');
         $signatureDate = collect($signatureColumns)->pluck('place_date')->filter()->first();
+        $renderSignature = function (array $signature) {
+            $name = data_get($signature, 'name');
+            return ['name' => filled($name) && $name !== '-' ? $name : '................................................', 'blank' => ! filled($name) || $name === '-'];
+        };
     @endphp
-    <table class="signatures">
-        @if ($signatureDate)<tr><td class="signature-date" colspan="{{ count($signatureColumns) }}">{{ $signatureDate }}</td></tr>@endif
-        <tr class="signature-labels">@foreach ($signatureColumns as $signature)<td>{{ data_get($signature, 'label', 'Mengetahui') }}</td>@endforeach</tr>
-        <tr class="signature-spaces">@foreach ($signatureColumns as $signature)<td><div class="signature-space"></div></td>@endforeach</tr>
-        <tr class="signature-names">@foreach ($signatureColumns as $signature)<td><div class="signature-name{{ data_get($signature, 'name') === '-' ? ' signature-name--blank' : '' }}">{{ filled(data_get($signature, 'name')) && data_get($signature, 'name') !== '-' ? data_get($signature, 'name') : '................................................' }}</div>@if (filled(data_get($signature, 'identifier')))<div class="signature-identifier">{{ data_get($signature, 'identifier') }}</div>@endif</td>@endforeach</tr>
+    <table class="signatures signatures--stacked">
+        @if ($signatureDate)<tr><td class="signature-date" colspan="2">{{ $signatureDate }}</td></tr>@endif
+        <tr class="signature-labels"><td>{{ data_get($signatureParent, 'label', 'Orang Tua/Wali') }}</td><td>{{ data_get($signatureHomeroom, 'label', 'Wali Kelas') }}</td></tr>
+        <tr class="signature-spaces"><td><div class="signature-space signature-space--manual"></div></td><td><div class="signature-space signature-space--manual"></div></td></tr>
+        <tr class="signature-names"><td>@php($rendered = $renderSignature($signatureParent))<div class="signature-name{{ $rendered['blank'] ? ' signature-name--blank' : '' }}">{{ $rendered['name'] }}</div>@if (filled(data_get($signatureParent, 'identifier')))<div class="signature-identifier">{{ data_get($signatureParent, 'identifier') }}</div>@endif</td><td>@php($rendered = $renderSignature($signatureHomeroom))<div class="signature-name{{ $rendered['blank'] ? ' signature-name--blank' : '' }}">{{ $rendered['name'] }}</div>@if (filled(data_get($signatureHomeroom, 'identifier')))<div class="signature-identifier">{{ data_get($signatureHomeroom, 'identifier') }}</div>@endif</td></tr>
+        <tr class="signature-labels signature-labels--principal"><td colspan="2">{{ data_get($signaturePrincipal, 'label', 'Kepala Sekolah') }}</td></tr>
+        <tr class="signature-spaces"><td colspan="2"><div class="signature-space signature-space--manual signature-space--principal"></div></td></tr>
+        <tr class="signature-names"><td colspan="2">@php($rendered = $renderSignature($signaturePrincipal))<div class="signature-name{{ $rendered['blank'] ? ' signature-name--blank' : '' }}">{{ $rendered['name'] }}</div>@if (filled(data_get($signaturePrincipal, 'identifier')))<div class="signature-identifier">{{ data_get($signaturePrincipal, 'identifier') }}</div>@endif</td></tr>
     </table>
 </section>
 @endif
