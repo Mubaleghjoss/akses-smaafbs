@@ -9,7 +9,6 @@ use App\Filament\Resources\AssessmentAuditLogResource;
 use App\Filament\Resources\AssessmentPeriodResource;
 use App\Filament\Resources\AssessmentReportTemplateResource;
 use App\Filament\Resources\AssessmentSchemeResource;
-use App\Filament\Resources\AssessmentSubjectCategoryResource;
 use App\Filament\Resources\AssessmentSubjectResource;
 use App\Filament\Resources\DataSiswaResource;
 use App\Filament\Resources\GuruTendikResource;
@@ -21,7 +20,6 @@ use App\Models\Assessment\HomeroomAssignment;
 use App\Models\Assessment\ReportTemplate;
 use App\Models\Assessment\Semester;
 use App\Models\Assessment\Subject;
-use App\Models\Assessment\SubjectCategory;
 use App\Models\Assessment\TeachingAssignment;
 use App\Models\DataSiswa;
 use App\Models\GuruTendik;
@@ -128,54 +126,37 @@ class AssessmentDashboard extends AssessmentPage
     {
         return [
             [
-                'title' => 'Kategori Mapel',
+                'title' => 'Setelan Awal',
                 'points' => [
-                    'Atur Mapel Wajib dan Mapel Pilihan yang tampil sebagai kelompok rapor.',
-                    'Kategori dapat berbeda pada setiap kelas.',
+                    'Ikuti checklist kesiapan master, penugasan, dan periode.',
+                    'Gunakan saat awal tahun atau sebelum membuka periode baru.',
                 ],
-                'action' => 'Kelola Kategori',
-                'icon' => 'heroicon-o-tag',
-                'tone' => 'warning',
-                'value' => AssessmentSubjectCategoryResource::canViewAny()
-                    ? SubjectCategory::query()->where('is_active', true)->count()
-                    : '—',
-                'caption' => 'kategori aktif',
-                'url' => AssessmentSubjectCategoryResource::canViewAny() ? AssessmentSubjectCategoryResource::getUrl() : null,
+                'action' => 'Buka Setelan Awal',
+                'icon' => 'heroicon-o-clipboard-document-list',
+                'tone' => 'primary',
+                'value' => AssessmentSetupWizard::canAccess() ? 'Checklist' : '—',
+                'caption' => 'kesiapan penilaian',
+                'url' => AssessmentSetupWizard::canAccess() ? AssessmentSetupWizard::getUrl() : null,
             ],
             [
-                'title' => 'Guru Mapel & Kelas',
+                'title' => 'Administrasi',
                 'points' => [
-                    'Hubungkan guru dengan mapel dan kelas per semester.',
-                    'Menentukan penugasan nilai yang tampil pada akun guru.',
+                    'Kelola kategori mapel, penugasan guru, dan wali kelas per semester.',
+                    'Mulai dari matriks kelas x mapel x guru untuk memeriksa kelengkapan.',
                 ],
-                'action' => 'Buka Mapel Penilaian',
-                'icon' => 'heroicon-o-book-open',
+                'action' => 'Kelola Penugasan Guru & Mapel',
+                'icon' => 'heroicon-o-table-cells',
                 'tone' => 'success',
-                'value' => GuruTendikResource::canViewAny()
+                'value' => AssessmentTeachingMatrix::canAccess()
                     ? TeachingAssignment::query()->where('is_active', true)->count()
                     : '—',
                 'caption' => 'penugasan mapel aktif',
-                'url' => AssessmentSubjectResource::canViewAny() ? AssessmentSubjectResource::getUrl() : null,
+                'url' => AssessmentTeachingMatrix::canAccess() ? AssessmentTeachingMatrix::getUrl() : null,
             ],
             [
-                'title' => 'Wali Kelas',
+                'title' => 'Periode',
                 'points' => [
-                    'Tetapkan satu wali kelas untuk setiap rombel dan semester.',
-                    'Menentukan akses rekap dan identitas wali pada rapor.',
-                ],
-                'action' => 'Atur Wali Kelas',
-                'icon' => 'heroicon-o-user-group',
-                'tone' => 'warning',
-                'value' => GuruTendikResource::canViewAny()
-                    ? HomeroomAssignment::query()->where('is_active', true)->count()
-                    : '—',
-                'caption' => 'penugasan walas aktif',
-                'url' => GuruTendikResource::canViewAny() ? GuruTendikResource::getUrl() : null,
-            ],
-            [
-                'title' => 'Periode Penilaian',
-                'points' => [
-                    'Buat periode ASTS atau ASAS dan pilih kelas peserta.',
+                    'Buat periode ASTS, ASAS, atau ASAT dan pilih kelas peserta.',
                     'Buka, verifikasi, kunci, dan terbitkan periode.',
                 ],
                 'action' => 'Kelola Periode',
@@ -186,7 +167,7 @@ class AssessmentDashboard extends AssessmentPage
                 'url' => AssessmentPeriodResource::canViewAny() ? AssessmentPeriodResource::getUrl() : null,
             ],
             [
-                'title' => 'Komponen dan Bobot',
+                'title' => 'Komponen & Bobot',
                 'points' => [
                     'Atur komponen, KKM, predikat, dan sumber nilai.',
                     'Total bobot komponen aktif wajib tepat 100%.',
@@ -199,7 +180,7 @@ class AssessmentDashboard extends AssessmentPage
                 'url' => AssessmentSchemeResource::canViewAny() ? AssessmentSchemeResource::getUrl() : null,
             ],
             [
-                'title' => 'Template Rapor',
+                'title' => 'Template',
                 'points' => [
                     'Atur identitas sekolah, tanda tangan, layout, dan watermark.',
                     'Template yang sudah dipakai tetap menjadi versi historis.',
@@ -212,7 +193,7 @@ class AssessmentDashboard extends AssessmentPage
                 'url' => AssessmentReportTemplateResource::canViewAny() ? AssessmentReportTemplateResource::getUrl() : null,
             ],
             [
-                'title' => 'Impor Master Resmi',
+                'title' => 'Impor Master',
                 'points' => [
                     'Unduh workbook resmi dan lengkapi master secara massal.',
                     'Selalu tinjau preview sebelum data diterapkan.',
@@ -225,7 +206,7 @@ class AssessmentDashboard extends AssessmentPage
                 'url' => AssessmentMasterImport::canAccess() ? AssessmentMasterImport::getUrl() : null,
             ],
             [
-                'title' => 'Log Perubahan',
+                'title' => 'Log',
                 'points' => [
                     'Telusuri perubahan periode, nilai, dan penerbitan.',
                     'Lihat pelaku, waktu, serta alasan setiap koreksi.',

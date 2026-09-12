@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssignmentStatus;
 use App\Filament\Pages\Assessment\AsasHomeroomRecap;
+use App\Filament\Pages\Assessment\AsasHub;
 use App\Filament\Pages\Assessment\AsasSubmissionStatus;
+use App\Filament\Pages\Assessment\AsatHub;
 use App\Filament\Pages\Assessment\AstsHomeroomRecap;
 use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\Assessment\AstsInputScores;
@@ -161,7 +163,8 @@ class AssessmentTeacherExperienceTest extends TestCase
             ->assertSee('1 dikirim')
             ->assertSee('1 belum dikirim')
             ->assertSee('Wali Kelas')
-            ->assertSee('X 1');
+            ->assertSee('X 1')
+            ->assertDontSee('Pindah fokus ujian');
 
         $studentId = (int) $students->first()->getKey();
         Livewire::actingAs($teacher)
@@ -882,6 +885,66 @@ class AssessmentTeacherExperienceTest extends TestCase
         $this->assertSame('Buka Komponen dan Bobot', $notification['actions'][0]['label']);
         $this->assertStringContainsString(AssessmentSchemeResource::getUrl(), $notification['actions'][0]['url']);
         $this->assertStringContainsString('total bobot 100%', (string) $notification['body']);
+    }
+
+    public function test_sidebar_hanya_menampilkan_fokus_ujian_aktif_yang_relevan_bagi_guru(): void
+    {
+        $teacher = $this->teacher(348);
+        $asts = AssessmentPeriod::factory()->asts()->create([
+            'status' => AssessmentPeriodStatus::OPEN,
+        ]);
+        $asas = AssessmentPeriod::factory()->asas()->create([
+            'status' => AssessmentPeriodStatus::OPEN,
+        ]);
+        $asatDraft = AssessmentPeriod::factory()->create([
+            'type' => \App\Enums\Assessment\AssessmentType::ASAT,
+            'status' => AssessmentPeriodStatus::DRAFT,
+        ]);
+        $asatVerification = AssessmentPeriod::factory()->create([
+            'type' => \App\Enums\Assessment\AssessmentType::ASAT,
+            'status' => AssessmentPeriodStatus::VERIFICATION,
+        ]);
+        $rombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $asts->getKey(),
+            'rombel_name_snapshot' => 'XI 1',
+        ]);
+        $subject = Subject::factory()->create(['name' => 'Fisika']);
+        AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $asts->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'assessment_subject_id' => $subject->getKey(),
+            'teacher_id' => 348,
+            'teacher_name_snapshot' => 'Putra Kamulyan',
+            'subject_name_snapshot' => 'Fisika',
+            'rombel_name_snapshot' => 'XI 1',
+        ]);
+        AssessmentPeriodHomeroom::factory()->create([
+            'assessment_period_id' => $asatVerification->getKey(),
+            'teacher_id' => 348,
+            'teacher_name_snapshot' => 'Putra Kamulyan',
+            'rombel_name_snapshot' => 'XI 2',
+        ]);
+        AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $asatDraft->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'assessment_subject_id' => $subject->getKey(),
+            'teacher_id' => 348,
+            'teacher_name_snapshot' => 'Putra Kamulyan',
+            'subject_name_snapshot' => 'Fisika',
+            'rombel_name_snapshot' => 'XI 1',
+        ]);
+
+        $this->actingAs($teacher);
+
+        $this->assertTrue(AstsHub::shouldRegisterNavigation());
+        $this->assertFalse(AsasHub::shouldRegisterNavigation());
+        $this->assertTrue(AsatHub::shouldRegisterNavigation());
+
+        $asatVerification->update(['status' => AssessmentPeriodStatus::DRAFT]);
+        $this->assertFalse(AsatHub::shouldRegisterNavigation());
+
+        // Halaman lama tidak ditutup hanya karena fokusnya tidak ada di sidebar.
+        $this->assertTrue(AsasHub::canAccess());
     }
 
     private function teacher(int $teacherId): User

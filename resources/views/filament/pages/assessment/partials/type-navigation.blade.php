@@ -5,31 +5,23 @@
 @endphp
 
 <div class="assessment-context-stack">
-    {{-- Pemilih JENIS penilaian. Satu tempat, bukan tiga cabang menu:
-         berpindah jenis MEMPERTAHANKAN halaman yang sedang dibuka
-         (Status ASTS -> Status ASAS), bukan kembali ke beranda. --}}
-    <div class="asmt-typebar" role="tablist" aria-label="Jenis Penilaian">
-        <span class="asmt-typebar__label">Jenis</span>
-        <div class="asmt-typebar__tabs">
-            @foreach ($assessmentNavigation['type_tabs'] as $tab)
-                @if ($tab['url'])
-                    <a
-                        href="{{ $tab['url'] }}"
-                        wire:navigate
-                        role="tab"
-                        title="{{ $tab['long_label'] }}"
-                        @class(['asmt-typebar__tab', 'is-active' => $tab['active']])
-                        @if ($tab['active']) aria-selected="true" @endif
-                    >{{ $tab['label'] }}</a>
-                @else
-                    <span
-                        class="asmt-typebar__tab is-disabled"
-                        title="Tidak tersedia untuk akun ini"
-                    >{{ $tab['label'] }}</span>
-                @endif
-            @endforeach
-        </div>
-        <span class="asmt-typebar__hint">{{ $assessmentNavigation['type_long_label'] }}</span>
+    <div class="asmt-typebar" aria-label="Fokus Penilaian">
+        <span class="asmt-typebar__label">Fokus ujian</span>
+        <strong class="asmt-typebar__hint">{{ $assessmentNavigation['type_label'] }} · {{ $assessmentNavigation['type_long_label'] }}</strong>
+        @if ($assessmentNavigation['type_shortcuts'] !== [])
+            <div class="asmt-typebar__tabs" aria-label="Pindah fokus ujian">
+                @foreach ($assessmentNavigation['type_shortcuts'] as $tab)
+                    @if ($tab['url'])
+                        <a
+                            href="{{ $tab['url'] }}"
+                            wire:navigate
+                            title="{{ $tab['long_label'] }}"
+                            @class(['asmt-typebar__tab', 'is-active' => $tab['active']])
+                        >{{ $tab['label'] }}</a>
+                    @endif
+                @endforeach
+            </div>
+        @endif
     </div>
 
     <nav class="assessment-context-nav" aria-label="Navigasi Penilaian">

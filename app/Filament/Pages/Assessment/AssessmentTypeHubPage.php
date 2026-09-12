@@ -3,6 +3,7 @@
 namespace App\Filament\Pages\Assessment;
 
 use App\Enums\Assessment\AssessmentType;
+use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssignmentStatus;
 use App\Filament\Pages\Assessment\Concerns\HasAssessmentTypeNavigation;
 use App\Models\Assessment\AssessmentPeriod;
@@ -33,6 +34,66 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
         if (! $this->periodId || ! in_array($this->periodId, $periodIds, true)) {
             $this->periodId = $periodIds[0] ?? null;
         }
+    }
+
+    /**
+     * Guru dan wali hanya melihat fokus ujian yang sedang berjalan dan memang
+     * memiliki penugasan. Route hub lama tetap dapat diakses sesuai policy.
+     */
+    public static function shouldRegisterNavigation(): bool
+    {
+        if (! parent::shouldRegisterNavigation()) {
+            return false;
+        }
+
+        $user = auth()->user();
+
+        if (! $user instanceof User) {
+            return false;
+        }
+
+        if ($user->hasFullAdminAccess() || $user->can('penilaian.manage') || $user->can('penilaian.verify') || $user->hasRole('kepala_sekolah')) {
+            return true;
+        }
+
+        if (! $user->guru_tendik_id) {
+            return false;
+        }
+
+        return AssessmentPeriod::query()
+            ->where('type', static::$assessmentType->value)
+            ->whereIn('status', [
+                AssessmentPeriodStatus::OPEN->value,
+                AssessmentPeriodStatus::ENTRY_CLOSED->value,
+                AssessmentPeriodStatus::VERIFICATION->value,
+            ])
+            ->where(function (Builder $periods) use ($user): void {
+                $periods
+                    ->whereHas('assignments', fn (Builder $assignments): Builder => $assignments->where('teacher_id', $user->guru_tendik_id))
+                    ->orWhereHas('homerooms', fn (Builder $homerooms): Builder => $homerooms->where('teacher_id', $user->guru_tendik_id));
+            })
+            ->exists();
+    }
+
+    public function getSelectedPeriodStatusLabel(): string
+    {
+        $period = $this->scopePeriods(AssessmentPeriod::query())
+            ->where('type', static::$assessmentType->value)
+            ->find($this->periodId);
+
+        if (! $period) {
+            return 'Belum Dibuka';
+        }
+
+        $status = $period->status instanceof AssessmentPeriodStatus
+            ? $period->status
+            : AssessmentPeriodStatus::tryFrom((string) $period->status);
+
+        return match ($status) {
+            AssessmentPeriodStatus::DRAFT => 'Menunggu',
+            AssessmentPeriodStatus::LOCKED, AssessmentPeriodStatus::PUBLISHED => 'Selesai',
+            default => 'Aktif',
+        };
     }
 
     public function getTitle(): string|Htmlable

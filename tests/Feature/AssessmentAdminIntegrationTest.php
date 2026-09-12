@@ -496,10 +496,10 @@ class AssessmentAdminIntegrationTest extends TestCase
         $this->actingAs($viewer);
         $this->assertTrue(AssessmentDashboard::canAccess());
         $this->assertTrue(AssessmentDashboard::shouldRegisterNavigation());
-        $this->assertTrue(AstsHub::shouldRegisterNavigation());
-        $this->assertTrue(AsasHub::shouldRegisterNavigation());
-        // ASAT wajib punya baris menunya sendiri, bukan menumpang menu ASAS.
-        $this->assertTrue(AsatHub::shouldRegisterNavigation());
+        // Akun pembaca tanpa tautan guru tidak melihat fokus ujian teknis.
+        $this->assertFalse(AstsHub::shouldRegisterNavigation());
+        $this->assertFalse(AsasHub::shouldRegisterNavigation());
+        $this->assertFalse(AsatHub::shouldRegisterNavigation());
         // Halaman turunan tetap TIDAK muncul di sidebar; dibuka dari pusat jenis.
         $this->assertFalse(AstsInputScores::canAccess());
         $this->assertFalse(AstsInputScores::shouldRegisterNavigation());
@@ -582,17 +582,16 @@ class AssessmentAdminIntegrationTest extends TestCase
             ->assertSee('Asesmen Sumatif Tengah Semester')
             ->assertSee('Asesmen Sumatif Akhir Semester')
             ->assertSee('Asesmen Sumatif Akhir Tahun')
-            ->assertSee('Kategori Mapel')
-            ->assertSee('Kelola Kategori')
-            ->assertSee('Guru Mapel & Kelas')
-            ->assertSee('Hubungkan guru dengan mapel dan kelas per semester.')
-            ->assertSee('Buka Mapel Penilaian')
-            ->assertSee('Wali Kelas')
-            ->assertSee('Atur Wali Kelas')
+            ->assertSee('Setelan Awal')
+            ->assertSee('Administrasi')
+            ->assertSee('Kelola kategori mapel, penugasan guru, dan wali kelas per semester.')
+            ->assertSee('Kelola Penugasan Guru & Mapel')
             ->assertSee('Menu Pengaturan')
-            ->assertSee('Periode Penilaian')
-            ->assertSee('Komponen dan Bobot')
-            ->assertSee('Template Rapor')
+            ->assertSee('Periode')
+            ->assertSee('Komponen & Bobot')
+            ->assertSee('Template')
+            ->assertSee('Impor Master')
+            ->assertSee('Log')
             ->assertSee('Buka Log Perubahan')
             ->assertSee('Kesiapan Fondasi')
             ->assertSee('Aktivitas Terbaru')
@@ -615,7 +614,8 @@ class AssessmentAdminIntegrationTest extends TestCase
             ->assertSee('Input Nilai Saya')
             ->assertSee('Status Pengumpulan')
             ->assertSee('Rekap Wali Kelas')
-            ->assertSee('Cetak Rapor ASTS');
+            ->assertSee('Cetak Rapor ASTS')
+            ->assertSee('Pindah fokus ujian');
 
         Livewire::actingAs($admin)
             ->test(AsasHub::class)

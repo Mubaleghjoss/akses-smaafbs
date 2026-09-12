@@ -27,7 +27,7 @@ class AssessmentTeachingMatrix extends AssessmentPage
 {
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-table-cells';
 
-    protected static ?string $navigationLabel = 'Matriks Penugasan';
+    protected static ?string $navigationLabel = 'Penugasan Guru & Mapel';
 
     protected static ?string $slug = 'penilaian/matriks-penugasan';
 
@@ -61,7 +61,7 @@ class AssessmentTeachingMatrix extends AssessmentPage
 
     public function getTitle(): string|Htmlable
     {
-        return 'Matriks Penugasan';
+        return 'Penugasan Guru & Mapel';
     }
 
     public function updatedSemesterId(): void

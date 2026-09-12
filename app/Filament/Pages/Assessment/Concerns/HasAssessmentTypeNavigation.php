@@ -54,7 +54,7 @@ trait HasAssessmentTypeNavigation
             'is_hub' => static::class === $hubPage,
             'type_label' => static::$assessmentType->label(),
             'type_long_label' => static::$assessmentType->namaPanjang(),
-            'type_tabs' => $this->getAssessmentTypeTabs(),
+            'type_shortcuts' => $this->getAssessmentTypeShortcuts(),
             'items' => collect($items)
                 ->map(fn (array $item): array => [
                     ...$item,
@@ -68,16 +68,19 @@ trait HasAssessmentTypeNavigation
     }
 
     /**
-     * Tab pemilih JENIS penilaian (ASTS · ASAS · ASAT).
-     *
-     * Berpindah jenis mempertahankan HALAMAN yang sedang dibuka: dari Status
-     * ASTS ke Status ASAS, bukan kembali ke beranda. Periode TIDAK dibawa
-     * karena periode terikat pada satu jenis.
+     * Shortcut konteks untuk pengelola. Guru/wali tidak perlu memilih jenis
+     * lagi setelah masuk ke fokus ujian yang relevan.
      *
      * @return array<int, array<string, mixed>>
      */
-    public function getAssessmentTypeTabs(): array
+    public function getAssessmentTypeShortcuts(): array
     {
+        $user = auth()->user();
+
+        if (! $user instanceof User || ! ($user->hasFullAdminAccess() || $user->can('penilaian.manage') || $user->can('penilaian.verify') || $user->hasRole('kepala_sekolah'))) {
+            return [];
+        }
+
         $bagian = $this->currentAssessmentSection();
 
         return collect(AssessmentType::cases())

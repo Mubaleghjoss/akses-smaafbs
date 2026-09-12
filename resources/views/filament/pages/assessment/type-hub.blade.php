@@ -20,6 +20,9 @@
                     <p class="assessment-type-hero__copy mt-2 max-w-2xl text-sm leading-6">
                         Pilih kartu sesuai pekerjaan Anda. Data, nilai, dan rapor tetap dipisahkan berdasarkan periode yang dipilih.
                     </p>
+                    <span class="mt-3 inline-flex rounded-full bg-primary-100 px-3 py-1 text-xs font-bold text-primary-700 dark:bg-primary-500/15 dark:text-primary-300">
+                        Status periode: {{ $this->getSelectedPeriodStatusLabel() }}
+                    </span>
                 </div>
 
                 <label class="assessment-dashboard-period block min-w-0 rounded-xl border border-gray-200 bg-white/90 p-3 shadow-sm dark:border-white/10 dark:bg-gray-950/70">

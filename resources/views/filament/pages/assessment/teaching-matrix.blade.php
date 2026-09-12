@@ -8,6 +8,10 @@
     @endphp
 
     <div class="asmt-matrix">
+        <section class="rounded-2xl border border-primary-200 bg-primary-50 p-4 text-sm leading-6 dark:border-primary-500/20 dark:bg-primary-500/10">
+            <strong class="block text-base">Matriks kelas x mapel x guru</strong>
+            Tetapkan guru pengampu dan wali kelas per semester. Ringkasan menandai sel atau rombel yang masih perlu dilengkapi sebelum periode dibuka.
+        </section>
         {{-- Pemilih semester + ringkasan sisa pekerjaan --}}
         <section class="asmt-matrix__bar">
             <div class="asmt-matrix__field">
