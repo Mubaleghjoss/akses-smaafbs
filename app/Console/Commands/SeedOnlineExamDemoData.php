@@ -67,6 +67,11 @@ class SeedOnlineExamDemoData extends Command
         [$schedule, $tokens] = DB::transaction(function () use ($teacher, $students, $class, $scoring): array {
             // Only the named demo schedule and its dependent rows are replaced.
             Schedule::query()->where('exam_code', self::EXAM_CODE)->delete();
+            QuestionSet::query()
+                ->where('title', 'like', self::MARKER.'%')
+                ->where('title', '!=', self::TITLE)
+                ->delete();
+
             $set = QuestionSet::query()->updateOrCreate(
                 ['title' => self::TITLE],
                 ['teacher_id' => $teacher->id, 'subject' => 'BAHASA INDONESIA', 'exam_type' => 'ASTS', 'academic_year' => '2026/2027', 'semester' => 'Ganjil', 'instructions' => self::MARKER.' Paket contoh untuk alur lengkap ujian online.', 'status' => 'published'],

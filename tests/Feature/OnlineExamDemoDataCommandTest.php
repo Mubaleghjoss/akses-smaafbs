@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Exam\Attempt;
 use App\Models\Exam\Question;
+use App\Models\Exam\QuestionSet;
 use App\Models\Exam\Schedule;
 use App\Models\Exam\StudentToken;
 use App\Models\User;
@@ -58,5 +59,47 @@ class OnlineExamDemoDataCommandTest extends TestCase
         $this->assertSame(4, Question::query()->count());
         $this->assertSame(3, StudentToken::query()->count());
         $this->assertSame(3, Attempt::query()->count());
+    }
+
+    public function test_command_cleans_up_legacy_demo_question_sets_with_marker(): void
+    {
+        $teacher = User::query()->first();
+        $legacySet = QuestionSet::query()->create([
+            'teacher_id' => $teacher->id,
+            'subject' => 'MATEMATIKA',
+            'exam_type' => 'ASTS',
+            'academic_year' => '2026/2027',
+            'semester' => 'Ganjil',
+            'title' => '[DEMO-UJIAN-MVP] MATEMATIKA: Operasi Hitung',
+            'status' => 'published',
+        ]);
+        Question::query()->create([
+            'question_set_id' => $legacySet->id,
+            'type' => 'multiple_choice',
+            'prompt' => '1 + 1 = ?',
+            'options' => ['2', '3'],
+            'answer_key' => ['2'],
+            'weight' => 2,
+            'cognitive_level' => 'LOTS',
+            'position' => 1,
+        ]);
+        Schedule::query()->create([
+            'question_set_id' => $legacySet->id,
+            'created_by' => $teacher->id,
+            'class_name' => 'X 1',
+            'exam_code' => 'DEMO-UJIAN-MVP-2026',
+            'supervisor_code_hash' => bcrypt('DEMO-AWAS'),
+            'starts_at' => now()->subDay(),
+            'ends_at' => now()->addDays(30),
+            'duration_minutes' => 90,
+            'is_active' => true,
+        ]);
+
+        $this->artisan('exam:demo-data --apply')->assertSuccessful();
+
+        $this->assertDatabaseMissing('exam_question_sets', ['id' => $legacySet->id]);
+        $this->assertDatabaseMissing('exam_questions', ['prompt' => '1 + 1 = ?']);
+        $this->assertSame(1, QuestionSet::query()->count());
+        $this->assertSame(4, Question::query()->count());
     }
 }
