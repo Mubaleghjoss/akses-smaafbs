@@ -510,8 +510,7 @@ class AssessmentAdminIntegrationTest extends TestCase
         $this->get(QuestionBankBuilderPage::getUrl())
             ->assertOk()
             ->assertSee('Bank &amp; Penyusunan Soal', false)
-            ->assertSee('PG kompleks')
-            ->assertSee('Import dan publish belum tersedia');
+            ->assertSee('Migration ujian online belum dijalankan');
         // Akun pembaca tanpa tautan guru tidak melihat fokus ujian teknis.
         $this->assertFalse(AstsHub::shouldRegisterNavigation());
         $this->assertFalse(AsasHub::shouldRegisterNavigation());

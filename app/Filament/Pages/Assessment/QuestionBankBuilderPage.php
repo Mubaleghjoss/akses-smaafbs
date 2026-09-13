@@ -2,8 +2,12 @@
 
 namespace App\Filament\Pages\Assessment;
 
+use App\Models\Exam\AiSetting;
+use App\Models\Exam\QuestionSet;
 use App\Models\User;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Schema;
 
 class QuestionBankBuilderPage extends AssessmentPage
 {
@@ -24,7 +28,26 @@ class QuestionBankBuilderPage extends AssessmentPage
 
     public function getSubheading(): string|Htmlable|null
     {
-        return 'Rancangan awal penyusunan soal dari format dokumen menuju ujian online yang tervalidasi.';
+        return 'Paket soal milik guru, editor butir, preview naskah, dan konfigurasi AI yang aman.';
+    }
+
+    public function questionSets(): Collection
+    {
+        if (! Schema::hasTable('exam_question_sets')) return new Collection();
+        $query = QuestionSet::query()->with('questions')->latest();
+        $user = auth()->user();
+        if ($user instanceof User && ! $user->hasFullAdminAccess() && ! $user->hasRole('kurikulum')) $query->where('teacher_id', $user->id);
+        return $query->get();
+    }
+
+    public function aiSetting(): ?AiSetting
+    {
+        return Schema::hasTable('exam_ai_settings') ? AiSetting::query()->first() : null;
+    }
+
+    public function schemaReady(): bool
+    {
+        return Schema::hasTable('exam_question_sets');
     }
 
     public function canPrepareAdvancedFeatures(): bool

@@ -8,6 +8,7 @@ use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Assessment\AssessmentReportProgressPage;
 use App\Filament\Pages\Assessment\AssessmentSetupWizard;
 use App\Filament\Pages\Assessment\QuestionBankBuilderPage;
+use App\Filament\Pages\Assessment\OnlineExamPage;
 use App\Filament\Pages\Assessment\AssessmentTeachingMatrix;
 use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\Bk\RekapSigapPage;
@@ -133,6 +134,7 @@ class AdminSchoolNavigation
         AssessmentSetupWizard::class => 'Nilai Ujian',
         AssessmentTeachingMatrix::class => 'Nilai Ujian',
         QuestionBankBuilderPage::class => 'Nilai Ujian',
+        OnlineExamPage::class => 'Nilai Ujian',
         AstsHub::class => 'Nilai Ujian',
         AsasHub::class => 'Nilai Ujian',
         AsatHub::class => 'Nilai Ujian',
@@ -147,6 +149,7 @@ class AdminSchoolNavigation
         AssessmentSetupWizard::class => self::GROUP,
         AssessmentTeachingMatrix::class => self::GROUP,
         QuestionBankBuilderPage::class => self::GROUP,
+        OnlineExamPage::class => self::GROUP,
         AstsHub::class => self::GROUP,
         AsasHub::class => self::GROUP,
         AsatHub::class => self::GROUP,
@@ -183,6 +186,7 @@ class AdminSchoolNavigation
             AssessmentSetupWizard::class,
             AssessmentTeachingMatrix::class,
             QuestionBankBuilderPage::class,
+            OnlineExamPage::class,
             AstsHub::class,
             AsasHub::class,
             AsatHub::class,
