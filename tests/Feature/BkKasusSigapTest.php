@@ -168,7 +168,7 @@ class BkKasusSigapTest extends TestCase
         $options = AdminModuleAccess::navigationItemOptions();
         $this->assertArrayNotHasKey(Dashboard::class, $options);
         $this->assertGreaterThanOrEqual(52, count($options));
-        $this->assertSame('Manajemen Sekolah -> Penilaian -> Pengaturan Penilaian', $options[AssessmentDashboard::class]);
+        $this->assertSame('Manajemen Sekolah -> Nilai Ujian -> Pengaturan Penilaian', $options[AssessmentDashboard::class]);
         $this->assertSame('Manajemen Sekolah -> BK -> Laporan SIGAP', $options[BkKasusResource::class]);
         $this->assertSame('Manajemen Sekolah -> BK -> Rekap SIGAP', $options[RekapSigapPage::class]);
         $this->assertSame('Manajemen Sekolah -> BK -> Catatan BK', $options[CatatanBkResource::class]);

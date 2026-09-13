@@ -69,7 +69,7 @@ class AdminSchoolNavigation
         'Agenda' => ['icon' => 'heroicon-o-calendar-days', 'sort' => 190],
         'Konten' => ['icon' => 'heroicon-o-newspaper', 'sort' => 200],
         'Perpustakaan' => ['icon' => 'heroicon-o-book-open', 'sort' => 210],
-        'Penilaian' => ['icon' => 'heroicon-o-academic-cap', 'sort' => 115],
+        'Nilai Ujian' => ['icon' => 'heroicon-o-academic-cap', 'sort' => 115],
         // Grup "IT SMA AFBS" DIPENSIUNKAN seluruhnya: seluruh komponen MikroTik
         // (Monitor, HotspotSettings, HotspotUser, BlockedDomain, BuatAkunSiswa)
         // sudah pindah ke aplikasi terpisah mikrotik.smaafbs.sch.id.
@@ -127,13 +127,13 @@ class AdminSchoolNavigation
         PerpustakaanKategoriResource::class => 'Perpustakaan',
         PerpustakaanLemariResource::class => 'Perpustakaan',
         PerpustakaanLiterasiMaterialResource::class => 'Perpustakaan',
-        AssessmentDashboard::class => 'Penilaian',
-        AssessmentReportProgressPage::class => 'Penilaian',
-        AssessmentSetupWizard::class => 'Penilaian',
-        AssessmentTeachingMatrix::class => 'Penilaian',
-        AstsHub::class => 'Penilaian',
-        AsasHub::class => 'Penilaian',
-        AsatHub::class => 'Penilaian',
+        AssessmentDashboard::class => 'Nilai Ujian',
+        AssessmentReportProgressPage::class => 'Nilai Ujian',
+        AssessmentSetupWizard::class => 'Nilai Ujian',
+        AssessmentTeachingMatrix::class => 'Nilai Ujian',
+        AstsHub::class => 'Nilai Ujian',
+        AsasHub::class => 'Nilai Ujian',
+        AsatHub::class => 'Nilai Ujian',
     ];
 
     /**

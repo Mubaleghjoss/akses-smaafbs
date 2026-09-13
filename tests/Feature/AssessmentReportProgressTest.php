@@ -220,7 +220,7 @@ class AssessmentReportProgressTest extends TestCase
             ->assertSee('Belum Siap Cetak')
             ->assertSeeHtml('assessment-report-progress');
 
-        $this->assertSame('Penilaian', AdminSchoolNavigation::parentItemForClass(AssessmentReportProgressPage::class));
+        $this->assertSame('Nilai Ujian', AdminSchoolNavigation::parentItemForClass(AssessmentReportProgressPage::class));
         $this->assertTrue(AdminSchoolNavigation::shouldRegisterAssessmentClass(AssessmentReportProgressPage::class));
     }
 

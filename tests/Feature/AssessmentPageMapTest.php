@@ -108,9 +108,9 @@ class AssessmentPageMapTest extends TestCase
                 "Pusat {$type->label()} tidak terdaftar di menu, sehingga jenis ini tidak dapat ditemukan pengguna.",
             );
             $this->assertSame(
-                'Penilaian',
+                'Nilai Ujian',
                 AdminSchoolNavigation::parentItemForClass($hub),
-                "Pusat {$type->label()} tidak berada di bawah induk menu Penilaian.",
+                "Pusat {$type->label()} tidak berada di bawah induk menu Nilai Ujian.",
             );
             $this->assertSame(
                 AdminSchoolNavigation::GROUP,
@@ -120,7 +120,7 @@ class AssessmentPageMapTest extends TestCase
 
         foreach ([AssessmentSetupWizard::class, AssessmentTeachingMatrix::class, AssessmentDashboard::class] as $class) {
             $this->assertTrue(AdminSchoolNavigation::shouldRegisterAssessmentClass($class));
-            $this->assertSame('Penilaian', AdminSchoolNavigation::parentItemForClass($class));
+            $this->assertSame('Nilai Ujian', AdminSchoolNavigation::parentItemForClass($class));
         }
     }
 

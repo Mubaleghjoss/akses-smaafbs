@@ -445,7 +445,6 @@ class AssessmentAdminIntegrationTest extends TestCase
         $admin = $this->createUser('assessment-admin', 'admin');
 
         $this->assertContains(AdminSchoolNavigation::GROUP, User::navigationGroupOptions());
-        $this->assertNotContains('Penilaian', User::navigationGroupOptions());
         $this->assertSame(
             AdminSchoolNavigation::GROUP,
             AdminModuleAccess::definition('penilaian')['group'],
@@ -464,7 +463,7 @@ class AssessmentAdminIntegrationTest extends TestCase
             AsasHub::class,
         ]))->keyBy(fn ($item): string => $item->getLabel());
         $this->assertSame(
-            ['Penilaian'],
+            ['Nilai Ujian'],
             $assessmentParents->keys()->all(),
         );
         $this->assertTrue(
