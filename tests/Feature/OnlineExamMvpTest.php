@@ -65,13 +65,41 @@ class OnlineExamMvpTest extends TestCase
         $this->assertDatabaseHas('exam_question_sets', ['teacher_id' => $teacher->id, 'title' => 'ASTS Matematika']);
     }
 
-    public function test_public_verification_rejects_invalid_student_token_and_accepts_valid_unique_token(): void
+    public function test_public_verification_rejects_incorrect_identity_or_token_and_accepts_valid_unique_token(): void
     {
         [$schedule, $token, $attempt, $plainToken] = $this->fixtures();
         $payload = ['class_name' => 'X-A', 'student_name' => 'Siswa Uji', 'nisn' => '12345', 'birth_date' => '2010-01-02', 'exam_code' => $plainToken];
+        $this->post(route('exam.verify'), [...$payload, 'nisn' => '99999'])->assertSessionHasErrors('exam_code');
+        $this->post(route('exam.verify'), [...$payload, 'birth_date' => '2010-01-03'])->assertSessionHasErrors('exam_code');
         $this->post(route('exam.verify'), [...$payload, 'exam_code' => 'ZZZZ-ZZZZ'])->assertSessionHasErrors('exam_code');
         $this->post(route('exam.verify'), $payload)->assertRedirect();
         $this->assertNotNull($token->fresh()->verified_at);
+    }
+
+    public function test_public_page_lists_active_rombel_and_only_exposes_student_names_for_autocomplete(): void
+    {
+        [$schedule, $token, $attempt, $plainToken] = $this->fixtures();
+        Schedule::create([
+            'question_set_id' => $schedule->question_set_id,
+            'created_by' => $schedule->created_by,
+            'class_name' => 'X-Tidak Aktif',
+            'exam_code' => 'INACTIVE-X',
+            'supervisor_code_hash' => Hash::make('awas123'),
+            'starts_at' => now()->subDay(),
+            'ends_at' => now()->subHour(),
+            'duration_minutes' => 60,
+            'is_active' => true,
+        ]);
+
+        $this->get(route('exam.index'))
+            ->assertOk()
+            ->assertSee('Pilih rombel')
+            ->assertSee('X-A')
+            ->assertSee('Siswa Uji')
+            ->assertDontSee('X-Tidak Aktif')
+            ->assertDontSee($plainToken)
+            ->assertDontSee($token->token_hash)
+            ->assertDontSee('2010-01-02');
     }
 
     public function test_student_token_hash_is_not_serialized(): void

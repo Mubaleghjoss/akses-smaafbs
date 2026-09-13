@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Exam\Answer;
 use App\Models\Exam\Attempt;
 use App\Models\Exam\Event;
+use App\Models\Exam\Schedule;
 use App\Models\Exam\StudentToken;
 use App\Services\Exam\ScoringService;
 use Illuminate\Http\JsonResponse;
@@ -14,15 +15,45 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class PublicExamController extends Controller
 {
-    public function index(): View { return view('exam.verify'); }
+    public function index(): View
+    {
+        $schedules = Schedule::query()
+            ->where('is_active', true)
+            ->where('starts_at', '<=', now())
+            ->where('ends_at', '>=', now())
+            ->with(['tokens' => fn ($query) => $query->select(['id', 'schedule_id', 'student_name', 'class_name'])])
+            ->orderBy('class_name')
+            ->get(['id', 'class_name']);
+
+        $studentsByClass = $schedules
+            ->flatMap(fn (Schedule $schedule) => $schedule->tokens
+                ->where('class_name', $schedule->class_name)
+                ->map(fn (StudentToken $token) => ['class_name' => $schedule->class_name, 'student_name' => $token->student_name]))
+            ->groupBy('class_name')
+            ->map(fn ($students) => $students->pluck('student_name')->unique()->sort()->values())
+            ->all();
+
+        return view('exam.verify', [
+            'classes' => $schedules->pluck('class_name')->unique()->values(),
+            'studentsByClass' => $studentsByClass,
+        ]);
+    }
 
     public function verify(Request $request): RedirectResponse
     {
-        $data = $request->validate(['class_name' => ['required', 'string'], 'student_name' => ['required', 'string'], 'nisn' => ['required', 'string'], 'birth_date' => ['required', 'date'], 'exam_code' => ['required', 'string', 'regex:/^[A-Za-z0-9]{4}-?[A-Za-z0-9]{4}$/']]);
+        $activeClasses = Schedule::query()
+            ->where('is_active', true)
+            ->where('starts_at', '<=', now())
+            ->where('ends_at', '>=', now())
+            ->pluck('class_name')
+            ->unique()
+            ->all();
+        $data = $request->validate(['class_name' => ['required', 'string', Rule::in($activeClasses)], 'student_name' => ['required', 'string'], 'nisn' => ['required', 'string'], 'birth_date' => ['required', 'date'], 'exam_code' => ['required', 'string', 'regex:/^[A-Za-z0-9]{4}-?[A-Za-z0-9]{4}$/']]);
         $token = StudentToken::query()
             ->where('token_hash', StudentToken::hashToken($data['exam_code']))
             ->where('class_name', $data['class_name'])
