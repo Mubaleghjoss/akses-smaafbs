@@ -27,7 +27,7 @@ class AssessmentSetupWizard extends AssessmentPage
 
     protected static ?string $slug = 'penilaian/setelan-awal';
 
-    protected static ?int $navigationSort = 0;
+    protected static ?int $navigationSort = 30;
 
     protected static string $assessmentPermission = 'penilaian.manage';
 

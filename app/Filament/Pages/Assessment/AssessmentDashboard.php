@@ -43,7 +43,7 @@ class AssessmentDashboard extends AssessmentPage
 
     protected static ?string $slug = 'penilaian';
 
-    protected static ?int $navigationSort = 30;
+    protected static ?int $navigationSort = 0;
 
     protected string $view = 'filament.pages.assessment.dashboard';
 

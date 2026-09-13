@@ -9,6 +9,7 @@ use App\Filament\Pages\Assessment\AsasInputScores;
 use App\Filament\Pages\Assessment\AsatHub;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Assessment\AssessmentMasterImport;
+use App\Filament\Pages\Assessment\QuestionBankBuilderPage;
 use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\Assessment\AstsInputScores;
 use App\Filament\Resources\AssessmentAuditLogResource\Pages\ListAssessmentAuditLogs;
@@ -459,6 +460,7 @@ class AssessmentAdminIntegrationTest extends TestCase
         );
         $assessmentParents = collect(AdminSchoolNavigation::parentNavigationItems([
             AssessmentDashboard::class,
+            QuestionBankBuilderPage::class,
             AstsHub::class,
             AsasHub::class,
         ]))->keyBy(fn ($item): string => $item->getLabel());
@@ -480,6 +482,14 @@ class AssessmentAdminIntegrationTest extends TestCase
             AdminModuleAccess::itemClassesForLevels(['penilaian' => AdminModuleAccess::VIEW]),
         );
         $this->assertContains(
+            QuestionBankBuilderPage::class,
+            AdminModuleAccess::itemClassesForLevels(['penilaian' => AdminModuleAccess::VIEW]),
+        );
+        $this->assertSame(
+            '/admin/penilaian/penyusunan-soal',
+            parse_url(QuestionBankBuilderPage::getUrl(), PHP_URL_PATH),
+        );
+        $this->assertContains(
             AsasHub::class,
             AdminModuleAccess::itemClassesForLevels(['penilaian' => AdminModuleAccess::VIEW]),
         );
@@ -495,6 +505,13 @@ class AssessmentAdminIntegrationTest extends TestCase
         $this->actingAs($viewer);
         $this->assertTrue(AssessmentDashboard::canAccess());
         $this->assertTrue(AssessmentDashboard::shouldRegisterNavigation());
+        $this->assertTrue(QuestionBankBuilderPage::canAccess());
+        $this->assertTrue(QuestionBankBuilderPage::shouldRegisterNavigation());
+        $this->get(QuestionBankBuilderPage::getUrl())
+            ->assertOk()
+            ->assertSee('Bank &amp; Penyusunan Soal', false)
+            ->assertSee('PG kompleks')
+            ->assertSee('Import dan publish belum tersedia');
         // Akun pembaca tanpa tautan guru tidak melihat fokus ujian teknis.
         $this->assertFalse(AstsHub::shouldRegisterNavigation());
         $this->assertFalse(AsasHub::shouldRegisterNavigation());

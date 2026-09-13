@@ -10,8 +10,10 @@ use App\Filament\Pages\Assessment\AsatInputScores;
 use App\Filament\Pages\Assessment\AsatReports;
 use App\Filament\Pages\Assessment\AsatSubmissionStatus;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
+use App\Filament\Pages\Assessment\AssessmentReportProgressPage;
 use App\Filament\Pages\Assessment\AssessmentSetupWizard;
 use App\Filament\Pages\Assessment\AssessmentTeachingMatrix;
+use App\Filament\Pages\Assessment\QuestionBankBuilderPage;
 use App\Filament\Pages\Assessment\AstsHub;
 use App\Support\Admin\AdminModuleAccess;
 use App\Support\Admin\AdminSchoolNavigation;
@@ -118,10 +120,13 @@ class AssessmentPageMapTest extends TestCase
             );
         }
 
-        foreach ([AssessmentSetupWizard::class, AssessmentTeachingMatrix::class, AssessmentDashboard::class] as $class) {
+        foreach ([AssessmentDashboard::class, AstsHub::class, AsasHub::class, AsatHub::class, QuestionBankBuilderPage::class, AssessmentTeachingMatrix::class, AssessmentReportProgressPage::class, AssessmentSetupWizard::class] as $class) {
             $this->assertTrue(AdminSchoolNavigation::shouldRegisterAssessmentClass($class));
             $this->assertSame('Nilai Ujian', AdminSchoolNavigation::parentItemForClass($class));
         }
+
+        $parent = collect(AdminSchoolNavigation::parentNavigationItems([QuestionBankBuilderPage::class]))->sole();
+        $this->assertSame('heroicon-o-clipboard-document-check', $parent->getIcon());
     }
 
     public function test_halaman_turunan_tidak_menambah_baris_sidebar(): void
@@ -157,7 +162,7 @@ class AssessmentPageMapTest extends TestCase
             }
         }
 
-        foreach ([AssessmentSetupWizard::class, AssessmentTeachingMatrix::class, AsasHub::class] as $class) {
+        foreach ([AssessmentSetupWizard::class, AssessmentTeachingMatrix::class, QuestionBankBuilderPage::class, AsasHub::class] as $class) {
             $this->assertContains($class, $classes);
         }
     }

@@ -14,7 +14,7 @@ class AssessmentReportProgressPage extends AssessmentPage
 
     protected static ?string $slug = 'penilaian/progres-rapor';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 25;
 
     protected string $view = 'filament.pages.assessment.report-progress';
 

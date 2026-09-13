@@ -7,6 +7,7 @@ use App\Filament\Pages\Assessment\AsatHub;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Assessment\AssessmentReportProgressPage;
 use App\Filament\Pages\Assessment\AssessmentSetupWizard;
+use App\Filament\Pages\Assessment\QuestionBankBuilderPage;
 use App\Filament\Pages\Assessment\AssessmentTeachingMatrix;
 use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\Bk\RekapSigapPage;
@@ -69,7 +70,7 @@ class AdminSchoolNavigation
         'Agenda' => ['icon' => 'heroicon-o-calendar-days', 'sort' => 190],
         'Konten' => ['icon' => 'heroicon-o-newspaper', 'sort' => 200],
         'Perpustakaan' => ['icon' => 'heroicon-o-book-open', 'sort' => 210],
-        'Nilai Ujian' => ['icon' => 'heroicon-o-academic-cap', 'sort' => 115],
+        'Nilai Ujian' => ['icon' => 'heroicon-o-clipboard-document-check', 'sort' => 115],
         // Grup "IT SMA AFBS" DIPENSIUNKAN seluruhnya: seluruh komponen MikroTik
         // (Monitor, HotspotSettings, HotspotUser, BlockedDomain, BuatAkunSiswa)
         // sudah pindah ke aplikasi terpisah mikrotik.smaafbs.sch.id.
@@ -131,6 +132,7 @@ class AdminSchoolNavigation
         AssessmentReportProgressPage::class => 'Nilai Ujian',
         AssessmentSetupWizard::class => 'Nilai Ujian',
         AssessmentTeachingMatrix::class => 'Nilai Ujian',
+        QuestionBankBuilderPage::class => 'Nilai Ujian',
         AstsHub::class => 'Nilai Ujian',
         AsasHub::class => 'Nilai Ujian',
         AsatHub::class => 'Nilai Ujian',
@@ -144,6 +146,7 @@ class AdminSchoolNavigation
         AssessmentReportProgressPage::class => self::GROUP,
         AssessmentSetupWizard::class => self::GROUP,
         AssessmentTeachingMatrix::class => self::GROUP,
+        QuestionBankBuilderPage::class => self::GROUP,
         AstsHub::class => self::GROUP,
         AsasHub::class => self::GROUP,
         AsatHub::class => self::GROUP,
@@ -179,6 +182,7 @@ class AdminSchoolNavigation
         return in_array($class, [
             AssessmentSetupWizard::class,
             AssessmentTeachingMatrix::class,
+            QuestionBankBuilderPage::class,
             AstsHub::class,
             AsasHub::class,
             AsatHub::class,
