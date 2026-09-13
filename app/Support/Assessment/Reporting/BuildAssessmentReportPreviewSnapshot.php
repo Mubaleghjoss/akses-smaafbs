@@ -80,6 +80,13 @@ final class BuildAssessmentReportPreviewSnapshot
             ->values()
             ->all();
 
+        $subjectResults = app(OnlineExamDemoReportMarker::class)->annotate(
+            $subjectResults,
+            (int) $student->student_id,
+            (string) $student->rombel_name_snapshot,
+            $period->type instanceof \BackedEnum ? $period->type->value : (string) $period->type,
+        );
+
         return new ReportSnapshot([
             'assessment_period_id' => $period->getKey(),
             'assessment_period_student_id' => $student->getKey(),

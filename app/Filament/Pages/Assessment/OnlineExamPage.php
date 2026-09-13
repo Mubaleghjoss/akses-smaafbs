@@ -18,7 +18,7 @@ class OnlineExamPage extends AssessmentPage
     protected string $view = 'filament.pages.assessment.online-exam';
 
     public function schemaReady(): bool { return Schema::hasTable('exam_schedules'); }
-    public function sets(): Collection { return $this->owned(QuestionSet::query())->get(); }
+    public function sets(): Collection { return $this->owned(QuestionSet::query()->with('questions'))->get(); }
     public function schedules(): Collection { return $this->owned(Schedule::query()->with(['questionSet', 'attempts', 'tokens']), 'questionSet')->latest()->get(); }
     public function attempts(): Collection { return $this->owned(Attempt::query()->with(['studentToken', 'schedule.questionSet', 'answers.question']), 'schedule.questionSet')->latest()->get(); }
 

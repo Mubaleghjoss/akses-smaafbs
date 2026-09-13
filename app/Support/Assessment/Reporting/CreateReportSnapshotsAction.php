@@ -301,6 +301,12 @@ class CreateReportSnapshotsAction
                             'settings' => $templateSettings,
                         ],
                     ];
+                $snapshotData['subjects'] = app(OnlineExamDemoReportMarker::class)->annotate(
+                    $snapshotData['subjects'],
+                    (int) $student->student_id,
+                    (string) $student->rombel_name_snapshot,
+                    $this->enumValue($period->type),
+                );
                 $snapshot = ReportSnapshot::query()->create([
                     'assessment_period_id' => $period->getKey(),
                     'assessment_period_student_id' => $student->id,
