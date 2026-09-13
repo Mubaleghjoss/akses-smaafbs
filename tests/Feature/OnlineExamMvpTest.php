@@ -72,6 +72,8 @@ class OnlineExamMvpTest extends TestCase
         $this->post(route('exam.verify'), [...$payload, 'nisn' => '99999'])->assertSessionHasErrors('exam_code');
         $this->post(route('exam.verify'), [...$payload, 'birth_date' => '2010-01-03'])->assertSessionHasErrors('exam_code');
         $this->post(route('exam.verify'), [...$payload, 'exam_code' => 'ZZZZ-ZZZZ'])->assertSessionHasErrors('exam_code');
+        $this->post(route('exam.verify'), [...$payload, 'exam_code' => 'DEMO-UJIAN-MVP-2026'])
+            ->assertSessionHasErrors(['exam_code' => 'Gunakan Kode Siswa/Token Ujian dari pengawas, contoh ABCD-1234. Jangan isi kode jadwal ujian.']);
         $this->post(route('exam.verify'), $payload)->assertRedirect();
         $this->assertNotNull($token->fresh()->verified_at);
     }
@@ -93,7 +95,11 @@ class OnlineExamMvpTest extends TestCase
 
         $this->get(route('exam.index'))
             ->assertOk()
+            ->assertSee('SMA Al Furqon Boarding School')
             ->assertSee('Pilih rombel')
+            ->assertSee('Kode Siswa / Token Ujian')
+            ->assertSee('placeholder="ABCD-1234"', false)
+            ->assertSee('Gunakan kode siswa dari pengawas/admin. Contoh: ABCD-1234. Jangan isi kode jadwal ujian.')
             ->assertSee('X-A')
             ->assertSee('Siswa Uji')
             ->assertDontSee('X-Tidak Aktif')
@@ -141,7 +147,7 @@ class OnlineExamMvpTest extends TestCase
         $teacher = User::factory()->create(['username' => 'teacher-'.Str::lower(Str::random(8)), 'module_access_levels' => ['penilaian' => 'manage']]);
         $set = QuestionSet::create(['teacher_id' => $teacher->id, 'subject' => 'Matematika', 'exam_type' => 'ASTS', 'academic_year' => '2026/2027', 'semester' => 'Ganjil', 'title' => 'ASTS Matematika']);
         $schedule = Schedule::create(['question_set_id' => $set->id, 'created_by' => $teacher->id, 'class_name' => 'X-A', 'exam_code' => 'ASTS-XA', 'supervisor_code_hash' => Hash::make('awas123'), 'starts_at' => now()->subMinute(), 'ends_at' => now()->addHour(), 'duration_minutes' => 60, 'is_active' => true]);
-        $plainToken = 'ABCD-1234';
+        $plainToken = 'DM01-4140';
         $token = StudentToken::create(['schedule_id' => $schedule->id, 'student_name' => 'Siswa Uji', 'nisn' => '12345', 'birth_date' => '2010-01-02', 'class_name' => 'X-A', 'token_hash' => StudentToken::hashToken($plainToken)]);
         $attempt = Attempt::create(['public_id' => (string) Str::uuid(), 'schedule_id' => $schedule->id, 'student_token_id' => $token->id]);
         return [$schedule, $token, $attempt, $plainToken];

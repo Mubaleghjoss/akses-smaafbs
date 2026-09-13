@@ -10,7 +10,7 @@ body{margin:0;font-family:Georgia,serif;background:#eef3ed;color:#163126}.wrap{m
 </head>
 <body>
 <main class="wrap"><div class="card">
-<small>SMA ALFA BOARDING SCHOOL</small><h1>Ujian Online</h1><p>Masukkan identitas persis seperti data sekolah. Sistem hanya menampilkan ujian yang sedang aktif.</p>
+<small>SMA Al Furqon Boarding School</small><h1>Ujian Online</h1><p>Masukkan identitas persis seperti data sekolah. Sistem hanya menampilkan ujian yang sedang aktif.</p>
 @if(session('success'))<p class="success">{{ session('success') }}</p>@endif
 @if($errors->any())<div class="error">{{ $errors->first() }}</div>@endif
 @if($classes->isEmpty())
@@ -27,7 +27,8 @@ body{margin:0;font-family:Georgia,serif;background:#eef3ed;color:#163126}.wrap{m
 <ul id="student_suggestions" class="suggestions" role="listbox" hidden></ul>
 <label>NISN<input name="nisn" value="{{ old('nisn') }}" required inputmode="numeric"></label>
 <label>Tanggal lahir<input type="date" name="birth_date" value="{{ old('birth_date') }}" required></label>
-<label>Kode Ujian Siswa<input name="exam_code" value="{{ old('exam_code') }}" required autocomplete="off" placeholder="XXXX-XXXX"></label>
+<label>Kode Siswa / Token Ujian<input name="exam_code" value="{{ old('exam_code') }}" required autocomplete="off" placeholder="ABCD-1234" aria-describedby="exam_code_hint"></label>
+<p class="hint" id="exam_code_hint">Gunakan kode siswa dari pengawas/admin. Contoh: ABCD-1234. Jangan isi kode jadwal ujian.</p>
 <button>Verifikasi & Lihat Ujian</button>
 </form>
 <script>

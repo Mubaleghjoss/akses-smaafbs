@@ -53,7 +53,10 @@ class PublicExamController extends Controller
             ->pluck('class_name')
             ->unique()
             ->all();
-        $data = $request->validate(['class_name' => ['required', 'string', Rule::in($activeClasses)], 'student_name' => ['required', 'string'], 'nisn' => ['required', 'string'], 'birth_date' => ['required', 'date'], 'exam_code' => ['required', 'string', 'regex:/^[A-Za-z0-9]{4}-?[A-Za-z0-9]{4}$/']]);
+        $data = $request->validate(
+            ['class_name' => ['required', 'string', Rule::in($activeClasses)], 'student_name' => ['required', 'string'], 'nisn' => ['required', 'string'], 'birth_date' => ['required', 'date'], 'exam_code' => ['required', 'string', 'regex:/^[A-Za-z0-9]{4}-[A-Za-z0-9]{4}$/']],
+            ['exam_code.regex' => 'Gunakan Kode Siswa/Token Ujian dari pengawas, contoh ABCD-1234. Jangan isi kode jadwal ujian.']
+        );
         $token = StudentToken::query()
             ->where('token_hash', StudentToken::hashToken($data['exam_code']))
             ->where('class_name', $data['class_name'])
@@ -63,7 +66,7 @@ class PublicExamController extends Controller
             ->whereHas('schedule', fn ($query) => $query->where('class_name', $data['class_name'])->where('is_active', true)->where('starts_at', '<=', now())->where('ends_at', '>=', now()))
             ->with('schedule')
             ->first();
-        if (! $token || ! $token->matchesToken($data['exam_code'])) return back()->withErrors(['exam_code' => 'Kode Ujian Siswa tidak valid, atau identitas dan jadwal ujian tidak sesuai.'])->withInput();
+        if (! $token || ! $token->matchesToken($data['exam_code'])) return back()->withErrors(['exam_code' => 'Kode Siswa/Token Ujian tidak valid, atau identitas dan jadwal ujian tidak sesuai.'])->withInput();
         $schedule = $token->schedule;
         $token->update(['verified_at' => now()]);
         $attempt = Attempt::firstOrCreate(['schedule_id' => $schedule->id, 'student_token_id' => $token->id], ['public_id' => (string) Str::uuid(), 'status' => 'verified']);
