@@ -23,7 +23,7 @@ class SeedOnlineExamDemoData extends Command
     protected $description = 'Membuat data demo MVP Ujian Online yang idempotent untuk staging/non-production';
 
     private const EXAM_CODE = 'DEMO-UJIAN-MVP-2026';
-    private const TITLE = '[DEMO-UJIAN-MVP] Matematika: Bilangan dan Penalaran';
+    private const TITLE = '[DEMO-UJIAN-MVP] BAHASA INDONESIA: Teks dan Penalaran';
     private const MARKER = '[DEMO-UJIAN-MVP]';
 
     public function handle(ScoringService $scoring): int
@@ -69,7 +69,7 @@ class SeedOnlineExamDemoData extends Command
             Schedule::query()->where('exam_code', self::EXAM_CODE)->delete();
             $set = QuestionSet::query()->updateOrCreate(
                 ['title' => self::TITLE],
-                ['teacher_id' => $teacher->id, 'subject' => 'Matematika', 'exam_type' => 'ASTS', 'academic_year' => '2026/2027', 'semester' => 'Ganjil', 'instructions' => self::MARKER.' Paket contoh untuk alur lengkap ujian online.', 'status' => 'published'],
+                ['teacher_id' => $teacher->id, 'subject' => 'BAHASA INDONESIA', 'exam_type' => 'ASTS', 'academic_year' => '2026/2027', 'semester' => 'Ganjil', 'instructions' => self::MARKER.' Paket contoh untuk alur lengkap ujian online.', 'status' => 'published'],
             );
             $set->questions()->delete();
             $questions = $this->questions($set);
