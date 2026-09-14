@@ -92,9 +92,20 @@ class PublicExamController extends Controller
             return view('exam.status', ['attempt' => $attempt, 'status' => 'inactive']);
         }
 
-        if (! $attempt->started_at) $attempt->update(['started_at' => now(), 'status' => 'started']);
         $attempt->load(['schedule.questionSet.questions', 'studentToken', 'answers']);
         return view('exam.work', compact('attempt'));
+    }
+
+    public function start(Request $request, string $publicId): JsonResponse
+    {
+        $attempt = $this->attempt($request, $publicId);
+        abort_if($attempt->status === 'submitted', 409);
+
+        if (! $attempt->started_at) {
+            $attempt->update(['started_at' => now(), 'status' => 'started']);
+        }
+
+        return response()->json(['started' => true]);
     }
 
     public function saveAnswer(Request $request, string $publicId, ScoringService $scoring): JsonResponse

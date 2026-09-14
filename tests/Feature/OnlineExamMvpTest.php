@@ -150,7 +150,28 @@ class OnlineExamMvpTest extends TestCase
         $this->withSession(['exam_attempt_id' => $attempt->id])
             ->get(route('exam.work', $attempt->public_id))
             ->assertOk()
-            ->assertSee('Kirim Jawaban Final');
+            ->assertSee('SEBELUM UJIAN')
+            ->assertSee('Mulai Ujian &amp; Layar Penuh', false)
+            ->assertSee('Lanjut tanpa fullscreen jika diizinkan pengawas')
+            ->assertSee('Kirim Jawaban Final')
+            ->assertSee('Download Jawaban Darurat Excel')
+            ->assertSee('requestFullscreen');
+    }
+
+    public function test_exam_starts_only_after_the_explicit_start_request(): void
+    {
+        [, , $attempt] = $this->fixtures();
+
+        $this->withSession(['exam_attempt_id' => $attempt->id])
+            ->get(route('exam.work', $attempt->public_id))
+            ->assertOk();
+        $this->assertNull($attempt->fresh()->started_at);
+
+        $this->withSession(['exam_attempt_id' => $attempt->id])
+            ->post(route('exam.start', $attempt->public_id))
+            ->assertOk()
+            ->assertJsonPath('started', true);
+        $this->assertNotNull($attempt->fresh()->started_at);
     }
 
     public function test_student_token_hash_is_not_serialized(): void

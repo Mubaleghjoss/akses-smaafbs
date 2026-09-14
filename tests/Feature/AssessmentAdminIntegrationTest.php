@@ -10,6 +10,7 @@ use App\Filament\Pages\Assessment\AsatHub;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Assessment\AssessmentMasterImport;
 use App\Filament\Pages\Assessment\QuestionBankBuilderPage;
+use App\Filament\Pages\Assessment\OnlineExamPage;
 use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\Assessment\AstsInputScores;
 use App\Filament\Resources\AssessmentAuditLogResource\Pages\ListAssessmentAuditLogs;
@@ -510,7 +511,12 @@ class AssessmentAdminIntegrationTest extends TestCase
         $this->get(QuestionBankBuilderPage::getUrl())
             ->assertOk()
             ->assertSee('Bank &amp; Penyusunan Soal', false)
+            ->assertSee('question-builder-shell')
             ->assertSee('Migration ujian online belum dijalankan');
+        $this->get(OnlineExamPage::getUrl())
+            ->assertOk()
+            ->assertSee('exam-admin-shell')
+            ->assertSee('Migration ujian online belum tersedia.');
         // Akun pembaca tanpa tautan guru tidak melihat fokus ujian teknis.
         $this->assertFalse(AstsHub::shouldRegisterNavigation());
         $this->assertFalse(AsasHub::shouldRegisterNavigation());

@@ -116,6 +116,7 @@ Route::prefix('/ujian')->middleware('throttle:120,1')->group(function (): void {
     Route::get('/', [PublicExamController::class, 'index'])->name('exam.index');
     Route::post('/verifikasi', [PublicExamController::class, 'verify'])->middleware('throttle:10,1')->name('exam.verify');
     Route::get('/{publicId}', [PublicExamController::class, 'work'])->name('exam.work');
+    Route::post('/{publicId}/mulai', [PublicExamController::class, 'start'])->name('exam.start');
     Route::post('/{publicId}/jawaban', [PublicExamController::class, 'saveAnswer'])->name('exam.answer');
     Route::post('/{publicId}/event', [PublicExamController::class, 'event'])->name('exam.event');
     Route::post('/{publicId}/unlock', [PublicExamController::class, 'unlock'])->middleware('throttle:10,1')->name('exam.unlock');
