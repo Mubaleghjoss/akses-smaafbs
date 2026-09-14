@@ -22,6 +22,15 @@ class OnlineExamPage extends AssessmentPage
     public function schedules(): Collection { return $this->owned(Schedule::query()->with(['questionSet', 'attempts', 'tokens']), 'questionSet')->latest()->get(); }
     public function attempts(): Collection { return $this->owned(Attempt::query()->with(['studentToken', 'schedule.questionSet', 'answers.question', 'events']), 'schedule.questionSet')->latest()->get(); }
 
+    public function proctorCodeHint(Attempt $attempt): ?string
+    {
+        if ($attempt->exit_count < 1 && $attempt->offline_count < 1 && $attempt->status !== 'started') return null;
+
+        return $attempt->schedule->exam_code === 'DEMO-UJIAN-MVP-2026'
+            ? 'DEMO-AWAS'
+            : 'Kode pengawas tersimpan aman; gunakan kode yang dibuat saat jadwal dibuat.';
+    }
+
     /** @return array{total:int,verified:int,started:int,submitted:int,attention:int} */
     public function monitoringSummary(): array
     {

@@ -109,6 +109,8 @@ Route::middleware('auth')->prefix('/admin/ujian')->group(function (): void {
     Route::post('/ai/test', [ExamAdminController::class, 'testAi'])->name('admin.exam.ai.test');
     Route::post('/jadwal', [ExamAdminController::class, 'createSchedule'])->name('admin.exam.schedules.store');
     Route::post('/jadwal/{schedule}/peserta', [ExamAdminController::class, 'addStudent'])->name('admin.exam.schedules.students.store');
+    Route::post('/attempt/{attempt}/reset-belum-mulai', [ExamAdminController::class, 'resetNotStarted'])->name('admin.exam.attempts.reset-not-started');
+    Route::post('/attempt/{attempt}/buka-ulang', [ExamAdminController::class, 'reopen'])->name('admin.exam.attempts.reopen');
     Route::post('/jawaban/{answer}/nilai', [ExamAdminController::class, 'grade'])->name('admin.exam.answers.grade');
 });
 

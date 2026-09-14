@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Exam\AiSetting;
 use App\Models\Exam\Answer;
 use App\Models\Exam\Attempt;
+use App\Models\Exam\Event;
 use App\Models\Exam\QuestionSet;
 use App\Models\Exam\Schedule;
 use App\Models\Exam\StudentToken;
@@ -14,6 +15,7 @@ use App\Services\Exam\AiQuestionService;
 use App\Services\Exam\ScoringService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -61,6 +63,53 @@ class ExamAdminController extends Controller
 
         StudentToken::create($data + ['schedule_id' => $schedule->id, 'token_hash' => $tokenHash]);
         return back()->with('exam_notice', 'Peserta ditambahkan. Catat dan berikan kode berikut kepada pengawas/siswa; kode hanya ditampilkan sekali.')->with('exam_student_token', $plainToken);
+    }
+
+    public function resetNotStarted(Request $request, Attempt $attempt): RedirectResponse
+    {
+        $this->authorizeExamModule();
+        $attempt->load('schedule.questionSet');
+        abort_unless($attempt->schedule->questionSet->isOwnedBy($request->user()), 403);
+        abort_unless($attempt->status === 'verified' && $attempt->started_at === null && ! $attempt->answers()->exists(), 422, 'Hanya sesi terverifikasi yang belum dimulai dan belum memiliki jawaban yang dapat direset.');
+
+        $attempt->studentToken->update(['verified_at' => null]);
+        Event::create(['attempt_id' => $attempt->id, 'type' => 'admin_reset_not_started', 'metadata' => ['reason' => $request->input('reason'), 'user_id' => $request->user()->id], 'occurred_at' => now()]);
+
+        return back()->with('exam_notice', 'Sesi belum mulai direset; siswa harus verifikasi ulang menggunakan token yang sama.');
+    }
+
+    public function reopen(Request $request, Attempt $attempt): RedirectResponse
+    {
+        $this->authorizeExamModule();
+        $attempt->load(['schedule.questionSet', 'studentToken']);
+        abort_unless($attempt->schedule->questionSet->isOwnedBy($request->user()), 403);
+        abort_unless(in_array($attempt->status, ['started', 'submitted'], true), 422, 'Hanya attempt yang sudah dimulai atau dikirim yang dapat dibuka ulang.');
+        $data = $request->validate(['reason' => ['required', 'string', 'max:1000']]);
+
+        $plainToken = DB::transaction(function () use ($attempt, $data, $request): string {
+            do {
+                $plainToken = StudentToken::generatePlainToken();
+                $tokenHash = StudentToken::hashToken($plainToken);
+            } while (StudentToken::query()->where('token_hash', $tokenHash)->exists());
+
+            $oldToken = $attempt->studentToken;
+            $newToken = StudentToken::create([
+                'schedule_id' => $attempt->schedule_id,
+                'student_id' => null,
+                'student_name' => $oldToken->student_name,
+                'nisn' => $oldToken->nisn,
+                'birth_date' => $oldToken->birth_date,
+                'class_name' => $oldToken->class_name,
+                'token_hash' => $tokenHash,
+                'verified_at' => now(),
+            ]);
+            Attempt::create(['public_id' => (string) Str::uuid(), 'schedule_id' => $attempt->schedule_id, 'student_token_id' => $newToken->id, 'status' => 'verified']);
+            Event::create(['attempt_id' => $attempt->id, 'type' => 'admin_reopen_attempt', 'metadata' => ['reason' => $data['reason'], 'user_id' => $request->user()->id, 'new_student_token_id' => $newToken->id], 'occurred_at' => now()]);
+
+            return $plainToken;
+        });
+
+        return back()->with('exam_notice', 'Attempt lama tetap tersimpan. Token baru untuk buka ulang hanya ditampilkan sekali:')->with('exam_student_token', $plainToken);
     }
 
     public function grade(Request $request, Answer $answer, ScoringService $scoring): RedirectResponse

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Exam\AiSetting;
 use App\Models\Exam\Answer;
 use App\Models\Exam\Attempt;
+use App\Models\Exam\Event;
 use App\Models\Exam\Question;
 use App\Models\Exam\QuestionSet;
 use App\Models\Exam\Schedule;
@@ -15,6 +16,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Livewire\Livewire;
 use Tests\Feature\Concerns\BootstrapsUserAndPermissionTables;
 use Tests\TestCase;
 
@@ -196,10 +198,62 @@ class OnlineExamMvpTest extends TestCase
         [$schedule, $token, $attempt] = $this->fixtures();
         $question = Question::create(['question_set_id' => $schedule->question_set_id, 'type' => 'essay', 'prompt' => 'Jelaskan proses', 'answer_key' => ['KEY-MUST-NOT-LEAK'], 'rubric' => 'Rubrik', 'weight' => 5]);
         $answer = Answer::create(['attempt_id' => $attempt->id, 'question_id' => $question->id, 'answer' => ['Jawaban siswa']]);
-        $this->withSession(['exam_attempt_id' => $attempt->id])->get(route('exam.emergency', $attempt->public_id))->assertOk()->assertDontSee('KEY-MUST-NOT-LEAK')->assertDontSee('Rubrik')->assertDontSee($token->token_hash)->assertSee('Jawaban siswa')->assertSee('Status attempt')->assertSee('Alasan ekspor')->assertSee('Hash integritas');
+        $this->withSession(['exam_attempt_id' => $attempt->id])->get(route('exam.emergency', $attempt->public_id))->assertOk()->assertDontSee('KEY-MUST-NOT-LEAK')->assertDontSee('Rubrik')->assertDontSee($token->token_hash)->assertSee('Jawaban siswa')->assertSee('Status attempt')->assertSee('Waktu ekspor')->assertSee('Hash integritas');
         $teacher = $schedule->questionSet->teacher;
         $this->actingAs($teacher)->post(route('admin.exam.answers.grade', $answer), ['manual_score' => 4, 'teacher_feedback' => 'Baik'])->assertSessionHasNoErrors();
         $this->assertDatabaseHas('exam_answers', ['id' => $answer->id, 'manual_score' => 4]);
+    }
+
+    public function test_emergency_export_contains_complete_safe_sections(): void
+    {
+        [$schedule, $token, $attempt] = $this->fixtures();
+        $question = Question::create(['question_set_id' => $schedule->question_set_id, 'type' => 'multiple_choice', 'prompt' => 'Soal pilihan', 'options' => ['A', 'B'], 'answer_key' => ['A'], 'explanation' => 'Rahasia pembahasan', 'rubric' => 'Rahasia rubrik', 'weight' => 2]);
+        Answer::create(['attempt_id' => $attempt->id, 'question_id' => $question->id, 'answer' => ['B'], 'saved_at' => now(), 'auto_score' => 0]);
+        Event::create(['attempt_id' => $attempt->id, 'type' => 'offline', 'metadata' => ['source' => 'test'], 'occurred_at' => now()]);
+
+        $this->withSession(['exam_attempt_id' => $attempt->id])->get(route('exam.emergency', $attempt->public_id))
+            ->assertOk()->assertSee('IDENTITAS')->assertSee('Kelas')->assertSee('Kode jadwal')->assertSee('multiple_choice')->assertSee('A | B')->assertSee('B')->assertSee('LOG KEAMANAN/EVENT')->assertSee('offline')->assertSee('Hash integritas')
+            ->assertDontSee('Rahasia pembahasan')->assertDontSee('Rahasia rubrik')->assertDontSee($token->token_hash);
+    }
+
+    public function test_admin_can_reset_only_a_not_started_verified_session_and_event_is_recorded(): void
+    {
+        [$schedule, , $attempt] = $this->fixtures();
+        $teacher = $schedule->questionSet->teacher;
+        $attempt->studentToken->update(['verified_at' => now()]);
+        $this->actingAs($teacher)->post(route('admin.exam.attempts.reset-not-started', $attempt), ['reason' => 'Salah perangkat'])->assertSessionHasNoErrors();
+        $this->assertNull($attempt->studentToken->fresh()->verified_at);
+        $this->assertDatabaseHas('exam_events', ['attempt_id' => $attempt->id, 'type' => 'admin_reset_not_started']);
+
+        $attempt->update(['status' => 'started', 'started_at' => now()]);
+        $this->actingAs($teacher)->post(route('admin.exam.attempts.reset-not-started', $attempt))->assertStatus(422);
+    }
+
+    public function test_admin_reopen_requires_reason_and_creates_a_new_token_and_attempt(): void
+    {
+        [$schedule, $token, $attempt] = $this->fixtures();
+        $teacher = $schedule->questionSet->teacher;
+        $attempt->update(['status' => 'submitted', 'started_at' => now()->subHour(), 'submitted_at' => now()]);
+        $this->actingAs($teacher)->post(route('admin.exam.attempts.reopen', $attempt), [])->assertSessionHasErrors('reason');
+        $this->actingAs($teacher)->post(route('admin.exam.attempts.reopen', $attempt), ['reason' => 'Gangguan perangkat'])->assertSessionHas('exam_student_token');
+        $this->assertSame('submitted', $attempt->fresh()->status);
+        $this->assertSame(2, Attempt::query()->where('schedule_id', $schedule->id)->count());
+        $this->assertSame(2, StudentToken::query()->where('schedule_id', $schedule->id)->count());
+        $this->assertDatabaseHas('exam_events', ['attempt_id' => $attempt->id, 'type' => 'admin_reopen_attempt']);
+        $this->assertNotSame($token->id, Attempt::query()->where('schedule_id', $schedule->id)->latest('id')->firstOrFail()->student_token_id);
+    }
+
+    public function test_admin_monitoring_shows_demo_proctor_code_when_attempt_needs_attention(): void
+    {
+        [$schedule, , $attempt] = $this->fixtures();
+        $schedule->update(['exam_code' => 'DEMO-UJIAN-MVP-2026']);
+        $attempt->update(['status' => 'started', 'started_at' => now(), 'offline_count' => 1]);
+
+        Livewire::actingAs($schedule->questionSet->teacher)
+            ->test(\App\Filament\Pages\Assessment\OnlineExamPage::class)
+            ->assertSee('Kode lanjut / pengawas')
+            ->assertSee('DEMO-AWAS')
+            ->assertSee('Buka ulang ujian');
     }
 
     public function test_exam_navigation_and_public_routes_exist(): void

@@ -148,12 +148,65 @@ class PublicExamController extends Controller
     public function emergency(Request $request, string $publicId): Response
     {
         $attempt = $this->attempt($request, $publicId)->load(['studentToken', 'schedule.questionSet.questions', 'answers', 'events']);
-        $rows = [['Identitas', 'Nilai'], ['Nama', $attempt->studentToken->student_name], ['NISN', $attempt->studentToken->nisn], ['Ujian', $attempt->schedule->questionSet->title], ['Status attempt', $attempt->status], ['Alasan ekspor', 'Ekspor jawaban darurat oleh peserta'], ['Waktu ekspor', now()->toIso8601String()], [], ['Nomor', 'Soal', 'Jawaban']];
-        foreach ($attempt->schedule->questionSet->questions as $i => $question) { $answer = $attempt->answers->firstWhere('question_id', $question->id); $rows[] = [$i + 1, strip_tags($question->prompt), implode('|', $answer?->answer ?? [])]; }
-        $rows[] = []; $rows[] = ['Event', 'Waktu']; foreach ($attempt->events as $event) $rows[] = [$event->type, $event->occurred_at?->toIso8601String()];
-        $csv = collect($rows)->map(function ($row) { $stream = fopen('php://temp', 'r+'); fputcsv($stream, $row); rewind($stream); return rtrim((string) stream_get_contents($stream)); })->implode("\r\n");
-        $hash = hash('sha256', $csv); DB::table('exam_emergency_exports')->insert(['attempt_id' => $attempt->id, 'content_hash' => $hash, 'exported_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
-        return response("\xEF\xBB\xBF".$csv."\r\nHash integritas,".$hash, 200, ['Content-Type' => 'text/csv; charset=UTF-8', 'Content-Disposition' => 'attachment; filename="jawaban-darurat-'.$attempt->public_id.'.csv"']);
+        $exportedAt = now();
+        $rows = [
+            ['IDENTITAS'],
+            ['Field', 'Nilai'],
+            ['Nama', $attempt->studentToken->student_name],
+            ['Kelas', $attempt->studentToken->class_name],
+            ['NISN', $attempt->studentToken->nisn],
+            ['Ujian', $attempt->schedule->questionSet->title],
+            ['Mapel', $attempt->schedule->questionSet->subject],
+            ['Kode jadwal', $attempt->schedule->exam_code],
+            ['Status attempt', $attempt->status],
+            ['Waktu mulai', $attempt->started_at?->toIso8601String()],
+            ['Waktu submit', $attempt->submitted_at?->toIso8601String()],
+            ['Waktu ekspor', $exportedAt->toIso8601String()],
+            ['Device/browser', $request->userAgent()],
+            ['Public ID', $attempt->public_id],
+            [],
+            ['JAWABAN SISWA LENGKAP'],
+            ['Nomor', 'Tipe soal', 'Bobot', 'Soal', 'Pilihan jawaban', 'Jawaban siswa', 'Status tersimpan', 'Skor auto', 'Skor manual', 'Feedback guru'],
+        ];
+
+        foreach ($attempt->schedule->questionSet->questions as $i => $question) {
+            $answer = $attempt->answers->firstWhere('question_id', $question->id);
+            $rows[] = [
+                $i + 1,
+                $question->type,
+                $question->weight,
+                trim(strip_tags($question->prompt)),
+                implode(' | ', $question->options ?? []),
+                implode(' | ', $answer?->answer ?? []),
+                $answer?->saved_at?->toIso8601String() ?? 'Belum tersimpan',
+                $answer?->auto_score,
+                $answer?->manual_score,
+                $answer?->teacher_feedback,
+            ];
+        }
+
+        $rows[] = [];
+        $rows[] = ['LOG KEAMANAN/EVENT'];
+        $rows[] = ['Tipe', 'Waktu', 'Metadata ringkas'];
+        foreach ($attempt->events as $event) {
+            $rows[] = [$event->type, $event->occurred_at?->toIso8601String(), json_encode($event->metadata ?? [], JSON_UNESCAPED_SLASHES)];
+        }
+        $rows[] = [];
+        $rows[] = ['VALIDASI'];
+        $rows[] = ['Catatan', 'File ini tidak berisi kunci jawaban, pembahasan, atau rubrik.'];
+
+        $csv = collect($rows)->map(function (array $row): string {
+            $stream = fopen('php://temp', 'r+');
+            fputcsv($stream, $row);
+            rewind($stream);
+
+            return rtrim((string) stream_get_contents($stream));
+        })->implode("\r\n");
+        $hash = hash('sha256', $csv);
+        $csv .= "\r\nHash integritas,{$hash}";
+        DB::table('exam_emergency_exports')->insert(['attempt_id' => $attempt->id, 'content_hash' => $hash, 'exported_at' => $exportedAt, 'created_at' => $exportedAt, 'updated_at' => $exportedAt]);
+
+        return response("\xEF\xBB\xBF".$csv, 200, ['Content-Type' => 'text/csv; charset=UTF-8', 'Content-Disposition' => 'attachment; filename="jawaban-darurat-'.$attempt->public_id.'.csv"']);
     }
 
     private function attempt(Request $request, string $publicId): Attempt
