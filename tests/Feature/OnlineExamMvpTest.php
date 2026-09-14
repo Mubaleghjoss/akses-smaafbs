@@ -108,6 +108,41 @@ class OnlineExamMvpTest extends TestCase
             ->assertDontSee('2010-01-02');
     }
 
+    public function test_submitted_attempt_shows_friendly_status_page_without_session(): void
+    {
+        [$schedule, $token, $attempt] = $this->fixtures();
+        $attempt->update(['status' => 'submitted', 'submitted_at' => now()]);
+
+        $this->get(route('exam.work', $attempt->public_id))
+            ->assertOk()
+            ->assertSee('Ujian sudah dikirim')
+            ->assertSee('Siswa Uji')
+            ->assertSee('ASTS Matematika')
+            ->assertDontSee('409');
+    }
+
+    public function test_attempt_without_session_shows_inactive_status_page(): void
+    {
+        [, , $attempt] = $this->fixtures();
+
+        $this->get(route('exam.work', $attempt->public_id))
+            ->assertOk()
+            ->assertSee('Sesi ujian tidak aktif')
+            ->assertSee('Kembali ke halaman verifikasi')
+            ->assertSee('href="'.route('exam.index').'"', false)
+            ->assertDontSee('403');
+    }
+
+    public function test_attempt_with_session_opens_work_page(): void
+    {
+        [, , $attempt] = $this->fixtures();
+
+        $this->withSession(['exam_attempt_id' => $attempt->id])
+            ->get(route('exam.work', $attempt->public_id))
+            ->assertOk()
+            ->assertSee('Kirim Jawaban Final');
+    }
+
     public function test_student_token_hash_is_not_serialized(): void
     {
         [, $token] = $this->fixtures();

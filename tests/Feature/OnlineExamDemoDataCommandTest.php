@@ -43,13 +43,14 @@ class OnlineExamDemoDataCommandTest extends TestCase
     {
         $this->artisan('exam:demo-data --apply')
             ->expectsOutputToContain('Token demo Siswa Demo 1')
+            ->expectsOutputToContain('Token testing siap dikerjakan Siswa Demo 3')
             ->expectsOutputToContain('/ujian')
             ->assertSuccessful();
 
         $this->assertDatabaseHas('exam_schedules', ['exam_code' => 'DEMO-UJIAN-MVP-2026', 'class_name' => 'X 1']);
         $this->assertSame(4, Question::query()->count());
-        $this->assertSame(3, StudentToken::query()->count());
-        $this->assertSame(3, Attempt::query()->count());
+        $this->assertSame(4, StudentToken::query()->count());
+        $this->assertSame(4, Attempt::query()->count());
         $this->assertDatabaseHas('exam_attempts', ['status' => 'submitted', 'final_score' => 10]);
         $this->assertDatabaseHas('exam_attempts', ['status' => 'verified', 'exit_count' => 1, 'offline_count' => 1]);
         $this->assertDatabaseMissing('exam_student_tokens', ['token_hash' => 'DM01-0001']);
@@ -57,8 +58,8 @@ class OnlineExamDemoDataCommandTest extends TestCase
         $this->artisan('exam:demo-data --apply')->assertSuccessful();
         $this->assertSame(1, Schedule::query()->where('exam_code', 'DEMO-UJIAN-MVP-2026')->count());
         $this->assertSame(4, Question::query()->count());
-        $this->assertSame(3, StudentToken::query()->count());
-        $this->assertSame(3, Attempt::query()->count());
+        $this->assertSame(4, StudentToken::query()->count());
+        $this->assertSame(4, Attempt::query()->count());
     }
 
     public function test_command_cleans_up_legacy_demo_question_sets_with_marker(): void

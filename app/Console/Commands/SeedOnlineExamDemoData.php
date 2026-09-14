@@ -91,11 +91,16 @@ class SeedOnlineExamDemoData extends Command
             ]);
 
             $tokens = collect();
-            foreach ($students as $index => $student) {
+            $demoStudents = $students->values();
+            if ($demoStudents->count() === 3) {
+                // Nullable student_id permits a separate fresh testing login without replacing attention data.
+                $demoStudents->push($demoStudents->last());
+            }
+            foreach ($demoStudents as $index => $student) {
                 $plain = sprintf('DM%02d-%04d', $index + 1, ((int) $student->id) % 10000);
                 $token = StudentToken::query()->create([
                     'schedule_id' => $schedule->id,
-                    'student_id' => $student->id,
+                    'student_id' => $index === 3 && $students->count() === 3 ? null : $student->id,
                     'student_name' => $student->nama,
                     'nisn' => $student->nisn ?: 'DEMO-'.$student->id,
                     'birth_date' => $student->tanggal_lahir ?: '2010-01-01',
@@ -113,6 +118,8 @@ class SeedOnlineExamDemoData extends Command
             foreach (['fullscreen_exit', 'offline'] as $type) {
                 Event::query()->create(['attempt_id' => $attention->id, 'type' => $type, 'metadata' => ['demo' => true], 'ip_hash' => hash('sha256', 'demo-event-'.$type), 'occurred_at' => now()->subMinutes(5)]);
             }
+            // The fourth token is deliberately untouched so it opens at the beginning.
+            $this->attempt($schedule, $tokens[3]['token'], $questions, 'verified', $scoring);
 
             return [$schedule, $tokens];
         });
@@ -120,8 +127,9 @@ class SeedOnlineExamDemoData extends Command
         $this->info('Data demo Ujian Online selesai dibuat/diperbarui. Nilai final ditampilkan sebagai "Murni Ujian" pada halaman admin dan sebagai badge pada pratinjau/PDF rapor ASTS yang cocok; nilai rapor lama tidak diubah.');
         $this->components->twoColumnDetail('Admin', '/admin/penilaian/ujian-online');
         $this->components->twoColumnDetail('Ujian siswa', '/ujian');
-        foreach ($tokens->take(3) as $item) {
-            $this->components->twoColumnDetail('Token demo '.$item['student']->nama, $item['plain'].' | NISN '.($item['student']->nisn ?: 'DEMO-'.$item['student']->id).' | lahir '.($item['student']->tanggal_lahir ?: '2010-01-01'));
+        foreach ($tokens as $index => $item) {
+            $label = $index === 3 ? 'Token testing siap dikerjakan '.$item['student']->nama : 'Token demo '.$item['student']->nama;
+            $this->components->twoColumnDetail($label, $item['plain'].' | NISN '.($item['student']->nisn ?: 'DEMO-'.$item['student']->id).' | lahir '.($item['student']->tanggal_lahir ?: '2010-01-01'));
         }
         $this->warn('Token demo di atas deterministik untuk staging; hanya hash token yang disimpan di database.');
 
@@ -136,11 +144,11 @@ class SeedOnlineExamDemoData extends Command
     private function students()
     {
         $base = DB::table('data_siswa')->select(['id', 'nama', 'nisn', 'tanggal_lahir', 'rombel_saat_ini'])->where('status', 'aktif')->whereNotNull('rombel_saat_ini');
-        $preferred = (clone $base)->where('rombel_saat_ini', 'X 1')->orderBy('id')->limit(3)->get();
+        $preferred = (clone $base)->where('rombel_saat_ini', 'X 1')->orderBy('id')->limit(4)->get();
         if ($preferred->count() >= 3) return $preferred;
 
         $class = (clone $base)->select('rombel_saat_ini', DB::raw('count(*) as total'))->groupBy('rombel_saat_ini')->orderByDesc('total')->value('rombel_saat_ini');
-        return (clone $base)->where('rombel_saat_ini', $class)->orderBy('id')->limit(3)->get();
+        return (clone $base)->where('rombel_saat_ini', $class)->orderBy('id')->limit(4)->get();
     }
 
     private function questions(QuestionSet $set): array

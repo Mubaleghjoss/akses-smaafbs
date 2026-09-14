@@ -76,8 +76,18 @@ class PublicExamController extends Controller
 
     public function work(Request $request, string $publicId): View
     {
-        $attempt = $this->attempt($request, $publicId);
-        abort_if($attempt->status === 'submitted', 409, 'Ujian sudah dikirim.');
+        $attempt = Attempt::with(['schedule.questionSet', 'studentToken'])
+            ->where('public_id', $publicId)
+            ->firstOrFail();
+
+        if ($attempt->status === 'submitted') {
+            return view('exam.status', ['attempt' => $attempt, 'status' => 'submitted']);
+        }
+
+        if ((int) $request->session()->get('exam_attempt_id') !== $attempt->id) {
+            return view('exam.status', ['attempt' => $attempt, 'status' => 'inactive']);
+        }
+
         if (! $attempt->started_at) $attempt->update(['started_at' => now(), 'status' => 'started']);
         $attempt->load(['schedule.questionSet.questions', 'studentToken', 'answers']);
         return view('exam.work', compact('attempt'));
