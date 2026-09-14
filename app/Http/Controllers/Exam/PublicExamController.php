@@ -78,7 +78,11 @@ class PublicExamController extends Controller
     {
         $attempt = Attempt::with(['schedule.questionSet', 'studentToken'])
             ->where('public_id', $publicId)
-            ->firstOrFail();
+            ->first();
+
+        if ($attempt === null) {
+            return view('exam.status', ['status' => 'inactive', 'attempt' => null]);
+        }
 
         if ($attempt->status === 'submitted') {
             return view('exam.status', ['attempt' => $attempt, 'status' => 'submitted']);

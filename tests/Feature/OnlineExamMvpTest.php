@@ -133,6 +133,16 @@ class OnlineExamMvpTest extends TestCase
             ->assertDontSee('403');
     }
 
+    public function test_missing_attempt_shows_friendly_inactive_status_page(): void
+    {
+        $this->get(route('exam.work', (string) Str::uuid()))
+            ->assertOk()
+            ->assertSee('Sesi ujian tidak aktif')
+            ->assertSee('Kembali ke halaman verifikasi')
+            ->assertSee('href="'.route('exam.index').'"', false)
+            ->assertDontSee('404');
+    }
+
     public function test_attempt_with_session_opens_work_page(): void
     {
         [, , $attempt] = $this->fixtures();
