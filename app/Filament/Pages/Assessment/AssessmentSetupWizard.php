@@ -23,7 +23,7 @@ class AssessmentSetupWizard extends AssessmentPage
 {
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-list';
 
-    protected static ?string $navigationLabel = 'Setelan Awal Penilaian';
+    protected static ?string $navigationLabel = 'Setelan Awal';
 
     protected static ?string $slug = 'penilaian/setelan-awal';
 

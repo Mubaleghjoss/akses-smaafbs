@@ -16,8 +16,11 @@ abstract class AssessmentPage extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
+        $user = auth()->user();
+
         return static::canAccess()
-            && AdminSchoolNavigation::shouldRegisterAssessmentClass(static::class);
+            && $user instanceof User
+            && AdminSchoolNavigation::shouldRegisterAssessmentClassForUser(static::class, $user);
     }
 
     public static function canAccess(): bool

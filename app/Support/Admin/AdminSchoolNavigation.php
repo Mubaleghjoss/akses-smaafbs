@@ -3,6 +3,7 @@
 namespace App\Support\Admin;
 
 use App\Filament\Pages\Assessment\AsasHub;
+use App\Enums\Assessment\AssessmentType;
 use App\Filament\Pages\Assessment\AsatHub;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Assessment\AssessmentReportProgressPage;
@@ -11,6 +12,8 @@ use App\Filament\Pages\Assessment\QuestionBankBuilderPage;
 use App\Filament\Pages\Assessment\OnlineExamPage;
 use App\Filament\Pages\Assessment\AssessmentTeachingMatrix;
 use App\Filament\Pages\Assessment\AstsHub;
+use App\Models\User;
+use App\Support\Assessment\AssessmentNavigationVisibility;
 use App\Filament\Pages\Bk\RekapSigapPage;
 use App\Filament\Pages\DashboardProker;
 use App\Filament\Pages\SarprasStickerSettings;
@@ -193,6 +196,26 @@ class AdminSchoolNavigation
             AssessmentDashboard::class,
             AssessmentReportProgressPage::class,
         ], true);
+    }
+
+    public static function shouldRegisterAssessmentClassForUser(string $class, User $user): bool
+    {
+        if (! self::shouldRegisterAssessmentClass($class)) {
+            return false;
+        }
+
+        $visibility = app(AssessmentNavigationVisibility::class);
+
+        if ($visibility->canManageNavigation($user)) {
+            return true;
+        }
+
+        return match ($class) {
+            AstsHub::class => $visibility->hasRelevantOperationalWork($user, AssessmentType::ASTS),
+            AsasHub::class => $visibility->hasRelevantOperationalWork($user, AssessmentType::ASAS),
+            AsatHub::class => $visibility->hasRelevantOperationalWork($user, AssessmentType::ASAT),
+            default => false,
+        };
     }
 
     public static function effectiveGroupForClass(string $class): string|\UnitEnum|null

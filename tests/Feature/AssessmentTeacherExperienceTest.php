@@ -6,8 +6,11 @@ use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssignmentStatus;
 use App\Filament\Pages\Assessment\AsasHomeroomRecap;
 use App\Filament\Pages\Assessment\AsasHub;
-use App\Filament\Pages\Assessment\AsasSubmissionStatus;
 use App\Filament\Pages\Assessment\AsatHub;
+use App\Filament\Pages\Assessment\AssessmentDashboard;
+use App\Filament\Pages\Assessment\AssessmentSetupWizard;
+use App\Filament\Pages\Assessment\AssessmentTeachingMatrix;
+use App\Filament\Pages\Assessment\AsasSubmissionStatus;
 use App\Filament\Pages\Assessment\AstsHomeroomRecap;
 use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\Assessment\AstsInputScores;
@@ -887,9 +890,10 @@ class AssessmentTeacherExperienceTest extends TestCase
         $this->assertStringContainsString('total bobot 100%', (string) $notification['body']);
     }
 
-    public function test_sidebar_hanya_menampilkan_fokus_ujian_aktif_yang_relevan_bagi_guru(): void
+    public function test_sidebar_only_lists_operational_assessment_types_relevant_to_teacher_or_homeroom(): void
     {
         $teacher = $this->teacher(348);
+        $teacher->forceFill(['module_access_levels' => ['penilaian' => 'view']])->save();
         $asts = AssessmentPeriod::factory()->asts()->create([
             'status' => AssessmentPeriodStatus::OPEN,
         ]);
@@ -939,12 +943,39 @@ class AssessmentTeacherExperienceTest extends TestCase
         $this->assertTrue(AstsHub::shouldRegisterNavigation());
         $this->assertFalse(AsasHub::shouldRegisterNavigation());
         $this->assertTrue(AsatHub::shouldRegisterNavigation());
+        $this->assertFalse(AssessmentDashboard::shouldRegisterNavigation());
+        $this->assertFalse(AssessmentSetupWizard::shouldRegisterNavigation());
+        $this->assertFalse(AssessmentTeachingMatrix::shouldRegisterNavigation());
 
         $asatVerification->update(['status' => AssessmentPeriodStatus::DRAFT]);
         $this->assertFalse(AsatHub::shouldRegisterNavigation());
 
-        // Halaman lama tidak ditutup hanya karena fokusnya tidak ada di sidebar.
+        // Hubs remain accessible when their type is authorized but not in the sidebar.
         $this->assertTrue(AsasHub::canAccess());
+
+        DB::table('guru_tendik')->insert([
+            'id' => 349,
+            'nama' => 'Wali Kelas',
+            'status' => 'aktif',
+        ]);
+        $homeroomOnly = User::query()->create([
+            'name' => 'Wali Kelas',
+            'username' => 'homeroom-assessment',
+            'password' => 'test-password',
+            'guru_tendik_id' => 349,
+            'module_access_levels' => ['penilaian' => 'view'],
+        ]);
+        $homeroomOnly->assignRole('guru');
+        AssessmentPeriodHomeroom::factory()->create([
+            'assessment_period_id' => $asts->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'teacher_id' => 349,
+        ]);
+
+        $this->actingAs($homeroomOnly);
+        $this->assertTrue(AstsHub::shouldRegisterNavigation());
+        $this->assertFalse(AsasHub::shouldRegisterNavigation());
+        $this->assertFalse(AsatHub::shouldRegisterNavigation());
     }
 
     private function teacher(int $teacherId): User

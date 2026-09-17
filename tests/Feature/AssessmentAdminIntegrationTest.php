@@ -9,6 +9,9 @@ use App\Filament\Pages\Assessment\AsasInputScores;
 use App\Filament\Pages\Assessment\AsatHub;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Assessment\AssessmentMasterImport;
+use App\Filament\Pages\Assessment\AssessmentReportProgressPage;
+use App\Filament\Pages\Assessment\AssessmentSetupWizard;
+use App\Filament\Pages\Assessment\AssessmentTeachingMatrix;
 use App\Filament\Pages\Assessment\QuestionBankBuilderPage;
 use App\Filament\Pages\Assessment\OnlineExamPage;
 use App\Filament\Pages\Assessment\AstsHub;
@@ -435,6 +438,21 @@ class AssessmentAdminIntegrationTest extends TestCase
         $this->assertFalse(AstsInputScores::canAccess());
     }
 
+    public function test_manage_user_sidebar_shows_staged_assessment_entries_without_child_pages(): void
+    {
+        $manager = $this->createUser('assessment-navigation-manager', 'kurikulum');
+        $manager->forceFill(['module_access_levels' => ['penilaian' => AdminModuleAccess::MANAGE]])->save();
+
+        $this->actingAs($manager);
+
+        foreach ([AssessmentSetupWizard::class, AssessmentDashboard::class, AstsHub::class, AsasHub::class, AsatHub::class, AssessmentTeachingMatrix::class, AssessmentReportProgressPage::class, QuestionBankBuilderPage::class, OnlineExamPage::class] as $class) {
+            $this->assertTrue($class::shouldRegisterNavigation(), "{$class} harus terlihat untuk pengelola penilaian.");
+            $this->assertSame('Nilai Ujian', AdminSchoolNavigation::parentItemForClass($class));
+        }
+
+        $this->assertFalse(AstsInputScores::shouldRegisterNavigation());
+    }
+
     public function test_feature_flag_module_menu_access_and_template_route_authorization(): void
     {
         $this->createLegacyReferences();
@@ -505,9 +523,9 @@ class AssessmentAdminIntegrationTest extends TestCase
 
         $this->actingAs($viewer);
         $this->assertTrue(AssessmentDashboard::canAccess());
-        $this->assertTrue(AssessmentDashboard::shouldRegisterNavigation());
+        $this->assertFalse(AssessmentDashboard::shouldRegisterNavigation());
         $this->assertTrue(QuestionBankBuilderPage::canAccess());
-        $this->assertTrue(QuestionBankBuilderPage::shouldRegisterNavigation());
+        $this->assertFalse(QuestionBankBuilderPage::shouldRegisterNavigation());
         $this->get(QuestionBankBuilderPage::getUrl())
             ->assertOk()
             ->assertSee('Bank &amp; Penyusunan Soal', false)

@@ -39,7 +39,7 @@ class AssessmentDashboard extends AssessmentPage
 {
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-cog-6-tooth';
 
-    protected static ?string $navigationLabel = 'Pengaturan Penilaian';
+    protected static ?string $navigationLabel = 'Pengaturan';
 
     protected static ?string $slug = 'penilaian';
 
