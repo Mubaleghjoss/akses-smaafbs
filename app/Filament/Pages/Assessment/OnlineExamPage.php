@@ -18,6 +18,20 @@ class OnlineExamPage extends AssessmentPage
     protected static string $assessmentPermission = 'penilaian.manage';
     protected string $view = 'filament.pages.assessment.online-exam';
 
+    public static function canAccess(): bool
+    {
+        if (parent::canAccess()) {
+            return true;
+        }
+
+        $user = auth()->user();
+
+        return config('assessment.enabled')
+            && Schema::hasTable('assessment_periods')
+            && $user instanceof User
+            && $user->canManageModule('penilaian');
+    }
+
     public function schemaReady(): bool { return Schema::hasTable('exam_schedules'); }
     public function sets(): Collection { return $this->owned(QuestionSet::query()->with('questions'))->get(); }
     public function schedules(): Collection { return $this->owned(Schedule::query()->with(['questionSet', 'attempts', 'tokens']), 'questionSet')->latest()->get(); }

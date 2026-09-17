@@ -39,13 +39,13 @@ class AssessmentDashboard extends AssessmentPage
 {
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-cog-6-tooth';
 
-    protected static ?string $navigationLabel = 'Pengaturan';
+    protected static ?string $navigationLabel = 'Pengaturan Penilaian';
 
     protected static ?string $slug = 'penilaian';
 
     protected static ?int $navigationSort = 0;
 
-    // This is the administration hub, not a teacher operational workspace.
+    // Audit-only users can inspect only the period-scoped audit rows.
     protected static string $assessmentPermission = 'penilaian.period.manage';
 
     protected string $view = 'filament.pages.assessment.dashboard';
@@ -53,10 +53,23 @@ class AssessmentDashboard extends AssessmentPage
     #[Url(as: 'period')]
     public ?int $periodId = null;
 
+    public static function canAccess(): bool
+    {
+        if (parent::canAccess()) {
+            return true;
+        }
+
+        $user = auth()->user();
+
+        return config('assessment.enabled')
+            && Schema::hasTable('assessment_periods')
+            && $user instanceof User
+            && $user->canViewModule('penilaian')
+            && $user->can('penilaian.audit.view');
+    }
+
     public function mount(): void
     {
-        $this->authorizeAssessment('penilaian.period.manage');
-
         $ids = array_map('intval', array_keys($this->getPeriodOptions()));
         if (! $this->periodId || ! in_array($this->periodId, $ids, true)) {
             $this->periodId = $ids[0] ?? null;

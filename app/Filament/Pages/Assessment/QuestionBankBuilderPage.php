@@ -23,6 +23,20 @@ class QuestionBankBuilderPage extends AssessmentPage
 
     protected string $view = 'filament.pages.assessment.question-bank-builder';
 
+    public static function canAccess(): bool
+    {
+        if (parent::canAccess()) {
+            return true;
+        }
+
+        $user = auth()->user();
+
+        return config('assessment.enabled')
+            && Schema::hasTable('assessment_periods')
+            && $user instanceof User
+            && $user->canManageModule('penilaian');
+    }
+
     public function getTitle(): string|Htmlable
     {
         return 'Bank & Penyusunan Soal';
