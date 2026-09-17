@@ -20,6 +20,7 @@ use App\Filament\Resources\AssessmentAuditLogResource\Pages\ListAssessmentAuditL
 use App\Filament\Resources\AssessmentPeriodResource;
 use App\Filament\Resources\AssessmentSchemeResource;
 use App\Filament\Resources\AssessmentSchemeResource\Pages\CreateAssessmentScheme;
+use App\Filament\Resources\AssessmentSchemeResource\Pages\EditAssessmentScheme;
 use App\Filament\Resources\AssessmentSubjectResource\Pages\ListAssessmentSubjects;
 use App\Filament\Resources\GuruTendikResource\Pages\EditGuruTendik;
 use App\Filament\Resources\GuruTendikResource\RelationManagers\AssessmentHomeroomAssignmentsRelationManager;
@@ -29,6 +30,8 @@ use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodAssignment;
 use App\Models\Assessment\AssessmentPeriodRombel;
 use App\Models\Assessment\AssessmentScheme;
+use App\Models\Assessment\AssessmentComponent;
+use App\Models\Assessment\ReportSnapshot;
 use App\Models\Assessment\AuditLog;
 use App\Models\Assessment\HomeroomAssignment;
 use App\Models\Assessment\Semester;
@@ -522,19 +525,12 @@ class AssessmentAdminIntegrationTest extends TestCase
         );
 
         $this->actingAs($viewer);
-        $this->assertTrue(AssessmentDashboard::canAccess());
+        $this->assertFalse(AssessmentDashboard::canAccess());
         $this->assertFalse(AssessmentDashboard::shouldRegisterNavigation());
-        $this->assertTrue(QuestionBankBuilderPage::canAccess());
+        $this->assertFalse(QuestionBankBuilderPage::canAccess());
         $this->assertFalse(QuestionBankBuilderPage::shouldRegisterNavigation());
-        $this->get(QuestionBankBuilderPage::getUrl())
-            ->assertOk()
-            ->assertSee('Bank &amp; Penyusunan Soal', false)
-            ->assertSee('question-builder-shell')
-            ->assertSee('Migration ujian online belum dijalankan');
-        $this->get(OnlineExamPage::getUrl())
-            ->assertOk()
-            ->assertSee('exam-admin-shell')
-            ->assertSee('Migration ujian online belum tersedia.');
+        $this->assertFalse(OnlineExamPage::canAccess());
+        $this->assertFalse(OnlineExamPage::shouldRegisterNavigation());
         // Akun pembaca tanpa tautan guru tidak melihat fokus ujian teknis.
         $this->assertFalse(AstsHub::shouldRegisterNavigation());
         $this->assertFalse(AsasHub::shouldRegisterNavigation());
@@ -564,7 +560,7 @@ class AssessmentAdminIntegrationTest extends TestCase
             'module_access_levels' => ['penilaian' => AdminModuleAccess::MANAGE],
         ])->save();
         $this->actingAs($viewer);
-        $this->assertTrue(AssessmentDashboard::canAccess());
+        $this->assertFalse(AssessmentDashboard::canAccess());
         $this->assertFalse(
             AssessmentPeriodResource::canCreate(),
             'Akses modul manage hanya mengatur visibilitas dan tidak boleh menggantikan permission period.manage.',
@@ -942,6 +938,69 @@ class AssessmentAdminIntegrationTest extends TestCase
             'name' => 'Nilai Utama',
             'weight' => 100,
         ]);
+    }
+
+    public function test_manager_can_revise_published_scheme_with_audit_without_overwriting_report_snapshots(): void
+    {
+        $admin = $this->createUser('published-scheme-admin', 'admin');
+        $period = AssessmentPeriod::factory()->create(['status' => AssessmentPeriodStatus::PUBLISHED]);
+        $scheme = AssessmentScheme::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'name' => 'Skema Terbit',
+            'settings' => ['kkm' => 75, 'fallback_predicate' => 'D', 'predicates' => []],
+        ]);
+        $component = AssessmentComponent::factory()->create([
+            'assessment_scheme_id' => $scheme->getKey(),
+            'code' => 'UTAMA',
+            'weight' => 100,
+            'settings' => ['is_active' => true],
+        ]);
+        $snapshot = ReportSnapshot::factory()->create(['assessment_period_id' => $period->getKey()]);
+        $snapshotData = $snapshot->snapshot_data;
+
+        $this->actingAs($admin);
+        $this->assertTrue(AssessmentSchemeResource::canEdit($scheme));
+
+        Livewire::actingAs($admin)
+            ->test(EditAssessmentScheme::class, ['record' => $scheme->getRouteKey()])
+            ->assertSee('Perubahan setelah finalisasi tidak mengubah rapor terbit otomatis')
+            ->fillForm([
+                'assessment_period_id' => $period->getKey(),
+                'name' => 'Skema Terbit Direvisi',
+                'rounding_precision' => 2,
+                'minimum_score' => 0,
+                'maximum_score' => 100,
+                'is_active' => true,
+                'settings' => ['kkm' => 75, 'fallback_predicate' => 'D', 'predicates' => []],
+                'components' => [[
+                    'id' => $component->getKey(),
+                    'code' => 'UTAMA',
+                    'name' => 'Nilai Utama Direvisi',
+                    'weight' => 100,
+                    'maximum_score' => 100,
+                    'score_source' => 'manual',
+                    'is_required' => true,
+                    'settings' => ['is_active' => true],
+                ]],
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('Skema Terbit Direvisi', $scheme->fresh()->name);
+        $this->assertSame(
+            'Nilai Utama Direvisi',
+            AssessmentComponent::query()->where('assessment_scheme_id', $scheme->getKey())->value('name'),
+        );
+        $this->assertSame($snapshotData, $snapshot->fresh()->snapshot_data);
+        $this->assertDatabaseHas('assessment_audit_logs', [
+            'assessment_period_id' => $period->getKey(),
+            'actor_id' => $admin->getKey(),
+            'event' => 'assessment_scheme.revised_after_finalization',
+        ]);
+
+        $teacher = $this->createUser('published-scheme-teacher', 'guru');
+        $this->actingAs($teacher);
+        $this->assertFalse(AssessmentSchemeResource::canEdit($scheme->fresh()));
     }
 
     public function test_invalid_scheme_component_relationship_is_rolled_back_atomically(): void

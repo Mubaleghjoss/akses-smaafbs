@@ -22,7 +22,7 @@ final class AssessmentNavigationVisibility
         return $user->hasFullAdminAccess()
             || $user->canManageModule('penilaian')
             || $user->can('penilaian.manage')
-            || $user->can('penilaian.verify')
+            || $user->can('penilaian.period.manage')
             || $user->hasRole('kurikulum');
     }
 

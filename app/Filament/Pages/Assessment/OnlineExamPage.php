@@ -15,6 +15,7 @@ class OnlineExamPage extends AssessmentPage
     protected static ?string $navigationLabel = 'Ujian Online';
     protected static ?string $slug = 'penilaian/ujian-online';
     protected static ?int $navigationSort = 16;
+    protected static string $assessmentPermission = 'penilaian.manage';
     protected string $view = 'filament.pages.assessment.online-exam';
 
     public function schemaReady(): bool { return Schema::hasTable('exam_schedules'); }

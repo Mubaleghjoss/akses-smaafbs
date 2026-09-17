@@ -6,6 +6,7 @@ use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Filament\Resources\AssessmentSchemeResource;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentScheme;
+use App\Support\Assessment\AssessmentAuditLogger;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
@@ -17,9 +18,12 @@ class EditAssessmentScheme extends EditRecord
 
     protected ?bool $hasDatabaseTransactions = true;
 
+    /** @var array<string, mixed> */
+    private array $revisionBefore = [];
+
     protected function beforeValidate(): void
     {
-        $newPeriodId = (int) data_get($this->form->getRawState(), 'assessment_period_id');
+        $newPeriodId = (int) (data_get($this->form->getRawState(), 'assessment_period_id') ?: $this->record->assessment_period_id);
         $periodIds = collect([
             (int) $this->record->assessment_period_id,
             $newPeriodId,
@@ -31,23 +35,55 @@ class EditAssessmentScheme extends EditRecord
             ->get()
             ->keyBy('id');
 
-        foreach ($periodIds as $periodId) {
-            if ($periods->get($periodId)?->status !== AssessmentPeriodStatus::DRAFT) {
-                throw ValidationException::withMessages([
-                    'data.assessment_period_id' => 'Skema hanya dapat diubah ketika periode lama dan periode tujuan masih berstatus Draf.',
-                ]);
-            }
+        $currentPeriod = $periods->get((int) $this->record->assessment_period_id);
+        $targetPeriod = $periods->get($newPeriodId);
+
+        if (! $currentPeriod || ! $targetPeriod || (
+            $currentPeriod->status !== AssessmentPeriodStatus::DRAFT
+            && $newPeriodId !== (int) $this->record->assessment_period_id
+        ) || (
+            $currentPeriod->status === AssessmentPeriodStatus::DRAFT
+            && $targetPeriod->status !== AssessmentPeriodStatus::DRAFT
+        )) {
+            throw ValidationException::withMessages([
+                'data.assessment_period_id' => 'Skema pada periode final tidak dapat dipindahkan; periode tujuan harus masih berstatus Draf.',
+            ]);
         }
 
         $lockedScheme = AssessmentScheme::query()
+            ->with('components')
             ->whereKey($this->record->getKey())
             ->lockForUpdate()
             ->firstOrFail();
         abort_unless(AssessmentSchemeResource::canEdit($lockedScheme), 403);
+
+        $submittedComponentIds = collect(data_get($this->form->getRawState(), 'components', []))
+            ->pluck('id')
+            ->filter()
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all();
+        $protectedComponentIds = $lockedScheme->components()
+            ->whereHas('scores')
+            ->pluck('id')
+            ->map(fn (mixed $id): int => (int) $id);
+        if ($protectedComponentIds->diff($submittedComponentIds)->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'data.components' => 'Komponen yang sudah memiliki nilai tidak dapat dihapus agar bukti nilai historis tetap utuh.',
+            ]);
+        }
+
+        $this->revisionBefore = [
+            'scheme' => $lockedScheme->getAttributes(),
+            'components' => $lockedScheme->components
+                ->mapWithKeys(fn ($component): array => [$component->getKey() => $component->getAttributes()])
+                ->all(),
+            'period_status' => $currentPeriod->status->value,
+        ];
     }
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
+        $data['assessment_period_id'] ??= $this->record->assessment_period_id;
         $components = data_get($this->form->getRawState(), 'components', []);
 
         return AssessmentSchemeResource::validateSchemeData(
@@ -63,6 +99,34 @@ class EditAssessmentScheme extends EditRecord
         abort_unless($freshRecord && AssessmentSchemeResource::canEdit($freshRecord), 403);
 
         return parent::handleRecordUpdate($record, $data);
+    }
+
+    protected function afterSave(): void
+    {
+        if (($this->revisionBefore['period_status'] ?? AssessmentPeriodStatus::DRAFT->value) === AssessmentPeriodStatus::DRAFT->value) {
+            return;
+        }
+
+        $scheme = $this->record->fresh(['components']);
+        if (! $scheme) {
+            return;
+        }
+
+        app(AssessmentAuditLogger::class)->record(
+            auth()->user(),
+            'assessment_scheme.revised_after_finalization',
+            $scheme,
+            $this->revisionBefore,
+            [
+                'scheme' => $scheme->getAttributes(),
+                'components' => $scheme->components
+                    ->mapWithKeys(fn ($component): array => [$component->getKey() => $component->getAttributes()])
+                    ->all(),
+                'report_snapshots_unchanged' => true,
+                'requires_explicit_regeneration_and_republish' => true,
+            ],
+            'Perubahan konfigurasi setelah finalisasi; rapor terbit tidak diubah otomatis.',
+        );
     }
 
     protected function getHeaderActions(): array

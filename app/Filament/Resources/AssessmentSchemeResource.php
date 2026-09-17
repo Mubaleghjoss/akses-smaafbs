@@ -53,13 +53,15 @@ class AssessmentSchemeResource extends Resource
     {
         return static::canAccess()
             && parent::canEdit($record)
-            && $record instanceof AssessmentScheme
-            && $record->period?->status === AssessmentPeriodStatus::DRAFT;
+            && $record instanceof AssessmentScheme;
     }
 
     public static function canDelete(Model $record): bool
     {
-        return static::canEdit($record) && ! $record->components()->whereHas('scores')->exists();
+        return static::canEdit($record)
+            && $record instanceof AssessmentScheme
+            && $record->period?->status === AssessmentPeriodStatus::DRAFT
+            && ! $record->components()->whereHas('scores')->exists();
     }
 
     public static function form(Schema $schema): Schema
@@ -73,11 +75,9 @@ class AssessmentSchemeResource extends Resource
                 ->schema([
                     Forms\Components\Select::make('assessment_period_id')
                         ->label('Periode')
-                        ->relationship(
-                            'period',
-                            'name',
-                            modifyQueryUsing: fn ($query) => $query->where('status', AssessmentPeriodStatus::DRAFT->value),
-                        )
+                        ->relationship('period', 'name')
+                        ->disabled(fn (?AssessmentScheme $record): bool => $record !== null && $record->period?->status !== AssessmentPeriodStatus::DRAFT)
+                        ->helperText('Periode yang sudah final tidak dapat dipindahkan; perubahan konfigurasi tetap dapat dicatat sebagai revisi.')
                         ->searchable()
                         ->preload()
                         ->live()
@@ -128,8 +128,11 @@ class AssessmentSchemeResource extends Resource
                         ->default(true)
                         ->inline(false),
                 ]),
+            Section::make('Perubahan Setelah Finalisasi')
+                ->description('Perubahan setelah finalisasi tidak mengubah rapor terbit otomatis; gunakan regenerasi dan publish ulang secara eksplisit bila revisi harus diterbitkan. Riwayat perubahan dicatat pada audit penilaian.')
+                ->visible(fn (?AssessmentScheme $record): bool => $record !== null && $record->period?->status !== AssessmentPeriodStatus::DRAFT),
             Section::make('Komponen Nilai')
-                ->description('Total bobot komponen aktif wajib tepat 100%. Komponen referensi ASTS hanya digunakan pada ASAS.')
+                ->description('Total bobot komponen aktif wajib tepat 100%. Komponen referensi ASTS hanya digunakan pada ASAS. Komponen yang sudah memiliki nilai tidak dapat dihapus.')
                 ->schema([
                     Forms\Components\Placeholder::make('weight_total_preview')
                         ->label('Status Total Bobot')
@@ -337,9 +340,15 @@ class AssessmentSchemeResource extends Resource
     ): array {
         $period = AssessmentPeriod::query()->find((int) ($data['assessment_period_id'] ?? 0));
 
-        if (! $period || $period->status !== AssessmentPeriodStatus::DRAFT) {
+        if (! $period) {
             throw ValidationException::withMessages([
-                'data.assessment_period_id' => 'Skema hanya dapat dibuat atau diubah pada periode berstatus Draf.',
+                'data.assessment_period_id' => 'Periode penilaian tidak ditemukan.',
+            ]);
+        }
+
+        if ($period->status !== AssessmentPeriodStatus::DRAFT && $ignoreSchemeId === null) {
+            throw ValidationException::withMessages([
+                'data.assessment_period_id' => 'Skema baru hanya dapat dibuat pada periode berstatus Draf.',
             ]);
         }
 

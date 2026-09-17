@@ -19,6 +19,8 @@ class QuestionBankBuilderPage extends AssessmentPage
 
     protected static ?int $navigationSort = 15;
 
+    protected static string $assessmentPermission = 'penilaian.manage';
+
     protected string $view = 'filament.pages.assessment.question-bank-builder';
 
     public function getTitle(): string|Htmlable

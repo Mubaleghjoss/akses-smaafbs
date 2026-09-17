@@ -45,6 +45,9 @@ class AssessmentDashboard extends AssessmentPage
 
     protected static ?int $navigationSort = 0;
 
+    // This is the administration hub, not a teacher operational workspace.
+    protected static string $assessmentPermission = 'penilaian.period.manage';
+
     protected string $view = 'filament.pages.assessment.dashboard';
 
     #[Url(as: 'period')]
@@ -52,6 +55,8 @@ class AssessmentDashboard extends AssessmentPage
 
     public function mount(): void
     {
+        $this->authorizeAssessment('penilaian.period.manage');
+
         $ids = array_map('intval', array_keys($this->getPeriodOptions()));
         if (! $this->periodId || ! in_array($this->periodId, $ids, true)) {
             $this->periodId = $ids[0] ?? null;
