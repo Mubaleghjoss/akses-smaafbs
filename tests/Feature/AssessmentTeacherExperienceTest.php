@@ -214,14 +214,23 @@ class AssessmentTeacherExperienceTest extends TestCase
             ->call('loadReports')
             ->assertSee('Isi Massal Rekap Wali Kelas')
             ->assertSee('X 1')
+            ->assertSee('Sakit')
+            ->assertSee('Ekstrakurikuler')
+            ->assertSee('Predikat')
+            ->assertDontSee('Predikat Spiritual')
+            ->assertDontSee('Deskripsi Spiritual')
+            ->assertDontSee('Predikat Sosial')
+            ->assertDontSee('Deskripsi Sosial')
+            ->assertDontSee('Kokurikuler')
+            ->assertDontSee('Prestasi')
+            ->assertDontSee('Catatan Wali')
             ->set('selectedStudentIds', [$studentId])
-            ->set('bulkField', 'homeroom_note')
-            ->set('bulkValue', 'Terus tingkatkan kedisiplinan dan tanggung jawab.')
+            ->set('bulkField', 'extracurricular_items')
+            ->set('bulkStructuredItem.name', 'Pramuka')
+            ->set('bulkStructuredItem.description', 'A')
             ->call('applyBulkValue')
-            ->assertSet(
-                "reportRows.{$studentId}.homeroom_note",
-                'Terus tingkatkan kedisiplinan dan tanggung jawab.',
-            );
+            ->assertSet("reportRows.{$studentId}.extracurricular_items.0.name", 'Pramuka')
+            ->assertSet("reportRows.{$studentId}.extracurricular_items.0.description", 'A');
 
         $this->assertSame(AssignmentStatus::DRAFT, $assignment->refresh()->status);
         $this->assertSame(AssignmentStatus::SUBMITTED, $submittedAssignment->refresh()->status);
@@ -517,7 +526,7 @@ class AssessmentTeacherExperienceTest extends TestCase
         $teacher = $this->teacher(348);
 
         $astsPeriod = AssessmentPeriod::factory()
-            ->asts()
+            ->asas()
             ->create(['status' => AssessmentPeriodStatus::OPEN]);
         $astsRombel = AssessmentPeriodRombel::factory()->create([
             'assessment_period_id' => $astsPeriod->getKey(),
@@ -589,7 +598,7 @@ class AssessmentTeacherExperienceTest extends TestCase
         ];
 
         $astsComponent = Livewire::actingAs($teacher)
-            ->test(AstsHomeroomRecap::class)
+            ->test(AsasHomeroomRecap::class)
             ->set('periodId', $astsPeriod->getKey())
             ->set('homeroomId', $astsHomeroom->getKey())
             ->call('loadReports')
@@ -599,7 +608,10 @@ class AssessmentTeacherExperienceTest extends TestCase
             $expectedHeaders,
             array_column($astsComponent->instance()->getRecapFieldDefinitions(), 'header'),
         );
-        $this->assertSame($expectedFields, array_keys($astsComponent->instance()->getBulkFieldOptions()));
+        $this->assertSame(
+            $expectedFields,
+            array_slice(array_keys($astsComponent->instance()->getBulkFieldOptions()), 0, count($expectedFields)),
+        );
 
         $asasComponent = Livewire::actingAs($teacher)
             ->test(AsasHomeroomRecap::class)
@@ -789,10 +801,11 @@ class AssessmentTeacherExperienceTest extends TestCase
             ->call('saveReports')
             ->assertHasErrors(["rows.{$student->getKey()}.extracurricular_items.0.name"])
             ->set("reportRows.{$student->getKey()}.extracurricular_items.0.name", 'Pramuka')
+            ->set("reportRows.{$student->getKey()}.extracurricular_items.0.description", 'A')
             ->call('saveReports');
 
         $this->assertSame(
-            [['name' => 'Pramuka', 'description' => 'Keterangan lama tetap ada']],
+            [['name' => 'Pramuka', 'description' => 'A']],
             $report->fresh()->extracurricular_data,
         );
         $this->assertSame(

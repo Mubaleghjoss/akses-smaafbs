@@ -277,6 +277,10 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
             );
         }
 
+        if (! array_key_exists($this->bulkField, $this->getBulkFieldDefinitions())) {
+            $this->bulkField = array_key_first($this->getBulkFieldDefinitions()) ?? 'sick_days';
+        }
+
         $this->homeroomMeta = [
             'rombel' => (string) $homeroom->rombel_name_snapshot,
             'teacher' => (string) $homeroom->teacher_name_snapshot,
@@ -297,7 +301,27 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
      */
     public function getRecapFieldDefinitions(): array
     {
+        if ($this->isAstsHomeroomRecap()) {
+            return array_intersect_key(self::RECAP_FIELD_DEFINITIONS, array_flip([
+                'sick_days',
+                'permission_days',
+                'absent_days',
+                'extracurricular_items',
+            ]));
+        }
+
         return self::RECAP_FIELD_DEFINITIONS;
+    }
+
+    public function isAstsHomeroomRecap(): bool
+    {
+        return static::$assessmentType === AssessmentType::ASTS;
+    }
+
+    /** @return array<string, string> */
+    public function getExtracurricularPredicateOptions(): array
+    {
+        return ['A' => 'A', 'B' => 'B', 'C' => 'C', 'D' => 'D'];
     }
 
     /**
@@ -350,6 +374,11 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
     public function isStructuredBulkField(): bool
     {
         return data_get($this->getBulkFieldDefinition(), 'input') === 'items';
+    }
+
+    public function usesExtracurricularPredicates(): bool
+    {
+        return $this->isAstsHomeroomRecap() && $this->bulkField === 'extracurricular_items';
     }
 
     public function addStructuredItem(int $studentId, string $field): void
@@ -534,6 +563,17 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
             $this->bulkStructuredMode = 'append';
         }
 
+        if ($this->usesExtracurricularPredicates()
+            && ! array_key_exists($description, $this->getExtracurricularPredicateOptions())) {
+            Notification::make()
+                ->title('Predikat ekstrakurikuler tidak valid')
+                ->body('Pilih predikat A, B, C, atau D.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
         $item = ['name' => $name, 'description' => $description];
         $updates = [];
 
@@ -617,7 +657,10 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
             );
             $validator->after(function ($validator): void {
                 foreach ($this->rowsForValidation() as $studentId => $row) {
-                    foreach (['extracurricular_items', 'achievement_items'] as $field) {
+                    foreach (array_keys(array_filter(
+                        $this->getRecapFieldDefinitions(),
+                        fn (array $definition): bool => $definition['input'] === 'items',
+                    )) as $field) {
                         $maximum = self::RECAP_FIELD_DEFINITIONS[$field]['max'];
                         if ($this->structuredItemsLength($row[$field] ?? []) > $maximum) {
                             $validator->errors()->add(
@@ -688,10 +731,16 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
                         );
                     }
 
-                    $report->fill([
+                    $reportData = [
                         'sick_days' => max(0, (int) ($row['sick_days'] ?? 0)),
                         'permission_days' => max(0, (int) ($row['permission_days'] ?? 0)),
                         'absent_days' => max(0, (int) ($row['absent_days'] ?? 0)),
+                        'extracurricular_data' => $this->normalizeStructuredItems($row['extracurricular_items'] ?? [], true),
+                        'updated_by' => auth()->id(),
+                    ];
+
+                    if (! $this->isAstsHomeroomRecap()) {
+                        $reportData += [
                         'spiritual_predicate' => filled($row['spiritual_predicate'] ?? null)
                             ? trim((string) $row['spiritual_predicate'])
                             : null,
@@ -704,7 +753,6 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
                         'social_description' => filled($row['social_description'] ?? null)
                             ? trim((string) $row['social_description'])
                             : null,
-                        'extracurricular_data' => $this->normalizeStructuredItems($row['extracurricular_items'] ?? [], true),
                         'achievement_data' => filled($row['kokurikuler'] ?? null)
                             ? [
                                 'items' => $this->normalizeStructuredItems($row['achievement_items'] ?? [], true),
@@ -715,8 +763,10 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
                         'promotion_status' => $collectPromotionStatus && filled($row['promotion_status'] ?? null)
                             ? trim($row['promotion_status'])
                             : null,
-                        'updated_by' => auth()->id(),
-                    ])->save();
+                        ];
+                    }
+
+                    $report->fill($reportData)->save();
                 }
 
                 AuditLog::query()->create([
@@ -831,7 +881,9 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
             if ($definition['input'] === 'items') {
                 $rules["rows.*.{$field}"] = ['nullable', 'array'];
                 $rules["rows.*.{$field}.*.name"] = ['required', 'string', 'max:255'];
-                $rules["rows.*.{$field}.*.description"] = ['nullable', 'string', 'max:2000'];
+                $rules["rows.*.{$field}.*.description"] = $this->isAstsHomeroomRecap() && $field === 'extracurricular_items'
+                    ? ['required', 'in:A,B,C,D']
+                    : ['nullable', 'string', 'max:2000'];
 
                 continue;
             }
@@ -859,10 +911,12 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
                     $row['extracurricular_items'] ?? [],
                     true,
                 );
-                $row['achievement_items'] = $this->normalizeStructuredItems(
-                    $row['achievement_items'] ?? [],
-                    true,
-                );
+                if (! $this->isAstsHomeroomRecap()) {
+                    $row['achievement_items'] = $this->normalizeStructuredItems(
+                        $row['achievement_items'] ?? [],
+                        true,
+                    );
+                }
 
                 return $row;
             })

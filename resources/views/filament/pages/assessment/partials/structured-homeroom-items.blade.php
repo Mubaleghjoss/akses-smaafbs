@@ -1,6 +1,7 @@
 @php
     $items = is_array($items ?? null) ? $items : [];
     $nameLabel = $field === 'achievement_items' ? 'Jenis Prestasi' : 'Nama Ekstrakurikuler';
+    $predicateOptions = is_array($predicateOptions ?? null) ? $predicateOptions : [];
 @endphp
 
 <div class="assessment-homeroom-items" wire:key="{{ $surface }}-items-{{ $studentId }}-{{ $field }}">
@@ -22,14 +23,23 @@
                 @error($nameErrorKey)<small class="assessment-homeroom-field-error" role="alert">{{ $message }}</small>@enderror
             </label>
             <label>
-                <span>Keterangan</span>
-                <textarea
-                    rows="2"
-                    maxlength="2000"
-                    wire:model.blur="reportRows.{{ $studentId }}.{{ $field }}.{{ $index }}.description"
-                    @disabled(! $editable)
-                    @error($descriptionErrorKey) aria-invalid="true" @enderror
-                ></textarea>
+                <span>{{ $predicateOptions === [] ? 'Keterangan' : 'Predikat' }}</span>
+                @if ($predicateOptions === [])
+                    <textarea
+                        rows="2"
+                        maxlength="2000"
+                        wire:model.blur="reportRows.{{ $studentId }}.{{ $field }}.{{ $index }}.description"
+                        @disabled(! $editable)
+                        @error($descriptionErrorKey) aria-invalid="true" @enderror
+                    ></textarea>
+                @else
+                    <select wire:model.blur="reportRows.{{ $studentId }}.{{ $field }}.{{ $index }}.description" @disabled(! $editable) @error($descriptionErrorKey) aria-invalid="true" @enderror>
+                        <option value="">Pilih predikat</option>
+                        @foreach ($predicateOptions as $value => $label)
+                            <option value="{{ $value }}">{{ $label }}</option>
+                        @endforeach
+                    </select>
+                @endif
                 @error($descriptionErrorKey)<small class="assessment-homeroom-field-error" role="alert">{{ $message }}</small>@enderror
             </label>
             @if ($editable)

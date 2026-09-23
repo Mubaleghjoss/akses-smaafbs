@@ -107,8 +107,17 @@
                                     <input wire:model="bulkStructuredItem.name" type="text" maxlength="255" placeholder="Contoh: Pramuka">
                                 </label>
                                 <label>
-                                    <span>Keterangan</span>
-                                    <textarea wire:model="bulkStructuredItem.description" rows="2" maxlength="2000" placeholder="Contoh: Sangat Baik"></textarea>
+                                    <span>{{ $this->usesExtracurricularPredicates() ? 'Predikat' : 'Keterangan' }}</span>
+                                    @if ($this->usesExtracurricularPredicates())
+                                        <select wire:model="bulkStructuredItem.description">
+                                            <option value="">Pilih predikat</option>
+                                            @foreach ($this->getExtracurricularPredicateOptions() as $value => $label)
+                                                <option value="{{ $value }}">{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                    @else
+                                        <textarea wire:model="bulkStructuredItem.description" rows="2" maxlength="2000" placeholder="Contoh: Sangat Baik"></textarea>
+                                    @endif
                                 </label>
                                 <label>
                                     <span>Cara Menerapkan</span>
@@ -199,6 +208,7 @@
                                                     'field' => $field,
                                                     'items' => $row[$field] ?? [],
                                                     'editable' => $homeroomMeta['editable'],
+                                                    'predicateOptions' => $this->isAstsHomeroomRecap() && $field === 'extracurricular_items' ? $this->getExtracurricularPredicateOptions() : [],
                                                 ])
                                             @elseif ($definition['input'] === 'number')
                                                 <input type="number" min="0" max="{{ $definition['max'] }}" class="is-number" wire:model.blur="reportRows.{{ $studentId }}.{{ $field }}" @disabled(! $homeroomMeta['editable'])>
@@ -234,12 +244,16 @@
                             <span><strong>{{ $row['student_name'] }}</strong><small>{{ $row['nis'] }}</small></span>
                         </label>
 
+                        @if ($this->isAstsHomeroomRecap())
+                            <strong>Ketidakhadiran</strong>
+                        @endif
                         <div class="assessment-homeroom-absence-grid">
                             @foreach (['sick_days' => 'Sakit', 'permission_days' => 'Izin', 'absent_days' => 'Alpa'] as $field => $label)
                                 <label><span>{{ $label }}</span><input type="number" min="0" max="366" wire:model.blur="reportRows.{{ $studentId }}.{{ $field }}" @disabled(! $homeroomMeta['editable'])></label>
                             @endforeach
                         </div>
 
+                        @if (! $this->isAstsHomeroomRecap())
                         <div class="assessment-homeroom-attitude-grid">
                             <section>
                                 <strong>Sikap Spiritual</strong>
@@ -268,10 +282,15 @@
                                 <label><span>Deskripsi</span><textarea rows="3" wire:model.blur="reportRows.{{ $studentId }}.social_description" @disabled(! $homeroomMeta['editable'])></textarea></label>
                             </section>
                         </div>
+                        @endif
 
                         <div class="assessment-homeroom-text-grid">
                             <section class="assessment-homeroom-structured-section">
+                                @if ($this->isAstsHomeroomRecap())
+                                    <strong>Ekstrakurikuler (Predikat A/B/C/D)</strong>
+                                @else
                                 <strong>Ekstrakurikuler</strong>
+                                @endif
                                 @include('filament.pages.assessment.partials.structured-homeroom-items', [
                                     'surface' => 'mobile',
                                     'studentId' => $studentId,
@@ -279,8 +298,10 @@
                                     'field' => 'extracurricular_items',
                                     'items' => $row['extracurricular_items'] ?? [],
                                     'editable' => $homeroomMeta['editable'],
+                                    'predicateOptions' => $this->isAstsHomeroomRecap() ? $this->getExtracurricularPredicateOptions() : [],
                                 ])
                             </section>
+                            @if (! $this->isAstsHomeroomRecap())
                             <section class="assessment-homeroom-structured-section">
                                 <strong>Prestasi</strong>
                                 @include('filament.pages.assessment.partials.structured-homeroom-items', [
@@ -295,6 +316,7 @@
                             <label><span>Catatan Wali Kelas</span><textarea rows="3" wire:model.blur="reportRows.{{ $studentId }}.homeroom_note" @disabled(! $homeroomMeta['editable'])></textarea></label>
                             @if ($homeroomMeta['collect_promotion_status'])
                                 <label><span>Status Semester</span><input type="text" maxlength="50" wire:model.blur="reportRows.{{ $studentId }}.promotion_status" @disabled(! $homeroomMeta['editable'])></label>
+                            @endif
                             @endif
                         </div>
                     </article>

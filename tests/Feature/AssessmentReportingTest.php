@@ -867,7 +867,13 @@ class AssessmentReportingTest extends TestCase
             ],
             'homeroom' => [
                 'sick_days' => 1,
-                'extracurricular_data' => [['name' => 'Pramuka', 'description' => 'Baik']],
+                'spiritual_predicate' => 'Spiritual tidak boleh tampil',
+                'spiritual_description' => 'Deskripsi spiritual tidak boleh tampil',
+                'social_predicate' => 'Sosial tidak boleh tampil',
+                'social_description' => 'Deskripsi sosial tidak boleh tampil',
+                'kokurikuler' => 'Kokurikuler tidak boleh tampil',
+                'achievement_data' => [['name' => 'Prestasi tidak boleh tampil', 'description' => 'Tidak boleh tampil']],
+                'extracurricular_data' => [['name' => 'Pramuka', 'description' => 'A']],
             ],
             'signatures' => [
                 ['label' => 'Orang Tua/Wali', 'name' => '-'],
@@ -901,6 +907,14 @@ class AssessmentReportingTest extends TestCase
         $this->assertStringContainsString('Kelompok Umum', $html);
         $this->assertStringContainsString('Kelompok Pilihan', $html);
         $this->assertStringContainsString('Ekstrakurikuler', $html);
+        $this->assertStringContainsString('Nama Ekstrakurikuler</th><th>Predikat', $html);
+        $this->assertStringContainsString('Pramuka</td><td>A</td>', $html);
+        $this->assertStringNotContainsString('Spiritual tidak boleh tampil', $html);
+        $this->assertStringNotContainsString('Deskripsi spiritual tidak boleh tampil', $html);
+        $this->assertStringNotContainsString('Sosial tidak boleh tampil', $html);
+        $this->assertStringNotContainsString('Deskripsi sosial tidak boleh tampil', $html);
+        $this->assertStringNotContainsString('Kokurikuler tidak boleh tampil', $html);
+        $this->assertStringNotContainsString('Prestasi tidak boleh tampil', $html);
         $this->assertStringContainsString('asts-signatures', $html);
         $this->assertStringContainsString('(................................................)', $html);
         $this->assertStringNotContainsString('Capaian Kompetensi', $html);
