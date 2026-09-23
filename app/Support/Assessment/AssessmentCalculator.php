@@ -156,6 +156,19 @@ final class AssessmentCalculator
             ];
         }
 
+        if ($asts = $this->astsConfiguration($normalizedComponents, $settings)) {
+            return $this->calculateAsts(
+                $componentDetails,
+                $asts,
+                $settings,
+                $precision,
+                $schemeMinimum,
+                $schemeMaximum,
+                $configuredWeight,
+                $kkm,
+            );
+        }
+
         $isComplete = $missingRequired === [];
         $unroundedFinal = $isComplete && $includedWeight > 0
             ? $weightedTotal / $includedWeight
@@ -191,6 +204,117 @@ final class AssessmentCalculator
                 'components' => $componentDetails,
             ],
         );
+    }
+
+    /**
+     * ASTS is identified from its component codes so existing schemes can opt in
+     * without a migration. Legacy daily and pure-score codes remain supported.
+     *
+     * @param  array<int, array<string, mixed>>  $components
+     * @param  array<string, mixed>  $settings
+     * @return array{daily: array<int, int|string>, pure: int|string, daily_weight: float, pure_weight: float}|null
+     */
+    private function astsConfiguration(array $components, array $settings): ?array
+    {
+        $daily = [];
+        $pure = null;
+
+        foreach ($components as $component) {
+            $code = strtoupper((string) preg_replace('/[^A-Z0-9]/', '', $component['code']));
+
+            if (in_array($code, ['UH1', 'UH2', 'UH3', 'HARIAN1', 'HARIAN2', 'HARIAN3', 'SUMATIF1', 'SUMATIF2', 'SUMATIF3'], true)) {
+                $daily[] = $component['id'];
+            }
+            if (in_array($code, ['ASTSMURNI', 'NILAIASTS', 'MURNIASTS', 'ASTS', 'UTS', 'SUMATIF'], true)) {
+                $pure = $component['id'];
+            }
+        }
+
+        if ($daily === [] || $pure === null) {
+            return null;
+        }
+
+        $dailyWeight = $this->numeric(data_get($settings, 'asts.daily_weight', $settings['asts_daily_weight'] ?? 50), 'settings.asts.daily_weight');
+        $pureWeight = $this->numeric(data_get($settings, 'asts.pure_weight', $settings['asts_pure_weight'] ?? 50), 'settings.asts.pure_weight');
+        if ($dailyWeight < 0 || $pureWeight < 0 || abs(($dailyWeight + $pureWeight) - 100) > 0.0001) {
+            $this->fail('settings.asts', 'Bobot nilai harian dan ASTS murni harus berjumlah tepat 100%.');
+        }
+
+        return compact('daily', 'pure') + ['daily_weight' => $dailyWeight, 'pure_weight' => $pureWeight];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $components
+     * @param  array{daily: array<int, int|string>, pure: int|string, daily_weight: float, pure_weight: float}  $asts
+     * @param  array<string, mixed>  $settings
+     */
+    private function calculateAsts(array $components, array $asts, array $settings, int $precision, float $schemeMinimum, float $schemeMaximum, float $configuredWeight, ?float $kkm): AssessmentCalculationResult
+    {
+        $byId = collect($components)->keyBy(fn (array $component): string => (string) $component['id']);
+        $dailyComponents = collect($asts['daily'])->map(fn (int|string $id): ?array => $byId->get((string) $id))->filter();
+        $dailyScores = $dailyComponents->where('included', true)->pluck('normalized_score')->map(fn (mixed $score): float => (float) $score);
+        $pure = $byId->get((string) $asts['pure']);
+        $pureScore = $pure['included'] ?? false ? (float) $pure['normalized_score'] : null;
+        $missing = [];
+
+        if ($dailyScores->isEmpty()) {
+            $missing[] = $asts['daily'][0];
+        }
+        if ($pureScore === null) {
+            $missing[] = $asts['pure'];
+        }
+
+        $isComplete = $missing === [];
+        $dailyAverage = $dailyScores->isNotEmpty() ? $dailyScores->average() : null;
+        $unroundedFinal = $isComplete
+            ? (($dailyAverage * $asts['daily_weight']) + ($pureScore * $asts['pure_weight'])) / 100
+            : null;
+        $finalScore = $unroundedFinal !== null ? round($unroundedFinal, $precision, PHP_ROUND_HALF_UP) : null;
+        $predicateSettings = $settings + ['predicates' => self::defaultAstsPredicates(), 'fallback_predicate' => 'D - Kurang'];
+        $predicate = $finalScore !== null ? $this->predicate($finalScore, $predicateSettings) : null;
+        $description = $finalScore !== null ? $this->description($components, $settings) : null;
+
+        return new AssessmentCalculationResult(
+            finalScore: $finalScore,
+            predicate: $predicate,
+            description: $description,
+            isComplete: $isComplete,
+            missingRequiredComponentIds: $missing,
+            detail: [
+                'formula_version' => self::FORMULA_VERSION.'-asts-v1',
+                'formula' => 'asts_daily_average_plus_pure',
+                'complete' => $isComplete,
+                'missing_required_component_ids' => $missing,
+                'uh_values' => $dailyComponents->mapWithKeys(fn (array $component): array => [$component['code'] => $component['score']])->all(),
+                'daily_average' => $dailyAverage,
+                'pure_asts' => $pure['score'] ?? null,
+                'weights' => ['daily' => $asts['daily_weight'], 'pure_asts' => $asts['pure_weight']],
+                'final_score' => $finalScore,
+                'predicate_label' => $predicate,
+                'rounding_precision' => $precision,
+                'rounding_mode' => 'PHP_ROUND_HALF_UP',
+                'scheme_minimum_score' => $schemeMinimum,
+                'scheme_maximum_score' => $schemeMaximum,
+                'configured_weight' => $configuredWeight,
+                'included_weight' => $dailyScores->isNotEmpty() ? $asts['daily_weight'] + ($pureScore !== null ? $asts['pure_weight'] : 0) : 0,
+                'unrounded_final_score' => $unroundedFinal,
+                'kkm' => $kkm,
+                'meets_kkm' => $finalScore !== null && $kkm !== null ? $finalScore >= $kkm : null,
+                'generated_description' => $description,
+                'components' => $components,
+            ],
+        );
+    }
+
+    /** @return list<array{label: string, minimum_score: int}> */
+    private static function defaultAstsPredicates(): array
+    {
+        return [
+            ['label' => 'A - Sangat Baik', 'minimum_score' => 86],
+            ['label' => 'B - Baik', 'minimum_score' => 76],
+            ['label' => 'C - Cukup', 'minimum_score' => 70],
+            ['label' => 'D - Kurang', 'minimum_score' => 0],
+        ];
     }
 
     /**

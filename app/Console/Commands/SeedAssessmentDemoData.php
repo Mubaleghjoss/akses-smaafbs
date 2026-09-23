@@ -335,12 +335,18 @@ class SeedAssessmentDemoData extends Command
     private function buatSkema(AssessmentPeriod $period, array $subjects, AssessmentType $type): void
     {
         foreach ($subjects as $subject) {
-            $scheme = AssessmentScheme::query()->create(['assessment_period_id' => $period->getKey(), 'assessment_subject_id' => $subject->getKey(), 'name' => 'DEMO-SKEMA-'.$subject->code, 'rounding_precision' => 2, 'minimum_score' => 0, 'maximum_score' => 100, 'settings' => ['kkm' => 75, 'predicates' => [['label' => 'A', 'minimum_score' => 90], ['label' => 'B', 'minimum_score' => 80], ['label' => 'C', 'minimum_score' => 70]], 'demo_owner' => self::MARKER], 'is_active' => true]);
-            $components = $type === AssessmentType::ASAS
-                ? [['ASTS-SNAPSHOT', 'Nilai ASTS', 40, ScoreSource::ASTS_SNAPSHOT], ['SUMATIF', 'Asesmen Sumatif', 60, ScoreSource::MANUAL]]
-                : [['FORMATIF', 'Tugas dan Formatif', 40, ScoreSource::MANUAL], ['SUMATIF', 'Asesmen Sumatif', 60, ScoreSource::MANUAL]];
-            foreach ($components as $order => [$code, $name, $weight, $source]) {
-                AssessmentComponent::query()->create(['assessment_scheme_id' => $scheme->getKey(), 'code' => 'DEMO-'.$code, 'name' => $name, 'domain' => $name, 'weight' => $weight, 'maximum_score' => 100, 'is_required' => true, 'sort_order' => $order + 1, 'score_source' => $source, 'settings' => ['is_active' => true]]);
+            $settings = ['kkm' => 75, 'predicates' => [['label' => 'A', 'minimum_score' => 90], ['label' => 'B', 'minimum_score' => 80], ['label' => 'C', 'minimum_score' => 70]], 'demo_owner' => self::MARKER];
+            if ($type === AssessmentType::ASTS) {
+                $settings['asts'] = ['daily_weight' => 50, 'pure_weight' => 50];
+            }
+            $scheme = AssessmentScheme::query()->create(['assessment_period_id' => $period->getKey(), 'assessment_subject_id' => $subject->getKey(), 'name' => 'DEMO-SKEMA-'.$subject->code, 'rounding_precision' => 2, 'minimum_score' => 0, 'maximum_score' => 100, 'settings' => $settings, 'is_active' => true]);
+            $components = match ($type) {
+                AssessmentType::ASTS => [['UH1', 'UH 1', 16.6667, ScoreSource::MANUAL, false], ['UH2', 'UH 2', 16.6667, ScoreSource::MANUAL, false], ['UH3', 'UH 3', 16.6666, ScoreSource::MANUAL, false], ['ASTS_MURNI', 'Nilai Murni ASTS', 50, ScoreSource::MANUAL, true]],
+                AssessmentType::ASAS => [['ASTS-SNAPSHOT', 'Nilai ASTS', 40, ScoreSource::ASTS_SNAPSHOT, true], ['SUMATIF', 'Asesmen Sumatif', 60, ScoreSource::MANUAL, true]],
+                default => [['FORMATIF', 'Tugas dan Formatif', 40, ScoreSource::MANUAL, true], ['SUMATIF', 'Asesmen Sumatif', 60, ScoreSource::MANUAL, true]],
+            };
+            foreach ($components as $order => [$code, $name, $weight, $source, $required]) {
+                AssessmentComponent::query()->create(['assessment_scheme_id' => $scheme->getKey(), 'code' => $type === AssessmentType::ASTS ? $code : 'DEMO-'.$code, 'name' => $name, 'domain' => $name, 'weight' => $weight, 'maximum_score' => 100, 'is_required' => $required, 'sort_order' => $order + 1, 'score_source' => $source, 'settings' => ['is_active' => true]]);
             }
         }
     }

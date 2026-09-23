@@ -990,6 +990,59 @@ class AssessmentTeacherExperienceTest extends TestCase
             ->assertDontSee('Tugas Guru');
     }
 
+    public function test_asts_submission_blocks_missing_daily_or_pure_score(): void
+    {
+        $teacher = $this->teacher(348);
+        $period = AssessmentPeriod::factory()->asts()->create(['status' => AssessmentPeriodStatus::OPEN]);
+        $rombel = AssessmentPeriodRombel::factory()->create(['assessment_period_id' => $period->getKey()]);
+        $student = AssessmentPeriodStudent::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+        ]);
+        $subject = Subject::factory()->create();
+        $scheme = AssessmentScheme::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'settings' => ['asts' => ['daily_weight' => 50, 'pure_weight' => 50]],
+        ]);
+        $components = collect([
+            ['UH1', 'UH 1', 16.6667, false], ['UH2', 'UH 2', 16.6667, false],
+            ['UH3', 'UH 3', 16.6666, false], ['ASTS_MURNI', 'Nilai Murni ASTS', 50, true],
+        ])->map(fn (array $component, int $order): AssessmentComponent => AssessmentComponent::factory()->create([
+            'assessment_scheme_id' => $scheme->getKey(), 'code' => $component[0], 'name' => $component[1],
+            'weight' => $component[2], 'is_required' => $component[3], 'sort_order' => $order,
+        ]));
+        $assignment = AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $period->getKey(), 'assessment_period_rombel_id' => $rombel->getKey(),
+            'assessment_subject_id' => $subject->getKey(), 'teacher_id' => 348, 'status' => AssignmentStatus::DRAFT,
+        ]);
+
+        // A pure score alone is a valid draft but cannot be submitted without a UH.
+        AssessmentScore::factory()->create([
+            'assessment_period_assignment_id' => $assignment->getKey(),
+            'assessment_period_student_id' => $student->getKey(),
+            'assessment_component_id' => $components->last()->getKey(), 'score' => 90,
+        ]);
+        try {
+            app(\App\Actions\Assessment\SubmitAssessmentAssignmentAction::class)->execute($teacher, $assignment);
+            $this->fail('ASTS submission should require at least one UH score.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('scores', $exception->errors());
+        }
+
+        AssessmentScore::query()->where('assessment_period_assignment_id', $assignment->getKey())->delete();
+        AssessmentScore::factory()->create([
+            'assessment_period_assignment_id' => $assignment->getKey(),
+            'assessment_period_student_id' => $student->getKey(),
+            'assessment_component_id' => $components->first()->getKey(), 'score' => 90,
+        ]);
+        try {
+            app(\App\Actions\Assessment\SubmitAssessmentAssignmentAction::class)->execute($teacher, $assignment);
+            $this->fail('ASTS submission should require Nilai Murni ASTS.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('scores', $exception->errors());
+        }
+    }
+
     private function teacher(int $teacherId): User
     {
         Role::findOrCreate('guru', 'web');

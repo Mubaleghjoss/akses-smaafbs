@@ -194,6 +194,31 @@ class AssessmentSchemeResource extends Resource
                                 ->inline(false),
                         ]),
                 ]),
+            Section::make('Rumus ASTS')
+                ->description('Gunakan kode komponen UH1, UH2, UH3, dan ASTS_MURNI. Minimal satu UH serta Nilai Murni ASTS wajib diisi saat pengiriman.')
+                ->visible(fn (Get $get): bool => AssessmentPeriod::query()
+                    ->whereKey((int) ($get('assessment_period_id') ?? 0))
+                    ->value('type') === AssessmentType::ASTS->value)
+                ->columns(['default' => 1, 'md' => 2])
+                ->schema([
+                    Forms\Components\TextInput::make('settings.asts.daily_weight')
+                        ->label('Bobot Rata-rata UH')
+                        ->numeric()
+                        ->suffix('%')
+                        ->default(50)
+                        ->minValue(0)
+                        ->maxValue(100)
+                        ->required(),
+                    Forms\Components\TextInput::make('settings.asts.pure_weight')
+                        ->label('Bobot Nilai Murni ASTS')
+                        ->numeric()
+                        ->suffix('%')
+                        ->default(50)
+                        ->minValue(0)
+                        ->maxValue(100)
+                        ->required()
+                        ->helperText('Kedua bobot harus berjumlah tepat 100%.'),
+                ]),
             Section::make('Predikat dan Deskripsi')
                 ->collapsed()
                 ->columns(['default' => 1, 'md' => 2])
@@ -423,6 +448,16 @@ class AssessmentSchemeResource extends Resource
             throw ValidationException::withMessages([
                 'data.settings.kkm' => 'KKM wajib berupa angka pada rentang 0 sampai 100.',
             ]);
+        }
+
+        if ($period->type === AssessmentType::ASTS) {
+            $dailyWeight = data_get($data, 'settings.asts.daily_weight', 50);
+            $pureWeight = data_get($data, 'settings.asts.pure_weight', 50);
+            if (! is_numeric($dailyWeight) || ! is_numeric($pureWeight) || (float) $dailyWeight < 0 || (float) $pureWeight < 0 || abs(((float) $dailyWeight + (float) $pureWeight) - 100) > 0.0001) {
+                throw ValidationException::withMessages([
+                    'data.settings.asts' => 'Bobot rata-rata UH dan Nilai Murni ASTS harus berupa angka dan berjumlah tepat 100%.',
+                ]);
+            }
         }
 
         // A relationship repeater is intentionally excluded from the dehydrated

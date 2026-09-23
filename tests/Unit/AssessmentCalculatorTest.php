@@ -138,6 +138,76 @@ class AssessmentCalculatorTest extends TestCase
         $this->assertFalse($below->detail['meets_kkm']);
     }
 
+    public function test_asts_calculator_averages_daily_scores_and_applies_default_predicate(): void
+    {
+        $result = (new AssessmentCalculator)->calculate(
+            components: $this->astsComponents(),
+            scores: [1 => 98, 2 => 95, 3 => 95, 4 => 96],
+            scheme: $this->scheme(),
+        );
+
+        $this->assertTrue($result->isComplete);
+        $this->assertSame(96.0, $result->finalScore);
+        $this->assertSame('A - Sangat Baik', $result->predicate);
+        $this->assertSame(96.0, $result->detail['daily_average']);
+        $this->assertSame(96.0, $result->detail['pure_asts']);
+        $this->assertSame(['daily' => 50.0, 'pure_asts' => 50.0], $result->detail['weights']);
+        $this->assertSame('A - Sangat Baik', $result->detail['predicate_label']);
+    }
+
+    public function test_asts_calculator_accepts_one_daily_score_and_pure_score(): void
+    {
+        $result = (new AssessmentCalculator)->calculate(
+            components: $this->astsComponents(),
+            scores: [1 => 80, 4 => 90],
+            scheme: $this->scheme(),
+        );
+
+        $this->assertTrue($result->isComplete);
+        $this->assertSame(85.0, $result->finalScore);
+    }
+
+    public function test_asts_calculator_blocks_final_score_without_any_daily_score_or_pure_score(): void
+    {
+        $calculator = new AssessmentCalculator;
+
+        $withoutDaily = $calculator->calculate($this->astsComponents(), [4 => 90], $this->scheme());
+        $withoutPure = $calculator->calculate($this->astsComponents(), [1 => 90], $this->scheme());
+
+        $this->assertFalse($withoutDaily->isComplete);
+        $this->assertNull($withoutDaily->finalScore);
+        $this->assertSame([1], $withoutDaily->missingRequiredComponentIds);
+        $this->assertFalse($withoutPure->isComplete);
+        $this->assertNull($withoutPure->finalScore);
+        $this->assertSame([4], $withoutPure->missingRequiredComponentIds);
+    }
+
+    public function test_asts_calculator_uses_configured_daily_and_pure_weights(): void
+    {
+        $scheme = $this->scheme();
+        $scheme['settings'] = ['asts' => ['daily_weight' => 40, 'pure_weight' => 60]];
+
+        $result = (new AssessmentCalculator)->calculate(
+            components: $this->astsComponents(),
+            scores: [1 => 80, 4 => 90],
+            scheme: $scheme,
+        );
+
+        $this->assertSame(86.0, $result->finalScore);
+        $this->assertSame(['daily' => 40.0, 'pure_asts' => 60.0], $result->detail['weights']);
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function astsComponents(): array
+    {
+        return [
+            ['id' => 1, 'code' => 'UH1', 'name' => 'UH 1', 'weight' => 16.6667, 'maximum_score' => 100, 'is_required' => false],
+            ['id' => 2, 'code' => 'UH2', 'name' => 'UH 2', 'weight' => 16.6667, 'maximum_score' => 100, 'is_required' => false],
+            ['id' => 3, 'code' => 'UH3', 'name' => 'UH 3', 'weight' => 16.6666, 'maximum_score' => 100, 'is_required' => false],
+            ['id' => 4, 'code' => 'ASTS_MURNI', 'name' => 'Nilai Murni ASTS', 'weight' => 50, 'maximum_score' => 100, 'is_required' => true],
+        ];
+    }
+
     /**
      * @return array<int, array<string, mixed>>
      */
