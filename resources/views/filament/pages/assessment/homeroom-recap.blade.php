@@ -45,8 +45,8 @@
                         <table class="assessment-asts-ranking-table">
                             <thead>
                                 <tr>
-                                    <th>Peringkat</th>
-                                    <th>Siswa</th>
+                                    <th class="assessment-asts-ranking-rank">Peringkat</th>
+                                    <th class="assessment-asts-ranking-student">Siswa</th>
                                     @foreach ($astsRanking['subjects'] as $subjectName)
                                         <th>{{ $subjectName }}</th>
                                     @endforeach
@@ -58,14 +58,14 @@
                             <tbody>
                                 @forelse ($astsRanking['rows'] as $row)
                                     <tr>
-                                        <td>{{ $row['rank'] ?? '-' }}</td>
-                                        <td><strong>{{ $row['student_name'] }}</strong><small>{{ $row['nis'] }}</small></td>
+                                        <td class="assessment-asts-ranking-rank" data-label="Peringkat">{{ $row['rank'] ?? '-' }}</td>
+                                        <td class="assessment-asts-ranking-student" data-label="Siswa"><strong>{{ $row['student_name'] }}</strong><small>{{ $row['nis'] }}</small></td>
                                         @foreach ($astsRanking['subjects'] as $assignmentId => $subjectName)
-                                            <td>{{ $row['scores'][$assignmentId] === null ? '-' : number_format($row['scores'][$assignmentId], 2, ',', '.') }}</td>
+                                            <td data-label="{{ $subjectName }}">{{ $row['scores'][$assignmentId] === null ? '-' : number_format($row['scores'][$assignmentId], 2, ',', '.') }}</td>
                                         @endforeach
-                                        <td>{{ $row['completed'] ? number_format($row['total'], 2, ',', '.') : '-' }}</td>
-                                        <td>{{ $row['average'] === null ? '-' : number_format($row['average'], 2, ',', '.') }}</td>
-                                        <td @class(['assessment-asts-ranking-incomplete' => $row['completed'] < $row['expected']])>
+                                        <td data-label="Total">{{ $row['completed'] ? number_format($row['total'], 2, ',', '.') : '-' }}</td>
+                                        <td data-label="Rata-rata">{{ $row['average'] === null ? '-' : number_format($row['average'], 2, ',', '.') }}</td>
+                                        <td data-label="Kelengkapan" @class(['assessment-asts-ranking-incomplete' => $row['completed'] < $row['expected']])>
                                             {{ $row['completed'] }}/{{ $row['expected'] }}
                                             @if ($row['completed'] < $row['expected'])
                                                 <small>belum lengkap</small>

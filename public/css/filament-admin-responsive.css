@@ -10010,17 +10010,72 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
     color: #e2e8f0;
 }
 
-/* ASTS homeroom recap keeps academic ranking readable with wide subject lists. */
-.assessment-asts-ranking-card { margin: 1rem 0; border: 1px solid #bfdbfe; border-radius: 0.85rem; background: linear-gradient(135deg, #eff6ff 0%, #ffffff 58%); padding: 1rem; }
-.assessment-asts-ranking-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 0.85rem; }
+/* Assessment score entry and ASTS recap use stable classes so they remain responsive without compiled utilities. */
+.assessment-score-page { display: grid; min-width: 0; gap: 1.25rem; }
+.assessment-score-toolbar, .assessment-bulk-card { display: grid; min-width: 0; gap: .85rem; border: 1px solid #dbe4ee; border-radius: 1rem; background: #f8fafc; padding: 1rem; }
+.assessment-score-toolbar, .assessment-bulk-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.assessment-bulk-card { border-color: #99f6e4; background: #f0fdfa; }
+.assessment-bulk-grid { display: grid; gap: .8rem; }
+.assessment-bulk-grid .is-wide { grid-column: 1 / -1; }
+.assessment-score-field { min-width: 0; }
+.assessment-score-field label, .assessment-score-field > span { display: block; margin-bottom: .35rem; color: #475569; font-size: .75rem; font-weight: 800; }
+.assessment-score-select, .assessment-score-input, .assessment-description { width: 100%; min-width: 0; min-height: 2.75rem; border: 1px solid #cbd5e1; border-radius: .7rem; background: #fff; color: #0f172a; padding: .55rem .65rem; font-variant-numeric: tabular-nums; }
+.assessment-description { min-width: 15rem; resize: vertical; }
+.assessment-score-input:focus, .assessment-description:focus, .assessment-score-select:focus { border-color: #0d9488; outline: 2px solid rgb(13 148 136 / .28); outline-offset: 1px; }
+.assessment-score-input:disabled, .assessment-description:disabled { background: #f1f5f9; color: #64748b; opacity: 1; }
+.assessment-score-meta, .assessment-actionbar { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; }
+.assessment-actionbar { justify-content: flex-end; }
+.assessment-score-pill { display: inline-flex; align-items: center; min-height: 2rem; border-radius: 999px; background: #e2e8f0; color: #334155; padding: .3rem .65rem; font-size: .75rem; font-weight: 800; }
+.assessment-matrix-shell { min-width: 0; overflow: hidden; border: 1px solid #dbe4ee; border-radius: 1rem; background: #fff; }
+.assessment-matrix-scroll { max-width: 100%; overflow: auto; overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
+.assessment-matrix { width: 100%; min-width: 820px; border-collapse: separate; border-spacing: 0; font-size: .82rem; }
+.assessment-matrix th, .assessment-matrix td { border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: .7rem; text-align: left; vertical-align: top; }
+.assessment-matrix th { position: sticky; top: 0; z-index: 3; background: #f1f5f9; color: #334155; font-size: .72rem; }
+.assessment-matrix .student-col { position: sticky; left: 0; z-index: 2; min-width: 13rem; max-width: 15rem; background: #fff; box-shadow: 1px 0 0 #dbe4ee; }
+.assessment-matrix th.student-col { z-index: 4; background: #eaf0f6; }
+.assessment-matrix-component { min-width: 8.5rem; }
+.assessment-matrix-component__type, .assessment-matrix-component__name, .assessment-matrix-component__meta, .assessment-mobile-score__type { display: block; }
+.assessment-matrix-component__type, .assessment-mobile-score__type { width: fit-content; margin-bottom: .28rem; border-radius: 999px; background: #ccfbf1; color: #0f766e; padding: .16rem .42rem; font-size: .65rem; font-weight: 800; line-height: 1.25; }
+.assessment-matrix-component.is-automatic .assessment-matrix-component__type, .assessment-mobile-score.is-automatic .assessment-mobile-score__type { background: #e0e7ff; color: #4338ca; }
+.assessment-matrix-component__name { font-weight: 800; }
+.assessment-matrix-component__meta { margin-top: .25rem; color: #64748b; font-size: .68rem; font-weight: 600; }
+.assessment-matrix-score-cell.is-automatic { background: #f8fafc; }
+.assessment-final-score { display: inline-flex; margin-top: .45rem; border-radius: .55rem; background: #dcfce7; color: #166534; padding: .32rem .48rem; font-size: .72rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.assessment-student-check { display: flex; min-width: 0; align-items: flex-start; gap: .55rem; cursor: pointer; }
+.assessment-student-check input { width: 1rem; height: 1rem; flex: 0 0 auto; margin-top: .18rem; }
+.assessment-mobile-card { min-width: 0; border: 1px solid #dbe4ee; border-radius: 1rem; background: #fff; padding: 1rem; }
+.assessment-mobile-grid { display: grid; gap: .85rem; margin-top: 1rem; }
+.assessment-mobile-score { display: grid; grid-template-columns: minmax(0, 1fr) minmax(6.5rem, 7.5rem); align-items: center; gap: .7rem; }
+.assessment-mobile-score.is-automatic { border-radius: .75rem; background: #f8fafc; padding: .55rem; }
+
+/* ASTS ranking: sticky identifiers on wide screens, labeled rows on phones. */
+.assessment-asts-ranking-card { min-width: 0; margin: 1rem 0; border: 1px solid #bfdbfe; border-radius: 1rem; background: linear-gradient(135deg, #eff6ff 0%, #fff 58%); padding: 1rem; }
+.assessment-asts-ranking-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: .85rem; }
 .assessment-asts-ranking-card__head h2 { margin: 0; color: #1e3a5f; font-size: 1rem; font-weight: 800; }
-.assessment-asts-ranking-card__head p { margin: 0.3rem 0 0; color: #475569; font-size: 0.82rem; line-height: 1.45; }
-.assessment-asts-ranking-card__head > span { border-radius: 999px; background: #dbeafe; padding: 0.2rem 0.55rem; color: #1d4ed8; font-size: 0.75rem; font-weight: 800; white-space: nowrap; }
-.assessment-asts-ranking-scroll { overflow-x: auto; }
-.assessment-asts-ranking-table { width: 100%; min-width: 46rem; border-collapse: collapse; font-size: 0.8rem; }
-.assessment-asts-ranking-table th, .assessment-asts-ranking-table td { border-bottom: 1px solid #dbeafe; padding: 0.6rem; text-align: center; vertical-align: top; }
-.assessment-asts-ranking-table th { color: #1e3a5f; font-weight: 800; white-space: nowrap; }
-.assessment-asts-ranking-table td:nth-child(2) { min-width: 10rem; text-align: left; }
-.assessment-asts-ranking-table small { display: block; margin-top: 0.12rem; color: #64748b; font-size: 0.7rem; }
-.assessment-asts-ranking-incomplete { color: #b45309; font-weight: 700; }
-@media (max-width: 639px) { .assessment-asts-ranking-card { padding: 0.8rem; } .assessment-asts-ranking-card__head { display: block; } .assessment-asts-ranking-card__head > span { display: inline-block; margin-top: 0.55rem; } }
+.assessment-asts-ranking-card__head p { margin: .3rem 0 0; color: #475569; font-size: .82rem; line-height: 1.45; }
+.assessment-asts-ranking-card__head > span { border-radius: 999px; background: #dbeafe; padding: .2rem .55rem; color: #1d4ed8; font-size: .75rem; font-weight: 800; white-space: nowrap; }
+.assessment-asts-ranking-scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
+.assessment-asts-ranking-table { width: 100%; min-width: 52rem; border-collapse: separate; border-spacing: 0; font-size: .8rem; font-variant-numeric: tabular-nums; }
+.assessment-asts-ranking-table th, .assessment-asts-ranking-table td { border-bottom: 1px solid #dbeafe; background: #fff; padding: .65rem; text-align: center; vertical-align: top; }
+.assessment-asts-ranking-table th { position: sticky; top: 0; z-index: 3; background: #eff6ff; color: #1e3a5f; font-weight: 800; white-space: nowrap; }
+.assessment-asts-ranking-rank, .assessment-asts-ranking-student { position: sticky; z-index: 2; }
+.assessment-asts-ranking-rank { left: 0; min-width: 5.5rem; }
+.assessment-asts-ranking-student { left: 5.5rem; min-width: 11rem; text-align: left !important; box-shadow: 1px 0 0 #bfdbfe; }
+.assessment-asts-ranking-table th.assessment-asts-ranking-rank, .assessment-asts-ranking-table th.assessment-asts-ranking-student { z-index: 4; background: #dbeafe; }
+.assessment-asts-ranking-table small { display: block; margin-top: .12rem; color: #64748b; font-size: .7rem; }
+.assessment-asts-ranking-incomplete { background: #fffbeb !important; color: #b45309; font-weight: 800; }
+@media (max-width: 767px) { .assessment-score-toolbar, .assessment-bulk-grid { grid-template-columns: minmax(0, 1fr); } .assessment-bulk-grid .is-wide { grid-column: auto; } .assessment-desktop { display: none !important; } .assessment-actionbar { position: sticky; bottom: .5rem; z-index: 5; justify-content: stretch; border: 1px solid #dbe4ee; border-radius: .9rem; background: rgb(255 255 255 / .96); padding: .55rem; box-shadow: 0 12px 26px -18px rgb(15 23 42 / .6); } .assessment-actionbar > * { flex: 1 1 0; min-height: 2.75rem; } .assessment-asts-ranking-card { padding: .8rem; } .assessment-asts-ranking-card__head { display: block; } .assessment-asts-ranking-card__head > span { display: inline-block; margin-top: .55rem; } .assessment-asts-ranking-scroll { overflow: visible; } .assessment-asts-ranking-table, .assessment-asts-ranking-table tbody, .assessment-asts-ranking-table tr, .assessment-asts-ranking-table td { display: block; width: 100%; min-width: 0; } .assessment-asts-ranking-table thead { display: none; } .assessment-asts-ranking-table tbody { display: grid; gap: .75rem; } .assessment-asts-ranking-table tbody tr { overflow: hidden; border: 1px solid #bfdbfe; border-radius: .85rem; } .assessment-asts-ranking-table td { display: grid; grid-template-columns: minmax(7.5rem, .7fr) minmax(0, 1fr); gap: .75rem; border-bottom: 1px solid #e0edff; text-align: right; } .assessment-asts-ranking-table td::before { content: attr(data-label); color: #475569; font-size: .68rem; font-weight: 800; letter-spacing: .04em; text-align: left; text-transform: uppercase; } .assessment-asts-ranking-rank, .assessment-asts-ranking-student { position: static; box-shadow: none; } .assessment-asts-ranking-table td.assessment-asts-ranking-rank { background: #eff6ff; color: #1d4ed8; font-weight: 900; } .assessment-asts-ranking-table td.assessment-asts-ranking-student { text-align: right !important; } }
+@media (min-width: 768px) { .assessment-mobile { display: none !important; } }
+.dark .assessment-score-toolbar, .dark .assessment-matrix-shell, .dark .assessment-mobile-card, .fi-theme-dark .assessment-score-toolbar, .fi-theme-dark .assessment-matrix-shell, .fi-theme-dark .assessment-mobile-card { border-color: rgb(255 255 255 / .12); background: #111827; }
+.dark .assessment-bulk-card, .fi-theme-dark .assessment-bulk-card { border-color: rgb(45 212 191 / .25); background: rgb(13 148 136 / .1); }
+.dark .assessment-score-select, .dark .assessment-score-input, .dark .assessment-description, .fi-theme-dark .assessment-score-select, .fi-theme-dark .assessment-score-input, .fi-theme-dark .assessment-description { border-color: rgb(255 255 255 / .16); background: #0f172a; color: #f8fafc; }
+.dark .assessment-matrix th, .dark .assessment-matrix th.student-col, .fi-theme-dark .assessment-matrix th, .fi-theme-dark .assessment-matrix th.student-col { background: #1f2937; color: #e2e8f0; }
+.dark .assessment-matrix td, .dark .assessment-matrix .student-col, .fi-theme-dark .assessment-matrix td, .fi-theme-dark .assessment-matrix .student-col { border-color: rgb(255 255 255 / .1); background: #111827; }
+.dark .assessment-matrix-score-cell.is-automatic, .dark .assessment-mobile-score.is-automatic, .fi-theme-dark .assessment-matrix-score-cell.is-automatic, .fi-theme-dark .assessment-mobile-score.is-automatic { background: rgb(255 255 255 / .05); }
+.dark .assessment-actionbar, .fi-theme-dark .assessment-actionbar { border-color: rgb(255 255 255 / .14); background: rgb(17 24 39 / .96); }
+.dark .assessment-asts-ranking-card, .fi-theme-dark .assessment-asts-ranking-card { border-color: rgb(96 165 250 / .3); background: linear-gradient(135deg, #172554, #111827); }
+.dark .assessment-asts-ranking-card__head h2, .fi-theme-dark .assessment-asts-ranking-card__head h2 { color: #dbeafe; }
+.dark .assessment-asts-ranking-card__head p, .dark .assessment-asts-ranking-table small, .fi-theme-dark .assessment-asts-ranking-card__head p, .fi-theme-dark .assessment-asts-ranking-table small { color: #cbd5e1; }
+.dark .assessment-asts-ranking-table th, .dark .assessment-asts-ranking-table th.assessment-asts-ranking-rank, .dark .assessment-asts-ranking-table th.assessment-asts-ranking-student, .fi-theme-dark .assessment-asts-ranking-table th, .fi-theme-dark .assessment-asts-ranking-table th.assessment-asts-ranking-rank, .fi-theme-dark .assessment-asts-ranking-table th.assessment-asts-ranking-student { border-color: rgb(96 165 250 / .22); background: #1e3a5f; color: #dbeafe; }
+.dark .assessment-asts-ranking-table td, .fi-theme-dark .assessment-asts-ranking-table td { border-color: rgb(96 165 250 / .16); background: #111827; color: #e2e8f0; }
+.dark .assessment-asts-ranking-incomplete, .fi-theme-dark .assessment-asts-ranking-incomplete { background: rgb(120 53 15 / .26) !important; color: #fde68a; }

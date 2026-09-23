@@ -1,63 +1,4 @@
 <x-filament-panels::page>
-    <style>
-        .assessment-score-page { min-width: 0; }
-        .assessment-score-toolbar {
-            display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem;
-            padding: 1rem; border: 1px solid rgba(148,163,184,.25); border-radius: 1rem;
-            background: var(--gray-50, #f8fafc);
-        }
-        .dark .assessment-score-toolbar { background: rgba(255,255,255,.035); border-color: rgba(255,255,255,.1); }
-        .assessment-score-field label { display:block; margin-bottom:.35rem; font-size:.75rem; font-weight:700; color:#64748b; }
-        .assessment-score-select {
-            width:100%; min-width:0; min-height:2.65rem; padding:.55rem .75rem; border-radius:.75rem;
-            border:1px solid #cbd5e1; background:#fff; color:#0f172a;
-        }
-        .dark .assessment-score-select { background:#111827; color:#f8fafc; border-color:rgba(255,255,255,.15); }
-        .assessment-score-meta { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; margin-top:1rem; }
-        .assessment-score-pill { display:inline-flex; padding:.35rem .65rem; border-radius:999px; background:#e2e8f0; color:#334155; font-size:.75rem; font-weight:700; }
-        .dark .assessment-score-pill { background:rgba(255,255,255,.1); color:#e2e8f0; }
-        .assessment-matrix-shell { max-width:100%; overflow:hidden; border:1px solid rgba(148,163,184,.25); border-radius:1rem; }
-        .assessment-matrix-scroll { max-width:100%; overflow:auto; -webkit-overflow-scrolling:touch; }
-        .assessment-matrix { width:100%; min-width:780px; border-collapse:separate; border-spacing:0; }
-        .assessment-matrix th, .assessment-matrix td { padding:.7rem; border-right:1px solid #e2e8f0; border-bottom:1px solid #e2e8f0; vertical-align:top; }
-        .dark .assessment-matrix th, .dark .assessment-matrix td { border-color:rgba(255,255,255,.08); }
-        .assessment-matrix th { position:sticky; top:0; z-index:3; background:#f1f5f9; color:#475569; font-size:.72rem; text-align:left; }
-        .dark .assessment-matrix th { background:#1f2937; color:#cbd5e1; }
-        .assessment-matrix .student-col { position:sticky; left:0; z-index:2; min-width:210px; max-width:240px; background:#fff; }
-        .assessment-matrix th.student-col { z-index:4; background:#f1f5f9; }
-        .dark .assessment-matrix .student-col { background:#111827; }
-        .dark .assessment-matrix th.student-col { background:#1f2937; }
-        .assessment-score-input, .assessment-description {
-            width:100%; min-width:5.5rem; border:1px solid #cbd5e1; border-radius:.65rem; background:#fff; color:#0f172a; padding:.55rem .65rem;
-        }
-        .assessment-score-input:focus, .assessment-description:focus { outline:2px solid rgba(13,148,136,.28); border-color:#0d9488; }
-        .assessment-score-input:disabled, .assessment-description:disabled { opacity:.65; background:#f1f5f9; }
-        .dark .assessment-score-input, .dark .assessment-description { background:#0f172a; color:#fff; border-color:rgba(255,255,255,.15); }
-        .assessment-description { min-width:240px; resize:vertical; }
-        .assessment-mobile-card { border:1px solid rgba(148,163,184,.25); border-radius:1rem; background:#fff; padding:1rem; }
-        .dark .assessment-mobile-card { background:#111827; border-color:rgba(255,255,255,.1); }
-        .assessment-mobile-grid { display:grid; gap:.85rem; margin-top:1rem; }
-        .assessment-mobile-score { display:grid; grid-template-columns:minmax(0,1fr) minmax(90px,120px); gap:.7rem; align-items:center; }
-        .assessment-actionbar { display:flex; flex-wrap:wrap; gap:.65rem; align-items:center; justify-content:flex-end; }
-        .assessment-bulk-card {
-            display:grid; gap:1rem; padding:1rem; border:1px solid rgba(13,148,136,.28);
-            border-radius:1rem; background:rgba(240,253,250,.72);
-        }
-        .dark .assessment-bulk-card { border-color:rgba(45,212,191,.22); background:rgba(13,148,136,.08); }
-        .assessment-bulk-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:.8rem; }
-        .assessment-bulk-grid .is-wide { grid-column:1 / -1; }
-        .assessment-student-check { display:flex; align-items:flex-start; gap:.55rem; cursor:pointer; }
-        .assessment-student-check input { margin-top:.18rem; flex:0 0 auto; }
-        @media (max-width: 767px) {
-            .assessment-score-toolbar { grid-template-columns:minmax(0,1fr); }
-            .assessment-bulk-grid { grid-template-columns:minmax(0,1fr); }
-            .assessment-bulk-grid .is-wide { grid-column:auto; }
-            .assessment-desktop { display:none !important; }
-            .assessment-actionbar > * { flex:1 1 auto; }
-        }
-        @media (min-width: 768px) { .assessment-mobile { display:none !important; } }
-    </style>
-
     <div class="assessment-score-page space-y-5">
         @include('filament.pages.assessment.partials.type-navigation')
 
@@ -279,11 +220,10 @@
                                 <tr>
                                     <th class="student-col">Siswa</th>
                                     @foreach ($components as $component)
-                                        <th>
-                                            {{ $component['name'] }}
-                                            <div class="mt-1 font-normal">
-                                                {{ $component['weight'] }}% · {{ $component['minimum_score'] }}–{{ $component['maximum_score'] }}
-                                            </div>
+                                        <th @class(['assessment-matrix-component', 'is-manual' => $component['score_source'] === 'manual', 'is-automatic' => $component['score_source'] !== 'manual'])>
+                                            <span class="assessment-matrix-component__type">{{ $component['score_source'] === 'manual' ? 'Input manual' : 'Otomatis' }}</span>
+                                            <span class="assessment-matrix-component__name">{{ $component['name'] }}</span>
+                                            <span class="assessment-matrix-component__meta">{{ $component['weight'] }}% · {{ $component['minimum_score'] }}–{{ $component['maximum_score'] }}</span>
                                         </th>
                                     @endforeach
                                     <th>Deskripsi Capaian</th>
@@ -307,7 +247,7 @@
                                             @endif
                                         </td>
                                         @foreach ($components as $component)
-                                            <td>
+                                            <td @class(['assessment-matrix-score-cell', 'is-manual' => $component['score_source'] === 'manual', 'is-automatic' => $component['score_source'] !== 'manual'])>
                                                 <input
                                                     type="number"
                                                     step="0.01"
@@ -358,8 +298,9 @@
                                 @endif
                             <div class="assessment-mobile-grid">
                                 @foreach ($components as $component)
-                                    <label class="assessment-mobile-score">
+                                    <label @class(['assessment-mobile-score', 'is-manual' => $component['score_source'] === 'manual', 'is-automatic' => $component['score_source'] !== 'manual'])>
                                         <span class="min-w-0 text-sm font-semibold text-gray-700 dark:text-gray-200">
+                                            <small class="assessment-mobile-score__type">{{ $component['score_source'] === 'manual' ? 'Input manual' : 'Otomatis' }}</small>
                                             {{ $component['name'] }}
                                             <small class="block font-normal text-gray-500">
                                                 {{ $component['weight'] }}% · {{ $component['minimum_score'] }}–{{ $component['maximum_score'] }}
