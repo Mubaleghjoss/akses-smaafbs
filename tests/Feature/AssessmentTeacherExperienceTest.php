@@ -1284,6 +1284,35 @@ class AssessmentTeacherExperienceTest extends TestCase
         $this->assertTrue(Gate::forUser($owner)->allows('updateScores', $assignment));
     }
 
+    public function test_asts_excel_exports_are_scoped_and_return_xlsx_workbooks(): void
+    {
+        $teacher = $this->teacher(348);
+        $period = AssessmentPeriod::factory()->asts()->create(['status' => AssessmentPeriodStatus::OPEN]);
+        $rombel = AssessmentPeriodRombel::factory()->create(['assessment_period_id' => $period->getKey(), 'rombel_name_snapshot' => 'XI Excel']);
+        $student = AssessmentPeriodStudent::factory()->create(['assessment_period_id' => $period->getKey(), 'assessment_period_rombel_id' => $rombel->getKey(), 'rombel_name_snapshot' => 'XI Excel']);
+        $subject = Subject::factory()->create(['name' => 'Ekspor Nilai']);
+        $scheme = AssessmentScheme::factory()->create(['assessment_period_id' => $period->getKey()]);
+        $uh1 = AssessmentComponent::factory()->create(['assessment_scheme_id' => $scheme->getKey(), 'code' => 'UH1']);
+        $pure = AssessmentComponent::factory()->create(['assessment_scheme_id' => $scheme->getKey(), 'code' => 'ASTS_MURNI']);
+        $assignment = AssessmentPeriodAssignment::factory()->create(['assessment_period_id' => $period->getKey(), 'assessment_period_rombel_id' => $rombel->getKey(), 'assessment_subject_id' => $subject->getKey(), 'teacher_id' => 348, 'rombel_name_snapshot' => 'XI Excel', 'subject_name_snapshot' => 'Ekspor Nilai']);
+        AssessmentScore::factory()->create(['assessment_period_assignment_id' => $assignment->getKey(), 'assessment_period_student_id' => $student->getKey(), 'assessment_component_id' => $uh1->getKey(), 'score' => 80, 'updated_by' => $teacher->getKey()]);
+        AssessmentScore::factory()->create(['assessment_period_assignment_id' => $assignment->getKey(), 'assessment_period_student_id' => $student->getKey(), 'assessment_component_id' => $pure->getKey(), 'score' => 90, 'updated_by' => $teacher->getKey()]);
+        StudentSubjectResult::factory()->create(['assessment_period_id' => $period->getKey(), 'assessment_period_assignment_id' => $assignment->getKey(), 'assessment_period_student_id' => $student->getKey(), 'final_score' => 85, 'predicate' => 'B']);
+        $homeroom = AssessmentPeriodHomeroom::factory()->create(['assessment_period_id' => $period->getKey(), 'assessment_period_rombel_id' => $rombel->getKey(), 'teacher_id' => 348, 'rombel_name_snapshot' => 'XI Excel']);
+
+        $this->actingAs($teacher);
+        $status = $this->get(route('admin.assessment.asts.status.export', $period));
+        $status->assertOk()->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $this->assertStringStartsWith('PK', $status->streamedContent());
+        $homeroomExport = $this->get(route('admin.assessment.asts.homeroom.export', [$period, $homeroom]));
+        $homeroomExport->assertOk()->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $this->assertStringStartsWith('PK', $homeroomExport->streamedContent());
+
+        $otherRombel = AssessmentPeriodRombel::factory()->create(['assessment_period_id' => $period->getKey(), 'rombel_name_snapshot' => 'XI Lain']);
+        $otherHomeroom = AssessmentPeriodHomeroom::factory()->create(['assessment_period_id' => $period->getKey(), 'assessment_period_rombel_id' => $otherRombel->getKey(), 'teacher_id' => 999]);
+        $this->get(route('admin.assessment.asts.homeroom.export', [$period, $otherHomeroom]))->assertRedirect();
+    }
+
     private function teacher(int $teacherId): User
     {
         Role::findOrCreate('guru', 'web');

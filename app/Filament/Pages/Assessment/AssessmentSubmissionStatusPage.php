@@ -68,6 +68,11 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
         return 'Status Pengumpulan · '.static::$assessmentType->label();
     }
 
+    public function isAstsSubmissionStatus(): bool
+    {
+        return static::$assessmentType === AssessmentType::ASTS;
+    }
+
     public function getPeriodOptions(): array
     {
         return $this->scopePeriods(AssessmentPeriod::query())

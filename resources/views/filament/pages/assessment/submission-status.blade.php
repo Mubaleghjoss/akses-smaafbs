@@ -3,6 +3,9 @@
         @include('filament.pages.assessment.partials.type-navigation', ['showAccess' => false])
 
         <section class="assessment-status-filter-card">
+            @if ($periodId && $this->isAstsSubmissionStatus())
+                <a href="{{ route('admin.assessment.asts.status.export', ['assessmentPeriod' => $periodId, 'rombel' => $activeRombelId, 'subject' => $subjectId, 'status' => $statusFilter]) }}" data-navigate="false" class="fi-btn fi-btn-size-sm fi-btn-color-gray">Download Excel</a>
+            @endif
             <label>
                 <span>Periode</span>
                 <select wire:model.live="periodId" class="mt-2 w-full min-w-0 rounded-lg border-gray-300 bg-white dark:border-white/10 dark:bg-gray-950">

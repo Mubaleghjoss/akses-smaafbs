@@ -3,6 +3,7 @@
 use App\Contracts\SiteSettingsAccessor;
 use App\Http\Controllers\Admin\AdminUserCredentialDocumentController;
 use App\Http\Controllers\Admin\AssessmentMasterTemplateController;
+use App\Http\Controllers\Admin\AssessmentAstsExportController;
 use App\Http\Controllers\Admin\BerkasGuruDocumentController;
 use App\Http\Controllers\Admin\BoardingBacaanAssessmentExportController;
 use App\Http\Controllers\Admin\BoardingRapotDocumentController;
@@ -66,6 +67,11 @@ Route::middleware('auth')->group(function (): void {
         '/admin/penilaian/master/template',
         AssessmentMasterTemplateController::class,
     )->name('admin.assessment.master-template');
+
+    Route::get('/admin/penilaian/asts/{assessmentPeriod}/status-pengumpulan/export', [AssessmentAstsExportController::class, 'status'])
+        ->name('admin.assessment.asts.status.export');
+    Route::get('/admin/penilaian/asts/{assessmentPeriod}/rekap-wali-kelas/{homeroom}/export', [AssessmentAstsExportController::class, 'homeroom'])
+        ->name('admin.assessment.asts.homeroom.export');
 
     Route::get(
         '/admin/penilaian/rapor/siswa/{reportSnapshot}/download',

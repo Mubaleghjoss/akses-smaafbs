@@ -22,6 +22,11 @@
         </section>
 
         @if ($homeroomMeta)
+            @if ($this->isAstsHomeroomRecap())
+                <div class="flex justify-end">
+                    <a href="{{ route('admin.assessment.asts.homeroom.export', ['assessmentPeriod' => $periodId, 'homeroom' => $homeroomId]) }}" data-navigate="false" class="fi-btn fi-btn-size-sm fi-btn-color-gray">Download Excel</a>
+                </div>
+            @endif
             <section class="assessment-homeroom-summary-card">
                 <span>
                     <x-filament::icon icon="heroicon-o-user-group" />
