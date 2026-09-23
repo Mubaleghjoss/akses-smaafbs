@@ -51,6 +51,14 @@ abstract class AssessmentPolicy
             || $user->can('penilaian.verify');
     }
 
+    protected function canManageScoreAssignments(User $user): bool
+    {
+        return $this->isFullAdmin($user)
+            || $user->canManageModule('penilaian')
+            || $user->hasRole('kurikulum')
+            || $user->can('penilaian.verify');
+    }
+
     protected function canGenerateReports(User $user): bool
     {
         return $this->isFullAdmin($user)

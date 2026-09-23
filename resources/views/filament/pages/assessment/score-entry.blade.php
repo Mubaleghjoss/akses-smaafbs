@@ -244,6 +244,9 @@
                                                 <span class="min-w-0">
                                                     <span class="block font-semibold text-gray-950 dark:text-white">{{ $row['student_name'] }}</span>
                                                     <span class="mt-1 block text-xs text-gray-500">{{ $row['nis'] }}</span>
+                                                    @if ($row['updater_badge'])
+                                                        <span class="mt-2 inline-flex rounded-full bg-warning-100 px-2 py-0.5 text-xs font-semibold text-warning-800 dark:bg-warning-500/15 dark:text-warning-200">{{ $row['updater_badge'] }}</span>
+                                                    @endif
                                                 </span>
                                             </label>
                                             @if ($row['final_score'] !== null)
@@ -295,6 +298,9 @@
                                     <span class="min-w-0">
                                         <span class="block break-words font-bold text-gray-950 dark:text-white">{{ $row['student_name'] }}</span>
                                         <span class="mt-1 block text-xs text-gray-500">{{ $row['nis'] }}</span>
+                                        @if ($row['updater_badge'])
+                                            <span class="mt-2 inline-flex rounded-full bg-warning-100 px-2 py-0.5 text-xs font-semibold text-warning-800 dark:bg-warning-500/15 dark:text-warning-200">{{ $row['updater_badge'] }}</span>
+                                        @endif
                                     </span>
                                 </label>
                                     <span class="assessment-score-pill">{{ $index + 1 }}/{{ count($scoreRows) }}</span>

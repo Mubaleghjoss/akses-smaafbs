@@ -1199,13 +1199,98 @@ class AssessmentTeacherExperienceTest extends TestCase
             ->assertDontSee('Siswa Kelas Lain');
     }
 
+    public function test_admin_and_curriculum_can_edit_foreign_assignment_with_visible_updater_badge(): void
+    {
+        $owner = $this->teacher(348);
+        $nonOwner = $this->teacher(999);
+        Role::findOrCreate('admin', 'web');
+        Role::findOrCreate('kurikulum', 'web');
+        $admin = User::query()->create([
+            'name' => 'Admin Nilai',
+            'username' => 'admin-score-intervention',
+            'password' => 'test-password',
+        ]);
+        $admin->assignRole('admin');
+        $curriculum = User::query()->create([
+            'name' => 'Kurikulum Nilai',
+            'username' => 'kurikulum-score-intervention',
+            'password' => 'test-password',
+        ]);
+        $curriculum->assignRole('kurikulum');
+        $period = AssessmentPeriod::factory()->asts()->create([
+            'status' => AssessmentPeriodStatus::OPEN,
+        ]);
+        $rombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'rombel_name_snapshot' => 'XI Intervensi',
+        ]);
+        $student = AssessmentPeriodStudent::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'rombel_name_snapshot' => 'XI Intervensi',
+        ]);
+        $subject = Subject::factory()->create(['name' => 'Kimia']);
+        $scheme = AssessmentScheme::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+        ]);
+        $component = AssessmentComponent::factory()->create([
+            'assessment_scheme_id' => $scheme->getKey(),
+            'name' => 'Nilai ASTS',
+        ]);
+        $assignment = AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'assessment_subject_id' => $subject->getKey(),
+            'teacher_id' => 348,
+            'teacher_name_snapshot' => 'Putra Kamulyan',
+            'subject_name_snapshot' => 'Kimia',
+            'rombel_name_snapshot' => 'XI Intervensi',
+            'status' => AssignmentStatus::DRAFT,
+        ]);
+
+        $this->assertFalse(Gate::forUser($nonOwner)->allows('updateScores', $assignment));
+        Livewire::actingAs($nonOwner)
+            ->test(AstsInputScores::class)
+            ->set('periodId', $period->getKey())
+            ->set('assignmentId', $assignment->getKey())
+            ->call('loadAssignment')
+            ->assertSet('assignmentId', null);
+
+        foreach ([[$admin, 'Diperbarui oleh Admin', 90], [$curriculum, 'Diperbarui oleh Kurikulum', 91]] as [$actor, $badge, $score]) {
+            $this->assertTrue(Gate::forUser($actor)->allows('updateScores', $assignment));
+            Livewire::actingAs($actor)
+                ->test(AstsInputScores::class)
+                ->set('periodId', $period->getKey())
+                ->set('assignmentId', $assignment->getKey())
+                ->call('loadAssignment')
+                ->assertSet('assignmentMeta.editable', true)
+                ->set("scoreRows.{$student->getKey()}.scores.{$component->getKey()}", $score)
+                ->call('saveDraft');
+
+            $this->assertDatabaseHas('assessment_scores', [
+                'assessment_period_assignment_id' => $assignment->getKey(),
+                'assessment_period_student_id' => $student->getKey(),
+                'assessment_component_id' => $component->getKey(),
+                'updated_by' => $actor->getKey(),
+            ]);
+            Livewire::actingAs($actor)
+                ->test(AstsInputScores::class)
+                ->set('periodId', $period->getKey())
+                ->set('assignmentId', $assignment->getKey())
+                ->call('loadAssignment')
+                ->assertSee($badge);
+        }
+
+        $this->assertTrue(Gate::forUser($owner)->allows('updateScores', $assignment));
+    }
+
     private function teacher(int $teacherId): User
     {
         Role::findOrCreate('guru', 'web');
 
         $user = User::query()->create([
             'name' => 'Putra Kamulyan',
-            'username' => 'teacher-assessment',
+            'username' => 'teacher-assessment-'.$teacherId,
             'email' => null,
             'password' => 'test-password',
             'guru_tendik_id' => $teacherId,

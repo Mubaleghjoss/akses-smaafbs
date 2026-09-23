@@ -20,7 +20,7 @@ trait AuthorizesAssessmentAction
 
         if (! $actor->hasFullAdminAccess() && (
             ! $actor->canViewModule('penilaian')
-            || ! $actor->can($permission)
+            || (! $actor->canManageModule('penilaian') && ! $actor->can($permission))
         )) {
             throw new AuthorizationException('Akun tidak memiliki izin untuk tindakan Penilaian ini.');
         }

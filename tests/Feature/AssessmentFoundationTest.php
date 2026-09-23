@@ -252,6 +252,7 @@ class AssessmentFoundationTest extends TestCase
         $teacher = $this->createUser('teacher-policy', 501, 'guru_mapel');
         $otherTeacher = $this->createUser('other-teacher-policy', 502, 'guru_mapel');
         $curriculum = $this->createUser('curriculum-policy', null, 'kurikulum');
+        $admin = $this->createUser('admin-policy', null, 'admin');
 
         $this->assertInstanceOf(
             AssessmentPeriodPolicy::class,
@@ -264,7 +265,8 @@ class AssessmentFoundationTest extends TestCase
         $this->assertTrue($teacher->can('updateScores', $assignment));
         $this->assertTrue($teacher->can('submit', $assignment));
         $this->assertFalse($otherTeacher->can('updateScores', $assignment));
-        $this->assertFalse($curriculum->can('updateScores', $assignment));
+        $this->assertTrue($curriculum->can('updateScores', $assignment));
+        $this->assertTrue($admin->can('updateScores', $assignment));
 
         $assignment->forceFill(['status' => AssignmentStatus::SUBMITTED])->save();
 

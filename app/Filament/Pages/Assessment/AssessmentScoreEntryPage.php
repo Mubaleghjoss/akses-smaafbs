@@ -81,6 +81,8 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             && $user->canAccessNavigationItem(static::navigationAccessClass())
             && (
                 $user->hasFullAdminAccess()
+                || $user->canManageModule('penilaian')
+                || $user->hasRole('kurikulum')
                 || (
                     $user->canViewModule('penilaian')
                     && (
@@ -245,8 +247,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
         }
 
         $user = auth()->user();
-        if ($user instanceof User
-            && ($user->hasFullAdminAccess() || $user->can('penilaian.verify') || $user->hasRole('kepala_sekolah'))) {
+        if ($user instanceof User && $this->canManageScoreAssignments($user)) {
             return [
                 'title' => 'Cakupan pengelola',
                 'description' => 'Akun pengelola dapat memilih seluruh mapel dan kelas sesuai kewenangan Policy Penilaian.',
@@ -336,6 +337,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             ->orderBy('student_name_snapshot')
             ->get();
         $scores = AssessmentScore::query()
+            ->with('updatedBy:id,name,username')
             ->where('assessment_period_assignment_id', $assignment->getKey())
             ->get()
             ->keyBy(fn (AssessmentScore $score): string => $score->assessment_period_student_id.'|'.$score->assessment_component_id);
@@ -376,10 +378,17 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
                 );
             }
 
+            $updaterBadge = $scores
+                ->where('assessment_period_student_id', $student->getKey())
+                ->sortByDesc('updated_at')
+                ->map(fn (AssessmentScore $score): ?string => $this->scoreUpdaterBadge($score->updatedBy))
+                ->first(fn (?string $badge): bool => $badge !== null);
+
             $this->scoreRows[(int) $student->getKey()] = [
                 'student_id' => (int) $student->getKey(),
                 'student_name' => (string) $student->student_name_snapshot,
                 'nis' => (string) ($student->nis_snapshot ?: $student->nisn_snapshot ?: '-'),
+                'updater_badge' => $updaterBadge,
                 'scores' => $rowScores,
                 'description' => $results->get($student->getKey())?->description,
                 'final_score' => $results->get($student->getKey())?->final_score,
@@ -674,7 +683,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             return $query->whereRaw('1 = 0');
         }
 
-        if ($user->hasFullAdminAccess() || $user->can('penilaian.verify') || $user->hasRole('kepala_sekolah')) {
+        if ($this->canManageScoreAssignments($user)) {
             return $query;
         }
 
@@ -693,7 +702,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             return $query->whereRaw('1 = 0');
         }
 
-        if ($user->hasFullAdminAccess() || $user->can('penilaian.verify') || $user->hasRole('kepala_sekolah')) {
+        if ($this->canManageScoreAssignments($user)) {
             return $query;
         }
 
@@ -726,7 +735,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             return $query->whereRaw('1 = 0');
         }
 
-        if ($user->hasFullAdminAccess() || $user->can('penilaian.verify') || $user->hasRole('kepala_sekolah')) {
+        if ($this->canManageScoreAssignments($user)) {
             return $query;
         }
 
@@ -756,7 +765,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
 
         return $user instanceof User
             && (
-                $user->hasFullAdminAccess()
+                $this->canManageScoreAssignments($user)
                 || (
                     $user->canViewModule('penilaian')
                     && $user->can('penilaian.input')
@@ -782,6 +791,29 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             ])
             ->values()
             ->all();
+    }
+
+    protected function canManageScoreAssignments(User $user): bool
+    {
+        return $user->hasFullAdminAccess()
+            || $user->canManageModule('penilaian')
+            || $user->hasRole('kurikulum')
+            || $user->can('penilaian.verify');
+    }
+
+    private function scoreUpdaterBadge(?User $updater): ?string
+    {
+        if (! $updater instanceof User) {
+            return null;
+        }
+
+        if ($updater->hasRole('kurikulum')) {
+            return 'Diperbarui oleh Kurikulum';
+        }
+
+        return ($updater->hasFullAdminAccess() || $updater->canManageModule('penilaian'))
+            ? 'Diperbarui oleh Admin'
+            : null;
     }
 
     private function formatIndonesianNumber(mixed $value): string

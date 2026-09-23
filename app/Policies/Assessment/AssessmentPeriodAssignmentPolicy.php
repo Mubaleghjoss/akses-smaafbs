@@ -29,7 +29,7 @@ class AssessmentPeriodAssignmentPolicy extends AssessmentPolicy
 
     public function updateScores(User $user, AssessmentPeriodAssignment $assignment): bool
     {
-        return ($this->isFullAdmin($user)
+        return ($this->canManageScoreAssignments($user)
                 || ($user->can('penilaian.input')
                     && $this->ownsTeacherId($user, (int) $assignment->teacher_id)))
             && $assignment->period->status === AssessmentPeriodStatus::OPEN
