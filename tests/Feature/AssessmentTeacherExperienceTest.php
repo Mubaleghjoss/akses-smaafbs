@@ -965,6 +965,61 @@ class AssessmentTeacherExperienceTest extends TestCase
         $this->assertStringContainsString('total bobot 100%', (string) $notification['body']);
     }
 
+    public function test_blocking_assignment_notification_action_url_includes_assignment_and_no_markdown_outside_panel_context(): void
+    {
+        auth()->logout();
+
+        $period = AssessmentPeriod::factory()->asts()->create([
+            'status' => AssessmentPeriodStatus::OPEN,
+        ]);
+        $assignment = AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+        ]);
+
+        $notification = AssessmentActionFailureNotification::make(
+            new \RuntimeException('Penilaian belum lengkap.'),
+            'Simpan Draf Nilai',
+            $period,
+            $assignment,
+        )->toArray();
+
+        $this->assertSame('Buka Input Nilai', $notification['actions'][0]['label']);
+        $this->assertSame(
+            AstsInputScores::getUrl([
+                'period' => $period->getKey(),
+                'assignment' => $assignment->getKey(),
+            ]),
+            $notification['actions'][0]['url'],
+        );
+        $this->assertStringNotContainsString('**', (string) $notification['body']);
+        $this->assertStringContainsString('Kendala: Penilaian belum lengkap.', (string) $notification['body']);
+        $this->assertStringContainsString('Solusi: Buka penugasan nilai terkait, koreksi nilainya, simpan perubahan, lalu ulangi aksi.', (string) $notification['body']);
+
+        $asasPeriod = AssessmentPeriod::factory()->asas()->create([
+            'status' => AssessmentPeriodStatus::OPEN,
+        ]);
+        $asasAssignment = AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $asasPeriod->getKey(),
+        ]);
+
+        $asasNotification = AssessmentActionFailureNotification::make(
+            ValidationException::withMessages(['score' => 'Nilai melebihi batas maksimum.']),
+            'Simpan Nilai',
+            $asasPeriod,
+            $asasAssignment,
+        )->toArray();
+
+        $this->assertSame('Buka Input Nilai', $asasNotification['actions'][0]['label']);
+        $this->assertSame(
+            \App\Filament\Pages\Assessment\AsasInputScores::getUrl([
+                'period' => $asasPeriod->getKey(),
+                'assignment' => $asasAssignment->getKey(),
+            ]),
+            $asasNotification['actions'][0]['url'],
+        );
+        $this->assertStringNotContainsString('**', (string) $asasNotification['body']);
+    }
+
     public function test_sidebar_only_lists_operational_assessment_types_relevant_to_teacher_or_homeroom(): void
     {
         $teacher = $this->teacher(348);

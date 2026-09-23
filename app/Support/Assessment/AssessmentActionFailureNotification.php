@@ -93,58 +93,59 @@ final class AssessmentActionFailureNotification
             ];
         }
 
-        if ($period && self::containsAny($context, [
+        if ($period && ! self::containsAny(Str::lower($actionTitle), ['simpan draf nilai', 'input nilai']) && self::containsAny($context, [
             'assignment', 'assignments', 'penugasan', 'dikirim', 'verifikasi',
         ])) {
             $page = AssessmentPageMap::page($type, 'status');
-            if ($page::canAccess()) {
-                if ($blockingAssignment) {
-                    $status = $blockingAssignment->status instanceof \BackedEnum
-                        ? $blockingAssignment->status->value
-                        : (string) $blockingAssignment->status;
-                    $statusLabel = $status === 'draft' ? 'belum dikirim' : 'belum valid';
-                    $rombel = (string) $blockingAssignment->rombel_name_snapshot;
-                    $subject = (string) $blockingAssignment->subject_name_snapshot;
 
-                    return [
-                        'label' => "Lihat {$rombel} · {$subject} yang {$statusLabel}",
-                        'url' => $page::getUrl([
-                            'period' => $periodId,
-                            'rombel' => $blockingAssignment->assessment_period_rombel_id,
-                            'subject' => $blockingAssignment->assessment_subject_id,
-                            'status' => $status,
-                        ]),
-                        'icon' => 'heroicon-o-clipboard-document-check',
-                        'solution' => 'Buka penugasan yang menghambat, perbaiki atau kirimkan, lalu jalankan aksi kembali.',
-                    ];
-                }
+            if ($blockingAssignment) {
+                $status = $blockingAssignment->status instanceof \BackedEnum
+                    ? $blockingAssignment->status->value
+                    : (string) $blockingAssignment->status;
+                $statusLabel = $status === 'draft' ? 'belum dikirim' : 'belum valid';
+                $rombel = (string) $blockingAssignment->rombel_name_snapshot;
+                $subject = (string) $blockingAssignment->subject_name_snapshot;
 
                 return [
-                    'label' => 'Buka Status Pengumpulan',
-                    'url' => $page::getUrl(['period' => $periodId]),
-                    'icon' => 'heroicon-o-clipboard-document-check',
-                    'solution' => 'Periksa penugasan yang belum dikirim atau belum diverifikasi, selesaikan kendalanya, lalu jalankan aksi kembali.',
-                ];
-            }
-        }
-
-        if ($period && self::containsAny($context, [
-            'result', 'results', 'score', 'scores', 'nilai', 'capaian',
-        ])) {
-            $page = AssessmentPageMap::page($type, 'input');
-            if ($page::canAccess()) {
-                return [
-                    'label' => 'Buka Input Nilai',
+                    'label' => "Lihat {$rombel} · {$subject} yang {$statusLabel}",
                     'url' => $page::getUrl([
                         'period' => $periodId,
-                        ...($blockingAssignment ? ['assignment' => $blockingAssignment->getKey()] : []),
+                        'rombel' => $blockingAssignment->assessment_period_rombel_id,
+                        'subject' => $blockingAssignment->assessment_subject_id,
+                        'status' => $status,
                     ]),
-                    'icon' => 'heroicon-o-pencil-square',
-                    'solution' => $blockingAssignment
-                        ? 'Buka penugasan nilai terkait, koreksi nilainya, simpan perubahan, lalu ulangi aksi.'
-                        : 'Lengkapi atau koreksi nilai pada periode ini, simpan perubahan, lalu ulangi aksi.',
+                    'icon' => 'heroicon-o-clipboard-document-check',
+                    'solution' => 'Buka penugasan yang menghambat, perbaiki atau kirimkan, lalu jalankan aksi kembali.',
                 ];
             }
+
+            return [
+                'label' => 'Buka Status Pengumpulan',
+                'url' => $page::getUrl(['period' => $periodId]),
+                'icon' => 'heroicon-o-clipboard-document-check',
+                'solution' => 'Periksa penugasan yang belum dikirim atau belum diverifikasi, selesaikan kendalanya, lalu jalankan aksi kembali.',
+            ];
+        }
+
+        if ($period && (
+            $blockingAssignment
+            || self::containsAny($context, [
+                'result', 'results', 'score', 'scores', 'nilai', 'capaian',
+            ])
+        )) {
+            $page = AssessmentPageMap::page($type, 'input');
+
+            return [
+                'label' => 'Buka Input Nilai',
+                'url' => $page::getUrl([
+                    'period' => $periodId,
+                    ...($blockingAssignment ? ['assignment' => $blockingAssignment->getKey()] : []),
+                ]),
+                'icon' => 'heroicon-o-pencil-square',
+                'solution' => $blockingAssignment
+                    ? 'Buka penugasan nilai terkait, koreksi nilainya, simpan perubahan, lalu ulangi aksi.'
+                    : 'Lengkapi atau koreksi nilai pada periode ini, simpan perubahan, lalu ulangi aksi.',
+            ];
         }
 
         if ($period && self::containsAny($context, [
