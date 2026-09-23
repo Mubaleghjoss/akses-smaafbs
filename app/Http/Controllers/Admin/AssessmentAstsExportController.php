@@ -96,9 +96,22 @@ class AssessmentAstsExportController
         abort_unless($period->type === AssessmentType::ASTS && auth()->user() instanceof User, 404);
     }
 
+    public static function temporaryDirectory(): string
+    {
+        $uid = function_exists('posix_geteuid') ? posix_geteuid() : null;
+        $suffix = ($uid !== null && $uid !== false) ? '-'.$uid : '';
+
+        return sys_get_temp_dir().DIRECTORY_SEPARATOR.'smaafbs-assessment-exports'.$suffix;
+    }
+
+    public static function temporaryPath(): string
+    {
+        return static::temporaryDirectory();
+    }
+
     private function download(AssessmentAstsWorkbookExport $export, string $filename): BinaryFileResponse
     {
-        $temporaryPath = sys_get_temp_dir().DIRECTORY_SEPARATOR.'smaafbs-assessment-exports';
+        $temporaryPath = static::temporaryDirectory();
 
         File::ensureDirectoryExists($temporaryPath);
         config()->set('excel.temporary_files.local_path', $temporaryPath);
