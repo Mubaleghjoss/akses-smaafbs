@@ -1220,6 +1220,7 @@ class AssessmentTeacherExperienceTest extends TestCase
         $curriculum->assignRole('kurikulum');
         $period = AssessmentPeriod::factory()->asts()->create([
             'status' => AssessmentPeriodStatus::OPEN,
+            'entry_end_at' => now()->subMinute(),
         ]);
         $rombel = AssessmentPeriodRombel::factory()->create([
             'assessment_period_id' => $period->getKey(),
@@ -1283,6 +1284,41 @@ class AssessmentTeacherExperienceTest extends TestCase
         }
 
         $this->assertTrue(Gate::forUser($owner)->allows('updateScores', $assignment));
+        Livewire::actingAs($owner)
+            ->test(AstsInputScores::class)
+            ->set('periodId', $period->getKey())
+            ->set('assignmentId', $assignment->getKey())
+            ->call('loadAssignment')
+            ->set("scoreRows.{$student->getKey()}.scores.{$component->getKey()}", 80)
+            ->call('saveDraft');
+
+        $this->assertDatabaseHas('assessment_scores', [
+            'assessment_period_assignment_id' => $assignment->getKey(),
+            'assessment_period_student_id' => $student->getKey(),
+            'assessment_component_id' => $component->getKey(),
+            'score' => 91,
+            'updated_by' => $curriculum->getKey(),
+        ]);
+
+        $this->actingAs($admin);
+        $notification = AssessmentActionFailureNotification::make(
+            ValidationException::withMessages([
+                'period' => 'Batas waktu pengisian nilai telah berakhir.',
+            ]),
+            'Simpan Draf Nilai',
+            $period,
+            $assignment,
+        )->toArray();
+
+        $this->assertStringNotContainsString('**', (string) $notification['body']);
+        $this->assertSame('Buka Input Nilai', $notification['actions'][0]['label']);
+        $this->assertSame(
+            AstsInputScores::getUrl([
+                'period' => $period->getKey(),
+                'assignment' => $assignment->getKey(),
+            ]),
+            $notification['actions'][0]['url'],
+        );
     }
 
     public function test_asts_excel_exports_are_scoped_and_return_xlsx_workbooks(): void

@@ -453,6 +453,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
                 $exception,
                 'Simpan Draf Nilai',
                 $assignment->period,
+                $assignment,
             );
 
             return false;

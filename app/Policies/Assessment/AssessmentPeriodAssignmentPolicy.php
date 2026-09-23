@@ -36,6 +36,11 @@ class AssessmentPeriodAssignmentPolicy extends AssessmentPolicy
             && $assignment->status->isEditable();
     }
 
+    public function overrideScoreEntryDeadline(User $user, AssessmentPeriodAssignment $assignment): bool
+    {
+        return $this->canManageScoreAssignments($user);
+    }
+
     public function submit(User $user, AssessmentPeriodAssignment $assignment): bool
     {
         return ($this->isFullAdmin($user)

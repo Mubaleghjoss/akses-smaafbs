@@ -37,7 +37,7 @@ final class AssessmentActionFailureNotification
 
         return Notification::make()
             ->title('Aksi ditolak: '.$actionTitle)
-            ->body("**Kendala:** {$detail}\n\n**Solusi:** {$repair['solution']}")
+            ->body("Kendala: {$detail}\n\nSolusi: {$repair['solution']}")
             ->danger()
             ->persistent()
             ->actions([
@@ -135,9 +135,14 @@ final class AssessmentActionFailureNotification
             if ($page::canAccess()) {
                 return [
                     'label' => 'Buka Input Nilai',
-                    'url' => $page::getUrl(['period' => $periodId]),
+                    'url' => $page::getUrl([
+                        'period' => $periodId,
+                        ...($blockingAssignment ? ['assignment' => $blockingAssignment->getKey()] : []),
+                    ]),
                     'icon' => 'heroicon-o-pencil-square',
-                    'solution' => 'Lengkapi atau koreksi nilai pada periode ini, simpan perubahan, lalu ulangi aksi.',
+                    'solution' => $blockingAssignment
+                        ? 'Buka penugasan nilai terkait, koreksi nilainya, simpan perubahan, lalu ulangi aksi.'
+                        : 'Lengkapi atau koreksi nilai pada periode ini, simpan perubahan, lalu ulangi aksi.',
                 ];
             }
         }

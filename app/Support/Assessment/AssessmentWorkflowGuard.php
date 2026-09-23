@@ -38,7 +38,7 @@ final class AssessmentWorkflowGuard
         }
     }
 
-    public function entryWindow(AssessmentPeriod $period): void
+    public function entryWindow(AssessmentPeriod $period, bool $canOverrideDeadline = false): void
     {
         $now = now();
 
@@ -48,7 +48,7 @@ final class AssessmentWorkflowGuard
             ]);
         }
 
-        if ($period->entry_end_at && $now->gt($period->entry_end_at)) {
+        if (! $canOverrideDeadline && $period->entry_end_at && $now->gt($period->entry_end_at)) {
             throw ValidationException::withMessages([
                 'period' => 'Batas waktu pengisian nilai telah berakhir.',
             ]);

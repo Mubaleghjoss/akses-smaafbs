@@ -17,6 +17,7 @@ use App\Support\Assessment\AssessmentSchemeResolver;
 use App\Support\Assessment\AssessmentWorkflowGuard;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
 final class SaveAssessmentScoresAction
@@ -66,7 +67,10 @@ final class SaveAssessmentScoresAction
                 'Nilai hanya dapat disimpan ketika periode berstatus terbuka.',
             );
             if ($locked->status === AssignmentStatus::DRAFT) {
-                $this->guard->entryWindow($locked->period);
+                $this->guard->entryWindow(
+                    $locked->period,
+                    Gate::forUser($actor)->allows('overrideScoreEntryDeadline', $locked),
+                );
             }
             $this->guard->assignmentStatus(
                 $locked,
