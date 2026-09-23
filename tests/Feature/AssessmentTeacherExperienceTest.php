@@ -229,6 +229,59 @@ class AssessmentTeacherExperienceTest extends TestCase
         $this->assertSame(AssignmentStatus::SUBMITTED, $submittedAssignment->refresh()->status);
     }
 
+    public function test_asts_input_automatically_provides_three_daily_columns_and_pure_score(): void
+    {
+        $teacher = $this->teacher(348);
+        $period = AssessmentPeriod::factory()->asts()->create([
+            'status' => AssessmentPeriodStatus::OPEN,
+        ]);
+        $rombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'rombel_name_snapshot' => 'X ASTS',
+        ]);
+        $subject = Subject::factory()->create(['name' => 'Matematika']);
+        $scheme = AssessmentScheme::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_subject_id' => null,
+            'assessment_period_rombel_id' => null,
+            'settings' => ['kkm' => 75],
+        ]);
+        $assignment = AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'assessment_subject_id' => $subject->getKey(),
+            'teacher_id' => 348,
+            'teacher_name_snapshot' => 'Putra Kamulyan',
+            'subject_name_snapshot' => 'Matematika',
+            'rombel_name_snapshot' => 'X ASTS',
+            'status' => AssignmentStatus::DRAFT,
+        ]);
+        AssessmentPeriodStudent::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'rombel_name_snapshot' => 'X ASTS',
+        ]);
+
+        Livewire::actingAs($teacher)
+            ->test(AstsInputScores::class)
+            ->set('periodId', $period->getKey())
+            ->set('assignmentId', $assignment->getKey())
+            ->call('loadAssignment')
+            ->assertSee('Ujian Harian 1')
+            ->assertSee('Ujian Harian 2')
+            ->assertSee('Ujian Harian 3')
+            ->assertSee('Nilai Murni ASTS');
+
+        $this->assertSame([
+            ['code' => 'UH1', 'name' => 'Ujian Harian 1', 'is_required' => false],
+            ['code' => 'UH2', 'name' => 'Ujian Harian 2', 'is_required' => false],
+            ['code' => 'UH3', 'name' => 'Ujian Harian 3', 'is_required' => false],
+            ['code' => 'ASTS_MURNI', 'name' => 'Nilai Murni ASTS', 'is_required' => true],
+        ], $scheme->fresh()->components()->orderBy('sort_order')->get(['code', 'name', 'is_required'])
+            ->map(fn (AssessmentComponent $component): array => $component->only(['code', 'name', 'is_required']))
+            ->all());
+    }
+
     public function test_teacher_homeroom_input_only_lists_own_subjects_and_review_is_read_only(): void
     {
         $teacher = $this->teacher(348);

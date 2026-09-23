@@ -243,10 +243,11 @@ final class CreateAssessmentPeriodSnapshotAction
 
             $locked->assignments()->get()->each(function (AssessmentPeriodAssignment $assignment) use ($locked): void {
                 $scheme = $this->schemeResolver->forAssignment($assignment);
-                $this->calculator->calculate($scheme->components, [], $scheme);
                 $type = $locked->type instanceof AssessmentType
                     ? $locked->type
                     : AssessmentType::from((string) $locked->type);
+                $scheme->load('components');
+                $this->calculator->calculate($scheme->components, [], $scheme);
 
                 if ($type === AssessmentType::ASTS
                     && $scheme->components->contains(

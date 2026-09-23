@@ -14,6 +14,7 @@ use App\Models\Assessment\AssessmentScore;
 use App\Models\Assessment\StudentSubjectResult;
 use App\Models\User;
 use App\Support\Assessment\AssessmentActionFailureNotification;
+use App\Support\Assessment\AstsSchemeComponents;
 use App\Support\Assessment\AssessmentNumberFormatter;
 use App\Support\Assessment\AssessmentPageMap;
 use App\Support\Assessment\AssessmentSchemeResolver;
@@ -325,6 +326,9 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
         }
 
         $scheme = app(AssessmentSchemeResolver::class)->forAssignment($assignment);
+        if (static::$assessmentType === AssessmentType::ASTS) {
+            app(AstsSchemeComponents::class)->normalize($scheme);
+        }
         $scheme->load('components');
         $students = $assignment->period->students()
             ->where('assessment_period_rombel_id', $assignment->assessment_period_rombel_id)
