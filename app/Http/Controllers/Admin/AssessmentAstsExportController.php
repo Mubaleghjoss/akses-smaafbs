@@ -15,6 +15,7 @@ use App\Support\Assessment\AssessmentAstsHomeroomRanking;
 use App\Support\Assessment\AssessmentStatusScope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
 use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -55,7 +56,7 @@ class AssessmentAstsExportController
             }
         }
 
-        return Excel::download(new AssessmentAstsWorkbookExport([
+        return $this->download(new AssessmentAstsWorkbookExport([
             'Ringkasan Status' => $summary,
             'Detail Nilai' => $this->detailSheet($assignments, $data),
             'Belum Lengkap' => $problems,
@@ -82,7 +83,7 @@ class AssessmentAstsExportController
             $items = collect($report?->extracurricular_data ?: []);
             $attachments[] = [$student->student_name_snapshot, $report?->sick_days ?? 0, $report?->permission_days ?? 0, $report?->absent_days ?? 0, $items->pluck('name')->filter()->implode(', '), $items->pluck('description')->filter()->implode(', ')];
         }
-        return Excel::download(new AssessmentAstsWorkbookExport([
+        return $this->download(new AssessmentAstsWorkbookExport([
             'Rekap Kelas' => $recap,
             'Nilai Akhir Mapel' => $wide,
             'Detail Komponen' => $this->detailSheet($assignments, $data),
@@ -93,6 +94,16 @@ class AssessmentAstsExportController
     private function ensureAstsAndUser(AssessmentPeriod $period): void
     {
         abort_unless($period->type === AssessmentType::ASTS && auth()->user() instanceof User, 404);
+    }
+
+    private function download(AssessmentAstsWorkbookExport $export, string $filename): BinaryFileResponse
+    {
+        $temporaryPath = storage_path('app/assessment-exports/tmp');
+
+        File::ensureDirectoryExists($temporaryPath);
+        config()->set('excel.temporary_files.local_path', $temporaryPath);
+
+        return Excel::download($export, $filename);
     }
 
     private function canViewHomeroom(User $user, AssessmentPeriodHomeroom $homeroom): bool
