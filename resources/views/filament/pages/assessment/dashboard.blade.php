@@ -8,7 +8,7 @@
         <section class="assessment-dashboard-panel assessment-dashboard-overview">
             <div class="assessment-dashboard-overview__layout">
                 <div class="min-w-0">
-                    <h2 class="assessment-dashboard-title">Pengaturan Penilaian</h2>
+                    <h2 class="assessment-dashboard-title">Dashboard Nilai Ujian</h2>
                     <p class="assessment-dashboard-copy">Pilih periode, lalu buka pusat jenis penilaian atau pengaturan yang perlu ditangani.</p>
                 </div>
                 <label class="assessment-dashboard-period">

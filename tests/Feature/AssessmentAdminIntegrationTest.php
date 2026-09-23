@@ -611,7 +611,7 @@ class AssessmentAdminIntegrationTest extends TestCase
             ->assertSeeHtml('assessment-dashboard-status')
             ->assertSeeHtml('assessment-dashboard-activity')
             ->assertDontSee('Alur Menyiapkan ASTS dan ASAS')
-            ->assertSee('Pengaturan Penilaian')
+            ->assertSee('Dashboard Nilai Ujian')
             ->assertSee('Pusat Penilaian')
             // Ketiga jenis harus dapat ditemukan dari satu tempat.
             ->assertSee('Asesmen Sumatif Tengah Semester')

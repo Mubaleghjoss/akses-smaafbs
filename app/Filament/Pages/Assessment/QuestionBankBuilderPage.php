@@ -13,11 +13,11 @@ class QuestionBankBuilderPage extends AssessmentPage
 {
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
 
-    protected static ?string $navigationLabel = 'Bank & Penyusunan Soal';
+    protected static ?string $navigationLabel = 'Bank Soal';
 
     protected static ?string $slug = 'penilaian/penyusunan-soal';
 
-    protected static ?int $navigationSort = 15;
+    protected static ?int $navigationSort = 40;
 
     protected static string $assessmentPermission = 'penilaian.manage';
 
@@ -39,7 +39,7 @@ class QuestionBankBuilderPage extends AssessmentPage
 
     public function getTitle(): string|Htmlable
     {
-        return 'Bank & Penyusunan Soal';
+        return 'Bank Soal';
     }
 
     public function getSubheading(): string|Htmlable|null

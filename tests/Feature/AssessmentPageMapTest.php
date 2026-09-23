@@ -129,6 +129,42 @@ class AssessmentPageMapTest extends TestCase
         $this->assertSame('heroicon-o-clipboard-document-check', $parent->getIcon());
     }
 
+    public function test_menu_pengelola_mengikuti_alur_nilai_ujian_tanpa_halaman_turunan(): void
+    {
+        $menu = [
+            AssessmentDashboard::class,
+            AstsHub::class,
+            AsasHub::class,
+            AsatHub::class,
+            AssessmentTeachingMatrix::class,
+            \App\Filament\Pages\Assessment\OnlineExamPage::class,
+            QuestionBankBuilderPage::class,
+            AssessmentReportProgressPage::class,
+            AssessmentSetupWizard::class,
+        ];
+
+        $this->assertSame([
+            'Dashboard Nilai Ujian',
+            'ASTS — Tengah Semester',
+            'ASAS — Akhir Semester',
+            'ASAT — Akhir Tahun',
+            'Penugasan Guru & Mapel',
+            'Ujian Online',
+            'Bank Soal',
+            'Progres & Rapor',
+            'Pengaturan',
+        ], array_map(fn (string $class): string => $class::getNavigationLabel(), $menu));
+        $this->assertSame([0, 10, 11, 12, 20, 30, 40, 50, 60], array_map(
+            fn (string $class): ?int => $class::getNavigationSort(),
+            $menu,
+        ));
+
+        foreach ($menu as $class) {
+            $this->assertTrue(AdminSchoolNavigation::shouldRegisterAssessmentClass($class));
+            $this->assertSame('Nilai Ujian', AdminSchoolNavigation::parentItemForClass($class));
+        }
+    }
+
     public function test_halaman_turunan_tidak_menambah_baris_sidebar(): void
     {
         foreach (AssessmentPageMap::all() as $pages) {

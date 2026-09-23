@@ -39,7 +39,7 @@ class AssessmentDashboard extends AssessmentPage
 {
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-cog-6-tooth';
 
-    protected static ?string $navigationLabel = 'Pengaturan Penilaian';
+    protected static ?string $navigationLabel = 'Dashboard Nilai Ujian';
 
     protected static ?string $slug = 'penilaian';
 
@@ -78,7 +78,7 @@ class AssessmentDashboard extends AssessmentPage
 
     public function getTitle(): string|Htmlable
     {
-        return 'Pengaturan Penilaian';
+        return 'Dashboard Nilai Ujian';
     }
 
     /** @return array<string, mixed>|null */

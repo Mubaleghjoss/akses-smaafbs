@@ -10,17 +10,17 @@ class AssessmentReportProgressPage extends AssessmentPage
 {
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-chart-bar-square';
 
-    protected static ?string $navigationLabel = 'Progres Rapor';
+    protected static ?string $navigationLabel = 'Progres & Rapor';
 
     protected static ?string $slug = 'penilaian/progres-rapor';
 
-    protected static ?int $navigationSort = 25;
+    protected static ?int $navigationSort = 50;
 
     protected string $view = 'filament.pages.assessment.report-progress';
 
     public function getTitle(): string|Htmlable
     {
-        return 'Progres Rapor';
+        return 'Progres & Rapor';
     }
 
     public function getSubheading(): string|Htmlable|null

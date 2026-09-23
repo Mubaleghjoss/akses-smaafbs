@@ -10,7 +10,7 @@ class AsatHub extends AssessmentTypeHubPage
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-academic-cap';
 
-    protected static ?string $navigationLabel = 'ASAT';
+    protected static ?string $navigationLabel = 'ASAT — Akhir Tahun';
 
     protected static ?string $slug = 'penilaian/asat';
 

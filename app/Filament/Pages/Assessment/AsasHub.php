@@ -10,7 +10,7 @@ class AsasHub extends AssessmentTypeHubPage
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-book-open';
 
-    protected static ?string $navigationLabel = 'ASAS';
+    protected static ?string $navigationLabel = 'ASAS — Akhir Semester';
 
     protected static ?string $slug = 'penilaian/asas';
 

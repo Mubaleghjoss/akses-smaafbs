@@ -23,11 +23,11 @@ class AssessmentSetupWizard extends AssessmentPage
 {
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-list';
 
-    protected static ?string $navigationLabel = 'Setelan Awal';
+    protected static ?string $navigationLabel = 'Pengaturan';
 
     protected static ?string $slug = 'penilaian/setelan-awal';
 
-    protected static ?int $navigationSort = 30;
+    protected static ?int $navigationSort = 60;
 
     protected static string $assessmentPermission = 'penilaian.manage';
 
@@ -122,7 +122,7 @@ class AssessmentSetupWizard extends AssessmentPage
             AssessmentSubjectCategoryResource::canViewAny()
                 ? ['label' => 'Kategori Mapel', 'url' => AssessmentSubjectCategoryResource::getUrl()]
                 : null,
-            ['label' => 'Pengaturan Penilaian', 'url' => AssessmentDashboard::getUrl()],
+            ['label' => 'Dashboard Nilai Ujian', 'url' => AssessmentDashboard::getUrl()],
         ]));
     }
 }

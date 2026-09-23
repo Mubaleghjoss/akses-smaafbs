@@ -9014,6 +9014,28 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
     background: var(--asmt-surface);
 }
 
+.assessment-type-work-group {
+    border-top: 1px solid var(--asmt-border);
+    padding-top: 1.25rem;
+}
+
+.assessment-type-work-group__heading {
+    margin-bottom: .875rem;
+}
+
+.assessment-type-work-group__badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    background: var(--asmt-surface-soft);
+    color: var(--asmt-ink);
+    font-size: .6875rem;
+    font-weight: 800;
+    letter-spacing: .06em;
+    padding: .25rem .625rem;
+    text-transform: uppercase;
+}
+
 .assessment-type-page a:focus-visible,
 .assessment-context-stack a:focus-visible,
 .assessment-type-page select:focus-visible {

@@ -251,6 +251,11 @@ class OnlineExamMvpTest extends TestCase
 
         Livewire::actingAs($schedule->questionSet->teacher)
             ->test(\App\Filament\Pages\Assessment\OnlineExamPage::class)
+            ->assertSee('Bank Soal')
+            ->assertSee('Jadwalkan ujian dan tambahkan peserta')
+            ->assertSee('Monitoring')
+            ->assertSee('Kontrol ulang, koreksi essay, dan hasil')
+            ->assertSee('Jawaban Darurat')
             ->assertSee('Kode lanjut / pengawas')
             ->assertSee('DEMO-AWAS')
             ->assertSee('Buka ulang ujian');

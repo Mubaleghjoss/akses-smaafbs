@@ -12,7 +12,7 @@
                 <div class="min-w-0">
                     <span class="assessment-type-hero__eyebrow inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold">
                         <x-filament::icon icon="heroicon-o-academic-cap" class="h-4 w-4" />
-                        Pusat {{ $this->getAssessmentTypeLabel() }}
+                        Pusat {{ $this->getAssessmentTypeLabel() }} - fokus aktif
                     </span>
                     <h2 class="assessment-type-hero__title mt-3 break-words text-xl font-bold sm:text-2xl">
                         Semua kebutuhan {{ $this->getAssessmentTypeLabel() }} dalam satu halaman
@@ -83,49 +83,75 @@
             </section>
         @endif
 
-        <section>
-            <div class="mb-3">
-                <h2 class="assessment-type-section__title text-base font-bold">Pilih Pekerjaan</h2>
-                <p class="assessment-type-section__copy mt-1 text-sm">Setiap fungsi tampil sebagai kartu agar mudah ditemukan di HP maupun desktop.</p>
-            </div>
+        @php
+            $hasTeacherWork = $hub['input_assignment_count'] > 0;
+            $hasHomeroomWork = $hub['homeroom_count'] > 0;
+            $user = auth()->user();
+            $isManager = $user && ($user->hasFullAdminAccess() || $user->canManageModule('penilaian') || $user->can('penilaian.manage') || $user->can('penilaian.verify') || $user->hasRole('kurikulum') || $user->hasRole('kepala_sekolah'));
+            $workGroups = match (true) {
+                $isManager => [
+                    ['title' => 'Alur Penilaian', 'description' => 'Pantau input guru, rekap wali kelas, dan kesiapan rapor.', 'cards' => [0, 1, 2, 3]],
+                ],
+                $hasTeacherWork && $hasHomeroomWork => [
+                    ['title' => 'Tugas Guru', 'description' => 'Input dan pantau nilai mapel yang Anda ampu.', 'cards' => [0, 1]],
+                    ['title' => 'Tugas Wali Kelas', 'description' => 'Lengkapi rekap kelas wali dan siapkan rapor.', 'cards' => [2, 3]],
+                ],
+                $hasHomeroomWork => [
+                    ['title' => 'Rekap Wali Kelas', 'description' => 'Prioritas Anda: lengkapi rekap kelas wali dan pantau rapor.', 'cards' => [2, 3]],
+                ],
+                default => [
+                    ['title' => 'Tugas Guru', 'description' => 'Input nilai dan pantau pengumpulan mapel yang Anda ampu.', 'cards' => [0, 1]],
+                ],
+            };
+        @endphp
 
-            <div class="assessment-type-action-grid grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                @foreach ($hub['cards'] as $card)
-                    @php
-                        $toneClasses = match ($card['tone']) {
-                            'success' => 'bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-300',
-                            'warning' => 'bg-warning-50 text-warning-700 dark:bg-warning-500/10 dark:text-warning-300',
-                            'info' => 'bg-info-50 text-info-700 dark:bg-info-500/10 dark:text-info-300',
-                            default => 'bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-300',
-                        };
-                    @endphp
-                    <article class="assessment-settings-card assessment-type-action-card flex min-w-0 flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition sm:p-5 dark:border-white/10 dark:bg-gray-900 {{ $card['url'] ? 'is-actionable hover:-translate-y-0.5 hover:border-primary-400 hover:shadow-md' : 'is-restricted opacity-70' }}">
-                        <div class="flex min-w-0 items-start justify-between gap-3">
-                            <span class="assessment-settings-card__icon flex h-11 w-11 shrink-0 items-center justify-center rounded-xl {{ $toneClasses }}">
-                                <x-filament::icon :icon="$card['icon']" class="h-6 w-6" />
-                            </span>
-                            <div class="min-w-0 text-right">
-                                <p class="assessment-type-action-card__value break-words text-xl font-bold">{{ $card['value'] }}</p>
-                                <p class="assessment-type-action-card__caption break-words text-[11px] leading-4">{{ $card['caption'] }}</p>
+        @foreach ($workGroups as $group)
+            <section class="assessment-type-work-group">
+                <div class="assessment-type-work-group__heading">
+                    <span class="assessment-type-work-group__badge">Fokus aktif</span>
+                    <h2 class="assessment-type-section__title text-base font-bold">{{ $group['title'] }}</h2>
+                    <p class="assessment-type-section__copy mt-1 text-sm">{{ $group['description'] }}</p>
+                </div>
+
+                <div class="assessment-type-action-grid grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    @foreach ($group['cards'] as $cardIndex)
+                        @php
+                            $card = $hub['cards'][$cardIndex];
+                            $toneClasses = match ($card['tone']) {
+                                'success' => 'bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-300',
+                                'warning' => 'bg-warning-50 text-warning-700 dark:bg-warning-500/10 dark:text-warning-300',
+                                'info' => 'bg-info-50 text-info-700 dark:bg-info-500/10 dark:text-info-300',
+                                default => 'bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-300',
+                            };
+                        @endphp
+                        <article class="assessment-settings-card assessment-type-action-card flex min-w-0 flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition sm:p-5 dark:border-white/10 dark:bg-gray-900 {{ $card['url'] ? 'is-actionable hover:-translate-y-0.5 hover:border-primary-400 hover:shadow-md' : 'is-restricted opacity-70' }}">
+                            <div class="flex min-w-0 items-start justify-between gap-3">
+                                <span class="assessment-settings-card__icon flex h-11 w-11 shrink-0 items-center justify-center rounded-xl {{ $toneClasses }}">
+                                    <x-filament::icon :icon="$card['icon']" class="h-6 w-6" />
+                                </span>
+                                <div class="min-w-0 text-right">
+                                    <p class="assessment-type-action-card__value break-words text-xl font-bold">{{ $card['value'] }}</p>
+                                    <p class="assessment-type-action-card__caption break-words text-[11px] leading-4">{{ $card['caption'] }}</p>
+                                </div>
                             </div>
-                        </div>
 
-                        <h3 class="assessment-type-action-card__title mt-4 break-words text-base font-bold">{{ $card['title'] }}</h3>
-                        <p class="assessment-type-action-card__copy mt-2 flex-1 break-words text-sm leading-6">{{ $card['description'] }}</p>
+                            <h3 class="assessment-type-action-card__title mt-4 break-words text-base font-bold">{{ $card['title'] }}</h3>
+                            <p class="assessment-type-action-card__copy mt-2 flex-1 break-words text-sm leading-6">{{ $card['description'] }}</p>
 
-                        @if ($card['url'])
-                            <a href="{{ $card['url'] }}" wire:navigate class="assessment-settings-card__action mt-5 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:ring-offset-gray-900">
-                                Buka {{ $card['title'] }}
-                                <x-filament::icon icon="heroicon-o-arrow-right" class="h-4 w-4" />
-                            </a>
-                        @else
-                            <span class="mt-5 inline-flex min-h-10 w-full items-center justify-center rounded-xl bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-500 dark:bg-white/5 dark:text-gray-400">
-                                Akses tidak tersedia
-                            </span>
-                        @endif
-                    </article>
-                @endforeach
-            </div>
-        </section>
+                            @if ($card['url'])
+                                <a href="{{ $card['url'] }}" wire:navigate class="assessment-settings-card__action mt-5 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:ring-offset-gray-900">
+                                    Buka {{ $card['title'] }}
+                                    <x-filament::icon icon="heroicon-o-arrow-right" class="h-4 w-4" />
+                                </a>
+                            @else
+                                <span class="mt-5 inline-flex min-h-10 w-full items-center justify-center rounded-xl bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-500 dark:bg-white/5 dark:text-gray-400">
+                                    Akses tidak tersedia
+                                </span>
+                            @endif
+                        </article>
+                    @endforeach
+                </div>
+            </section>
+        @endforeach
     </div>
 </x-filament-panels::page>

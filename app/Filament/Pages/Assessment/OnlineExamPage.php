@@ -14,7 +14,7 @@ class OnlineExamPage extends AssessmentPage
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-computer-desktop';
     protected static ?string $navigationLabel = 'Ujian Online';
     protected static ?string $slug = 'penilaian/ujian-online';
-    protected static ?int $navigationSort = 16;
+    protected static ?int $navigationSort = 30;
     protected static string $assessmentPermission = 'penilaian.manage';
     protected string $view = 'filament.pages.assessment.online-exam';
 

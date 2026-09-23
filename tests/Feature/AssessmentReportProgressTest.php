@@ -213,7 +213,7 @@ class AssessmentReportProgressTest extends TestCase
         $this->actingAs($admin);
 
         Livewire::test(AssessmentReportProgressPage::class)
-            ->assertSee('Progres Rapor')
+            ->assertSee('Progres & Rapor')
             ->assertSee('ASTS Aktif Halaman')
             ->assertSee('ASAS Aktif Halaman')
             ->assertSee('Sebagai Admin')
