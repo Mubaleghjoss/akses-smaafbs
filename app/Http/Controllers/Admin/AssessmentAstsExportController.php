@@ -98,7 +98,7 @@ class AssessmentAstsExportController
 
     private function download(AssessmentAstsWorkbookExport $export, string $filename): BinaryFileResponse
     {
-        $temporaryPath = storage_path('app/assessment-exports/tmp');
+        $temporaryPath = sys_get_temp_dir().DIRECTORY_SEPARATOR.'smaafbs-assessment-exports';
 
         File::ensureDirectoryExists($temporaryPath);
         config()->set('excel.temporary_files.local_path', $temporaryPath);

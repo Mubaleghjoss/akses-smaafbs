@@ -1303,6 +1303,7 @@ class AssessmentTeacherExperienceTest extends TestCase
         $this->actingAs($teacher);
         $status = $this->get(route('admin.assessment.asts.status.export', $period));
         $status->assertOk()->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $this->assertSame(sys_get_temp_dir().DIRECTORY_SEPARATOR.'smaafbs-assessment-exports', config('excel.temporary_files.local_path'));
         $this->assertStringStartsWith('PK', $status->streamedContent());
         $homeroomExport = $this->get(route('admin.assessment.asts.homeroom.export', [$period, $homeroom]));
         $homeroomExport->assertOk()->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
