@@ -677,6 +677,13 @@ class AssessmentReportingTest extends TestCase
         $this->assertSame('Siswa 1', data_get($stored->snapshot_data, 'student.name'));
         $this->assertSame('88.50', data_get($stored->snapshot_data, 'subjects.0.final_score'));
         $this->assertSame('Matematika', data_get($stored->snapshot_data, 'subjects.0.name'));
+        $renderedReport = view('assessment.reports.asts', [
+            'snapshot' => $stored->snapshot_data,
+            'templateSettings' => [],
+            'pdfMode' => false,
+        ])->render();
+        $this->assertStringContainsString('88.5', $renderedReport);
+        $this->assertStringNotContainsString('(belum diisi)', $renderedReport);
         $this->assertSame(
             [['name' => 'Pramuka', 'description' => 'Sangat Baik']],
             data_get($stored->snapshot_data, 'homeroom.extracurricular_data'),

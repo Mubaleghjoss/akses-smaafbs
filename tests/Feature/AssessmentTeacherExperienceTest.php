@@ -28,6 +28,7 @@ use App\Models\Assessment\AssessmentScheme;
 use App\Models\Assessment\AssessmentScore;
 use App\Models\Assessment\HomeroomReport;
 use App\Models\Assessment\Subject;
+use App\Models\Assessment\StudentSubjectResult;
 use App\Models\User;
 use App\Support\Assessment\AssessmentActionFailureNotification;
 use Illuminate\Database\Schema\Blueprint;
@@ -1041,6 +1042,92 @@ class AssessmentTeacherExperienceTest extends TestCase
         } catch (ValidationException $exception) {
             $this->assertArrayHasKey('scores', $exception->errors());
         }
+    }
+
+    public function test_asts_homeroom_recap_shows_final_score_ranking_and_only_own_class(): void
+    {
+        $teacher = $this->teacher(348);
+        $period = AssessmentPeriod::factory()->asts()->create(['status' => AssessmentPeriodStatus::OPEN]);
+        $ownRombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'rombel_name_snapshot' => 'X Ranking',
+        ]);
+        $otherRombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'rombel_name_snapshot' => 'X Lain',
+        ]);
+        $students = AssessmentPeriodStudent::factory()->count(3)->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $ownRombel->getKey(),
+            'rombel_name_snapshot' => 'X Ranking',
+        ]);
+        $otherStudent = AssessmentPeriodStudent::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $otherRombel->getKey(),
+            'rombel_name_snapshot' => 'X Lain',
+            'student_name_snapshot' => 'Siswa Kelas Lain',
+        ]);
+        $homeroom = AssessmentPeriodHomeroom::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $ownRombel->getKey(),
+            'teacher_id' => 348,
+            'rombel_name_snapshot' => 'X Ranking',
+        ]);
+        AssessmentPeriodHomeroom::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $otherRombel->getKey(),
+            'teacher_id' => 999,
+            'rombel_name_snapshot' => 'X Lain',
+        ]);
+        $subjectOne = Subject::factory()->create(['name' => 'Matematika']);
+        $subjectTwo = Subject::factory()->create(['name' => 'Bahasa Indonesia']);
+        $assignment = function (Subject $subject) use ($period, $ownRombel): AssessmentPeriodAssignment {
+            return AssessmentPeriodAssignment::factory()->create([
+                'assessment_period_id' => $period->getKey(),
+                'assessment_period_rombel_id' => $ownRombel->getKey(),
+                'assessment_subject_id' => $subject->getKey(),
+                'subject_name_snapshot' => $subject->name,
+            ]);
+        };
+        $math = $assignment($subjectOne);
+        $indonesian = $assignment($subjectTwo);
+        foreach ([[90, 80], [90, 80], [70, null]] as $index => [$mathScore, $indonesianScore]) {
+            StudentSubjectResult::factory()->create([
+                'assessment_period_id' => $period->getKey(),
+                'assessment_period_student_id' => $students[$index]->getKey(),
+                'assessment_period_assignment_id' => $math->getKey(),
+                'final_score' => $mathScore,
+            ]);
+            if ($indonesianScore !== null) {
+                StudentSubjectResult::factory()->create([
+                    'assessment_period_id' => $period->getKey(),
+                    'assessment_period_student_id' => $students[$index]->getKey(),
+                    'assessment_period_assignment_id' => $indonesian->getKey(),
+                    'final_score' => $indonesianScore,
+                ]);
+            }
+        }
+        StudentSubjectResult::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_student_id' => $otherStudent->getKey(),
+            'assessment_period_assignment_id' => $math->getKey(),
+            'final_score' => 100,
+        ]);
+
+        Livewire::actingAs($teacher)
+            ->test(AstsHomeroomRecap::class)
+            ->set('periodId', $period->getKey())
+            ->set('homeroomId', $homeroom->getKey())
+            ->call('loadReports')
+            ->assertSet("astsRanking.rows.{$students[0]->getKey()}.total", 170.0)
+            ->assertSet("astsRanking.rows.{$students[0]->getKey()}.average", 85.0)
+            ->assertSet("astsRanking.rows.{$students[0]->getKey()}.rank", 1)
+            ->assertSet("astsRanking.rows.{$students[1]->getKey()}.rank", 1)
+            ->assertSet("astsRanking.rows.{$students[2]->getKey()}.rank", 3)
+            ->assertSet("astsRanking.rows.{$students[2]->getKey()}.completed", 1)
+            ->assertSee('Ringkasan Nilai Akhir dan Peringkat ASTS')
+            ->assertSee('belum lengkap')
+            ->assertDontSee('Siswa Kelas Lain');
     }
 
     private function teacher(int $teacherId): User

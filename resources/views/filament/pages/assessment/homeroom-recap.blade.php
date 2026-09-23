@@ -32,6 +32,55 @@
                 </div>
             </section>
 
+            @if ($astsRanking)
+                <section class="assessment-asts-ranking-card">
+                    <div class="assessment-asts-ranking-card__head">
+                        <div>
+                            <h2>Ringkasan Nilai Akhir dan Peringkat ASTS</h2>
+                            <p>Peringkat kompetisi dihitung dari rata-rata Nilai Akhir Mapel ASTS yang tersedia. Nilai sama memiliki peringkat sama.</p>
+                        </div>
+                        <span>{{ count($astsRanking['subjects']) }} mapel</span>
+                    </div>
+                    <div class="assessment-asts-ranking-scroll">
+                        <table class="assessment-asts-ranking-table">
+                            <thead>
+                                <tr>
+                                    <th>Peringkat</th>
+                                    <th>Siswa</th>
+                                    @foreach ($astsRanking['subjects'] as $subjectName)
+                                        <th>{{ $subjectName }}</th>
+                                    @endforeach
+                                    <th>Total</th>
+                                    <th>Rata-rata</th>
+                                    <th>Kelengkapan</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse ($astsRanking['rows'] as $row)
+                                    <tr>
+                                        <td>{{ $row['rank'] ?? '-' }}</td>
+                                        <td><strong>{{ $row['student_name'] }}</strong><small>{{ $row['nis'] }}</small></td>
+                                        @foreach ($astsRanking['subjects'] as $assignmentId => $subjectName)
+                                            <td>{{ $row['scores'][$assignmentId] === null ? '-' : number_format($row['scores'][$assignmentId], 2, ',', '.') }}</td>
+                                        @endforeach
+                                        <td>{{ $row['completed'] ? number_format($row['total'], 2, ',', '.') : '-' }}</td>
+                                        <td>{{ $row['average'] === null ? '-' : number_format($row['average'], 2, ',', '.') }}</td>
+                                        <td @class(['assessment-asts-ranking-incomplete' => $row['completed'] < $row['expected']])>
+                                            {{ $row['completed'] }}/{{ $row['expected'] }}
+                                            @if ($row['completed'] < $row['expected'])
+                                                <small>belum lengkap</small>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr><td colspan="{{ 6 + count($astsRanking['subjects']) }}">Belum ada siswa aktif pada kelas ini.</td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            @endif
+
             @if ($homeroomMeta['editable'])
                 <section class="assessment-homeroom-bulk-card">
                     <div class="assessment-homeroom-bulk-card__head">

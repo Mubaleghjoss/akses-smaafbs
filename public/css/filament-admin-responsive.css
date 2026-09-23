@@ -10009,3 +10009,18 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .fi-theme-dark .assessment-score-page .asmt-typebar__tab {
     color: #e2e8f0;
 }
+
+/* ASTS homeroom recap keeps academic ranking readable with wide subject lists. */
+.assessment-asts-ranking-card { margin: 1rem 0; border: 1px solid #bfdbfe; border-radius: 0.85rem; background: linear-gradient(135deg, #eff6ff 0%, #ffffff 58%); padding: 1rem; }
+.assessment-asts-ranking-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 0.85rem; }
+.assessment-asts-ranking-card__head h2 { margin: 0; color: #1e3a5f; font-size: 1rem; font-weight: 800; }
+.assessment-asts-ranking-card__head p { margin: 0.3rem 0 0; color: #475569; font-size: 0.82rem; line-height: 1.45; }
+.assessment-asts-ranking-card__head > span { border-radius: 999px; background: #dbeafe; padding: 0.2rem 0.55rem; color: #1d4ed8; font-size: 0.75rem; font-weight: 800; white-space: nowrap; }
+.assessment-asts-ranking-scroll { overflow-x: auto; }
+.assessment-asts-ranking-table { width: 100%; min-width: 46rem; border-collapse: collapse; font-size: 0.8rem; }
+.assessment-asts-ranking-table th, .assessment-asts-ranking-table td { border-bottom: 1px solid #dbeafe; padding: 0.6rem; text-align: center; vertical-align: top; }
+.assessment-asts-ranking-table th { color: #1e3a5f; font-weight: 800; white-space: nowrap; }
+.assessment-asts-ranking-table td:nth-child(2) { min-width: 10rem; text-align: left; }
+.assessment-asts-ranking-table small { display: block; margin-top: 0.12rem; color: #64748b; font-size: 0.7rem; }
+.assessment-asts-ranking-incomplete { color: #b45309; font-weight: 700; }
+@media (max-width: 639px) { .assessment-asts-ranking-card { padding: 0.8rem; } .assessment-asts-ranking-card__head { display: block; } .assessment-asts-ranking-card__head > span { display: inline-block; margin-top: 0.55rem; } }

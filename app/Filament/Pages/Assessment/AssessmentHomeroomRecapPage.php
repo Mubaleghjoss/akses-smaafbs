@@ -12,6 +12,7 @@ use App\Models\Assessment\HomeroomReport;
 use App\Models\Assessment\ReportSnapshot;
 use App\Models\User;
 use App\Support\Assessment\AssessmentActionFailureNotification;
+use App\Support\Assessment\AssessmentAstsHomeroomRanking;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
@@ -126,6 +127,9 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
 
     public ?array $homeroomMeta = null;
 
+    /** @var array{subjects: array<int, string>, rows: array<int, array<string, mixed>>}|null */
+    public ?array $astsRanking = null;
+
     /** @var array<int, int|string> */
     public array $selectedStudentIds = [];
 
@@ -225,6 +229,7 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
     {
         $this->reportRows = [];
         $this->homeroomMeta = null;
+        $this->astsRanking = null;
         $this->selectedStudentIds = [];
 
         $homeroom = $this->homeroomId ? $this->homeroomQuery()->with('period')->find($this->homeroomId) : null;
@@ -265,6 +270,13 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
         $status = $homeroom->period->status instanceof AssessmentPeriodStatus
             ? $homeroom->period->status
             : AssessmentPeriodStatus::from((string) $homeroom->period->status);
+        if ($homeroom->period->type === AssessmentType::ASTS) {
+            $this->astsRanking = app(AssessmentAstsHomeroomRanking::class)->forClass(
+                (int) $homeroom->assessment_period_id,
+                (int) $homeroom->assessment_period_rombel_id,
+            );
+        }
+
         $this->homeroomMeta = [
             'rombel' => (string) $homeroom->rombel_name_snapshot,
             'teacher' => (string) $homeroom->teacher_name_snapshot,
