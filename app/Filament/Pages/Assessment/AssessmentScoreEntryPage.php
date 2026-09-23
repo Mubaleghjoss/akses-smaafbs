@@ -482,6 +482,18 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
         }
     }
 
+    public function usesDescriptions(): bool
+    {
+        return static::$assessmentType !== AssessmentType::ASTS;
+    }
+
+    public function formatComponentMeta(array $component): string
+    {
+        return $this->formatIndonesianNumber($component['weight']).'% · '
+            .$this->formatIndonesianNumber($component['minimum_score']).'–'
+            .$this->formatIndonesianNumber($component['maximum_score']);
+    }
+
     public function selectAllStudents(): void
     {
         $this->selectedStudentIds = array_map('intval', array_keys($this->scoreRows));
@@ -524,7 +536,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             ? collect($this->components)->firstWhere('id', $this->bulkComponentId)
             : null;
         $hasScore = trim($this->bulkScore) !== '';
-        $description = trim($this->bulkDescription);
+        $description = $this->usesDescriptions() ? trim($this->bulkDescription) : '';
 
         if (! $hasScore && $description === '') {
             Notification::make()
@@ -614,7 +626,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
                 }
             }
 
-            if (trim($this->bulkDescription) !== '') {
+            if ($this->usesDescriptions() && trim($this->bulkDescription) !== '') {
                 $current = trim((string) data_get($this->scoreRows, "{$studentId}.description", ''));
                 if ($current !== '') {
                     $overwritten++;
@@ -766,9 +778,14 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
                         'score' => $score,
                     ])
                     ->all(),
-                'description' => $row['description'] ?? null,
+                ...($this->usesDescriptions() ? ['description' => $row['description'] ?? null] : []),
             ])
             ->values()
             ->all();
+    }
+
+    private function formatIndonesianNumber(mixed $value): string
+    {
+        return str_replace('.', ',', AssessmentNumberFormatter::score($value));
     }
 }

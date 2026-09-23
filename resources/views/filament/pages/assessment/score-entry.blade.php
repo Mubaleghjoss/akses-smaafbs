@@ -1,5 +1,5 @@
 <x-filament-panels::page>
-    <div class="assessment-score-page space-y-5">
+    <div @class(['assessment-score-page space-y-5', 'is-asts' => ! $this->usesDescriptions()])>
         @include('filament.pages.assessment.partials.type-navigation')
 
         @php($scopeNotice = $this->getEntryScopeNotice())
@@ -145,9 +145,9 @@
                 @if ($assignmentMeta['editable'])
                     <section class="assessment-bulk-card">
                         <div>
-                            <h2 class="font-bold text-gray-950 dark:text-white">Isi Nilai & Deskripsi Massal</h2>
+                            <h2 class="font-bold text-gray-950 dark:text-white">{{ $this->usesDescriptions() ? 'Isi Nilai & Deskripsi Massal' : 'Isi Nilai Massal' }}</h2>
                             <p class="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">
-                                Centang siswa, isi nilai atau deskripsi, lalu terapkan ke formulir. Data belum masuk server sampai tombol <strong>Simpan Draf</strong> ditekan.
+                                Centang siswa, isi {{ $this->usesDescriptions() ? 'nilai atau deskripsi' : 'nilai' }}, lalu terapkan ke formulir. Data belum masuk server sampai tombol <strong>Simpan Draf</strong> ditekan.
                             </p>
                         </div>
 
@@ -166,13 +166,15 @@
                                 <span class="block text-xs font-bold text-gray-600 dark:text-gray-300">Nilai Massal</span>
                                 <input wire:model="bulkScore" type="number" step="0.01" class="assessment-score-input mt-2" placeholder="Contoh: 85">
                             </label>
-                            <label class="assessment-score-field is-wide">
-                                <span class="block text-xs font-bold text-gray-600 dark:text-gray-300">Deskripsi Massal (opsional)</span>
-                                <textarea wire:model="bulkDescription" rows="2" class="assessment-description mt-2 min-w-0" placeholder="Contoh: Menunjukkan pemahaman yang baik dan konsisten."></textarea>
-                            </label>
+                            @if ($this->usesDescriptions())
+                                <label class="assessment-score-field is-wide">
+                                    <span class="block text-xs font-bold text-gray-600 dark:text-gray-300">Deskripsi Massal (opsional)</span>
+                                    <textarea wire:model="bulkDescription" rows="2" class="assessment-description mt-2 min-w-0" placeholder="Contoh: Menunjukkan pemahaman yang baik dan konsisten."></textarea>
+                                </label>
+                            @endif
                             <label class="is-wide flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200">
                                 <input type="checkbox" wire:model="bulkFillEmptyOnly" class="mt-1 rounded border-gray-300">
-                                <span><strong>Hanya isi kolom yang masih kosong</strong><small class="block text-gray-500">Bawaan nonaktif: nilai/deskripsi lama pada siswa terpilih akan ditimpa setelah konfirmasi.</small></span>
+                                <span><strong>Hanya isi kolom yang masih kosong</strong><small class="block text-gray-500">Bawaan nonaktif: {{ $this->usesDescriptions() ? 'nilai/deskripsi' : 'nilai' }} lama pada siswa terpilih akan ditimpa setelah konfirmasi.</small></span>
                             </label>
                         </div>
 
@@ -215,7 +217,7 @@
 
                 <section class="assessment-desktop assessment-matrix-shell">
                     <div class="assessment-matrix-scroll">
-                        <table class="assessment-matrix">
+                        <table @class(['assessment-matrix', 'is-asts' => ! $this->usesDescriptions()])>
                             <thead>
                                 <tr>
                                     <th class="student-col">Siswa</th>
@@ -223,10 +225,12 @@
                                         <th @class(['assessment-matrix-component', 'is-manual' => $component['score_source'] === 'manual', 'is-automatic' => $component['score_source'] !== 'manual'])>
                                             <span class="assessment-matrix-component__type">{{ $component['score_source'] === 'manual' ? 'Input manual' : 'Otomatis' }}</span>
                                             <span class="assessment-matrix-component__name">{{ $component['name'] }}</span>
-                                            <span class="assessment-matrix-component__meta">{{ $component['weight'] }}% · {{ $component['minimum_score'] }}–{{ $component['maximum_score'] }}</span>
+                                            <span class="assessment-matrix-component__meta">{{ $this->formatComponentMeta($component) }}</span>
                                         </th>
                                     @endforeach
-                                    <th>Deskripsi Capaian</th>
+                                    @if ($this->usesDescriptions())
+                                        <th>Deskripsi Capaian</th>
+                                    @endif
                                 </tr>
                             </thead>
                             <tbody>
@@ -261,15 +265,17 @@
                                                 >
                                             </td>
                                         @endforeach
-                                        <td>
-                                            <textarea
-                                                rows="3"
-                                                class="assessment-description"
-                                                data-assessment-path="scoreRows.{{ $studentId }}.description"
-                                                wire:model.blur="scoreRows.{{ $studentId }}.description"
-                                                @disabled(! $assignmentMeta['editable'])
-                                            ></textarea>
-                                        </td>
+                                        @if ($this->usesDescriptions())
+                                            <td>
+                                                <textarea
+                                                    rows="3"
+                                                    class="assessment-description"
+                                                    data-assessment-path="scoreRows.{{ $studentId }}.description"
+                                                    wire:model.blur="scoreRows.{{ $studentId }}.description"
+                                                    @disabled(! $assignmentMeta['editable'])
+                                                ></textarea>
+                                            </td>
+                                        @endif
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -303,7 +309,7 @@
                                             <small class="assessment-mobile-score__type">{{ $component['score_source'] === 'manual' ? 'Input manual' : 'Otomatis' }}</small>
                                             {{ $component['name'] }}
                                             <small class="block font-normal text-gray-500">
-                                                {{ $component['weight'] }}% · {{ $component['minimum_score'] }}–{{ $component['maximum_score'] }}
+                                                {{ $this->formatComponentMeta($component) }}
                                             </small>
                                         </span>
                                         <input
@@ -318,16 +324,18 @@
                                         >
                                     </label>
                                 @endforeach
-                                <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                                    Deskripsi Capaian
-                                    <textarea
-                                        rows="4"
-                                        class="assessment-description mt-2 min-w-0"
-                                        data-assessment-path="scoreRows.{{ $studentId }}.description"
-                                        wire:model.blur="scoreRows.{{ $studentId }}.description"
-                                        @disabled(! $assignmentMeta['editable'])
-                                    ></textarea>
-                                </label>
+                                @if ($this->usesDescriptions())
+                                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">
+                                        Deskripsi Capaian
+                                        <textarea
+                                            rows="4"
+                                            class="assessment-description mt-2 min-w-0"
+                                            data-assessment-path="scoreRows.{{ $studentId }}.description"
+                                            wire:model.blur="scoreRows.{{ $studentId }}.description"
+                                            @disabled(! $assignmentMeta['editable'])
+                                        ></textarea>
+                                    </label>
+                                @endif
                             </div>
                         </article>
                     @endforeach

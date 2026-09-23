@@ -183,10 +183,8 @@ class AssessmentTeacherExperienceTest extends TestCase
             ->set('selectedStudentIds', [$studentId])
             ->set('bulkComponentId', $component->getKey())
             ->set('bulkScore', '88')
-            ->set('bulkDescription', 'Menunjukkan pemahaman yang baik.')
             ->call('applyBulkValues')
             ->assertSet("scoreRows.{$studentId}.scores.{$component->getKey()}", 88.0)
-            ->assertSet("scoreRows.{$studentId}.description", 'Menunjukkan pemahaman yang baik.')
             ->assertSee('Data belum masuk server sampai tombol');
 
         Livewire::actingAs($teacher)
@@ -203,7 +201,7 @@ class AssessmentTeacherExperienceTest extends TestCase
             ->assertSet('bulkFillEmptyOnly', false)
             ->call('applyBulkValues')
             ->assertSet("scoreRows.{$studentId}.scores.{$component->getKey()}", 91.0)
-            ->assertSet("scoreRows.{$studentId}.description", 'Deskripsi hasil bulk terbaru.');
+            ->assertSet("scoreRows.{$studentId}.description", 'Deskripsi lama.');
 
         $this->assertTrue(AstsHomeroomRecap::canAccess());
         $this->assertTrue(Gate::forUser($teacher)->allows('view', $homeroom));
@@ -270,7 +268,12 @@ class AssessmentTeacherExperienceTest extends TestCase
             ->assertSee('Ujian Harian 1')
             ->assertSee('Ujian Harian 2')
             ->assertSee('Ujian Harian 3')
-            ->assertSee('Nilai Murni ASTS');
+            ->assertSee('Nilai Murni ASTS')
+            ->assertDontSee('Deskripsi Capaian')
+            ->assertDontSee('Deskripsi Massal')
+            ->assertDontSee('16.6667%')
+            ->assertSee('16,67% · 0–100')
+            ->assertSee('50% · 0–100');
 
         $this->assertSame([
             ['code' => 'UH1', 'name' => 'Ujian Harian 1', 'is_required' => false],

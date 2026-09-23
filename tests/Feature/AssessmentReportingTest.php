@@ -683,6 +683,8 @@ class AssessmentReportingTest extends TestCase
             'pdfMode' => false,
         ])->render();
         $this->assertStringContainsString('88.5', $renderedReport);
+        $this->assertStringNotContainsString('Menguasai operasi numerik.', $renderedReport);
+        $this->assertStringNotContainsString('Capaian Kompetensi', $renderedReport);
         $this->assertStringNotContainsString('(belum diisi)', $renderedReport);
         $this->assertSame(
             [['name' => 'Pramuka', 'description' => 'Sangat Baik']],
