@@ -4,6 +4,7 @@ namespace App\Filament\Pages\Assessment\Concerns;
 
 use App\Enums\Assessment\AssessmentType;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
+use App\Filament\Pages\Assessment\AstsExtracurricularScores;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodAssignment;
 use App\Models\Assessment\AssessmentPeriodHomeroom;
@@ -43,6 +44,11 @@ trait HasAssessmentTypeNavigation
         $items = [
             ['label' => 'Beranda', 'icon' => 'heroicon-o-home', 'page' => $hubPage],
             ['label' => 'Input Nilai', 'icon' => 'heroicon-o-pencil-square', 'page' => $pages['input']],
+            ...(static::$assessmentType === AssessmentType::ASTS ? [[
+                'label' => 'Nilai Ekskul',
+                'icon' => 'heroicon-o-trophy',
+                'page' => AstsExtracurricularScores::class,
+            ]] : []),
             ['label' => 'Status', 'icon' => 'heroicon-o-clipboard-document-check', 'page' => $pages['status']],
             ['label' => 'Rekap Wali', 'icon' => 'heroicon-o-user-group', 'page' => $pages['recap']],
             ['label' => 'Rapor', 'icon' => 'heroicon-o-printer', 'page' => $pages['reports']],

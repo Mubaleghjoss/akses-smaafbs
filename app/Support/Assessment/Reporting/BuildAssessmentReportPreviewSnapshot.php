@@ -7,6 +7,7 @@ use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodStudent;
 use App\Models\Assessment\ReportSnapshot;
 use App\Models\Assessment\ReportTemplate;
+use App\Support\Assessment\AssessmentExtracurricularReportResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -121,7 +122,10 @@ final class BuildAssessmentReportPreviewSnapshot
                     'spiritual_description' => $homeroom?->spiritual_description,
                     'social_predicate' => $homeroom?->social_predicate,
                     'social_description' => $homeroom?->social_description,
-                    'extracurricular_data' => $homeroom?->extracurricular_data ?? [],
+                    'extracurricular_data' => app(AssessmentExtracurricularReportResolver::class)->resolve(
+                        $student,
+                        $homeroom?->extracurricular_data ?? [],
+                    ),
                     'achievement_data' => $this->achievementItems($homeroom?->achievement_data),
                     'kokurikuler' => $this->kokurikulerNote($homeroom?->achievement_data),
                     'homeroom_note' => $homeroom?->homeroom_note,

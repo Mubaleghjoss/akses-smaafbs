@@ -13,6 +13,7 @@ use App\Filament\Pages\Assessment\AsatHub;
 use App\Filament\Pages\Assessment\AsatInputScores;
 use App\Filament\Pages\Assessment\AsatReports;
 use App\Filament\Pages\Assessment\AsatSubmissionStatus;
+use App\Filament\Pages\Assessment\AstsExtracurricularScores;
 use App\Filament\Pages\Assessment\AstsHomeroomRecap;
 use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\Assessment\AstsInputScores;
@@ -48,6 +49,7 @@ class AssessmentPageMap
             AssessmentType::ASTS->value => [
                 'hub' => AstsHub::class,
                 'input' => AstsInputScores::class,
+                'extracurricular' => AstsExtracurricularScores::class,
                 'status' => AstsSubmissionStatus::class,
                 'recap' => AstsHomeroomRecap::class,
                 'reports' => AstsReports::class,

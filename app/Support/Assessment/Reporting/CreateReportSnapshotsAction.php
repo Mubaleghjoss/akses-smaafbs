@@ -11,6 +11,7 @@ use App\Models\Assessment\ReportShareLink;
 use App\Models\Assessment\ReportSnapshot;
 use App\Models\Assessment\ReportTemplate;
 use App\Models\User;
+use App\Support\Assessment\AssessmentExtracurricularReportResolver;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -280,7 +281,11 @@ class CreateReportSnapshotsAction
                             'spiritual_description' => $homeroom?->spiritual_description,
                             'social_predicate' => $homeroom?->social_predicate,
                             'social_description' => $homeroom?->social_description,
-                            'extracurricular_data' => $this->decodeJson($homeroom?->extracurricular_data),
+                            'extracurricular_data' => app(AssessmentExtracurricularReportResolver::class)->resolveFor(
+                                (int) $student->id,
+                                (int) $period->getKey(),
+                                $this->decodeJson($homeroom?->extracurricular_data),
+                            ),
                             'achievement_data' => $this->achievementItems($homeroom?->achievement_data),
                             'kokurikuler' => $this->kokurikulerNote($homeroom?->achievement_data),
                             'homeroom_note' => $homeroom?->homeroom_note,

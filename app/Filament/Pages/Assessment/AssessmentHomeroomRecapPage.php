@@ -13,6 +13,7 @@ use App\Models\Assessment\ReportSnapshot;
 use App\Models\User;
 use App\Support\Assessment\AssessmentActionFailureNotification;
 use App\Support\Assessment\AssessmentAstsHomeroomRanking;
+use App\Support\Assessment\AssessmentExtracurricularReportResolver;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
@@ -259,7 +260,11 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
                 'spiritual_description' => $report?->spiritual_description,
                 'social_predicate' => $report?->social_predicate,
                 'social_description' => $report?->social_description,
-                'extracurricular_items' => $this->normalizeStructuredItems($report?->extracurricular_data),
+                'extracurricular_items' => $this->normalizeStructuredItems(
+                    $this->isAstsHomeroomRecap()
+                        ? app(AssessmentExtracurricularReportResolver::class)->resolve($student, $report?->extracurricular_data)
+                        : $report?->extracurricular_data,
+                ),
                 'achievement_items' => $this->normalizeStructuredItems(data_get($report?->achievement_data, 'items', $report?->achievement_data)),
                 'kokurikuler' => trim((string) data_get($report?->achievement_data, 'kokurikuler', '')),
                 'homeroom_note' => $report?->homeroom_note,
@@ -735,9 +740,14 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
                         'sick_days' => max(0, (int) ($row['sick_days'] ?? 0)),
                         'permission_days' => max(0, (int) ($row['permission_days'] ?? 0)),
                         'absent_days' => max(0, (int) ($row['absent_days'] ?? 0)),
-                        'extracurricular_data' => $this->normalizeStructuredItems($row['extracurricular_items'] ?? [], true),
                         'updated_by' => auth()->id(),
                     ];
+                    $resolvedExtracurricular = $this->isAstsHomeroomRecap()
+                        ? app(AssessmentExtracurricularReportResolver::class)->resolveFor((int) $studentId, (int) $freshHomeroom->assessment_period_id)
+                        : [];
+                    if (! collect($resolvedExtracurricular)->contains('source', 'guru_ekskul')) {
+                        $reportData['extracurricular_data'] = $this->normalizeStructuredItems($row['extracurricular_items'] ?? [], true);
+                    }
 
                     if (! $this->isAstsHomeroomRecap()) {
                         $reportData += [
