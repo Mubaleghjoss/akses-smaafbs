@@ -43,7 +43,7 @@ class AssessmentPeriodAssignmentPolicy extends AssessmentPolicy
 
     public function submit(User $user, AssessmentPeriodAssignment $assignment): bool
     {
-        return ($this->isFullAdmin($user)
+        return ($this->canManageScoreAssignments($user)
                 || ($user->can('penilaian.submit')
                     && $this->ownsTeacherId($user, (int) $assignment->teacher_id)))
             && $assignment->period->status === AssessmentPeriodStatus::OPEN

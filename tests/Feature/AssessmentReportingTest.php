@@ -18,6 +18,7 @@ use App\Jobs\Assessment\GenerateStudentReportJob;
 use App\Models\Assessment\AcademicYear;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodAssignment;
+use App\Models\Assessment\AssessmentPeriodHomeroom;
 use App\Models\Assessment\AssessmentPeriodRombel;
 use App\Models\Assessment\AssessmentPeriodStudent;
 use App\Models\Assessment\ClassReportArtifact;
@@ -48,6 +49,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
@@ -71,6 +73,10 @@ class AssessmentReportingTest extends TestCase
         config(['assessment.enabled' => true]);
         $userMigration = require database_path('migrations/0001_01_01_000000_create_users_table.php');
         $userMigration->up();
+        Schema::table('users', function (Blueprint $table): void {
+            $table->unsignedInteger('guru_tendik_id')->nullable();
+            $table->json('module_access_levels')->nullable();
+        });
         $permissionMigration = require database_path('migrations/2026_01_12_111708_create_permission_tables.php');
         $permissionMigration->up();
         $migration = require database_path('migrations/2026_07_31_080000_create_assessment_foundation_tables.php');
@@ -1302,6 +1308,63 @@ class AssessmentReportingTest extends TestCase
             ->assertOk()
             ->assertHeader('Content-Type', 'application/pdf');
         $this->assertStringContainsString('no-store', (string) $previewResponse->headers->get('Cache-Control'));
+    }
+
+    public function test_homeroom_teacher_can_preview_own_class_reports_but_not_another_class(): void
+    {
+        [$period, $ownRombel, $students, $template] = $this->reportingFoundation();
+        $ownSnapshot = $this->snapshot($period, $students[0], $template, 1);
+        $otherRombel = AssessmentPeriodRombel::query()->create([
+            'assessment_period_id' => $period->getKey(),
+            'source_rombel_id' => 102,
+            'rombel_name_snapshot' => 'XI 2',
+            'grade_level' => 'XI',
+            'is_active' => true,
+        ]);
+        $otherStudent = AssessmentPeriodStudent::query()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $otherRombel->getKey(),
+            'student_id' => 299,
+            'nis_snapshot' => 'NIS299',
+            'nisn_snapshot' => 'NISN299',
+            'student_name_snapshot' => 'Siswa Kelas Lain',
+            'gender_snapshot' => 'L',
+            'rombel_name_snapshot' => 'XI 2',
+            'is_active' => true,
+        ]);
+        $otherSnapshot = $this->snapshot($period, $otherStudent, $template, 1);
+        AssessmentPeriodHomeroom::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $ownRombel->getKey(),
+            'teacher_id' => 501,
+            'rombel_name_snapshot' => 'XI 1',
+        ]);
+        Role::findOrCreate('wali_kelas', 'web');
+        $homeroomTeacher = User::query()->create([
+            'name' => 'Wali Kelas XI 1',
+            'username' => 'wali-report-test',
+            'password' => 'test-password',
+            'guru_tendik_id' => 501,
+            'module_access_levels' => ['penilaian' => 'view'],
+        ]);
+        $homeroomTeacher->assignRole('wali_kelas');
+
+        $this->actingAs($homeroomTeacher);
+        $this->assertTrue(AstsReports::canAccess());
+        $this->assertTrue(Gate::allows('view', $ownSnapshot));
+        $this->assertFalse(Gate::allows('view', $otherSnapshot));
+        $this->assertTrue(Gate::allows('view', $ownRombel));
+        $this->assertFalse(Gate::allows('view', $otherRombel));
+
+        Livewire::test(AstsReports::class)
+            ->set('periodId', $period->getKey())
+            ->assertSee('XI 1')
+            ->assertDontSee('XI 2');
+
+        $this->get(route('assessment.reports.preview', $ownSnapshot))->assertOk();
+        $this->get(route('assessment.reports.preview', $otherSnapshot))->assertRedirect();
+        $this->get(route('assessment.reports.live-preview', [$period, $template, $students[0]]))->assertOk();
+        $this->get(route('assessment.reports.live-preview', [$period, $template, $otherStudent]))->assertRedirect();
     }
 
     public function test_report_authorization_failure_links_to_period_report_access_help(): void

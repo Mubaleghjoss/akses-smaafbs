@@ -18,8 +18,7 @@ class ReportSnapshotPolicy extends AssessmentPolicy
             return true;
         }
 
-        return $user->can('penilaian.homeroom')
-            && $this->ownsPeriodRombel($user, $snapshot->student->periodRombel);
+        return $this->ownsPeriodRombel($user, $snapshot->student->periodRombel);
     }
 
     public function create(User $user): bool

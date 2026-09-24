@@ -10,6 +10,7 @@ use App\Support\Assessment\AssessmentAuditLogger;
 use App\Support\Assessment\AssessmentSchemeResolver;
 use App\Support\Assessment\AssessmentWorkflowGuard;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
 final class SubmitAssessmentAssignmentAction
@@ -46,8 +47,10 @@ final class SubmitAssessmentAssignmentAction
                 [AssessmentPeriodStatus::OPEN],
                 'Nilai hanya dapat dikirim ketika periode berstatus terbuka.',
             );
+            $deadlineOverridden = false;
             if ($locked->status === AssignmentStatus::DRAFT) {
-                $this->guard->entryWindow($locked->period);
+                $deadlineOverridden = Gate::forUser($actor)->allows('overrideScoreEntryDeadline', $locked);
+                $this->guard->entryWindow($locked->period, $deadlineOverridden);
             }
             $this->guard->assignmentStatus(
                 $locked,
@@ -113,7 +116,9 @@ final class SubmitAssessmentAssignmentAction
                     'lock_version' => $locked->lock_version,
                     'submitted_at' => $locked->submitted_at?->toISOString(),
                     'submitted_by' => $actor->getKey(),
+                    'entry_deadline_overridden' => $deadlineOverridden,
                 ],
+                reason: $deadlineOverridden ? 'Submission after score-entry deadline was authorized by override policy.' : null,
             );
 
             return $locked->refresh();

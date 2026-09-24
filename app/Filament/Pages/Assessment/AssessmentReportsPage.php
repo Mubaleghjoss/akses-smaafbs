@@ -97,6 +97,9 @@ abstract class AssessmentReportsPage extends AssessmentPage
                 || $user->can('penilaian.report.generate')
                 || $user->can('penilaian.publish')
                 || $user->can('penilaian.homeroom')
+                || ($user->guru_tendik_id !== null && AssessmentPeriodHomeroom::query()
+                    ->where('teacher_id', $user->guru_tendik_id)
+                    ->exists())
                 || $user->hasRole('kepala_sekolah')
             );
     }

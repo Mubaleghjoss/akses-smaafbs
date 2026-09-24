@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssignmentStatus;
+use App\Enums\Assessment\ScoreSource;
 use App\Filament\Pages\Assessment\AsasHomeroomRecap;
 use App\Filament\Pages\Assessment\AsasHub;
 use App\Filament\Pages\Assessment\AsatHub;
@@ -1353,6 +1354,36 @@ class AssessmentTeacherExperienceTest extends TestCase
             'assessment_component_id' => $component->getKey(),
             'score' => 91,
             'updated_by' => $curriculum->getKey(),
+        ]);
+
+        $pureComponent = AssessmentComponent::query()
+            ->where('assessment_scheme_id', $scheme->getKey())
+            ->where('code', 'ASTS_MURNI')
+            ->firstOrFail();
+        AssessmentScore::query()->updateOrCreate([
+            'assessment_period_assignment_id' => $assignment->getKey(),
+            'assessment_period_student_id' => $student->getKey(),
+            'assessment_component_id' => $pureComponent->getKey(),
+        ], [
+            'score' => 90,
+            'source' => ScoreSource::MANUAL,
+            'updated_by' => $curriculum->getKey(),
+        ]);
+
+        try {
+            app(\App\Actions\Assessment\SubmitAssessmentAssignmentAction::class)->execute($owner, $assignment);
+            $this->fail('Teacher owner must not submit after the entry deadline.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('period', $exception->errors());
+        }
+
+        app(\App\Actions\Assessment\SubmitAssessmentAssignmentAction::class)->execute($curriculum, $assignment);
+        $this->assertSame(AssignmentStatus::SUBMITTED, $assignment->fresh()->status);
+        $this->assertDatabaseHas('assessment_audit_logs', [
+            'event' => 'assignment.submitted',
+            'subject_id' => $assignment->getKey(),
+            'actor_id' => $curriculum->getKey(),
+            'reason' => 'Submission after score-entry deadline was authorized by override policy.',
         ]);
 
         $this->actingAs($admin);

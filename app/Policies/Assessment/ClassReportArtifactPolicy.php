@@ -15,10 +15,7 @@ class ClassReportArtifactPolicy extends AssessmentPolicy
     public function view(User $user, ClassReportArtifact $artifact): bool
     {
         return $this->canReadAll($user)
-            || (
-                $user->can('penilaian.homeroom')
-                && $this->ownsPeriodRombel($user, $artifact->periodRombel)
-            );
+            || $this->ownsPeriodRombel($user, $artifact->periodRombel);
     }
 
     public function create(User $user): bool
