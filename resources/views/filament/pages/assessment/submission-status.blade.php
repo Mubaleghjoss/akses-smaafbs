@@ -61,7 +61,8 @@
                             <th class="p-3">Guru</th>
                             <th class="p-3">Status</th>
                             <th class="p-3">Kelengkapan</th>
-                            <th class="p-3">Dikirim</th>
+                            <th class="p-3">Dikirim Oleh</th>
+                            <th class="p-3">Mode / Waktu Kirim</th>
                             <th class="p-3 text-right">Aksi</th>
                         </tr>
                     </thead>
@@ -80,7 +81,11 @@
                                 <td class="p-3 text-sm">{{ $row['teacher'] }}</td>
                                 <td class="p-3"><span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold dark:bg-white/10">{{ $row['status_label'] }}</span></td>
                                 <td class="p-3 text-sm">{{ $row['completed_count'] }}/{{ $row['student_count'] }} · {{ $row['completion_percent'] }}%</td>
-                                <td class="p-3 text-sm">{{ $row['submitted_at'] ?: '-' }}</td>
+                                <td class="p-3 text-sm">{{ $row['submitted_by'] }}</td>
+                                <td class="p-3 text-sm">
+                                    <div>{{ $row['submission_mode'] }}</div>
+                                    <div class="mt-1 text-xs text-gray-500">{{ $row['submitted_at'] ?: '-' }}</div>
+                                </td>
                                 <td class="p-3">
                                     <div class="flex flex-wrap justify-end gap-2">
                                         <x-filament::button
@@ -125,7 +130,8 @@
                         </div>
                         <div class="grid grid-cols-2 gap-2 text-sm">
                             <div class="rounded-lg bg-gray-50 p-2 dark:bg-white/5"><strong>{{ $row['completion_percent'] }}%</strong><br><span class="text-xs text-gray-500">{{ $row['completed_count'] }}/{{ $row['student_count'] }} lengkap</span></div>
-                            <div class="rounded-lg bg-gray-50 p-2 dark:bg-white/5"><strong>Dikirim</strong><br><span class="text-xs text-gray-500">{{ $row['submitted_at'] ?: '-' }}</span></div>
+                            <div class="rounded-lg bg-gray-50 p-2 dark:bg-white/5"><strong>{{ $row['submission_mode'] }}</strong><br><span class="text-xs text-gray-500">{{ $row['submitted_at'] ?: '-' }}</span></div>
+                            <div class="col-span-2 rounded-lg bg-gray-50 p-2 text-sm dark:bg-white/5"><strong>Dikirim oleh</strong><br><span class="text-xs text-gray-500">{{ $row['submitted_by'] }}</span></div>
                         </div>
                         <div class="flex flex-wrap gap-2">
                             <x-filament::button

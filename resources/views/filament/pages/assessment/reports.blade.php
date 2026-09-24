@@ -2,6 +2,33 @@
     <div class="assessment-reports-page">
         @include('filament.pages.assessment.partials.type-navigation', ['showAccess' => false])
 
+        @if ($this->isHomeroomReportView())
+            <section class="assessment-report-card border-primary-200 bg-primary-50/60 dark:border-primary-500/25 dark:bg-primary-950/15">
+                <div class="assessment-report-card__body">
+                    <div class="assessment-report-card__head">
+                        <div>
+                            <span class="assessment-report-eyebrow">Akses Wali Kelas</span>
+                            <h2>Rapor Kelas Saya</h2>
+                            <p>Pratinjau dan unduhan hanya menampilkan siswa pada kelas wali Anda.</p>
+                        </div>
+                        @if ($previewClassId)
+                            <span class="assessment-report-status is-completed">{{ $this->getClassOptions()[$previewClassId] ?? 'Kelas saya' }}</span>
+                        @endif
+                    </div>
+                    <div class="assessment-report-primary-actions">
+                        @if ($previewClassId)
+                            <x-filament::button color="gray" x-on:click="$dispatch('open-modal', { id: 'assessment-class-preview-modal' })" icon="heroicon-o-rectangle-stack">Preview Rapor Kelas Saya</x-filament::button>
+                            @if ($this->classZipUrl())
+                                <x-filament::button tag="a" href="{{ $this->classZipUrl() }}" color="primary" icon="heroicon-o-archive-box-arrow-down">Download ZIP Rapor Kelas Saya</x-filament::button>
+                            @endif
+                        @else
+                            <span class="assessment-report-inline-note">Belum ada kelas wali yang dapat dipilih pada periode ini.</span>
+                        @endif
+                    </div>
+                </div>
+            </section>
+        @endif
+
         <section class="assessment-report-card is-step">
             <span class="assessment-report-step">1</span>
             <div class="assessment-report-card__body">

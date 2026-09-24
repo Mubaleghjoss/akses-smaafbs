@@ -62,11 +62,29 @@
         @if ($assignmentMeta)
             <section>
                 <div class="assessment-score-meta">
-                    <span class="assessment-score-pill">{{ $assignmentMeta['status_label'] }}</span>
+                    <span class="assessment-score-pill">Status: {{ $assignmentMeta['status_label'] }}</span>
                     <span class="assessment-score-pill">{{ $assignmentMeta['teacher'] }}</span>
                     <span class="assessment-score-pill">{{ count($scoreRows) }} siswa</span>
+                    <span class="assessment-score-pill">{{ $assignmentMeta['deadline_at'] ? 'Deadline: '.$assignmentMeta['deadline_at'] : 'Tanpa deadline' }}</span>
+                    <span class="assessment-score-pill">Akses: {{ $assignmentMeta['access_mode'] }}</span>
                     <span class="assessment-score-pill">Versi {{ $lockVersion }}</span>
                 </div>
+                @if ($assignmentMeta['deadline_passed'])
+                    <section @class([
+                        'mt-3 rounded-xl border p-4 text-sm',
+                        'border-warning-300 bg-warning-50 text-warning-900 dark:border-warning-500/30 dark:bg-warning-950/20 dark:text-warning-100' => $assignmentMeta['can_override_deadline'],
+                        'border-danger-300 bg-danger-50 text-danger-900 dark:border-danger-500/30 dark:bg-danger-950/20 dark:text-danger-100' => ! $assignmentMeta['can_override_deadline'],
+                    ])>
+                        <strong>{{ $assignmentMeta['can_override_deadline'] ? 'Mode override deadline aktif' : 'Pengisian nilai terkunci' }}</strong>
+                        <p class="mt-1">
+                            @if ($assignmentMeta['can_override_deadline'])
+                                Anda dapat menyimpan dan mengirim setelah deadline. Pengiriman dengan override dicatat pada audit penilaian.
+                            @else
+                                Deadline pengisian telah berakhir. Akun guru tidak dapat menyimpan atau mengirim nilai; hubungi Admin/Kurikulum bila perlu tindak lanjut.
+                            @endif
+                        </p>
+                    </section>
+                @endif
                 @if ($assignmentMeta['returned_reason'])
                     <section class="assessment-revision-card">
                         <span class="assessment-revision-card__icon"><x-filament::icon icon="heroicon-o-exclamation-triangle" /></span>
@@ -364,17 +382,21 @@
                         </x-filament::button>
                         <x-filament::button
                             wire:click="submitAssignment"
-                            wire:confirm="Kirim seluruh nilai kelas ini untuk verifikasi? Setelah dikirim, nilai tidak dapat diedit sampai dikembalikan."
+                            wire:confirm="{{ $assignmentMeta['deadline_passed'] && $assignmentMeta['can_override_deadline'] ? 'Kirim dengan override deadline? Aksi ini dicatat pada audit penilaian.' : 'Kirim seluruh nilai kelas ini untuk verifikasi? Setelah dikirim, nilai tidak dapat diedit sampai dikembalikan.' }}"
                             wire:loading.attr="disabled"
                             color="success"
                             icon="heroicon-o-paper-airplane"
                         >
-                            Kirim untuk Verifikasi
+                            {{ $assignmentMeta['deadline_passed'] && $assignmentMeta['can_override_deadline'] ? 'Kirim dengan Override Deadline' : 'Kirim untuk Verifikasi' }}
                         </x-filament::button>
                     </div>
                 @else
                     <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300">
-                        Penugasan berstatus <strong>{{ $assignmentMeta['status_label'] }}</strong>. Nilai ditampilkan baca-saja.
+                        @if ($assignmentMeta['deadline_passed'] && ! $assignmentMeta['can_override_deadline'])
+                            <strong>Deadline pengisian telah berakhir.</strong> Nilai terkunci untuk akun guru dan tidak dapat disimpan atau dikirim.
+                        @else
+                            Penugasan berstatus <strong>{{ $assignmentMeta['status_label'] }}</strong>. Nilai ditampilkan baca-saja.
+                        @endif
                     </div>
                 @endif
             </div>

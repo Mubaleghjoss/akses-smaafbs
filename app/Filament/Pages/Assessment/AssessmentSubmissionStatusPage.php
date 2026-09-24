@@ -9,6 +9,7 @@ use App\Enums\Assessment\AssignmentStatus;
 use App\Filament\Pages\Assessment\Concerns\HasAssessmentTypeNavigation;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodAssignment;
+use App\Models\Assessment\AuditLog;
 use App\Models\User;
 use App\Support\Assessment\AssessmentActionFailureNotification;
 use App\Support\Assessment\AssessmentPageMap;
@@ -382,11 +383,23 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
             $query->where('assessment_subject_id', $this->subjectId);
         }
 
-        return $query
+        $assignments = $query
+            ->with('submitter:id,name,username')
             ->orderBy('rombel_name_snapshot')
             ->orderBy('subject_name_snapshot')
-            ->get()
-            ->map(function (AssessmentPeriodAssignment $assignment) use ($studentCounts): array {
+            ->get();
+        $overrideIds = AuditLog::query()
+            ->where('assessment_period_id', $period->getKey())
+            ->where('event', 'assignment.submitted')
+            ->where('subject_type', (new AssessmentPeriodAssignment())->getMorphClass())
+            ->whereIn('subject_id', $assignments->modelKeys())
+            ->get(['subject_id', 'new_values'])
+            ->filter(fn (AuditLog $log): bool => (bool) data_get($log->new_values, 'entry_deadline_overridden'))
+            ->pluck('subject_id')
+            ->flip();
+
+        return $assignments
+            ->map(function (AssessmentPeriodAssignment $assignment) use ($studentCounts, $overrideIds): array {
                 $status = $assignment->status instanceof AssignmentStatus
                     ? $assignment->status
                     : AssignmentStatus::from((string) $assignment->status);
@@ -405,6 +418,12 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
                         ? (int) round(((int) $assignment->completed_results_count / $studentCount) * 100)
                         : 0,
                     'submitted_at' => $assignment->submitted_at?->format('d/m/Y H:i'),
+                    'submitted_by' => $assignment->submitter?->name
+                        ?: $assignment->submitter?->username
+                        ?: '-',
+                    'submission_mode' => $overrideIds->has($assignment->getKey())
+                        ? 'Override deadline (audit)'
+                        : ($assignment->submitted_at ? 'Normal' : '-'),
                     'returned_reason' => $assignment->returned_reason,
                     'review_url' => $this->scoreReviewUrl($assignment),
                 ];

@@ -1370,6 +1370,24 @@ class AssessmentTeacherExperienceTest extends TestCase
             'updated_by' => $curriculum->getKey(),
         ]);
 
+        Livewire::actingAs($owner)
+            ->test(AstsInputScores::class)
+            ->set('periodId', $period->getKey())
+            ->set('assignmentId', $assignment->getKey())
+            ->call('loadAssignment')
+            ->assertSet('assignmentMeta.editable', false)
+            ->assertSee('Pengisian nilai terkunci')
+            ->assertSee('Nilai terkunci untuk akun guru dan tidak dapat disimpan atau dikirim.');
+
+        Livewire::actingAs($curriculum)
+            ->test(AstsInputScores::class)
+            ->set('periodId', $period->getKey())
+            ->set('assignmentId', $assignment->getKey())
+            ->call('loadAssignment')
+            ->assertSet('assignmentMeta.editable', true)
+            ->assertSee('Mode override deadline aktif')
+            ->assertSee('Kirim dengan Override Deadline');
+
         try {
             app(\App\Actions\Assessment\SubmitAssessmentAssignmentAction::class)->execute($owner, $assignment);
             $this->fail('Teacher owner must not submit after the entry deadline.');
@@ -1385,6 +1403,12 @@ class AssessmentTeacherExperienceTest extends TestCase
             'actor_id' => $curriculum->getKey(),
             'reason' => 'Submission after score-entry deadline was authorized by override policy.',
         ]);
+        Livewire::actingAs($curriculum)
+            ->test(AstsSubmissionStatus::class)
+            ->set('periodId', $period->getKey())
+            ->assertSee('Dikirim Oleh')
+            ->assertSee('Kurikulum Nilai')
+            ->assertSee('Override deadline (audit)');
 
         $this->actingAs($admin);
         $notification = AssessmentActionFailureNotification::make(

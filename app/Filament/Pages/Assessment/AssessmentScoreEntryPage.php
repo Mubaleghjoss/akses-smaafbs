@@ -399,6 +399,15 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             ? $assignment->status
             : AssignmentStatus::from((string) $assignment->status);
         $revisionAssignment = $assignment->fresh('returner') ?: $assignment;
+        $user = auth()->user();
+        $deadlinePassed = $assignment->period->entry_end_at?->isPast() ?? false;
+        $canOverrideDeadline = $user instanceof User
+            && Gate::forUser($user)->allows('overrideScoreEntryDeadline', $assignment);
+        $editable = ! $this->isReviewMode()
+            && $status->isEditable()
+            && (! $deadlinePassed || $canOverrideDeadline)
+            && Gate::forUser(auth()->user())->allows('updateScores', $assignment);
+
         $this->lockVersion = (int) $assignment->lock_version;
         $this->assignmentMeta = [
             'id' => (int) $assignment->getKey(),
@@ -408,9 +417,15 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             'teacher' => (string) $assignment->teacher_name_snapshot,
             'status' => $status->value,
             'status_label' => $status->label(),
-            'editable' => ! $this->isReviewMode()
-                && $status->isEditable()
-                && Gate::forUser(auth()->user())->allows('updateScores', $assignment),
+            'editable' => $editable,
+            'deadline_at' => $assignment->period->entry_end_at?->format('d/m/Y H:i'),
+            'deadline_passed' => $deadlinePassed,
+            'can_override_deadline' => $canOverrideDeadline,
+            'access_mode' => $this->isReviewMode()
+                ? 'Tinjau saja'
+                : ($deadlinePassed
+                    ? ($canOverrideDeadline ? 'Override deadline (diaudit)' : 'Terkunci setelah deadline')
+                    : 'Input normal'),
             'returned_reason' => $revisionAssignment->returned_reason,
             'returned_at' => $revisionAssignment->returned_at?->format('d/m/Y H:i'),
             'returned_by' => $revisionAssignment->returner?->name
@@ -419,7 +434,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
         ];
     }
 
-    public function saveDraft(): bool
+    public function saveDraft(bool $notify = true): bool
     {
         $this->authorizeAssessment('penilaian.input');
         $assignment = $this->selectedAssignment();
@@ -440,11 +455,13 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             $this->lockVersion = (int) $saved->lock_version;
             $this->dispatch('assessment-draft-cleared', key: $this->draftKey());
             $this->loadAssignment();
-            Notification::make()
-                ->title('Draf nilai tersimpan')
-                ->body('Satu batch kelas berhasil disimpan. Nilai belum dikirim untuk verifikasi.')
-                ->success()
-                ->send();
+            if ($notify) {
+                Notification::make()
+                    ->title('Draf nilai tersimpan')
+                    ->body('Satu batch kelas berhasil disimpan. Nilai belum dikirim untuk verifikasi.')
+                    ->success()
+                    ->send();
+            }
 
             return true;
         } catch (Throwable $exception) {
@@ -464,7 +481,9 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
     {
         $this->authorizeAssessment('penilaian.submit');
 
-        if (! $this->saveDraft()) {
+        // Submission persists the current form first, but emits one final
+        // notification so a failed submission never follows a success toast.
+        if (! $this->saveDraft(false)) {
             return;
         }
 
@@ -476,9 +495,13 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
         try {
             app(SubmitAssessmentAssignmentAction::class)->execute(auth()->user(), $assignment);
             $this->loadAssignment();
+            $overridden = (bool) data_get($this->assignmentMeta, 'deadline_passed')
+                && (bool) data_get($this->assignmentMeta, 'can_override_deadline');
             Notification::make()
-                ->title('Nilai dikirim untuk verifikasi')
-                ->body('Nilai tidak dapat diedit lagi kecuali dikembalikan oleh kurikulum.')
+                ->title($overridden ? 'Nilai dikirim dengan override deadline' : 'Nilai dikirim untuk verifikasi')
+                ->body($overridden
+                    ? 'Pengiriman setelah deadline berhasil dan telah dicatat pada audit penilaian.'
+                    : 'Nilai tidak dapat diedit lagi kecuali dikembalikan oleh kurikulum.')
                 ->success()
                 ->duration(12000)
                 ->send();

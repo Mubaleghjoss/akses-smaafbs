@@ -126,6 +126,15 @@ abstract class AssessmentReportsPage extends AssessmentPage
     }
 
     /**
+     * Wali kelas gets a focused shortcut; broader report roles keep the
+     * existing administration-oriented workflow unchanged.
+     */
+    public function isHomeroomReportView(): bool
+    {
+        return $this->visiblePeriodRombelIds() !== null;
+    }
+
+    /**
      * Kelengkapan nilai kelas terpilih — dipakai popup sebelum cetak.
      *
      * Membedakan mapel yang BELUM DIISI (tagih guru, rapor jadi SEMENTARA)

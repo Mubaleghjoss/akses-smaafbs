@@ -1358,6 +1358,8 @@ class AssessmentReportingTest extends TestCase
 
         Livewire::test(AstsReports::class)
             ->set('periodId', $period->getKey())
+            ->assertSee('Rapor Kelas Saya')
+            ->assertSee('Preview Rapor Kelas Saya')
             ->assertSee('XI 1')
             ->assertDontSee('XI 2');
 
