@@ -370,38 +370,52 @@ class AdminModuleAccess
         }
 
         $storedLevels = $user->module_access_levels;
+        $levels = [];
+        $hasExplicitStoredLevel = is_array($storedLevels) && array_key_exists($prefix, $storedLevels);
 
-        if (is_array($storedLevels) && array_key_exists($prefix, $storedLevels)) {
-            $level = (string) $storedLevels[$prefix];
+        if ($hasExplicitStoredLevel) {
+            $levels[] = (string) $storedLevels[$prefix];
+        } elseif (is_array($storedLevels) && ($inherited = self::inheritedLegacyLevel($storedLevels, $prefix))) {
+            // Prefix hasil pemisahan tetap mengikuti konfigurasi akun lama.
+            $levels[] = $inherited;
+        }
 
-            if (in_array($level, [self::NONE, self::VIEW, self::MANAGE], true)) {
-                return $level;
+        // A division grants access in addition to legacy per-account levels.
+        // This keeps existing accounts working while allowing multi-division users.
+        foreach (AdminRoleTemplateSupport::mergedLevelsForTemplates($user->divisionKeys()) as $divisionPrefix => $level) {
+            if ($divisionPrefix === $prefix) {
+                $levels[] = $level;
             }
         }
 
-        // Prefix hasil pemisahan: akun lama belum punya kuncinya, jadi ikut
-        // level prefix induk agar menunya tidak hilang mendadak.
-        if (is_array($storedLevels) && ! array_key_exists($prefix, $storedLevels)) {
-            if ($inherited = self::inheritedLegacyLevel($storedLevels, $prefix)) {
-                return $inherited;
+        // A configured division is the menu authority. Accounts without the
+        // new assignment retain the legacy role/permission fallback.
+        if ($user->divisionKeys() === [] && ! $hasExplicitStoredLevel) {
+            if ($user->can("{$prefix}.manage")) {
+                $levels[] = self::MANAGE;
+            } elseif ($user->can("{$prefix}.view")) {
+                $levels[] = self::VIEW;
+            }
+
+            if ($parent = self::LEGACY_PARENT_PREFIXES[$prefix] ?? null) {
+                if ($user->can("{$parent}.manage") || $user->can("{$parent}.view")) {
+                    $levels[] = self::VIEW;
+                }
             }
         }
 
-        if ($user->can("{$prefix}.manage")) {
-            return self::MANAGE;
-        }
+        return self::highestLevel($levels);
+    }
 
-        if ($user->can("{$prefix}.view")) {
-            return self::VIEW;
-        }
+    /** @param array<int, string> $levels */
+    protected static function highestLevel(array $levels): string
+    {
+        $weights = [self::NONE => 0, self::VIEW => 1, self::MANAGE => 2];
 
-        if ($parent = self::LEGACY_PARENT_PREFIXES[$prefix] ?? null) {
-            if ($user->can("{$parent}.manage") || $user->can("{$parent}.view")) {
-                return self::VIEW;
-            }
-        }
-
-        return self::NONE;
+        return collect($levels)
+            ->filter(fn (string $level): bool => array_key_exists($level, $weights))
+            ->sortByDesc(fn (string $level): int => $weights[$level])
+            ->first() ?? self::NONE;
     }
 
     /**
@@ -415,7 +429,7 @@ class AdminModuleAccess
 
         $storedLevels = self::storedLevelsSnapshot($user);
 
-        if ($storedLevels !== null) {
+        if ($storedLevels !== null && $user->divisionKeys() === []) {
             return $storedLevels;
         }
 

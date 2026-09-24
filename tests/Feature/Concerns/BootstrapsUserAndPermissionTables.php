@@ -36,6 +36,9 @@ trait BootstrapsUserAndPermissionTables
 
             $defaultPasswordFlagsMigration = require database_path('migrations/2026_03_29_090000_add_default_password_flags_to_users_table.php');
             $defaultPasswordFlagsMigration->up();
+
+            $divisionKeysMigration = require database_path('migrations/2026_08_29_090000_add_division_keys_to_users_table.php');
+            $divisionKeysMigration->up();
         }
 
         if (! Schema::hasTable('admin_access_change_logs')) {

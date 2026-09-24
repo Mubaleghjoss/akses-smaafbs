@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\Admin\AdminModuleAccess;
+use App\Support\Admin\AdminRoleTemplateSupport;
 use App\Support\Admin\Dashboard\DashboardCacheSupport;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
@@ -73,6 +74,7 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
         'allowed_navigation_groups',
         'allowed_navigation_items',
         'module_access_levels',
+        'division_keys',
         'uses_default_password',
         'default_password_reset_at',
         'default_password_changed_at',
@@ -94,6 +96,7 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
             'allowed_navigation_groups' => 'array',
             'allowed_navigation_items' => 'array',
             'module_access_levels' => 'array',
+            'division_keys' => 'array',
             'uses_default_password' => 'boolean',
             'default_password_reset_at' => 'datetime',
             'default_password_changed_at' => 'datetime',
@@ -394,6 +397,17 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
     public function explicitModuleAccessLevels(): array
     {
         return AdminModuleAccess::normalizeLevels($this->module_access_levels ?? []);
+    }
+
+    /**
+     * Division keys are additive: one account may hold several division
+     * assignments while legacy per-account module levels remain valid.
+     *
+     * @return array<int, string>
+     */
+    public function divisionKeys(): array
+    {
+        return AdminRoleTemplateSupport::normalizeTemplateKeys($this->division_keys ?? []);
     }
 
     public function moduleAccessLevel(string $prefix): string

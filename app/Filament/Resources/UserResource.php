@@ -210,6 +210,7 @@ class UserResource extends Resource
             ->description('Pilih template untuk mengisi role dasar dan akses modul secara otomatis. Setelah dipilih, pengaturan tetap bisa disesuaikan manual.')
             ->compact()
             ->schema([
+                Forms\Components\Hidden::make('division_keys'),
                 Forms\Components\Select::make('access_template_preset')
                     ->label('Template Divisi')
                     ->options(AdminRoleTemplateSupport::options())
@@ -226,6 +227,8 @@ class UserResource extends Resource
                         }
 
                         $set('roles', $templateState['roles']);
+                        $set('division_keys', $state ? [$state] : []);
+                        $set('access_template_addons', $state ? [$state] : []);
                         $set('module_access_levels', $templateState['module_access_levels']);
                         $set('allowed_navigation_items', $templateState['allowed_navigation_items']);
                     }),
@@ -235,24 +238,21 @@ class UserResource extends Resource
                         ?: 'Pilih template jika ingin mengisi role dan akses modul lebih cepat.')
                     ->columnSpanFull(),
                 Forms\Components\CheckboxList::make('access_template_addons')
-                    ->label('Akses Tambahan Divisi')
+                    ->label('Divisi Aktif (bisa lebih dari satu)')
                     ->options(AdminRoleTemplateSupport::options())
                     ->columns(['default' => 1, 'md' => 2])
                     ->default(fn (): array => static::defaultAccessAddonState())
                     ->dehydrated(false)
                     ->live()
-                    ->helperText('Cocok untuk akun guru yang mendapat tugas tambahan, misalnya guru sekaligus sarpras, BK, atau humas. Preset ini menambah akses modul tanpa harus mengganti role utama akun.')
+                    ->helperText('Pilih satu atau beberapa divisi yang aktif untuk akun ini, termasuk Penilai. Akun dapat memegang beberapa divisi sekaligus; pilihan ini tidak menghapus role utama akun.')
                     ->afterStateUpdated(function (Set $set, Get $get, mixed $state): void {
-                        $templateKeys = collect($state)
+                        $templateKeys = collect($state ?? [])
                             ->map(fn ($value): string => trim((string) $value))
                             ->filter(fn (string $value): bool => array_key_exists($value, AdminRoleTemplateSupport::definitions()))
                             ->values()
                             ->all();
 
-                        if ($templateKeys === []) {
-                            return;
-                        }
-
+                        $set('division_keys', $templateKeys);
                         $set('module_access_levels', static::mergeAddonTemplatesIntoLevels(
                             $get('module_access_levels') ?? static::createDefaultModuleAccessLevels(),
                             $templateKeys,
@@ -261,7 +261,7 @@ class UserResource extends Resource
                     ->columnSpanFull(),
                 Forms\Components\Placeholder::make('access_template_addon_help')
                     ->label('Catatan Tugas Tambahan')
-                    ->content('Untuk akun guru yang sudah ada, cukup tambah akses divisi yang dibutuhkan. Role guru tetap bisa dipakai, sementara sidebar dan modul tambahan akan mengikuti matrix akses yang sudah digabung.')
+                    ->content('Daftar ini adalah seluruh divisi aktif akun, bukan hanya tambahan. Role utama tetap dipertahankan, sementara sidebar dan modul mengikuti gabungan akses dari semua divisi yang dipilih.')
                     ->columnSpanFull(),
             ]);
     }
@@ -1000,10 +1000,14 @@ class UserResource extends Resource
         }
 
         $beforeLevels = AdminModuleAccess::effectiveLevels($user);
-        $mergedLevels = AdminModuleAccess::normalizeLevels(array_merge(
-            $beforeLevels,
-            AdminRoleTemplateSupport::mergedLevelsForTemplates($templateKeys),
-        ));
+        $divisionKeys = collect($user->divisionKeys())
+            ->merge($templateKeys)
+            ->unique()
+            ->values()
+            ->all();
+        $mergedLevels = AdminModuleAccess::effectiveLevels($user->forceFill([
+            'division_keys' => $divisionKeys,
+        ]));
         $roleState = static::roleIdsForUser($user);
         $pamongRoleNames = AdminRoleTemplateSupport::boardingPamongRoleNamesForTemplates($templateKeys);
 
@@ -1022,7 +1026,8 @@ class UserResource extends Resource
 
         static::syncScopedModuleConfiguration($user, [
             'roles' => $roleState,
-            'module_access_levels' => $mergedLevels,
+            'module_access_levels' => $user->explicitModuleAccessLevels(),
+            'division_keys' => $divisionKeys,
             'allowed_navigation_items' => $user->allowed_navigation_items ?? [],
         ]);
 
@@ -1051,14 +1056,17 @@ class UserResource extends Resource
         }
 
         $beforeLevels = AdminModuleAccess::effectiveLevels($user);
-        $reducedLevels = AdminRoleTemplateSupport::removeTemplatesFromLevels(
-            $beforeLevels,
-            $templateKeys,
-        );
+        $divisionKeys = collect($user->divisionKeys())
+            ->reject(fn (string $key): bool => in_array($key, $templateKeys, true))
+            ->values()
+            ->all();
+        $user->forceFill(['division_keys' => $divisionKeys]);
+        $reducedLevels = AdminModuleAccess::effectiveLevels($user);
 
         static::syncScopedModuleConfiguration($user, [
             'roles' => static::roleIdsForUser($user),
-            'module_access_levels' => $reducedLevels,
+            'module_access_levels' => $user->explicitModuleAccessLevels(),
+            'division_keys' => $divisionKeys,
             'allowed_navigation_items' => $user->allowed_navigation_items ?? [],
         ]);
 
@@ -1199,6 +1207,7 @@ class UserResource extends Resource
             'module_access_levels' => AdminModuleAccess::effectiveLevels($user),
             'allowed_navigation_items' => $user->allowed_navigation_items ?? [],
             'navigation_selection_explicit' => $user->hasExplicitNavigationSelection(),
+            'division_keys' => $user->divisionKeys(),
         ];
     }
 
@@ -1248,6 +1257,15 @@ class UserResource extends Resource
             $baseLevels,
             $state['module_access_levels'] ?? [],
         ));
+        $divisionKeys = AdminRoleTemplateSupport::normalizeTemplateKeys($state['division_keys'] ?? $user->divisionKeys());
+        $divisionLevels = AdminRoleTemplateSupport::mergedLevelsForTemplates($divisionKeys);
+
+        foreach ($divisionLevels as $prefix => $level) {
+            if ($level === AdminModuleAccess::MANAGE || ($level === AdminModuleAccess::VIEW && $managedLevels[$prefix] === AdminModuleAccess::NONE)) {
+                $managedLevels[$prefix] = $level;
+            }
+        }
+
         $selectableNavigationClasses = [
             ...array_keys(AdminModuleAccess::navigationItemOptions()),
             Dashboard::class,
@@ -1284,7 +1302,8 @@ class UserResource extends Resource
             : AdminModuleAccess::deriveNavigationGroups($resolvedItems);
 
         $user->forceFill([
-            'module_access_levels' => $managedLevels,
+            'module_access_levels' => AdminModuleAccess::normalizeLevels($state['module_access_levels'] ?? []),
+            'division_keys' => $divisionKeys,
             'allowed_navigation_groups' => $resolvedGroups,
             'allowed_navigation_items' => $roleNames->contains('admin') ? [] : $storedItems,
         ])->saveQuietly();

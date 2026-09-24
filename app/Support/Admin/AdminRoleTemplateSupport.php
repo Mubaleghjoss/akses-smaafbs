@@ -130,6 +130,13 @@ class AdminRoleTemplateSupport
                 'manage' => ['guru_tendik', 'jenis_berkas', 'berkas_guru'],
                 'view' => [],
             ],
+            'penilai' => [
+                'label' => 'Penilai',
+                'description' => 'Tim penilai dengan akses penuh ke menu Nilai Ujian/Penilaian.',
+                'roles' => ['guru'],
+                'manage' => ['penilaian'],
+                'view' => [],
+            ],
             'perpustakaan' => [
                 'label' => 'Perpustakaan',
                 'description' => 'Operator perpustakaan untuk materi literasi, pertanyaan, responden, dan analisa plagiat.',

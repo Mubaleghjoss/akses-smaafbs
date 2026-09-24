@@ -56,6 +56,43 @@ class GuruModulesAndUksTest extends TestCase
         $this->bootstrapAdminFeatureTables();
     }
 
+    public function test_division_assignments_are_multi_value_and_penilai_grants_assessment_menu(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Guru Penilai',
+            'username' => 'guru-penilai',
+            'password' => 'secret123',
+        ]);
+        $user->assignRole('guru');
+
+        UserResource::applyDivisionTemplatesToUser($user, ['sarpras', 'penilai']);
+        $user->refresh();
+
+        $this->assertSame(['sarpras', 'penilai'], $user->divisionKeys());
+        $this->assertTrue($user->canManageModule('sarpras_bosp_inventory'));
+        $this->assertTrue($user->canManageModule('penilaian'));
+
+        $unrelatedUser = User::query()->create([
+            'name' => 'Guru Sarpras',
+            'username' => 'guru-sarpras',
+            'password' => 'secret123',
+            'division_keys' => ['sarpras'],
+        ]);
+        $unrelatedUser->assignRole('guru');
+
+        $this->assertFalse($unrelatedUser->canViewModule('penilaian'));
+
+        $legacyUser = User::query()->create([
+            'name' => 'Akun Lama Penilai',
+            'username' => 'akun-lama-penilai',
+            'password' => 'secret123',
+            'module_access_levels' => ['penilaian' => AdminModuleAccess::VIEW],
+        ]);
+
+        $this->assertSame([], $legacyUser->divisionKeys());
+        $this->assertTrue($legacyUser->canViewModule('penilaian'));
+    }
+
     public function test_guru_only_sees_own_profile_and_private_documents(): void
     {
         $jenisBerkas = JenisBerkas::query()->create([

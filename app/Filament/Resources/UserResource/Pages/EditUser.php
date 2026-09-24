@@ -24,7 +24,8 @@ class EditUser extends EditRecord
             ),
         );
         $data['navigation_selection_explicit'] = true;
-        $data['access_template_addons'] = UserResource::defaultAccessAddonState();
+        $data['access_template_addons'] = $record->divisionKeys();
+        $data['division_keys'] = $record->divisionKeys();
 
         if ($data['access_template_addons'] !== []) {
             $data['module_access_levels'] = UserResource::mergeAddonTemplatesIntoLevels(
