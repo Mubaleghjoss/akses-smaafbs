@@ -98,7 +98,7 @@ class UserResource extends Resource
     {
         return $schema
             ->schema([
-                static::accessTemplateSection(),
+                ...static::accessTemplateSections(),
                 Section::make('Akun Pengguna Admin')
                     ->description('Atur identitas akun, role, dan scope dasar. Level akses modul serta menu sidebar akan mengikuti pengaturan di bawah secara otomatis.')
                     ->columns(['default' => 1, 'md' => 2])
@@ -204,66 +204,71 @@ class UserResource extends Resource
     /**
      * @return array<int, Section>
      */
-    protected static function accessTemplateSection(): Section
+    protected static function accessTemplateSections(): array
     {
-        return Section::make('Preset Akses')
-            ->description('Pilih template untuk mengisi role dasar dan akses modul secara otomatis. Setelah dipilih, pengaturan tetap bisa disesuaikan manual.')
-            ->compact()
-            ->schema([
-                Forms\Components\Hidden::make('division_keys'),
-                Forms\Components\Select::make('access_template_preset')
-                    ->label('Template Divisi')
-                    ->options(AdminRoleTemplateSupport::options())
-                    ->default(fn (): ?string => static::requestedAccessTemplate())
-                    ->native(false)
-                    ->searchable()
-                    ->live()
-                    ->dehydrated(false)
-                    ->afterStateUpdated(function (Set $set, ?string $state): void {
-                        $templateState = AdminRoleTemplateSupport::formState($state);
+        return [
+            Section::make('Divisi & Akses Utama')
+                ->description('Pilih seluruh divisi yang aktif pada akun ini. Akses modul dan menu akan mengikuti gabungan divisi serta pengaturan akun.')
+                ->compact()
+                ->schema([
+                    Forms\Components\Hidden::make('division_keys'),
+                    Forms\Components\CheckboxList::make('access_template_addons')
+                        ->label('Divisi Aktif (bisa lebih dari satu)')
+                        ->options(AdminRoleTemplateSupport::options())
+                        ->columns(['default' => 1, 'md' => 2])
+                        ->default(fn (): array => static::defaultAccessAddonState())
+                        ->dehydrated(false)
+                        ->live()
+                        ->helperText('Pilih satu atau beberapa divisi, termasuk Penilai. Pilihan ini tidak menghapus role utama akun.')
+                        ->afterStateUpdated(function (Set $set, Get $get, mixed $state): void {
+                            $templateKeys = static::normalizeDivisionTemplateKeys((array) ($state ?? []));
 
-                        if (! $templateState) {
-                            return;
-                        }
+                            $set('division_keys', $templateKeys);
+                            $set('module_access_levels', static::mergeAddonTemplatesIntoLevels(
+                                $get('module_access_levels') ?? static::createDefaultModuleAccessLevels(),
+                                $templateKeys,
+                            ));
+                        })
+                        ->columnSpanFull(),
+                    Forms\Components\Placeholder::make('active_menu_summary')
+                        ->label('Ringkasan Menu Aktif')
+                        ->content(fn (Get $get): string => static::activeMenuSummary($get))
+                        ->columnSpanFull(),
+                ]),
+            Section::make('Preset Awal (Opsional)')
+                ->description('Shortcut untuk mengisi role, divisi, dan akses awal saat membuat akun. Gunakan bila perlu; Divisi Aktif tetap menjadi pengaturan utama.')
+                ->compact()
+                ->collapsible()
+                ->collapsed()
+                ->schema([
+                    Forms\Components\Select::make('access_template_preset')
+                        ->label('Template awal')
+                        ->options(AdminRoleTemplateSupport::options())
+                        ->default(fn (): ?string => static::requestedAccessTemplate())
+                        ->native(false)
+                        ->searchable()
+                        ->live()
+                        ->dehydrated(false)
+                        ->afterStateUpdated(function (Set $set, ?string $state): void {
+                            $templateState = AdminRoleTemplateSupport::formState($state);
 
-                        $set('roles', $templateState['roles']);
-                        $set('division_keys', $state ? [$state] : []);
-                        $set('access_template_addons', $state ? [$state] : []);
-                        $set('module_access_levels', $templateState['module_access_levels']);
-                        $set('allowed_navigation_items', $templateState['allowed_navigation_items']);
-                    }),
-                Forms\Components\Placeholder::make('access_template_help')
-                    ->label('Ringkasan Template')
-                    ->content(fn (Get $get): string => AdminRoleTemplateSupport::description($get('access_template_preset'))
-                        ?: 'Pilih template jika ingin mengisi role dan akses modul lebih cepat.')
-                    ->columnSpanFull(),
-                Forms\Components\CheckboxList::make('access_template_addons')
-                    ->label('Divisi Aktif (bisa lebih dari satu)')
-                    ->options(AdminRoleTemplateSupport::options())
-                    ->columns(['default' => 1, 'md' => 2])
-                    ->default(fn (): array => static::defaultAccessAddonState())
-                    ->dehydrated(false)
-                    ->live()
-                    ->helperText('Pilih satu atau beberapa divisi yang aktif untuk akun ini, termasuk Penilai. Akun dapat memegang beberapa divisi sekaligus; pilihan ini tidak menghapus role utama akun.')
-                    ->afterStateUpdated(function (Set $set, Get $get, mixed $state): void {
-                        $templateKeys = collect($state ?? [])
-                            ->map(fn ($value): string => trim((string) $value))
-                            ->filter(fn (string $value): bool => array_key_exists($value, AdminRoleTemplateSupport::definitions()))
-                            ->values()
-                            ->all();
+                            if (! $templateState) {
+                                return;
+                            }
 
-                        $set('division_keys', $templateKeys);
-                        $set('module_access_levels', static::mergeAddonTemplatesIntoLevels(
-                            $get('module_access_levels') ?? static::createDefaultModuleAccessLevels(),
-                            $templateKeys,
-                        ));
-                    })
-                    ->columnSpanFull(),
-                Forms\Components\Placeholder::make('access_template_addon_help')
-                    ->label('Catatan Tugas Tambahan')
-                    ->content('Daftar ini adalah seluruh divisi aktif akun, bukan hanya tambahan. Role utama tetap dipertahankan, sementara sidebar dan modul mengikuti gabungan akses dari semua divisi yang dipilih.')
-                    ->columnSpanFull(),
-            ]);
+                            $set('roles', $templateState['roles']);
+                            $set('division_keys', $state ? [$state] : []);
+                            $set('access_template_addons', $state ? [$state] : []);
+                            $set('module_access_levels', $templateState['module_access_levels']);
+                            $set('allowed_navigation_items', $templateState['allowed_navigation_items']);
+                        }),
+                    Forms\Components\Placeholder::make('access_template_help')
+                        ->label('Efek Template')
+                        ->content(fn (Get $get): string => AdminRoleTemplateSupport::description($get('access_template_preset'))
+                            ?: 'Pilih template untuk mengisi pengaturan awal lebih cepat; Anda tetap dapat mengubah Divisi Aktif dan akses manual.')
+                        ->columnSpanFull(),
+                ]),
+        ];
     }
 
     /**
@@ -275,8 +280,10 @@ class UserResource extends Resource
 
         return [
             Section::make('Hak Akses Menu Admin')
-                ->description('Atur menu yang muncul di sidebar admin. Setiap menu bisa disembunyikan, hanya dilihat, atau dikelola penuh.')
+                ->description('Pengaturan lanjutan untuk menyesuaikan menu di luar Divisi Aktif. Setiap menu bisa disembunyikan, hanya dilihat, atau dikelola penuh.')
                 ->compact()
+                ->collapsible()
+                ->collapsed()
                 ->schema([
                     Forms\Components\Placeholder::make('module_access_summary')
                         ->label('Ringkasan')
@@ -341,6 +348,39 @@ class UserResource extends Resource
             ->native(false)
             ->live()
             ->helperText($definition['description']);
+    }
+
+    protected static function activeMenuSummary(Get $get): string
+    {
+        $levels = AdminModuleAccess::normalizeLevels($get('module_access_levels') ?? static::defaultModuleAccessLevelsSnapshot());
+        $definitions = static::moduleAccessDefinitionsSnapshot();
+        $divisionLabels = collect(static::normalizeDivisionTemplateKeys((array) ($get('access_template_addons') ?? [])))
+            ->map(fn (string $key): string => AdminRoleTemplateSupport::options()[$key])
+            ->all();
+        $roleLabels = static::selectedRoleNames((array) ($get('roles') ?? []))
+            ->map(fn (string $role): string => str($role)->replace('_', ' ')->title()->toString())
+            ->all();
+        $formatMenus = function (string $level) use ($definitions, $levels): string {
+            $labels = $definitions
+                ->filter(fn (array $definition): bool => ($levels[$definition['prefix']] ?? AdminModuleAccess::NONE) === $level)
+                ->pluck('label')
+                ->values();
+            $visible = $labels->take(8)->implode(', ');
+
+            return $labels->count() > 8 ? $visible.' +'.($labels->count() - 8).' lainnya' : $visible;
+        };
+
+        $parts = [];
+        $parts[] = 'Role: '.($roleLabels === [] ? 'belum dipilih' : implode(', ', $roleLabels)).'.';
+        $parts[] = 'Divisi: '.($divisionLabels === [] ? 'belum ada' : implode(', ', $divisionLabels)).'.';
+
+        $managed = $formatMenus(AdminModuleAccess::MANAGE);
+        $viewOnly = $formatMenus(AdminModuleAccess::VIEW);
+        $parts[] = $managed === '' && $viewOnly === ''
+            ? 'Belum ada menu aktif.'
+            : 'Kelola: '.($managed ?: '-').'; Lihat: '.($viewOnly ?: '-').'.';
+
+        return implode(' ', $parts);
     }
 
     protected static function moduleAccessSummary(Get $get): string
