@@ -13,7 +13,6 @@ use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Assessment\AssessmentReportProgressPage;
 use App\Filament\Pages\Assessment\AssessmentSetupWizard;
 use App\Filament\Pages\Assessment\AssessmentTeachingMatrix;
-use App\Filament\Pages\Assessment\QuestionBankBuilderPage;
 use App\Filament\Pages\Assessment\AstsHub;
 use App\Support\Admin\AdminModuleAccess;
 use App\Support\Admin\AdminSchoolNavigation;
@@ -120,12 +119,12 @@ class AssessmentPageMapTest extends TestCase
             );
         }
 
-        foreach ([AssessmentDashboard::class, AstsHub::class, AsasHub::class, AsatHub::class, QuestionBankBuilderPage::class, AssessmentTeachingMatrix::class, AssessmentReportProgressPage::class, AssessmentSetupWizard::class] as $class) {
+        foreach ([AssessmentDashboard::class, AstsHub::class, AsasHub::class, AsatHub::class, AssessmentTeachingMatrix::class, AssessmentReportProgressPage::class, AssessmentSetupWizard::class] as $class) {
             $this->assertTrue(AdminSchoolNavigation::shouldRegisterAssessmentClass($class));
             $this->assertSame('Nilai Ujian', AdminSchoolNavigation::parentItemForClass($class));
         }
 
-        $parent = collect(AdminSchoolNavigation::parentNavigationItems([QuestionBankBuilderPage::class]))->sole();
+        $parent = collect(AdminSchoolNavigation::parentNavigationItems([AssessmentDashboard::class]))->sole();
         $this->assertSame('heroicon-o-clipboard-document-check', $parent->getIcon());
     }
 
@@ -137,8 +136,6 @@ class AssessmentPageMapTest extends TestCase
             AsasHub::class,
             AsatHub::class,
             AssessmentTeachingMatrix::class,
-            \App\Filament\Pages\Assessment\OnlineExamPage::class,
-            QuestionBankBuilderPage::class,
             AssessmentReportProgressPage::class,
             AssessmentSetupWizard::class,
         ];
@@ -149,12 +146,10 @@ class AssessmentPageMapTest extends TestCase
             'ASAS — Akhir Semester',
             'ASAT — Akhir Tahun',
             'Penugasan Guru & Mapel',
-            'Ujian Online',
-            'Bank Soal',
             'Progres & Rapor',
             'Pengaturan',
         ], array_map(fn (string $class): string => $class::getNavigationLabel(), $menu));
-        $this->assertSame([0, 10, 11, 12, 20, 30, 40, 50, 60], array_map(
+        $this->assertSame([0, 10, 11, 12, 20, 50, 60], array_map(
             fn (string $class): ?int => $class::getNavigationSort(),
             $menu,
         ));
@@ -198,7 +193,7 @@ class AssessmentPageMapTest extends TestCase
             }
         }
 
-        foreach ([AssessmentSetupWizard::class, AssessmentTeachingMatrix::class, QuestionBankBuilderPage::class, AsasHub::class] as $class) {
+        foreach ([AssessmentSetupWizard::class, AssessmentTeachingMatrix::class, AsasHub::class] as $class) {
             $this->assertContains($class, $classes);
         }
     }

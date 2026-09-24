@@ -28,9 +28,6 @@ use App\Http\Controllers\AssessmentReportController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\GuruTendikProfileController;
 use App\Http\Controllers\HomeController;
-use App\Http\Controllers\Exam\ExamAdminController;
-use App\Http\Controllers\Exam\PublicExamController;
-use App\Http\Controllers\Exam\QuestionSetController;
 use App\Http\Controllers\LibraryController;
 use App\Http\Controllers\NewsController;
 use App\Http\Controllers\PerpustakaanLiteracyProgramController;
@@ -103,33 +100,6 @@ Route::middleware('auth')->group(function (): void {
         '/admin/penilaian/rapor/kelas/{classReportArtifact}/download',
         [AssessmentReportController::class, 'downloadClass'],
     )->name('assessment.reports.class.download');
-});
-
-Route::middleware('auth')->prefix('/admin/ujian')->group(function (): void {
-    Route::post('/paket', [QuestionSetController::class, 'store'])->name('admin.exam.question-sets.store');
-    Route::put('/paket/{questionSet}', [QuestionSetController::class, 'update'])->name('admin.exam.question-sets.update');
-    Route::post('/paket/{questionSet}/soal', [QuestionSetController::class, 'addQuestion'])->name('admin.exam.question-sets.questions.store');
-    Route::put('/soal/{question}', [QuestionSetController::class, 'updateQuestion'])->name('admin.exam.questions.update');
-    Route::get('/paket/{questionSet}/preview/{version}', [QuestionSetController::class, 'preview'])->name('admin.exam.question-sets.preview');
-    Route::post('/ai', [ExamAdminController::class, 'saveAi'])->name('admin.exam.ai.save');
-    Route::post('/ai/test', [ExamAdminController::class, 'testAi'])->name('admin.exam.ai.test');
-    Route::post('/jadwal', [ExamAdminController::class, 'createSchedule'])->name('admin.exam.schedules.store');
-    Route::post('/jadwal/{schedule}/peserta', [ExamAdminController::class, 'addStudent'])->name('admin.exam.schedules.students.store');
-    Route::post('/attempt/{attempt}/reset-belum-mulai', [ExamAdminController::class, 'resetNotStarted'])->name('admin.exam.attempts.reset-not-started');
-    Route::post('/attempt/{attempt}/buka-ulang', [ExamAdminController::class, 'reopen'])->name('admin.exam.attempts.reopen');
-    Route::post('/jawaban/{answer}/nilai', [ExamAdminController::class, 'grade'])->name('admin.exam.answers.grade');
-});
-
-Route::prefix('/ujian')->middleware('throttle:120,1')->group(function (): void {
-    Route::get('/', [PublicExamController::class, 'index'])->name('exam.index');
-    Route::post('/verifikasi', [PublicExamController::class, 'verify'])->middleware('throttle:10,1')->name('exam.verify');
-    Route::get('/{publicId}', [PublicExamController::class, 'work'])->name('exam.work');
-    Route::post('/{publicId}/mulai', [PublicExamController::class, 'start'])->name('exam.start');
-    Route::post('/{publicId}/jawaban', [PublicExamController::class, 'saveAnswer'])->name('exam.answer');
-    Route::post('/{publicId}/event', [PublicExamController::class, 'event'])->name('exam.event');
-    Route::post('/{publicId}/unlock', [PublicExamController::class, 'unlock'])->middleware('throttle:10,1')->name('exam.unlock');
-    Route::post('/{publicId}/submit', [PublicExamController::class, 'submit'])->name('exam.submit');
-    Route::get('/{publicId}/jawaban-darurat.csv', [PublicExamController::class, 'emergency'])->name('exam.emergency');
 });
 
 Route::get(

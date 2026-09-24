@@ -12,8 +12,6 @@ use App\Filament\Pages\Assessment\AssessmentMasterImport;
 use App\Filament\Pages\Assessment\AssessmentReportProgressPage;
 use App\Filament\Pages\Assessment\AssessmentSetupWizard;
 use App\Filament\Pages\Assessment\AssessmentTeachingMatrix;
-use App\Filament\Pages\Assessment\QuestionBankBuilderPage;
-use App\Filament\Pages\Assessment\OnlineExamPage;
 use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\Assessment\AstsInputScores;
 use App\Filament\Resources\AssessmentAuditLogResource\Pages\ListAssessmentAuditLogs;
@@ -448,7 +446,7 @@ class AssessmentAdminIntegrationTest extends TestCase
 
         $this->actingAs($manager);
 
-        foreach ([AssessmentSetupWizard::class, AssessmentDashboard::class, AstsHub::class, AsasHub::class, AsatHub::class, AssessmentTeachingMatrix::class, AssessmentReportProgressPage::class, QuestionBankBuilderPage::class, OnlineExamPage::class] as $class) {
+        foreach ([AssessmentSetupWizard::class, AssessmentDashboard::class, AstsHub::class, AsasHub::class, AsatHub::class, AssessmentTeachingMatrix::class, AssessmentReportProgressPage::class] as $class) {
             $this->assertTrue($class::shouldRegisterNavigation(), "{$class} harus terlihat untuk pengelola penilaian.");
             $this->assertSame('Nilai Ujian', AdminSchoolNavigation::parentItemForClass($class));
         }
@@ -482,7 +480,6 @@ class AssessmentAdminIntegrationTest extends TestCase
         );
         $assessmentParents = collect(AdminSchoolNavigation::parentNavigationItems([
             AssessmentDashboard::class,
-            QuestionBankBuilderPage::class,
             AstsHub::class,
             AsasHub::class,
         ]))->keyBy(fn ($item): string => $item->getLabel());
@@ -504,14 +501,6 @@ class AssessmentAdminIntegrationTest extends TestCase
             AdminModuleAccess::itemClassesForLevels(['penilaian' => AdminModuleAccess::VIEW]),
         );
         $this->assertContains(
-            QuestionBankBuilderPage::class,
-            AdminModuleAccess::itemClassesForLevels(['penilaian' => AdminModuleAccess::VIEW]),
-        );
-        $this->assertSame(
-            '/admin/penilaian/penyusunan-soal',
-            parse_url(QuestionBankBuilderPage::getUrl(), PHP_URL_PATH),
-        );
-        $this->assertContains(
             AsasHub::class,
             AdminModuleAccess::itemClassesForLevels(['penilaian' => AdminModuleAccess::VIEW]),
         );
@@ -527,10 +516,6 @@ class AssessmentAdminIntegrationTest extends TestCase
         $this->actingAs($viewer);
         $this->assertFalse(AssessmentDashboard::canAccess());
         $this->assertFalse(AssessmentDashboard::shouldRegisterNavigation());
-        $this->assertFalse(QuestionBankBuilderPage::canAccess());
-        $this->assertFalse(QuestionBankBuilderPage::shouldRegisterNavigation());
-        $this->assertFalse(OnlineExamPage::canAccess());
-        $this->assertFalse(OnlineExamPage::shouldRegisterNavigation());
         // Akun pembaca tanpa tautan guru tidak melihat fokus ujian teknis.
         $this->assertFalse(AstsHub::shouldRegisterNavigation());
         $this->assertFalse(AsasHub::shouldRegisterNavigation());

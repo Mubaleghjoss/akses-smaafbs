@@ -17,7 +17,6 @@ use App\Filament\Pages\Assessment\AssessmentMasterImport;
 use App\Filament\Pages\Assessment\AssessmentReportProgressPage;
 use App\Filament\Pages\Assessment\AssessmentSetupWizard;
 use App\Filament\Pages\Assessment\AssessmentTeachingMatrix;
-use App\Filament\Pages\Assessment\QuestionBankBuilderPage;
 use App\Filament\Pages\Assessment\AstsHomeroomRecap;
 use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\Assessment\AstsInputScores;
@@ -183,7 +182,6 @@ class AdminModuleAccess
             AssessmentReportProgressPage::class,
             AssessmentSetupWizard::class,
             AssessmentTeachingMatrix::class,
-            QuestionBankBuilderPage::class,
             AstsHub::class,
             AsasHub::class,
             AsatHub::class,

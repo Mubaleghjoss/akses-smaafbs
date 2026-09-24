@@ -11,8 +11,6 @@ use App\Filament\Pages\Assessment\AsatHub;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Assessment\AssessmentSetupWizard;
 use App\Filament\Pages\Assessment\AssessmentTeachingMatrix;
-use App\Filament\Pages\Assessment\OnlineExamPage;
-use App\Filament\Pages\Assessment\QuestionBankBuilderPage;
 use App\Filament\Pages\Assessment\AsasSubmissionStatus;
 use App\Filament\Pages\Assessment\AstsHomeroomRecap;
 use App\Filament\Pages\Assessment\AstsHub;
@@ -1077,8 +1075,6 @@ class AssessmentTeacherExperienceTest extends TestCase
         $this->assertFalse(AssessmentDashboard::shouldRegisterNavigation());
         $this->assertFalse(AssessmentSetupWizard::shouldRegisterNavigation());
         $this->assertFalse(AssessmentTeachingMatrix::shouldRegisterNavigation());
-        $this->assertFalse(QuestionBankBuilderPage::shouldRegisterNavigation());
-        $this->assertFalse(OnlineExamPage::shouldRegisterNavigation());
 
         $asatVerification->update(['status' => AssessmentPeriodStatus::DRAFT]);
         $this->assertFalse(AsatHub::shouldRegisterNavigation());
