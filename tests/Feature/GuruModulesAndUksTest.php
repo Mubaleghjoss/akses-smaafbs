@@ -12,6 +12,7 @@ use App\Filament\Resources\DataSiswaResource;
 use App\Filament\Resources\DataSiswaResource\Pages\ManageDataSiswas;
 use App\Filament\Resources\GuruTendikResource;
 use App\Filament\Resources\GuruTendikResource\Pages\ListGuruTendiks;
+use App\Filament\Resources\PerpustakaanLiterasiMaterialResource;
 use App\Filament\Resources\PrestasiResource;
 use App\Filament\Resources\UserResource;
 use App\Filament\Widgets\GuruTendikAccountStatsOverview;
@@ -42,6 +43,7 @@ use Livewire\Livewire;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PHPUnit\Framework\Attributes\RunInSeparateProcess;
+use Spatie\Permission\Models\Role;
 use Tests\Feature\Concerns\BootstrapsAdminFeatureTables;
 use Tests\TestCase;
 
@@ -56,41 +58,75 @@ class GuruModulesAndUksTest extends TestCase
         $this->bootstrapAdminFeatureTables();
     }
 
-    public function test_division_assignments_are_multi_value_and_penilai_grants_assessment_menu(): void
+    public function test_perpustakaan_access_requires_division_or_explicit_legacy_module_access(): void
     {
-        $user = User::query()->create([
-            'name' => 'Guru Penilai',
-            'username' => 'guru-penilai',
+        // Defend against a pre-existing database where the generic guru role
+        // was accidentally granted the library permissions.
+        Role::query()->where('name', 'guru')->firstOrFail()->givePermissionTo([
+            'perpustakaan_literasi.view',
+            'perpustakaan_literasi.manage',
+        ]);
+
+        $genericGuru = User::query()->create([
+            'name' => 'Guru Umum',
+            'username' => 'guru-umum',
             'password' => 'secret123',
         ]);
-        $user->assignRole('guru');
+        $genericGuru->assignRole('guru');
+        $genericGuru->refresh();
 
-        UserResource::applyDivisionTemplatesToUser($user, ['sarpras', 'penilai']);
-        $user->refresh();
+        $this->assertTrue($genericGuru->can('perpustakaan_literasi.manage'));
+        $this->assertFalse($genericGuru->canViewModule('perpustakaan_literasi'));
+        $this->assertNotContains(PerpustakaanLiterasiMaterialResource::class, $genericGuru->resolvedNavigationItems());
+        $this->assertNotContains('Perpustakaan', $genericGuru->resolvedNavigationGroups());
 
-        $this->assertSame(['sarpras', 'penilai'], $user->divisionKeys());
-        $this->assertTrue($user->canManageModule('sarpras_bosp_inventory'));
-        $this->assertTrue($user->canManageModule('penilaian'));
-
-        $unrelatedUser = User::query()->create([
-            'name' => 'Guru Sarpras',
-            'username' => 'guru-sarpras',
+        $libraryGuru = User::query()->create([
+            'name' => 'Guru Perpustakaan',
+            'username' => 'guru-perpustakaan',
             'password' => 'secret123',
-            'division_keys' => ['sarpras'],
         ]);
-        $unrelatedUser->assignRole('guru');
+        $libraryGuru->assignRole('guru');
+        UserResource::applyDivisionTemplatesToUser($libraryGuru, ['perpustakaan']);
+        $libraryGuru->refresh();
 
-        $this->assertFalse($unrelatedUser->canViewModule('penilaian'));
+        $this->assertSame(['perpustakaan'], $libraryGuru->divisionKeys());
+        $this->assertTrue($libraryGuru->canViewModule('perpustakaan_literasi'));
+        $this->assertTrue($libraryGuru->canManageModule('perpustakaan_literasi'));
+        $this->assertContains(PerpustakaanLiterasiMaterialResource::class, $libraryGuru->resolvedNavigationItems());
+
+        $kepalaPerpus = User::query()->create([
+            'name' => 'Kepala Perpustakaan',
+            'username' => 'kepala-perpustakaan',
+            'password' => 'secret123',
+        ]);
+        $kepalaPerpus->assignRole('kepala_perpus');
+
+        $this->assertTrue($kepalaPerpus->canManageModule('perpustakaan_literasi'));
+
+        $multiDivisionGuru = User::query()->create([
+            'name' => 'Guru Penilai Perpustakaan',
+            'username' => 'guru-penilai-perpustakaan',
+            'password' => 'secret123',
+        ]);
+        $multiDivisionGuru->assignRole('guru');
+        UserResource::applyDivisionTemplatesToUser($multiDivisionGuru, ['penilai', 'perpustakaan']);
+        $multiDivisionGuru->refresh();
+
+        $this->assertSame(['penilai', 'perpustakaan'], $multiDivisionGuru->divisionKeys());
+        $this->assertTrue($multiDivisionGuru->canManageModule('penilaian'));
+        $this->assertTrue($multiDivisionGuru->canManageModule('perpustakaan_literasi'));
 
         $legacyUser = User::query()->create([
-            'name' => 'Akun Lama Penilai',
-            'username' => 'akun-lama-penilai',
+            'name' => 'Akun Lama Perpustakaan',
+            'username' => 'akun-lama-perpustakaan',
             'password' => 'secret123',
-            'module_access_levels' => ['penilaian' => AdminModuleAccess::VIEW],
+            'module_access_levels' => ['perpustakaan_literasi' => AdminModuleAccess::MANAGE],
         ]);
+        $legacyUser->assignRole('guru');
 
         $this->assertSame([], $legacyUser->divisionKeys());
-        $this->assertTrue($legacyUser->canViewModule('penilaian'));
+        $this->assertTrue($legacyUser->canViewModule('perpustakaan_literasi'));
+        $this->assertTrue($legacyUser->canManageModule('perpustakaan_literasi'));
     }
 
     public function test_guru_only_sees_own_profile_and_private_documents(): void

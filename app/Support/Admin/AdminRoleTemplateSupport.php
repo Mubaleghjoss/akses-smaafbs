@@ -138,8 +138,8 @@ class AdminRoleTemplateSupport
                 'view' => [],
             ],
             'perpustakaan' => [
-                'label' => 'Perpustakaan',
-                'description' => 'Operator perpustakaan untuk materi literasi, pertanyaan, responden, dan analisa plagiat.',
+                'label' => 'Divisi Perpustakaan',
+                'description' => 'Operator perpustakaan/literasi untuk materi, pertanyaan, responden, dan analisa plagiat.',
                 'roles' => ['kepala_perpus'],
                 'manage' => ['perpustakaan_literasi'],
                 'view' => ['data_siswa', 'rombel'],

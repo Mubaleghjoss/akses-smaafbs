@@ -389,8 +389,12 @@ class AdminModuleAccess
         }
 
         // A configured division is the menu authority. Accounts without the
-        // new assignment retain the legacy role/permission fallback.
-        if ($user->divisionKeys() === [] && ! $hasExplicitStoredLevel) {
+        // new assignment retain the legacy role/permission fallback, except
+        // generic guru access must never open the library module.
+        $mayUseRolePermissionFallback = $prefix !== 'perpustakaan_literasi'
+            || $user->hasRole('kepala_perpus');
+
+        if ($user->divisionKeys() === [] && ! $hasExplicitStoredLevel && $mayUseRolePermissionFallback) {
             if ($user->can("{$prefix}.manage")) {
                 $levels[] = self::MANAGE;
             } elseif ($user->can("{$prefix}.view")) {
