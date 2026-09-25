@@ -10,6 +10,7 @@ use App\Models\Assessment\AssessmentExtracurricularParticipant;
 use App\Models\Assessment\AssessmentExtracurricularScore;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodStudent;
+use App\Models\Assessment\AssessmentPeriodRombel;
 use App\Models\User;
 use App\Support\Assessment\AssessmentExtracurricularImport;
 use App\Support\Assessment\AssessmentExtracurricularWorkflow;
@@ -43,6 +44,9 @@ class AstsExtracurricularScores extends AssessmentPage
     public ?int $newTeacherId = null;
     public ?int $selectedExtracurricularId = null;
     public ?int $selectedStudentId = null;
+    public ?int $selectedRombelId = null;
+    /** @var array<int, int> */
+    public array $selectedStudentIds = [];
     public string $participantStatusFilter = 'all';
     public string $participantSearch = '';
     public mixed $importFile = null;
@@ -88,6 +92,11 @@ class AstsExtracurricularScores extends AssessmentPage
     public function updatedSelectedExtracurricularId(): void
     {
         $this->loadScores();
+    }
+
+    public function updatedSelectedRombelId(): void
+    {
+        $this->selectedStudentIds = [];
     }
 
     public function updatedParticipantStatusFilter(): void
@@ -190,10 +199,52 @@ class AstsExtracurricularScores extends AssessmentPage
         abort_unless($this->isManager(), 403);
         $data = $this->validate(['selectedExtracurricularId' => ['required', 'integer'], 'selectedStudentId' => ['required', 'integer']]);
         $activity = $this->managerActivity($data['selectedExtracurricularId']);
-        $student = AssessmentPeriodStudent::query()->where('assessment_period_id', $this->periodId)->findOrFail($data['selectedStudentId']);
-        AssessmentExtracurricularParticipant::query()->firstOrCreate(['assessment_extracurricular_id' => $activity->id, 'assessment_period_student_id' => $student->id], ['assessment_period_rombel_id' => $student->assessment_period_rombel_id, 'source' => 'manual']);
+        $student = AssessmentPeriodStudent::query()->where('assessment_period_id', $this->periodId)->where('is_active', true)->findOrFail($data['selectedStudentId']);
+        $created = $this->addStudentsToActivity($activity, collect([$student]));
         $this->selectedStudentId = null;
+        $this->notifyParticipantResult($created, 1 - $created);
+    }
+
+    public function addSelectedParticipants(): void
+    {
+        abort_unless($this->isManager(), 403);
+        $data = $this->validate([
+            'selectedExtracurricularId' => ['required', 'integer'],
+            'selectedRombelId' => ['required', 'integer'],
+            'selectedStudentIds' => ['required', 'array', 'min:1'],
+            'selectedStudentIds.*' => ['integer'],
+        ]);
+        $activity = $this->managerActivity($data['selectedExtracurricularId']);
+        $students = AssessmentPeriodStudent::query()->where('assessment_period_id', $this->periodId)
+            ->where('assessment_period_rombel_id', $data['selectedRombelId'])->where('is_active', true)
+            ->whereIn('id', $data['selectedStudentIds'])->get();
+        $created = $this->addStudentsToActivity($activity, $students);
+        $this->selectedStudentIds = [];
+        $this->notifyParticipantResult($created, $students->count() - $created);
+    }
+
+    public function selectAllClassStudents(): void
+    {
+        $this->selectedStudentIds = $this->classStudentOptions->pluck('id')->all();
+    }
+
+    private function addStudentsToActivity(AssessmentExtracurricular $activity, $students): int
+    {
+        $created = 0;
+        foreach ($students as $student) {
+            $participant = AssessmentExtracurricularParticipant::query()->firstOrCreate(
+                ['assessment_extracurricular_id' => $activity->id, 'assessment_period_student_id' => $student->id],
+                ['assessment_period_rombel_id' => $student->assessment_period_rombel_id, 'source' => 'manual']
+            );
+            $created += $participant->wasRecentlyCreated ? 1 : 0;
+        }
         $this->loadScores();
+        return $created;
+    }
+
+    private function notifyParticipantResult(int $created, int $skipped): void
+    {
+        Notification::make()->success()->title("{$created} peserta ditambahkan".($skipped ? ", {$skipped} sudah terdaftar" : ''))->send();
     }
 
     public function downloadImportTemplate()
@@ -263,6 +314,16 @@ class AstsExtracurricularScores extends AssessmentPage
     public function getStudentOptionsProperty(): array
     {
         return AssessmentPeriodStudent::query()->where('assessment_period_id', $this->periodId)->where('is_active', true)->orderBy('rombel_name_snapshot')->orderBy('student_name_snapshot')->get()->mapWithKeys(fn ($student) => [$student->id => $student->rombel_name_snapshot.' - '.$student->student_name_snapshot])->all();
+    }
+
+    public function getRombelOptionsProperty(): array
+    {
+        return AssessmentPeriodRombel::query()->where('assessment_period_id', $this->periodId)->where('is_active', true)->orderBy('rombel_name_snapshot')->pluck('rombel_name_snapshot', 'id')->all();
+    }
+
+    public function getClassStudentOptionsProperty()
+    {
+        return AssessmentPeriodStudent::query()->where('assessment_period_id', $this->periodId)->where('assessment_period_rombel_id', $this->selectedRombelId)->where('is_active', true)->orderBy('student_name_snapshot')->get(['id', 'student_name_snapshot', 'nis_snapshot']);
     }
 
     private function scopedParticipant(int $id): AssessmentExtracurricularParticipant
