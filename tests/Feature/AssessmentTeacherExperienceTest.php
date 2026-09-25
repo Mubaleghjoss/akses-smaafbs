@@ -381,6 +381,17 @@ class AssessmentTeacherExperienceTest extends TestCase
             ->assertSet('assignmentId', null)
             ->assertSet('assignmentMeta', null);
 
+        // A hand-crafted input-nilai URL must not turn wali read access into score entry access.
+        $inputFromUrl = Livewire::actingAs($teacher)
+            ->withQueryParams([
+                'period' => $period->getKey(),
+                'assignment' => $foreignAssignment->getKey(),
+            ])
+            ->test(AstsInputScores::class)
+            ->assertSet('assignmentMeta.subject', 'Bahasa Inggris');
+        $this->assertNotSame($foreignAssignment->getKey(), $inputFromUrl->instance()->assignmentId);
+        $this->assertFalse(Gate::forUser($teacher)->allows('updateScores', $foreignAssignment));
+
         $status = Livewire::actingAs($teacher)
             ->test(AstsSubmissionStatus::class)
             ->set('periodId', $period->getKey());
