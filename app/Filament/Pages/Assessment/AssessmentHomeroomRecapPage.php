@@ -262,7 +262,7 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
                 'social_description' => $report?->social_description,
                 'extracurricular_items' => $this->normalizeStructuredItems(
                     $this->isAstsHomeroomRecap()
-                        ? app(AssessmentExtracurricularReportResolver::class)->resolve($student, $report?->extracurricular_data)
+                        ? app(AssessmentExtracurricularReportResolver::class)->resolve($student, $report?->extracurricular_data, true)
                         : $report?->extracurricular_data,
                 ),
                 'achievement_items' => $this->normalizeStructuredItems(data_get($report?->achievement_data, 'items', $report?->achievement_data)),
@@ -743,7 +743,7 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
                         'updated_by' => auth()->id(),
                     ];
                     $resolvedExtracurricular = $this->isAstsHomeroomRecap()
-                        ? app(AssessmentExtracurricularReportResolver::class)->resolveFor((int) $studentId, (int) $freshHomeroom->assessment_period_id)
+                        ? app(AssessmentExtracurricularReportResolver::class)->resolveFor((int) $studentId, (int) $freshHomeroom->assessment_period_id, [], true)
                         : [];
                     if (! collect($resolvedExtracurricular)->contains('source', 'guru_ekskul')) {
                         $reportData['extracurricular_data'] = $this->normalizeStructuredItems($row['extracurricular_items'] ?? [], true);

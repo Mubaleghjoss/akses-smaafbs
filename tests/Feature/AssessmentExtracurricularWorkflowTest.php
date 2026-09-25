@@ -56,8 +56,9 @@ class AssessmentExtracurricularWorkflowTest extends TestCase
         $resolver = app(AssessmentExtracurricularReportResolver::class);
 
         $manualResolved = $resolver->resolve($this->student, $manual);
-        $this->assertSame('Pramuka', $manualResolved[0]['name']);
-        $this->assertSame('manual_walas', $manualResolved[0]['source']);
+        $this->assertSame([['name' => 'Pramuka', 'description' => 'B']], $manualResolved);
+        $manualResolvedWithSource = $resolver->resolve($this->student, $manual, true);
+        $this->assertSame('manual_walas', $manualResolvedWithSource[0]['source']);
         $score = app(AssessmentExtracurricularWorkflow::class)->save($this->admin, $participant, 'A');
         $this->assertSame('Pramuka', $resolver->resolve($this->student, $manual)[0]['name']);
         app(AssessmentExtracurricularWorkflow::class)->submit($this->admin, $participant->fresh('score'));
@@ -65,7 +66,9 @@ class AssessmentExtracurricularWorkflowTest extends TestCase
         app(AssessmentExtracurricularWorkflow::class)->verify($this->admin, $score->fresh());
 
         $resolved = $resolver->resolve($this->student, $manual);
-        $this->assertSame([['name' => 'Futsal', 'predicate' => 'A', 'description' => 'A', 'source' => 'guru_ekskul']], $resolved);
+        $this->assertSame([['name' => 'Futsal', 'predicate' => 'A', 'description' => 'A']], $resolved);
+        $resolvedWithSource = $resolver->resolve($this->student, $manual, true);
+        $this->assertSame([['name' => 'Futsal', 'predicate' => 'A', 'description' => 'A', 'source' => 'guru_ekskul']], $resolvedWithSource);
     }
 
     public function test_unassigned_user_cannot_edit_participant_score(): void
