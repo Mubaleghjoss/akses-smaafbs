@@ -55,7 +55,9 @@ class AssessmentExtracurricularWorkflowTest extends TestCase
         $manual = [['name' => 'Pramuka', 'description' => 'B']];
         $resolver = app(AssessmentExtracurricularReportResolver::class);
 
-        $this->assertSame('Pramuka', $resolver->resolve($this->student, $manual)[0]['name']);
+        $manualResolved = $resolver->resolve($this->student, $manual);
+        $this->assertSame('Pramuka', $manualResolved[0]['name']);
+        $this->assertSame('manual_walas', $manualResolved[0]['source']);
         $score = app(AssessmentExtracurricularWorkflow::class)->save($this->admin, $participant, 'A');
         $this->assertSame('Pramuka', $resolver->resolve($this->student, $manual)[0]['name']);
         app(AssessmentExtracurricularWorkflow::class)->submit($this->admin, $participant->fresh('score'));

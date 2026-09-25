@@ -939,7 +939,7 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
     }
 
     /**
-     * @return array<int, array{name:string,description:string}>
+     * @return array<int, array{name:string,description:string,source?:string}>
      */
     protected function normalizeStructuredItems(mixed $value, bool $removeBlank = false): array
     {
@@ -949,10 +949,11 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
                     return ['name' => '', 'description' => trim((string) $item)];
                 }
 
-                return [
+                return array_filter([
                     'name' => trim((string) ($item['name'] ?? '')),
                     'description' => trim((string) ($item['description'] ?? $item['grade'] ?? $item['level'] ?? '')),
-                ];
+                    'source' => in_array($item['source'] ?? null, ['guru_ekskul', 'manual_walas'], true) ? $item['source'] : null,
+                ], fn ($item) => $item !== null);
             })
             ->when(
                 $removeBlank,

@@ -21,6 +21,9 @@
                     @error($nameErrorKey) aria-invalid="true" @enderror
                 >
                 @error($nameErrorKey)<small class="assessment-homeroom-field-error" role="alert">{{ $message }}</small>@enderror
+                @if ($field === 'extracurricular_items' && filled($item['source'] ?? null))
+                    <small @class(['assessment-homeroom-source', 'is-teacher' => ($item['source'] ?? null) === 'guru_ekskul'])>Sumber: {{ ($item['source'] ?? null) === 'guru_ekskul' ? 'Guru Ekskul' : 'Manual Walas' }}</small>
+                @endif
             </label>
             <label>
                 <span>{{ $predicateOptions === [] ? 'Keterangan' : 'Predikat' }}</span>

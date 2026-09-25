@@ -50,6 +50,7 @@ final class AssessmentExtracurricularReportResolver
 
         return collect($manual)
             ->filter(fn ($item): bool => is_array($item))
+            ->map(fn (array $item): array => array_merge($item, ['source' => $item['source'] ?? 'manual_walas']))
             ->values()
             ->all();
     }

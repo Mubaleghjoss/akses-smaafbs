@@ -40,6 +40,8 @@ class AstsExtracurricularScores extends AssessmentPage
     public ?int $newTeacherId = null;
     public ?int $selectedExtracurricularId = null;
     public ?int $selectedStudentId = null;
+    public string $participantStatusFilter = 'all';
+    public string $participantSearch = '';
     public mixed $importFile = null;
     /** @var array<int, string|null> */
     public array $predicates = [];
@@ -85,6 +87,16 @@ class AstsExtracurricularScores extends AssessmentPage
         $this->loadScores();
     }
 
+    public function updatedParticipantStatusFilter(): void
+    {
+        $this->loadScores();
+    }
+
+    public function updatedParticipantSearch(): void
+    {
+        $this->loadScores();
+    }
+
     public function isManager(): bool
     {
         $user = auth()->user();
@@ -95,8 +107,29 @@ class AstsExtracurricularScores extends AssessmentPage
     {
         $user = auth()->user();
         return AssessmentExtracurricular::query()->where('assessment_period_id', $this->periodId)->when(! $this->isManager(), fn (Builder $query) => $query->whereHas('teachers', fn (Builder $teachers) => $teachers->whereKey($user->getKey())))
-            ->withCount(['participants', 'participants as verified_count' => fn (Builder $query) => $query->whereHas('score', fn (Builder $score) => $score->where('status', 'verified'))])
+            ->with('teachers:id,name')
+            ->withCount([
+                'participants',
+                'participants as draft_count' => fn (Builder $query) => $query->whereDoesntHave('score')->orWhereHas('score', fn (Builder $score) => $score->where('status', 'draft')),
+                'participants as submitted_count' => fn (Builder $query) => $query->whereHas('score', fn (Builder $score) => $score->where('status', 'submitted')),
+                'participants as verified_count' => fn (Builder $query) => $query->whereHas('score', fn (Builder $score) => $score->where('status', 'verified')),
+                'participants as returned_count' => fn (Builder $query) => $query->whereHas('score', fn (Builder $score) => $score->where('status', 'returned')),
+            ])
             ->orderBy('name')->get();
+    }
+
+    public function getSummaryProperty(): array
+    {
+        $activities = $this->extracurriculars;
+
+        return [
+            'active' => $activities->where('is_active', true)->count(),
+            'participants' => (int) $activities->sum('participants_count'),
+            'draft' => (int) $activities->sum('draft_count'),
+            'submitted' => (int) $activities->sum('submitted_count'),
+            'verified' => (int) $activities->sum('verified_count'),
+            'returned' => (int) $activities->sum('returned_count'),
+        ];
     }
 
     public function getParticipantsProperty()
@@ -106,7 +139,16 @@ class AstsExtracurricularScores extends AssessmentPage
         }
 
         return AssessmentExtracurricularParticipant::query()->where('assessment_extracurricular_id', $this->selectedExtracurricularId)
-            ->with(['student', 'score'])->whereHas('student', fn (Builder $query) => $query->where('is_active', true))->get()
+            ->with(['student', 'score'])->whereHas('student', function (Builder $query): void {
+                $query->where('is_active', true)
+                    ->when(filled($this->participantSearch), fn (Builder $students) => $students->where(fn (Builder $search) => $search
+                        ->where('student_name_snapshot', 'like', '%'.trim($this->participantSearch).'%')
+                        ->orWhere('rombel_name_snapshot', 'like', '%'.trim($this->participantSearch).'%')));
+            })
+            ->when($this->participantStatusFilter === 'draft', fn (Builder $query) => $query->whereHas('score', fn (Builder $score) => $score->where('status', 'draft')))
+            ->when($this->participantStatusFilter === 'unscored', fn (Builder $query) => $query->whereDoesntHave('score'))
+            ->when(in_array($this->participantStatusFilter, ['submitted', 'verified', 'returned'], true), fn (Builder $query) => $query->whereHas('score', fn (Builder $score) => $score->where('status', $this->participantStatusFilter)))
+            ->get()
             ->sortBy(fn ($row) => $row->student->rombel_name_snapshot.'|'.$row->student->student_name_snapshot)->values();
     }
 
