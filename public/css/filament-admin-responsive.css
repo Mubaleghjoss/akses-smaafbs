@@ -10083,3 +10083,45 @@ input[type='checkbox'].fi-checkbox-input:focus-visible {
 .dark .assessment-asts-ranking-table th, .dark .assessment-asts-ranking-table th.assessment-asts-ranking-rank, .dark .assessment-asts-ranking-table th.assessment-asts-ranking-student, .fi-theme-dark .assessment-asts-ranking-table th, .fi-theme-dark .assessment-asts-ranking-table th.assessment-asts-ranking-rank, .fi-theme-dark .assessment-asts-ranking-table th.assessment-asts-ranking-student { border-color: rgb(96 165 250 / .22); background: #1e3a5f; color: #dbeafe; }
 .dark .assessment-asts-ranking-table td, .fi-theme-dark .assessment-asts-ranking-table td { border-color: rgb(96 165 250 / .16); background: #111827; color: #e2e8f0; }
 .dark .assessment-asts-ranking-incomplete, .fi-theme-dark .assessment-asts-ranking-incomplete { background: rgb(120 53 15 / .26) !important; color: #fde68a; }
+
+/* ASTS extracurricular workflow: keep the form hierarchy clear without relying on utility compilation. */
+.assessment-extracurricular-page { display: grid; gap: 1.25rem; min-width: 0; }
+.assessment-extracurricular-field { display: grid; gap: .4rem; min-width: 0; }
+.assessment-extracurricular-field label { color: #334155; font-size: .78rem; font-weight: 800; }
+.assessment-extracurricular-field label span { color: #64748b; font-weight: 500; }
+.assessment-extracurricular-field .fi-input { width: 100%; min-height: 2.75rem; border: 1px solid #cbd5e1; border-radius: .65rem; background: #fff; padding: .55rem .7rem; color: #0f172a; }
+.assessment-extracurricular-field .fi-input:focus { border-color: #0d9488; outline: 2px solid rgb(13 148 136 / .24); outline-offset: 1px; }
+.assessment-extracurricular-field small { color: #64748b; font-size: .72rem; line-height: 1.4; }
+.assessment-extracurricular-period { max-width: 32rem; }
+.assessment-extracurricular-workspace { display: grid; gap: 1rem; }
+.assessment-extracurricular-steps { display: flex; flex-wrap: wrap; gap: .55rem; color: #475569; font-size: .75rem; font-weight: 700; }
+.assessment-extracurricular-steps span { display: inline-flex; align-items: center; gap: .4rem; border-radius: 999px; background: #f1f5f9; padding: .4rem .7rem; }
+.assessment-extracurricular-steps b { display: grid; width: 1.35rem; height: 1.35rem; place-items: center; border-radius: 50%; background: #0f766e; color: #fff; }
+.assessment-extracurricular-section { border: 1px solid #dbe4ee; border-radius: 1rem; background: #f8fafc; padding: 1rem; }
+.assessment-extracurricular-section__heading { margin-bottom: 1rem; }
+.assessment-extracurricular-section__heading h2 { margin: 0; color: #1e293b; font-size: 1rem; font-weight: 800; }
+.assessment-extracurricular-section__heading p { margin: .25rem 0 0; color: #64748b; font-size: .8rem; }
+.assessment-extracurricular-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: .85rem; }
+.assessment-extracurricular-form--master { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.assessment-extracurricular-button { display: flex; align-items: end; min-height: 2.75rem; }
+.assessment-extracurricular-button > * { width: 100%; justify-content: center; min-height: 2.75rem; }
+.assessment-extracurricular-section-grid, .assessment-extracurricular-results { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2.5fr); gap: 1.25rem; }
+.assessment-extracurricular-section-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.assessment-extracurricular-activities { display: grid; gap: .6rem; }
+.assessment-extracurricular-activity { display: grid; gap: .2rem; width: 100%; border: 1px solid #dbe4ee; border-radius: .75rem; background: #fff; padding: .75rem; text-align: left; }
+.assessment-extracurricular-activity.is-selected { border-color: #0d9488; background: #f0fdfa; box-shadow: 0 0 0 1px #0d9488; }
+.assessment-extracurricular-activity span, .assessment-extracurricular-empty { color: #64748b; font-size: .78rem; }
+.assessment-extracurricular-table-wrap { overflow-x: auto; }
+.assessment-extracurricular-table { width: 100%; min-width: 48rem; border-collapse: separate; border-spacing: 0; font-size: .82rem; }
+.assessment-extracurricular-table th, .assessment-extracurricular-table td { border-bottom: 1px solid #e2e8f0; padding: .7rem; text-align: left; vertical-align: top; }
+.assessment-extracurricular-table th { background: #f1f5f9; color: #334155; font-size: .72rem; font-weight: 800; white-space: nowrap; }
+.assessment-extracurricular-table td .fi-input { min-height: 2.5rem; min-width: 7rem; border: 1px solid #cbd5e1; border-radius: .6rem; padding: .45rem .55rem; }
+.assessment-extracurricular-status { display: block; margin-bottom: .5rem; color: #475569; font-size: .7rem; font-weight: 800; text-transform: uppercase; }
+.assessment-extracurricular-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
+.assessment-extracurricular-actions .fi-input { width: 9rem; }
+.dark .assessment-extracurricular-section, .fi-theme-dark .assessment-extracurricular-section { border-color: rgb(255 255 255 / .12); background: #111827; }
+.dark .assessment-extracurricular-field label, .fi-theme-dark .assessment-extracurricular-field label, .dark .assessment-extracurricular-section__heading h2, .fi-theme-dark .assessment-extracurricular-section__heading h2 { color: #e2e8f0; }
+.dark .assessment-extracurricular-field .fi-input, .fi-theme-dark .assessment-extracurricular-field .fi-input, .dark .assessment-extracurricular-table td .fi-input, .fi-theme-dark .assessment-extracurricular-table td .fi-input { border-color: rgb(255 255 255 / .16); background: #0f172a; color: #f8fafc; }
+.dark .assessment-extracurricular-activity, .fi-theme-dark .assessment-extracurricular-activity, .dark .assessment-extracurricular-table th, .fi-theme-dark .assessment-extracurricular-table th { border-color: rgb(255 255 255 / .12); background: #1f2937; color: #e2e8f0; }
+@media (max-width: 900px) { .assessment-extracurricular-form--master, .assessment-extracurricular-section-grid, .assessment-extracurricular-results { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) { .assessment-extracurricular-form { grid-template-columns: minmax(0, 1fr); } .assessment-extracurricular-table { min-width: 0; } .assessment-extracurricular-table thead { display: none; } .assessment-extracurricular-table, .assessment-extracurricular-table tbody, .assessment-extracurricular-table tr, .assessment-extracurricular-table td { display: block; width: 100%; } .assessment-extracurricular-table tbody { display: grid; gap: .75rem; } .assessment-extracurricular-table tr { overflow: hidden; border: 1px solid #dbe4ee; border-radius: .8rem; } .assessment-extracurricular-table td { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: .7rem; } .assessment-extracurricular-table td::before { content: attr(data-label); color: #64748b; font-size: .7rem; font-weight: 800; text-transform: uppercase; } .assessment-extracurricular-table td[colspan] { display: block; text-align: center; } }
