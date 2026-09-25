@@ -821,8 +821,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
     {
         return $user->hasFullAdminAccess()
             || $user->canManageModule('penilaian')
-            || $user->hasRole('kurikulum')
-            || $user->can('penilaian.verify');
+            || $user->hasRole('kurikulum');
     }
 
     private function scoreUpdaterBadge(?User $updater): ?string

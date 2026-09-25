@@ -55,8 +55,7 @@ abstract class AssessmentPolicy
     {
         return $this->isFullAdmin($user)
             || $user->canManageModule('penilaian')
-            || $user->hasRole('kurikulum')
-            || $user->can('penilaian.verify');
+            || $user->hasRole('kurikulum');
     }
 
     protected function canGenerateReports(User $user): bool

@@ -354,6 +354,9 @@ class AssessmentTeacherExperienceTest extends TestCase
             'rombel_name_snapshot' => 'XII 2',
         ]);
 
+        // Verify permission grants review/status access, not foreign score-entry access.
+        $teacher->givePermissionTo('penilaian.verify');
+
         $input = Livewire::actingAs($teacher)
             ->test(AstsInputScores::class)
             ->set('periodId', $period->getKey());

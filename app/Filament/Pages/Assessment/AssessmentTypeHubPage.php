@@ -321,7 +321,9 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
             return $query->whereRaw('1 = 0');
         }
 
-        if ($user->hasFullAdminAccess() || $user->can('penilaian.verify') || $user->hasRole('kepala_sekolah')) {
+        if ($user->hasFullAdminAccess()
+            || $user->canManageModule('penilaian')
+            || $user->hasRole('kurikulum')) {
             return $query;
         }
 
