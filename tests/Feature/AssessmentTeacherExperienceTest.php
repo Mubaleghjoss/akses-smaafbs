@@ -30,6 +30,7 @@ use App\Models\Assessment\HomeroomReport;
 use App\Models\Assessment\Subject;
 use App\Models\Assessment\StudentSubjectResult;
 use App\Models\User;
+use App\Support\Admin\AdminModuleAccess;
 use App\Support\Assessment\AssessmentActionFailureNotification;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Artisan;
@@ -354,10 +355,12 @@ class AssessmentTeacherExperienceTest extends TestCase
             'rombel_name_snapshot' => 'XII 2',
         ]);
 
-        // Verify permission grants review/status access, not foreign score-entry access.
+        // Verify/penilai access grants module/status visibility, not foreign score-entry access.
         $teacher->givePermissionTo('penilaian.verify');
+        $teacher->forceFill(['module_access_levels' => ['penilaian' => AdminModuleAccess::MANAGE]])->save();
+        $this->assertTrue($teacher->fresh()->canManageModule('penilaian'));
 
-        $input = Livewire::actingAs($teacher)
+        $input = Livewire::actingAs($teacher->fresh())
             ->test(AstsInputScores::class)
             ->set('periodId', $period->getKey());
         $this->assertEqualsCanonicalizing(

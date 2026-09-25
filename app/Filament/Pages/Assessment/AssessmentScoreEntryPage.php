@@ -820,7 +820,6 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
     protected function canManageScoreAssignments(User $user): bool
     {
         return $user->hasFullAdminAccess()
-            || $user->canManageModule('penilaian')
             || $user->hasRole('kurikulum');
     }
 

@@ -54,7 +54,6 @@ abstract class AssessmentPolicy
     protected function canManageScoreAssignments(User $user): bool
     {
         return $this->isFullAdmin($user)
-            || $user->canManageModule('penilaian')
             || $user->hasRole('kurikulum');
     }
 
