@@ -3,6 +3,7 @@
 namespace App\Filament\Pages\Assessment;
 
 use App\Enums\Assessment\AssessmentType;
+use App\Exports\AssessmentExtracurricularImportTemplateExport;
 use App\Filament\Pages\Assessment\Concerns\HasAssessmentTypeNavigation;
 use App\Models\Assessment\AssessmentExtracurricular;
 use App\Models\Assessment\AssessmentExtracurricularParticipant;
@@ -16,6 +17,8 @@ use Filament\Notifications\Notification;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
+use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Url;
 use Livewire\Features\SupportFileUploads\WithFileUploads;
@@ -193,13 +196,32 @@ class AstsExtracurricularScores extends AssessmentPage
         $this->loadScores();
     }
 
+    public function downloadImportTemplate()
+    {
+        abort_unless($this->isManager(), 403);
+        if (! $this->periodId) {
+            Notification::make()->danger()->title('Pilih periode ASTS terlebih dahulu.')->send();
+
+            return null;
+        }
+
+        $period = AssessmentPeriod::query()->where('type', AssessmentType::ASTS->value)->findOrFail($this->periodId);
+        $filename = 'template-peserta-ekskul-asts-'.Str::slug($period->code ?: $period->name).'.xlsx';
+
+        return Excel::download(new AssessmentExtracurricularImportTemplateExport($period), $filename);
+    }
+
     public function importParticipants(): void
     {
         abort_unless($this->isManager(), 403);
         $this->validate(['importFile' => ['required', 'file', 'mimes:xlsx,xls,csv,txt', 'max:5120']]);
         $result = app(AssessmentExtracurricularImport::class)->import(AssessmentPeriod::findOrFail($this->periodId), $this->importFile, auth()->id());
         $this->importFile = null;
-        Notification::make()->success()->title("Import selesai: {$result['created']} peserta, {$result['skipped']} dilewati")->send();
+        $message = "Import selesai: {$result['created']} peserta, {$result['skipped']} dilewati";
+        if ($result['scores_updated'] > 0 || $result['protected_scores'] > 0) {
+            $message .= "; {$result['scores_updated']} draf nilai disimpan, {$result['protected_scores']} nilai terkunci tidak ditimpa";
+        }
+        Notification::make()->success()->title($message)->send();
     }
 
     public function saveScore(int $participantId): void

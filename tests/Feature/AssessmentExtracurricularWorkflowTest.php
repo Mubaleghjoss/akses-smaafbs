@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\Assessment\AssessmentType;
+use App\Exports\AssessmentExtracurricularImportTemplateExport;
 use App\Models\Assessment\AcademicYear;
 use App\Models\Assessment\AssessmentExtracurricular;
 use App\Models\Assessment\AssessmentExtracurricularParticipant;
@@ -11,11 +12,13 @@ use App\Models\Assessment\AssessmentPeriodRombel;
 use App\Models\Assessment\AssessmentPeriodStudent;
 use App\Models\Assessment\Semester;
 use App\Models\User;
+use App\Support\Assessment\AssessmentExtracurricularImport;
 use App\Support\Assessment\AssessmentExtracurricularReportResolver;
 use App\Support\Assessment\AssessmentExtracurricularWorkflow;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Maatwebsite\Excel\Facades\Excel;
 use Spatie\Permission\Models\Role;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
@@ -45,7 +48,7 @@ class AssessmentExtracurricularWorkflowTest extends TestCase
         $semester = Semester::query()->create(['assessment_academic_year_id' => $year->id, 'code' => 'GANJIL', 'name' => 'Ganjil']);
         $this->period = AssessmentPeriod::query()->create(['assessment_academic_year_id' => $year->id, 'assessment_semester_id' => $semester->id, 'code' => 'ASTS-EKSKUL-TEST', 'name' => 'ASTS Test', 'type' => AssessmentType::ASTS, 'created_by' => $this->admin->id]);
         $rombel = AssessmentPeriodRombel::query()->create(['assessment_period_id' => $this->period->id, 'source_rombel_id' => 10, 'rombel_name_snapshot' => 'X 1']);
-        $this->student = AssessmentPeriodStudent::query()->create(['assessment_period_id' => $this->period->id, 'assessment_period_rombel_id' => $rombel->id, 'student_id' => 100, 'student_name_snapshot' => 'Siswa Ekskul', 'rombel_name_snapshot' => 'X 1', 'is_active' => true]);
+        $this->student = AssessmentPeriodStudent::query()->create(['assessment_period_id' => $this->period->id, 'assessment_period_rombel_id' => $rombel->id, 'student_id' => 100, 'nisn_snapshot' => '0012345678', 'student_name_snapshot' => 'Siswa Ekskul', 'rombel_name_snapshot' => 'X 1', 'is_active' => true]);
     }
 
     public function test_verified_teacher_score_overrides_manual_and_unverified_score_keeps_fallback(): void
@@ -79,6 +82,47 @@ class AssessmentExtracurricularWorkflowTest extends TestCase
 
         $this->expectException(HttpException::class);
         app(AssessmentExtracurricularWorkflow::class)->save($outsider, $participant, 'B');
+    }
+
+    public function test_import_template_contains_active_period_students_and_existing_extracurriculars(): void
+    {
+        AssessmentExtracurricular::query()->create(['assessment_period_id' => $this->period->id, 'name' => 'Futsal', 'created_by' => $this->admin->id]);
+        AssessmentPeriodStudent::query()->create(['assessment_period_id' => $this->period->id, 'assessment_period_rombel_id' => $this->student->assessment_period_rombel_id, 'student_id' => 101, 'student_name_snapshot' => 'Siswa Nonaktif', 'rombel_name_snapshot' => 'X 1', 'is_active' => false]);
+
+        $sheets = (new AssessmentExtracurricularImportTemplateExport($this->period))->sheets();
+
+        $this->assertSame(['nisn', 'nama_siswa', 'kelas', 'nama_ekskul', 'predikat', 'catatan'], $sheets[0]->array()[0]);
+        $this->assertSame(['0012345678', 'Siswa Ekskul', 'X 1', '', '', ''], $sheets[0]->array()[1]);
+        $this->assertCount(2, $sheets[0]->array());
+        $this->assertSame(['Futsal'], $sheets[2]->array()[1]);
+    }
+
+    public function test_import_creates_draft_score_and_preserves_verified_score(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'ekskul-import-').'.xlsx';
+        file_put_contents($path, Excel::raw(new class implements \Maatwebsite\Excel\Concerns\FromArray {
+            public function array(): array
+            {
+                return [
+                    ['nisn', 'nama_siswa', 'kelas', 'nama_ekskul', 'predikat', 'catatan'],
+                    ['0012345678', 'Siswa Ekskul', 'X 1', 'Futsal', 'A', 'Aktif berlatih'],
+                ];
+            }
+        }, \Maatwebsite\Excel\Excel::XLSX));
+
+        $result = app(AssessmentExtracurricularImport::class)->import($this->period, $path, $this->admin->id);
+        $participant = AssessmentExtracurricularParticipant::query()->with('score')->firstOrFail();
+        $this->assertSame(['created' => 1, 'skipped' => 0, 'scores_updated' => 1, 'protected_scores' => 0], $result);
+        $this->assertSame('draft', $participant->score->status);
+        $this->assertSame('A', $participant->score->predicate);
+        $this->assertSame('Aktif berlatih', $participant->score->description);
+
+        $participant->score->update(['status' => 'verified', 'predicate' => 'B']);
+        $result = app(AssessmentExtracurricularImport::class)->import($this->period, $path, $this->admin->id);
+        $this->assertSame(1, $result['protected_scores']);
+        $this->assertSame('verified', $participant->score->fresh()->status);
+        $this->assertSame('B', $participant->score->fresh()->predicate);
+        unlink($path);
     }
 
     public function test_demo_command_is_dry_run_by_default_and_replaces_only_marker_rows(): void
