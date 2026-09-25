@@ -43,10 +43,8 @@ final class AssessmentSchemeResolver
             ->map(fn (AssessmentScheme $scheme): array => [
                 'scheme' => $scheme,
                 'specificity' => (int) ($scheme->assessment_subject_id !== null)
-                    + (int) (
-                        $scheme->source_rombel_id !== null
-                        || $scheme->assessment_period_rombel_id !== null
-                    ),
+                    + (int) ($scheme->source_rombel_id !== null)
+                    + (int) ($scheme->assessment_period_rombel_id !== null),
             ])
             ->sortByDesc('specificity')
             ->values();

@@ -131,8 +131,11 @@ class AssessmentSchemeResource extends Resource
             Section::make('Perubahan Setelah Finalisasi')
                 ->description('Perubahan setelah finalisasi tidak mengubah rapor terbit otomatis; gunakan regenerasi dan publish ulang secara eksplisit bila revisi harus diterbitkan. Riwayat perubahan dicatat pada audit penilaian.')
                 ->visible(fn (?AssessmentScheme $record): bool => $record !== null && $record->period?->status !== AssessmentPeriodStatus::DRAFT),
+            Section::make('Nilai yang Sudah Terekam')
+                ->description('Komponen pada skema ini sudah memiliki nilai. Pengaturan umum tetap dapat direvisi oleh pengelola, tetapi struktur komponen dikunci agar nilai historis tidak berubah diam-diam. Reset terarah harus dilakukan melalui perintah assessment:repair-asts-assignment dan selalu diawali dry-run.')
+                ->visible(fn (?AssessmentScheme $record): bool => $record !== null && $record->components()->whereHas('scores')->exists()),
             Section::make('Komponen Nilai')
-                ->description('Total bobot komponen aktif wajib tepat 100%. Komponen referensi ASTS hanya digunakan pada ASAS. Komponen yang sudah memiliki nilai tidak dapat dihapus.')
+                ->description('Total bobot komponen aktif wajib tepat 100%. Komponen referensi ASTS hanya digunakan pada ASAS. Struktur komponen yang sudah memiliki nilai harus direset secara terarah melalui workflow repair, bukan diubah langsung.')
                 ->schema([
                     Forms\Components\Placeholder::make('weight_total_preview')
                         ->label('Status Total Bobot')
@@ -147,6 +150,7 @@ class AssessmentSchemeResource extends Resource
                         ->addActionLabel('Tambah Komponen')
                         ->reorderableWithButtons()
                         ->orderColumn('sort_order')
+                        ->disabled(fn (?AssessmentScheme $record): bool => $record !== null && $record->components()->whereHas('scores')->exists())
                         ->columns(['default' => 1, 'md' => 2, 'xl' => 4])
                         ->schema([
                             Forms\Components\TextInput::make('code')
