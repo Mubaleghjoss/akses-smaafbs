@@ -4,6 +4,7 @@ namespace App\Models\Assessment;
 
 use App\Models\GuruTendik;
 use App\Models\Rombel;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -23,6 +24,15 @@ class HomeroomAssignment extends Model
         'rombel_name_snapshot',
         'is_active',
     ];
+
+    protected static function booted(): void
+    {
+        static::saved(function (self $assignment): void {
+            User::query()
+                ->where('guru_tendik_id', $assignment->teacher_id)
+                ->each(fn (User $user) => $user->syncAssessmentHomeroomRole());
+        });
+    }
 
     protected function casts(): array
     {

@@ -1202,6 +1202,50 @@ class AssessmentAdminIntegrationTest extends TestCase
             ->assertTableActionVisible('details', $log);
     }
 
+    public function test_active_homeroom_assignment_automatically_marks_linked_user_as_walas_without_overwriting_manual_scope(): void
+    {
+        $teacher = GuruTendik::query()->create([
+            'nama' => 'Ustadz Wali Otomatis',
+            'status' => 'aktif',
+            'niy' => 'G-WALAS-01',
+        ]);
+        $rombel = Rombel::query()->create([
+            'nama' => 'XI Walas',
+            'angkatan' => 'XI',
+            'is_active' => true,
+        ]);
+        $user = $this->createUser('wali-otomatis', 'guru', (int) $teacher->getKey());
+        $user->update(['guru_walas_scope' => ['Scope Manual']]);
+        $year = AcademicYear::query()->create([
+            'code' => '2026-2027-walas',
+            'name' => '2026/2027 Walas',
+            'is_active' => true,
+        ]);
+        $semester = Semester::query()->create([
+            'assessment_academic_year_id' => $year->getKey(),
+            'code' => 'ganjil-walas',
+            'name' => 'Ganjil Walas',
+            'is_active' => true,
+        ]);
+
+        HomeroomAssignment::query()->create([
+            'assessment_semester_id' => $semester->getKey(),
+            'teacher_id' => $teacher->getKey(),
+            'rombel_id' => $rombel->getKey(),
+            'teacher_name_snapshot' => $teacher->nama,
+            'rombel_name_snapshot' => $rombel->nama,
+            'is_active' => true,
+        ]);
+
+        $user->refresh();
+
+        $this->assertTrue($user->hasRole('wali_kelas'));
+        $this->assertTrue($user->can('penilaian.homeroom'));
+        $this->assertTrue($user->isAssessmentHomeroomTeacher());
+        $this->assertSame(['Scope Manual', 'XI Walas'], $user->guruWalasScopes());
+        $this->assertSame(['XI Walas'], $user->assessmentHomeroomScopes());
+    }
+
     private function createLegacyMasterTables(): void
     {
         Schema::create('guru_tendik', function (Blueprint $table): void {

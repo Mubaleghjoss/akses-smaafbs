@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Support\Admin\AdminModuleAccess;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
+use Spatie\Permission\Models\Role;
 
 class EditUser extends EditRecord
 {
@@ -17,6 +18,16 @@ class EditUser extends EditRecord
         /** @var User $record */
         $record = $this->record->loadMissing('roles');
         $data['module_access_levels'] = AdminModuleAccess::effectiveLevels($record);
+
+        if ($record->isAssessmentHomeroomTeacher()) {
+            $waliRoleId = Role::query()->where('name', 'wali_kelas')->value('id');
+            $data['roles'] = collect($data['roles'] ?? [])
+                ->when($waliRoleId, fn ($roles) => $roles->push($waliRoleId))
+                ->unique()
+                ->values()
+                ->all();
+        }
+
         $data['allowed_navigation_items'] = AdminModuleAccess::navigationItemSelectionGroups(
             AdminModuleAccess::selectableNavigationItems(
                 $record->hasExplicitNavigationSelection() ? [] : $data['module_access_levels'],

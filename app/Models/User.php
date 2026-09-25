@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Support\Admin\AdminModuleAccess;
 use App\Support\Admin\AdminRoleTemplateSupport;
 use App\Support\Admin\Dashboard\DashboardCacheSupport;
+use App\Models\Assessment\HomeroomAssignment;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasAvatar;
@@ -19,6 +20,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema as SchemaFacade;
 use Illuminate\Support\Facades\Storage;
+use Spatie\Permission\Models\Role;
 use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable implements FilamentUser, HasAvatar
@@ -333,10 +335,57 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
     public function guruWalasScopes(): array
     {
         return collect($this->guru_walas_scope ?? [])
+            ->merge($this->assessmentHomeroomScopes())
             ->map(fn ($scope): string => trim((string) $scope))
             ->filter()
+            ->unique()
             ->values()
             ->all();
+    }
+
+    /** @return array<int, string> */
+    public function assessmentHomeroomScopes(): array
+    {
+        return static::assessmentHomeroomScopesForGuruTendikId($this->guru_tendik_id);
+    }
+
+    /** @return array<int, string> */
+    public static function assessmentHomeroomScopesForGuruTendikId(int|string|null $guruTendikId): array
+    {
+        if (! $guruTendikId || ! SchemaFacade::hasTable('assessment_homeroom_assignments')) {
+            return [];
+        }
+
+        return HomeroomAssignment::query()
+            ->where('teacher_id', (int) $guruTendikId)
+            ->where('is_active', true)
+            ->orderBy('rombel_name_snapshot')
+            ->pluck('rombel_name_snapshot')
+            ->map(fn ($scope): string => trim((string) $scope))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    public function isAssessmentHomeroomTeacher(): bool
+    {
+        return $this->assessmentHomeroomScopes() !== [];
+    }
+
+    /**
+     * Tambahkan role sistem wali kelas tanpa pernah mencabut role pilihan admin.
+     */
+    public function syncAssessmentHomeroomRole(): void
+    {
+        if (! $this->exists || ! $this->isAssessmentHomeroomTeacher() || ! SchemaFacade::hasTable('roles')) {
+            return;
+        }
+
+        if (! $this->hasRole('wali_kelas')
+            && Role::query()->where('name', 'wali_kelas')->exists()) {
+            $this->assignRole('wali_kelas');
+        }
     }
 
     public function resolvedNavigationGroups(): array

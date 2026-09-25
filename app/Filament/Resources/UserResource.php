@@ -170,6 +170,16 @@ class UserResource extends Resource
                                 ));
                             })
                             ->columnSpanFull(),
+                        Forms\Components\Placeholder::make('assessment_homeroom_status')
+                            ->label('Status Wali Kelas dari Penilaian')
+                            ->content(function (Get $get): string {
+                                $scopes = User::assessmentHomeroomScopesForGuruTendikId($get('guru_tendik_id'));
+
+                                return $scopes === []
+                                    ? 'Belum terdeteksi sebagai Wali Kelas dari Matriks Penugasan.'
+                                    : 'Terdeteksi sebagai Wali Kelas dari Matriks Penugasan: '.implode(', ', $scopes).'. Role wali_kelas ditambahkan otomatis tanpa mengubah role atau divisi lain.';
+                            })
+                            ->columnSpanFull(),
                         Forms\Components\Placeholder::make('guru_access_suggestion')
                             ->label('Saran Akses dari Tugas Tambahan')
                             ->content(fn (Get $get): string => AdminRoleTemplateSupport::suggestionReasonSummary(
@@ -1283,6 +1293,7 @@ class UserResource extends Resource
 
         if ($user->exists) {
             $user->syncRoles($roleNames->all());
+            $user->syncAssessmentHomeroomRole();
             unset(static::$userRoleIdsCache[(int) $user->getKey()]);
             $user->load('roles');
         }
