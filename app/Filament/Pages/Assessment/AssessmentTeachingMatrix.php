@@ -5,6 +5,7 @@ namespace App\Filament\Pages\Assessment;
 use App\Models\Assessment\HomeroomAssignment;
 use App\Models\Assessment\Semester;
 use App\Models\Assessment\Subject;
+use App\Models\Assessment\SubjectCategory;
 use App\Models\Assessment\TeachingAssignment;
 use App\Models\GuruTendik;
 use App\Models\Rombel;
@@ -364,13 +365,14 @@ class AssessmentTeachingMatrix extends AssessmentPage
         $guru = GuruTendik::query()->pluck('nama', 'id');
         $namaRombel = Rombel::query()->pluck('nama', 'id');
         $namaMapel = Subject::query()->pluck('name', 'id');
+        $kategoriMapel = $this->subjectCategoryMap();
 
         $tersimpan = 0;
         $dinonaktifkan = 0;
         $waliTersimpan = 0;
 
         DB::transaction(function () use (
-            $guru, $namaRombel, $namaMapel,
+            $guru, $namaRombel, $namaMapel, $kategoriMapel,
             &$tersimpan, &$dinonaktifkan, &$waliTersimpan
         ): void {
             foreach ($this->getRombelRows() as $r) {
@@ -389,19 +391,14 @@ class AssessmentTeachingMatrix extends AssessmentPage
                         continue;
                     }
 
-                    TeachingAssignment::query()->updateOrCreate(
-                        [
-                            'assessment_semester_id' => $this->semesterId,
-                            'rombel_id' => $r['id'],
-                            'assessment_subject_id' => $m['id'],
-                        ],
-                        [
-                            'teacher_id' => (int) $teacherId,
-                            'teacher_name_snapshot' => $guru[(int) $teacherId] ?? null,
-                            'subject_name_snapshot' => $namaMapel[$m['id']] ?? $m['nama'],
-                            'rombel_name_snapshot' => $namaRombel[$r['id']] ?? $r['nama'],
-                            'is_active' => true,
-                        ],
+                    $this->simpanPenugasanMengajar(
+                        $r,
+                        $m,
+                        (int) $teacherId,
+                        $guru,
+                        $namaRombel,
+                        $namaMapel,
+                        $kategoriMapel,
                     );
                     $tersimpan++;
                 }
@@ -447,6 +444,81 @@ class AssessmentTeachingMatrix extends AssessmentPage
             ->success()
             ->duration(10000)
             ->send();
+    }
+
+    /**
+     * @return array<int, int|null>
+     */
+    private function subjectCategoryMap(): array
+    {
+        $categoryIds = SubjectCategory::query()->pluck('id', 'code');
+        $fallbackId = $categoryIds['WAJIB'] ?? $categoryIds['UMUM-A-LEGACY'] ?? null;
+
+        return Subject::query()
+            ->get(['id', 'report_group_code'])
+            ->mapWithKeys(fn (Subject $subject): array => [
+                (int) $subject->getKey() => $categoryIds[(string) $subject->report_group_code] ?? $fallbackId,
+            ])
+            ->all();
+    }
+
+    /**
+     * Simpan satu sel matriks secara deterministik.
+     *
+     * updateOrCreate lama mencari hanya semester+kelas+mapel. Pada production
+     * bisa ada baris lama nonaktif dan baris aktif dengan guru berbeda untuk
+     * kombinasi yang sama. Query tanpa urutan dapat mengambil baris lama, lalu
+     * mengubah teacher_id ke guru aktif dan menabrak unique key. Karena itu,
+     * pilih baris guru yang diminta lebih dulu, lalu nonaktifkan baris aktif
+     * lain pada scope semester+kelas+mapel.
+     *
+     * @param  array{id: int, nama: string}  $rombel
+     * @param  array{id: int, nama: string, kelompok: string}  $subject
+     * @param  array<int|string, string>  $guru
+     * @param  array<int|string, string>  $namaRombel
+     * @param  array<int|string, string>  $namaMapel
+     * @param  array<int, int|null>  $kategoriMapel
+     */
+    private function simpanPenugasanMengajar(
+        array $rombel,
+        array $subject,
+        int $teacherId,
+        mixed $guru,
+        mixed $namaRombel,
+        mixed $namaMapel,
+        array $kategoriMapel,
+    ): void {
+        $scope = TeachingAssignment::query()
+            ->where('assessment_semester_id', $this->semesterId)
+            ->where('rombel_id', $rombel['id'])
+            ->where('assessment_subject_id', $subject['id']);
+
+        $assignment = (clone $scope)->where('teacher_id', $teacherId)->first()
+            ?? (clone $scope)->where('is_active', true)->latest('updated_at')->first()
+            ?? (clone $scope)->latest('updated_at')->first();
+
+        $values = [
+            'assessment_semester_id' => $this->semesterId,
+            'rombel_id' => $rombel['id'],
+            'assessment_subject_id' => $subject['id'],
+            'assessment_subject_category_id' => $kategoriMapel[(int) $subject['id']] ?? null,
+            'teacher_id' => $teacherId,
+            'teacher_name_snapshot' => $guru[$teacherId] ?? null,
+            'subject_name_snapshot' => $namaMapel[$subject['id']] ?? $subject['nama'],
+            'rombel_name_snapshot' => $namaRombel[$rombel['id']] ?? $rombel['nama'],
+            'is_active' => true,
+        ];
+
+        if ($assignment instanceof TeachingAssignment) {
+            $assignment->forceFill($values)->save();
+        } else {
+            $assignment = TeachingAssignment::query()->create($values);
+        }
+
+        (clone $scope)
+            ->whereKeyNot($assignment->getKey())
+            ->where('is_active', true)
+            ->update(['is_active' => false]);
     }
 
     /**

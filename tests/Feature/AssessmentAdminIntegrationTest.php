@@ -439,6 +439,70 @@ class AssessmentAdminIntegrationTest extends TestCase
         $this->assertFalse(AstsInputScores::canAccess());
     }
 
+    public function test_teaching_matrix_save_reuses_active_assignment_when_stale_teacher_row_exists(): void
+    {
+        $manager = $this->createUser('matrix-manager', 'kurikulum');
+        $manager->forceFill(['module_access_levels' => ['penilaian' => AdminModuleAccess::MANAGE]])->save();
+        $year = AcademicYear::query()->create(['code' => 'MATRIX', 'name' => 'Matrix Year']);
+        $semester = Semester::query()->create([
+            'assessment_academic_year_id' => $year->getKey(),
+            'code' => 'MATRIX-1',
+            'name' => 'Matrix Semester',
+            'starts_on' => '2026-07-01',
+            'ends_on' => '2026-12-31',
+            'is_active' => true,
+        ]);
+        $category = SubjectCategory::query()->firstOrCreate(
+            ['code' => 'PILIHAN'],
+            ['name' => 'Mapel Pilihan', 'type' => SubjectCategory::TYPE_PILIHAN, 'sort_order' => 20, 'is_active' => true],
+        );
+        $subject = Subject::query()->create([
+            'code' => 'FIS-MATRIX',
+            'name' => 'Fisika Matrix',
+            'report_group_code' => 'PILIHAN',
+            'report_group_name' => 'Mapel Pilihan',
+            'is_active' => true,
+        ]);
+        $rombel = Rombel::query()->create(['nama' => 'X Matrix', 'is_active' => true]);
+        $oldTeacher = GuruTendik::query()->create(['nama' => 'Guru Lama Matrix', 'status' => 'aktif']);
+        $newTeacher = GuruTendik::query()->create(['nama' => 'Guru Baru Matrix', 'status' => 'aktif']);
+
+        $old = TeachingAssignment::query()->create([
+            'assessment_semester_id' => $semester->getKey(),
+            'assessment_subject_id' => $subject->getKey(),
+            'assessment_subject_category_id' => $category->getKey(),
+            'teacher_id' => $oldTeacher->getKey(),
+            'rombel_id' => $rombel->getKey(),
+            'teacher_name_snapshot' => $oldTeacher->nama,
+            'subject_name_snapshot' => $subject->name,
+            'rombel_name_snapshot' => $rombel->nama,
+            'is_active' => false,
+        ]);
+        $active = TeachingAssignment::query()->create([
+            'assessment_semester_id' => $semester->getKey(),
+            'assessment_subject_id' => $subject->getKey(),
+            'assessment_subject_category_id' => $category->getKey(),
+            'teacher_id' => $newTeacher->getKey(),
+            'rombel_id' => $rombel->getKey(),
+            'teacher_name_snapshot' => $newTeacher->nama,
+            'subject_name_snapshot' => $subject->name,
+            'rombel_name_snapshot' => $rombel->nama,
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($manager)
+            ->test(AssessmentTeachingMatrix::class)
+            ->set('semesterId', $semester->getKey())
+            ->set("matriks.{$rombel->getKey()}.{$subject->getKey()}", (string) $newTeacher->getKey())
+            ->call('simpan')
+            ->assertHasNoErrors();
+
+        $this->assertTrue($active->fresh()->is_active);
+        $this->assertSame((int) $newTeacher->getKey(), $active->fresh()->teacher_id);
+        $this->assertFalse($old->fresh()->is_active);
+        $this->assertSame(2, TeachingAssignment::query()->count());
+    }
+
     public function test_manage_user_sidebar_shows_staged_assessment_entries_without_child_pages(): void
     {
         $manager = $this->createUser('assessment-navigation-manager', 'kurikulum');
