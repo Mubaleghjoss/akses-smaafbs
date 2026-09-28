@@ -24,9 +24,10 @@ class EditAssessmentPeriod extends EditRecord
             ->lockForUpdate()
             ->firstOrFail();
 
-        if ($period->status !== AssessmentPeriodStatus::DRAFT) {
+        if ($period->status !== AssessmentPeriodStatus::DRAFT
+            && ! AssessmentPeriodResource::canEditInputDeadline($period)) {
             throw ValidationException::withMessages([
-                'data.status' => 'Periode hanya dapat diubah ketika masih berstatus Draf.',
+                'data.entry_end_at' => 'Batas input hanya dapat diubah saat periode berstatus Dibuka.',
             ]);
         }
     }
@@ -55,6 +56,16 @@ class EditAssessmentPeriod extends EditRecord
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
         abort_unless(AssessmentPeriodResource::canEdit($record), 403);
+
+        if ($record->status !== AssessmentPeriodStatus::DRAFT) {
+            abort_unless(AssessmentPeriodResource::canEditInputDeadline($record), 403);
+
+            // A period snapshot is immutable after opening; only its score-entry deadline may move.
+            return parent::handleRecordUpdate($record, [
+                'entry_end_at' => $data['entry_end_at'] ?? $record->entry_end_at,
+            ]);
+        }
+
         unset($data['status'], $data['created_by']);
 
         $academicYearId = (int) ($data['assessment_academic_year_id'] ?? $record->assessment_academic_year_id);

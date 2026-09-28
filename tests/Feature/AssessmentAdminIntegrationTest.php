@@ -16,6 +16,7 @@ use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\Assessment\AstsInputScores;
 use App\Filament\Resources\AssessmentAuditLogResource\Pages\ListAssessmentAuditLogs;
 use App\Filament\Resources\AssessmentPeriodResource;
+use App\Filament\Resources\AssessmentPeriodResource\Pages\EditAssessmentPeriod;
 use App\Filament\Resources\AssessmentSchemeResource;
 use App\Filament\Resources\AssessmentSchemeResource\Pages\CreateAssessmentScheme;
 use App\Filament\Resources\AssessmentSchemeResource\Pages\EditAssessmentScheme;
@@ -740,9 +741,9 @@ class AssessmentAdminIntegrationTest extends TestCase
         ]);
 
         $this->actingAs($admin);
-        $this->assertFalse(
+        $this->assertTrue(
             AssessmentPeriodResource::canEdit($period),
-            'Direct URL edit tidak boleh mengubah periode yang sudah dibuka.',
+            'Pengelola dapat membuka form untuk menyesuaikan batas input periode yang sudah dibuka.',
         );
         $this->assertFalse(AssessmentPeriodResource::canDelete($period));
 
@@ -764,6 +765,36 @@ class AssessmentAdminIntegrationTest extends TestCase
             $admin->fresh()->hasPermissionTo('penilaian.report.generate'),
             'Menjalankan ulang seeder awal tidak boleh menghapus permission Penilaian.',
         );
+    }
+
+    public function test_manager_can_update_open_period_input_deadline_from_resource_form(): void
+    {
+        $admin = $this->createUser('assessment-deadline-admin', 'admin');
+        $year = AcademicYear::factory()->create();
+        $semester = Semester::factory()->create([
+            'assessment_academic_year_id' => $year->getKey(),
+        ]);
+        $period = AssessmentPeriod::factory()->asts()->create([
+            'assessment_academic_year_id' => $year->getKey(),
+            'assessment_semester_id' => $semester->getKey(),
+            'status' => AssessmentPeriodStatus::OPEN,
+            'entry_end_at' => '2026-08-01 16:06:00',
+        ]);
+
+        $this->actingAs($admin);
+        $this->assertTrue(AssessmentPeriodResource::canEdit($period));
+        $this->assertTrue(AssessmentPeriodResource::canEditInputDeadline($period));
+
+        Livewire::actingAs($admin)
+            ->test(EditAssessmentPeriod::class, ['record' => $period->getRouteKey()])
+            ->assertSee('Batas Input Nilai')
+            ->fillForm(['entry_end_at' => '2026-08-05 17:30:00'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('2026-08-05 17:30:00', $period->fresh()->entry_end_at?->format('Y-m-d H:i:s'));
+        $this->assertSame(AssessmentPeriodStatus::OPEN, $period->fresh()->status);
+
     }
 
     public function test_master_import_preview_renders_summary_and_rows_without_blade_errors(): void

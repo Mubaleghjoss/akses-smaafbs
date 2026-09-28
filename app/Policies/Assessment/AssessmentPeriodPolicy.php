@@ -40,6 +40,12 @@ class AssessmentPeriodPolicy extends AssessmentPolicy
             && $period->status === AssessmentPeriodStatus::DRAFT;
     }
 
+    public function updateDeadline(User $user, AssessmentPeriod $period): bool
+    {
+        return $this->canManage($user)
+            && $period->status === AssessmentPeriodStatus::OPEN;
+    }
+
     public function delete(User $user, AssessmentPeriod $period): bool
     {
         return $this->update($user, $period);

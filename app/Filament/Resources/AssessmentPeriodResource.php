@@ -62,9 +62,19 @@ class AssessmentPeriodResource extends Resource
     {
         return $record instanceof AssessmentPeriod
             && static::canAccess()
-            && $record->status === AssessmentPeriodStatus::DRAFT
             && static::canManageAssessment()
-            && auth()->user()?->can('update', $record) === true;
+            && (
+                ($record->status === AssessmentPeriodStatus::DRAFT
+                    && auth()->user()?->can('update', $record) === true)
+                || static::canEditInputDeadline($record)
+            );
+    }
+
+    public static function canEditInputDeadline(AssessmentPeriod $record): bool
+    {
+        return static::canAccess()
+            && static::canManageAssessment()
+            && auth()->user()?->can('updateDeadline', $record) === true;
     }
 
     public static function canDelete(Model $record): bool
@@ -83,9 +93,11 @@ class AssessmentPeriodResource extends Resource
             Section::make('Identitas Periode')
                 ->description('ASTS dan ASAS tersimpan terpisah. Status hanya berubah melalui aksi workflow.')
                 ->columns(['default' => 1, 'md' => 2])
+                ->disabled(fn (?AssessmentPeriod $record): bool => $record !== null && $record->status !== AssessmentPeriodStatus::DRAFT)
                 ->schema([
                     Forms\Components\Select::make('assessment_academic_year_id')
                         ->label('Tahun Pelajaran')
+                        ->disabled(fn (?AssessmentPeriod $record): bool => static::locksSnapshotFields($record))
                         ->relationship('academicYear', 'name')
                         ->searchable()
                         ->preload()
@@ -93,6 +105,7 @@ class AssessmentPeriodResource extends Resource
                         ->required(),
                     Forms\Components\Select::make('assessment_semester_id')
                         ->label('Semester')
+                        ->disabled(fn (?AssessmentPeriod $record): bool => static::locksSnapshotFields($record))
                         ->options(fn (Get $get): array => Semester::query()
                             ->where('assessment_academic_year_id', $get('assessment_academic_year_id'))
                             ->orderBy('starts_on')
@@ -103,6 +116,7 @@ class AssessmentPeriodResource extends Resource
                         ->required(),
                     Forms\Components\Select::make('type')
                         ->label('Jenis')
+                        ->disabled(fn (?AssessmentPeriod $record): bool => static::locksSnapshotFields($record))
                         // ASAT hanya boleh di semester GENAP: pilihan disaring
                         // mengikuti semester terpilih. Penyaringan di form
                         // memudahkan, tetapi TIDAK menjamin — validasi sisi
@@ -143,11 +157,13 @@ class AssessmentPeriodResource extends Resource
                         ->native(false),
                     Forms\Components\TextInput::make('code')
                         ->label('Kode Periode')
+                        ->disabled(fn (?AssessmentPeriod $record): bool => static::locksSnapshotFields($record))
                         ->required()
                         ->maxLength(50)
                         ->unique(ignoreRecord: true),
                     Forms\Components\TextInput::make('name')
                         ->label('Nama Periode')
+                        ->disabled(fn (?AssessmentPeriod $record): bool => static::locksSnapshotFields($record))
                         ->required()
                         ->maxLength(150)
                         ->columnSpanFull(),
@@ -158,9 +174,11 @@ class AssessmentPeriodResource extends Resource
             Section::make('Kelas dan Jadwal')
                 ->description('Snapshot hanya mengambil kelas yang dipilih. Setelah periode dibuka, master tidak lagi mengubah isi periode.')
                 ->columns(['default' => 1, 'md' => 2])
+                ->disabled(fn (?AssessmentPeriod $record): bool => $record !== null && $record->status !== AssessmentPeriodStatus::DRAFT)
                 ->schema([
                     Forms\Components\Select::make('settings.rombel_ids')
                         ->label('Kelas Peserta')
+                        ->disabled(fn (?AssessmentPeriod $record): bool => static::locksSnapshotFields($record))
                         ->options(fn (): array => Rombel::query()
                             ->where('is_active', true)
                             ->orderBy('nama')
@@ -169,15 +187,12 @@ class AssessmentPeriodResource extends Resource
                         ->multiple()
                         ->searchable()
                         ->preload()
-                        ->required()
+                        ->required(fn (?AssessmentPeriod $record): bool => $record === null
+                            || $record->status === AssessmentPeriodStatus::DRAFT)
                         ->columnSpanFull(),
                     Forms\Components\DateTimePicker::make('entry_start_at')
                         ->label('Mulai Input Nilai')
                         ->seconds(false),
-                    Forms\Components\DateTimePicker::make('entry_end_at')
-                        ->label('Batas Input Nilai')
-                        ->seconds(false)
-                        ->after('entry_start_at'),
                     Forms\Components\DatePicker::make('report_date')
                         ->label('Tanggal Rapor'),
                     Forms\Components\TextInput::make('settings.report_place')
@@ -185,10 +200,22 @@ class AssessmentPeriodResource extends Resource
                         ->maxLength(100),
                     Forms\Components\Toggle::make('settings.collect_promotion_status')
                         ->label('Catat Status Semester')
+                        ->disabled(fn (?AssessmentPeriod $record): bool => static::locksSnapshotFields($record))
                         ->default(false)
                         ->inline(false)
                         ->helperText('Aktifkan untuk kenaikan/kelulusan atau status akhir semester. Default aktif saat jenis ASAS dipilih.')
                         ->columnSpanFull(),
+                ]),
+            Section::make('Batas Input Nilai')
+                ->description('Batas dapat disesuaikan saat periode sudah dibuka tanpa mengubah status atau data snapshot.')
+                ->schema([
+                    Forms\Components\DateTimePicker::make('entry_end_at')
+                        ->label('Batas Input Nilai')
+                        ->seconds(false)
+                        ->after('entry_start_at')
+                        ->disabled(fn (?AssessmentPeriod $record): bool => $record !== null
+                            && $record->status !== AssessmentPeriodStatus::DRAFT
+                            && ! static::canEditInputDeadline($record)),
                 ]),
         ]);
     }
@@ -234,8 +261,7 @@ class AssessmentPeriodResource extends Resource
                 Tables\Columns\TextColumn::make('entry_end_at')
                     ->label('Batas Input')
                     ->dateTime('d/m/Y H:i')
-                    ->placeholder('-')
-                    ->visibleFrom('lg'),
+                    ->placeholder('-'),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('type')
@@ -247,7 +273,8 @@ class AssessmentPeriodResource extends Resource
             ])
             ->actions([
                 EditAction::make()
-                    ->visible(fn (AssessmentPeriod $record): bool => static::canEdit($record) && $record->status === AssessmentPeriodStatus::DRAFT),
+                    ->label(fn (AssessmentPeriod $record): string => $record->status === AssessmentPeriodStatus::DRAFT ? 'Edit' : 'Edit Jadwal')
+                    ->visible(fn (AssessmentPeriod $record): bool => static::canEdit($record)),
                 static::transitionAction(
                     'open_period',
                     'Buka Periode',
@@ -394,6 +421,12 @@ class AssessmentPeriodResource extends Resource
 
             return null;
         }
+    }
+
+    private static function locksSnapshotFields(?AssessmentPeriod $record): bool
+    {
+        return $record instanceof AssessmentPeriod
+            && $record->status !== AssessmentPeriodStatus::DRAFT;
     }
 
     public static function getPages(): array
