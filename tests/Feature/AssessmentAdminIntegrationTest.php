@@ -76,6 +76,7 @@ class AssessmentAdminIntegrationTest extends TestCase
             'migrations/2026_07_31_080000_create_assessment_foundation_tables.php',
         );
         $migration->up();
+        (require database_path('migrations/2026_08_08_000000_make_assessment_period_assignment_teacher_snapshot_nullable.php'))->up();
         $reportStructureMigration = require database_path(
             'migrations/2026_07_31_120000_extend_assessment_report_structure.php',
         );
