@@ -393,6 +393,11 @@ class AssessmentTeachingMatrix extends AssessmentPage
                             ->where('is_active', true)
                             ->update(['is_active' => false]);
                         $dinonaktifkan += $terpengaruh;
+                        $snapshotDisinkronkan += $this->cabutSnapshotPeriodeTerbuka(
+                            rombelId: $r['id'],
+                            subjectId: $m['id'],
+                            actor: $actor instanceof User ? $actor : null,
+                        );
 
                         continue;
                     }
@@ -575,6 +580,52 @@ class AssessmentTeachingMatrix extends AssessmentPage
                 oldValues: $old,
                 newValues: $assignment->only([...array_keys($values), 'lock_version']),
                 reason: 'Perubahan Matriks Penugasan menyelaraskan guru pada periode terbuka tanpa mengubah nilai atau status.',
+            );
+            $updated++;
+        }
+
+        return $updated;
+    }
+
+    /**
+     * A blank matrix cell must immediately remove the old teacher's input access.
+     * Assignment records remain intact so scores and workflow history are preserved.
+     */
+    private function cabutSnapshotPeriodeTerbuka(int $rombelId, int $subjectId, ?User $actor): int
+    {
+        $assignments = AssessmentPeriodAssignment::query()
+            ->where('assessment_subject_id', $subjectId)
+            ->whereHas('period', fn ($query) => $query
+                ->where('assessment_semester_id', $this->semesterId)
+                ->where('status', AssessmentPeriodStatus::OPEN->value))
+            ->whereHas('periodRombel', fn ($query) => $query->where('source_rombel_id', $rombelId))
+            ->lockForUpdate()
+            ->get();
+
+        $updated = 0;
+        foreach ($assignments as $assignment) {
+            $values = [
+                'source_teaching_assignment_id' => null,
+                'teacher_id' => null,
+                'teacher_name_snapshot' => null,
+            ];
+            if ($assignment->only(array_keys($values)) === $values) {
+                continue;
+            }
+
+            $old = $assignment->only([...array_keys($values), 'lock_version']);
+            $assignment->forceFill([
+                ...$values,
+                'lock_version' => (int) $assignment->lock_version + 1,
+            ])->save();
+
+            app(AssessmentAuditLogger::class)->record(
+                actor: $actor,
+                event: 'assignment.teacher_snapshot_cleared_from_matrix',
+                subject: $assignment,
+                oldValues: $old,
+                newValues: $assignment->only([...array_keys($values), 'lock_version']),
+                reason: 'Sel Matriks Penugasan kosong mencabut kepemilikan guru pada periode terbuka tanpa mengubah nilai atau status.',
             );
             $updated++;
         }

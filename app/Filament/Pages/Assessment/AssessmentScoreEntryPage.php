@@ -757,24 +757,33 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             return 0;
         }
 
-        /** @var TeachingAssignment|null $teaching */
-        $teaching = TeachingAssignment::query()
+        $matrixScope = TeachingAssignment::query()
             ->where('assessment_semester_id', $assignment->period->assessment_semester_id)
             ->where('rombel_id', $sourceRombelId)
-            ->where('assessment_subject_id', $assignment->assessment_subject_id)
+            ->where('assessment_subject_id', $assignment->assessment_subject_id);
+
+        if (! (clone $matrixScope)->exists()) {
+            return 0;
+        }
+
+        /** @var TeachingAssignment|null $teaching */
+        $teaching = (clone $matrixScope)
             ->where('is_active', true)
             ->latest('updated_at')
             ->first();
 
-        if (! $teaching) {
-            return 0;
-        }
-
-        $values = [
-            'source_teaching_assignment_id' => $teaching->getKey(),
-            'teacher_id' => $teaching->teacher_id,
-            'teacher_name_snapshot' => $teaching->teacher_name_snapshot,
-        ];
+        $values = $teaching
+            ? [
+                'source_teaching_assignment_id' => $teaching->getKey(),
+                'teacher_id' => $teaching->teacher_id,
+                'teacher_name_snapshot' => $teaching->teacher_name_snapshot,
+            ]
+            // A blank matrix cell revokes teacher ownership but retains its work.
+            : [
+                'source_teaching_assignment_id' => null,
+                'teacher_id' => null,
+                'teacher_name_snapshot' => null,
+            ];
 
         if ($assignment->only(array_keys($values)) === $values) {
             return 0;
@@ -793,7 +802,9 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             subject: $assignment,
             oldValues: $old,
             newValues: $assignment->only([...array_keys($values), 'lock_version']),
-            reason: 'Refresh Input Nilai menyelaraskan guru dari Matriks Penugasan aktif tanpa mengubah nilai atau status.',
+            reason: $teaching
+                ? 'Refresh Input Nilai menyelaraskan guru dari Matriks Penugasan aktif tanpa mengubah nilai atau status.'
+                : 'Refresh Input Nilai mencabut kepemilikan guru karena sel Matriks Penugasan kosong, tanpa mengubah nilai atau status.',
         );
 
         return 1;

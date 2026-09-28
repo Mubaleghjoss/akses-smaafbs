@@ -544,6 +544,27 @@ class AssessmentAdminIntegrationTest extends TestCase
             'event' => 'assignment.teacher_snapshot_synchronized_from_matrix',
             'subject_id' => $periodAssignment->getKey(),
         ]);
+
+        $lockVersionBeforeClear = $periodAssignment->fresh()->lock_version;
+
+        Livewire::actingAs($manager)
+            ->test(AssessmentTeachingMatrix::class)
+            ->set('semesterId', $semester->getKey())
+            ->set("matriks.{$rombel->getKey()}.{$subject->getKey()}", '')
+            ->call('simpan')
+            ->assertHasNoErrors();
+
+        $cleared = $periodAssignment->fresh();
+        $this->assertNull($cleared->source_teaching_assignment_id);
+        $this->assertNull($cleared->teacher_id);
+        $this->assertNull($cleared->teacher_name_snapshot);
+        $this->assertSame($lockVersionBeforeClear + 1, $cleared->lock_version);
+        $this->assertDatabaseHas('assessment_scores', ['id' => $score->getKey(), 'assessment_period_assignment_id' => $periodAssignment->getKey()]);
+        $this->assertDatabaseHas('assessment_audit_logs', [
+            'assessment_period_id' => $period->getKey(),
+            'event' => 'assignment.teacher_snapshot_cleared_from_matrix',
+            'subject_id' => $periodAssignment->getKey(),
+        ]);
     }
 
     public function test_input_score_refresh_synchronizes_stale_assignment_teacher_snapshot_from_matrix(): void
@@ -657,6 +678,27 @@ class AssessmentAdminIntegrationTest extends TestCase
             ->test(AstsInputScores::class)
             ->set('periodId', $period->getKey())
             ->assertSet('assignmentId', null);
+
+        $active->forceFill(['is_active' => false])->save();
+
+        Livewire::actingAs($oldUser)
+            ->test(AstsInputScores::class)
+            ->set('periodId', $period->getKey())
+            ->assertSet('assignmentId', null)
+            ->assertSet('assignmentMeta', null);
+
+        $cleared = $periodAssignment->fresh();
+        $this->assertSame((int) $periodAssignment->getKey(), (int) $cleared->getKey());
+        $this->assertNull($cleared->source_teaching_assignment_id);
+        $this->assertNull($cleared->teacher_id);
+        $this->assertNull($cleared->teacher_name_snapshot);
+        $this->assertSame(6, $cleared->lock_version);
+        $this->assertDatabaseHas('assessment_scores', ['id' => $score->getKey(), 'assessment_period_assignment_id' => $periodAssignment->getKey()]);
+        $this->assertDatabaseHas('assessment_audit_logs', [
+            'assessment_period_id' => $period->getKey(),
+            'event' => 'assignment.teacher_snapshot_synchronized_from_input_refresh',
+            'subject_id' => $periodAssignment->getKey(),
+        ]);
     }
 
     public function test_manage_user_sidebar_shows_staged_assessment_entries_without_child_pages(): void

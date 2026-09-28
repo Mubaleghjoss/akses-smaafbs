@@ -168,11 +168,11 @@ return new class extends Migration
             $table->foreignId('assessment_period_rombel_id')
                 ->constrained('assessment_period_rombels', indexName: 'assessment_pa_rombel_fk')
                 ->restrictOnDelete();
-            $table->bigInteger('teacher_id')->index();
+            $table->bigInteger('teacher_id')->nullable()->index();
             $table->foreignId('assessment_subject_id')
                 ->constrained('assessment_subjects')
                 ->restrictOnDelete();
-            $table->string('teacher_name_snapshot', 150);
+            $table->string('teacher_name_snapshot', 150)->nullable();
             $table->string('subject_name_snapshot', 150);
             $table->string('rombel_name_snapshot', 100);
             $table->string('status', 30)->default(AssignmentStatus::DRAFT->value)->index();
