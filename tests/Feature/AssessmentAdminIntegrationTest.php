@@ -30,6 +30,7 @@ use App\Models\Assessment\AssessmentPeriodAssignment;
 use App\Models\Assessment\AssessmentPeriodRombel;
 use App\Models\Assessment\AssessmentScheme;
 use App\Models\Assessment\AssessmentComponent;
+use App\Models\Assessment\AssessmentScore;
 use App\Models\Assessment\ReportSnapshot;
 use App\Models\Assessment\AuditLog;
 use App\Models\Assessment\HomeroomAssignment;
@@ -490,10 +491,41 @@ class AssessmentAdminIntegrationTest extends TestCase
             'rombel_name_snapshot' => $rombel->nama,
             'is_active' => true,
         ]);
+        $period = AssessmentPeriod::query()->create([
+            'assessment_academic_year_id' => $year->getKey(),
+            'assessment_semester_id' => $semester->getKey(),
+            'code' => 'MATRIX-ASTS',
+            'name' => 'ASTS Matrix',
+            'type' => AssessmentType::ASTS,
+            'status' => AssessmentPeriodStatus::OPEN,
+            'created_by' => $manager->getKey(),
+        ]);
+        $periodRombel = AssessmentPeriodRombel::query()->create([
+            'assessment_period_id' => $period->getKey(),
+            'source_rombel_id' => $rombel->getKey(),
+            'rombel_name_snapshot' => $rombel->nama,
+            'is_active' => true,
+        ]);
+        $periodAssignment = AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $periodRombel->getKey(),
+            'source_teaching_assignment_id' => $old->getKey(),
+            'assessment_subject_id' => $subject->getKey(),
+            'teacher_id' => $oldTeacher->getKey(),
+            'teacher_name_snapshot' => $oldTeacher->nama,
+            'subject_name_snapshot' => $subject->name,
+            'rombel_name_snapshot' => $rombel->nama,
+        ]);
+        $score = AssessmentScore::factory()->create([
+            'assessment_period_assignment_id' => $periodAssignment->getKey(),
+        ]);
 
         Livewire::actingAs($manager)
             ->test(AssessmentTeachingMatrix::class)
             ->set('semesterId', $semester->getKey())
+            ->set("matriks.{$rombel->getKey()}.{$subject->getKey()}", (string) $oldTeacher->getKey())
+            ->call('simpan')
+            ->assertHasNoErrors()
             ->set("matriks.{$rombel->getKey()}.{$subject->getKey()}", (string) $newTeacher->getKey())
             ->call('simpan')
             ->assertHasNoErrors();
@@ -502,6 +534,16 @@ class AssessmentAdminIntegrationTest extends TestCase
         $this->assertSame((int) $newTeacher->getKey(), $active->fresh()->teacher_id);
         $this->assertFalse($old->fresh()->is_active);
         $this->assertSame(2, TeachingAssignment::query()->count());
+        $this->assertSame((int) $periodAssignment->getKey(), (int) $periodAssignment->fresh()->getKey());
+        $this->assertSame((int) $active->getKey(), $periodAssignment->fresh()->source_teaching_assignment_id);
+        $this->assertSame((int) $newTeacher->getKey(), $periodAssignment->fresh()->teacher_id);
+        $this->assertSame($newTeacher->nama, $periodAssignment->fresh()->teacher_name_snapshot);
+        $this->assertDatabaseHas('assessment_scores', ['id' => $score->getKey(), 'assessment_period_assignment_id' => $periodAssignment->getKey()]);
+        $this->assertDatabaseHas('assessment_audit_logs', [
+            'assessment_period_id' => $period->getKey(),
+            'event' => 'assignment.teacher_snapshot_synchronized_from_matrix',
+            'subject_id' => $periodAssignment->getKey(),
+        ]);
     }
 
     public function test_manage_user_sidebar_shows_staged_assessment_entries_without_child_pages(): void

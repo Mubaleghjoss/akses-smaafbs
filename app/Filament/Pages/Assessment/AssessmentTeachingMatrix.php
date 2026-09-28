@@ -2,6 +2,8 @@
 
 namespace App\Filament\Pages\Assessment;
 
+use App\Enums\Assessment\AssessmentPeriodStatus;
+use App\Models\Assessment\AssessmentPeriodAssignment;
 use App\Models\Assessment\HomeroomAssignment;
 use App\Models\Assessment\Semester;
 use App\Models\Assessment\Subject;
@@ -9,6 +11,8 @@ use App\Models\Assessment\SubjectCategory;
 use App\Models\Assessment\TeachingAssignment;
 use App\Models\GuruTendik;
 use App\Models\Rombel;
+use App\Models\User;
+use App\Support\Assessment\AssessmentAuditLogger;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\DB;
@@ -370,10 +374,12 @@ class AssessmentTeachingMatrix extends AssessmentPage
         $tersimpan = 0;
         $dinonaktifkan = 0;
         $waliTersimpan = 0;
+        $snapshotDisinkronkan = 0;
+        $actor = auth()->user();
 
         DB::transaction(function () use (
-            $guru, $namaRombel, $namaMapel, $kategoriMapel,
-            &$tersimpan, &$dinonaktifkan, &$waliTersimpan
+            $guru, $namaRombel, $namaMapel, $kategoriMapel, $actor,
+            &$tersimpan, &$dinonaktifkan, &$waliTersimpan, &$snapshotDisinkronkan
         ): void {
             foreach ($this->getRombelRows() as $r) {
                 foreach ($this->getSubjectColumns() as $m) {
@@ -391,7 +397,7 @@ class AssessmentTeachingMatrix extends AssessmentPage
                         continue;
                     }
 
-                    $this->simpanPenugasanMengajar(
+                    $teachingAssignment = $this->simpanPenugasanMengajar(
                         $r,
                         $m,
                         (int) $teacherId,
@@ -399,6 +405,10 @@ class AssessmentTeachingMatrix extends AssessmentPage
                         $namaRombel,
                         $namaMapel,
                         $kategoriMapel,
+                    );
+                    $snapshotDisinkronkan += $this->sinkronkanSnapshotPeriodeTerbuka(
+                        $teachingAssignment,
+                        $actor instanceof User ? $actor : null,
                     );
                     $tersimpan++;
                 }
@@ -439,7 +449,8 @@ class AssessmentTeachingMatrix extends AssessmentPage
                 '%d penugasan mengajar aktif, %d wali kelas.%s',
                 $tersimpan,
                 $waliTersimpan,
-                $dinonaktifkan > 0 ? " {$dinonaktifkan} penugasan dinonaktifkan (tidak dihapus)." : '',
+                ($dinonaktifkan > 0 ? " {$dinonaktifkan} penugasan dinonaktifkan (tidak dihapus)." : '')
+                    . ($snapshotDisinkronkan > 0 ? " {$snapshotDisinkronkan} snapshot periode terbuka disinkronkan." : ''),
             ))
             ->success()
             ->duration(10000)
@@ -487,7 +498,7 @@ class AssessmentTeachingMatrix extends AssessmentPage
         mixed $namaRombel,
         mixed $namaMapel,
         array $kategoriMapel,
-    ): void {
+    ): TeachingAssignment {
         $scope = TeachingAssignment::query()
             ->where('assessment_semester_id', $this->semesterId)
             ->where('rombel_id', $rombel['id'])
@@ -519,6 +530,56 @@ class AssessmentTeachingMatrix extends AssessmentPage
             ->whereKeyNot($assignment->getKey())
             ->where('is_active', true)
             ->update(['is_active' => false]);
+
+        return $assignment;
+    }
+
+    /**
+     * Update identity snapshots in periods that still accept operational changes.
+     * Scores and workflow state are deliberately left untouched, including when
+     * an assignment has already been submitted during an open period.
+     */
+    private function sinkronkanSnapshotPeriodeTerbuka(TeachingAssignment $teaching, ?User $actor): int
+    {
+        $assignments = AssessmentPeriodAssignment::query()
+            ->where('assessment_subject_id', $teaching->assessment_subject_id)
+            ->whereHas('period', fn ($query) => $query
+                ->where('assessment_semester_id', $teaching->assessment_semester_id)
+                ->where('status', AssessmentPeriodStatus::OPEN->value))
+            ->whereHas('periodRombel', fn ($query) => $query
+                ->where('source_rombel_id', $teaching->rombel_id))
+            ->lockForUpdate()
+            ->get();
+
+        $updated = 0;
+        foreach ($assignments as $assignment) {
+            $values = [
+                'source_teaching_assignment_id' => $teaching->getKey(),
+                'teacher_id' => $teaching->teacher_id,
+                'teacher_name_snapshot' => $teaching->teacher_name_snapshot,
+            ];
+            if ($assignment->only(array_keys($values)) === $values) {
+                continue;
+            }
+
+            $old = $assignment->only([...array_keys($values), 'lock_version']);
+            $assignment->forceFill([
+                ...$values,
+                'lock_version' => (int) $assignment->lock_version + 1,
+            ])->save();
+
+            app(AssessmentAuditLogger::class)->record(
+                actor: $actor,
+                event: 'assignment.teacher_snapshot_synchronized_from_matrix',
+                subject: $assignment,
+                oldValues: $old,
+                newValues: $assignment->only([...array_keys($values), 'lock_version']),
+                reason: 'Perubahan Matriks Penugasan menyelaraskan guru pada periode terbuka tanpa mengubah nilai atau status.',
+            );
+            $updated++;
+        }
+
+        return $updated;
     }
 
     /**
