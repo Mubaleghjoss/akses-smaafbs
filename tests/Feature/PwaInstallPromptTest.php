@@ -25,14 +25,18 @@ class PwaInstallPromptTest extends TestCase
             ->assertSee('Install App');
     }
 
-    public function test_admin_login_renders_install_cta_hook_without_disrupting_login_flow(): void
+    public function test_admin_login_renders_dismissible_install_notice_after_login_actions(): void
     {
         $this->get('/admin/login')
             ->assertOk()
             ->assertSee('data-pwa-install-root', false)
             ->assertSee('data-pwa-install-trigger', false)
-            ->assertSee('Install App')
-            ->assertSee('Login sidik jari / passkey');
+            ->assertSee('data-pwa-install-close', false)
+            ->assertSee('admin-login-install--badge', false)
+            ->assertSee('admin-login-install-dismissed-v3')
+            ->assertSee('Masuk')
+            ->assertSee('Akses lebih cepat dari layar utama.')
+            ->assertSee('Install App');
     }
 
     protected function createPublicHomepageTables(): void

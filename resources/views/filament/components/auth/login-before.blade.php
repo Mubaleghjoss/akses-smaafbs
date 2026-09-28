@@ -2,28 +2,17 @@
     data-pwa-install-root
     data-dismiss-key="admin-login-install-dismissed-v3"
     data-installed-key="admin-login-install-installed-v1"
-    class="admin-login-install mb-4 hidden"
+    class="admin-login-install admin-login-install--badge hidden"
     hidden
 >
-    <div class="admin-login-install__body">
-        <div class="admin-login-install__icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="4" y="3" width="16" height="18" rx="2.5" />
-                <path d="M9 7h6M10 17h4" />
-                <path d="M12 10v4m0 0 2-2m-2 2-2-2" />
-            </svg>
-        </div>
+    <div class="admin-login-install__body" role="status" aria-live="polite">
         <div class="admin-login-install__content">
-            <strong>Gunakan aplikasi SMA AFBS</strong>
-            <div class="admin-login-install__text">
-                Install untuk akses admin yang lebih cepat dan nyaman.
-            </div>
+            <span class="admin-login-install__badge" aria-hidden="true">App</span>
+            <span class="admin-login-install__text">Akses lebih cepat dari layar utama.</span>
         </div>
 
         <div class="admin-login-install__actions">
-            <button type="button" data-pwa-install-trigger class="admin-login-install__button">
-                <span>Install App</span>
-            </button>
+            <button type="button" data-pwa-install-trigger class="admin-login-install__button">Install App</button>
             <button type="button" data-pwa-install-close class="admin-login-install__close" aria-label="Tutup">
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <path d="m5 5 10 10M15 5 5 15" />

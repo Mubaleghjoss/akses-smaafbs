@@ -122,12 +122,12 @@ class AdminPanelProvider extends PanelProvider
                 fn (): string => '<span class="admin-topbar-menu-label">Menu</span>'
             )
             ->renderHook(
-                PanelsRenderHook::AUTH_LOGIN_FORM_BEFORE,
-                fn (): string => view('filament.components.auth.login-before')->render()
+                PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
+                fn (): string => view('filament.components.auth.login-after')->render()
             )
             ->renderHook(
                 PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
-                fn (): string => view('filament.components.auth.login-after')->render()
+                fn (): string => view('filament.components.auth.login-before')->render()
             )
             ->renderHook(
                 PanelsRenderHook::PAGE_START,
