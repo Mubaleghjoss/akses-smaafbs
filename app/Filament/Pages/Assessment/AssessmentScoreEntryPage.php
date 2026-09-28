@@ -4,6 +4,7 @@ namespace App\Filament\Pages\Assessment;
 
 use App\Actions\Assessment\SaveAssessmentScoresAction;
 use App\Actions\Assessment\SubmitAssessmentAssignmentAction;
+use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssessmentType;
 use App\Enums\Assessment\AssignmentStatus;
 use App\Filament\Pages\Assessment\Concerns\HasAssessmentTypeNavigation;
@@ -12,8 +13,10 @@ use App\Models\Assessment\AssessmentPeriodAssignment;
 use App\Models\Assessment\AssessmentPeriodHomeroom;
 use App\Models\Assessment\AssessmentScore;
 use App\Models\Assessment\StudentSubjectResult;
+use App\Models\Assessment\TeachingAssignment;
 use App\Models\User;
 use App\Support\Assessment\AssessmentActionFailureNotification;
+use App\Support\Assessment\AssessmentAuditLogger;
 use App\Support\Assessment\AstsSchemeComponents;
 use App\Support\Assessment\AssessmentNumberFormatter;
 use App\Support\Assessment\AssessmentPageMap;
@@ -120,6 +123,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             $this->periodId = $periodIds[0] ?? null;
         }
 
+        $this->syncCurrentPeriodAssignmentTeacherSnapshotsFromMatrix();
         $this->selectDefaultAssignment();
         $this->loadAssignment();
     }
@@ -209,6 +213,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
 
     public function updatedPeriodId(): void
     {
+        $this->syncCurrentPeriodAssignmentTeacherSnapshotsFromMatrix();
         $this->selectDefaultAssignment();
         $this->loadAssignment();
     }
@@ -314,6 +319,8 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
         if (! $this->assignmentId) {
             return;
         }
+
+        $this->syncSelectedAssignmentTeacherSnapshotFromMatrix();
 
         /** @var AssessmentPeriodAssignment|null $assignment */
         $assignment = $this->assignmentQuery()
@@ -686,6 +693,110 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
     protected function selectedAssignment(): ?AssessmentPeriodAssignment
     {
         return $this->assignmentId ? $this->assignmentQuery()->find($this->assignmentId) : null;
+    }
+
+    private function syncCurrentPeriodAssignmentTeacherSnapshotsFromMatrix(): void
+    {
+        if (! $this->periodId) {
+            return;
+        }
+
+        /** @var AssessmentPeriod|null $period */
+        $period = AssessmentPeriod::query()->find($this->periodId);
+        if (! $period || $period->type !== static::$assessmentType || $period->status !== AssessmentPeriodStatus::OPEN) {
+            return;
+        }
+
+        AssessmentPeriodAssignment::query()
+            ->with(['period', 'periodRombel'])
+            ->where('assessment_period_id', $period->getKey())
+            ->get()
+            ->each(fn (AssessmentPeriodAssignment $assignment): int => $this->syncAssignmentTeacherSnapshotFromMatrix(
+                assignment: $assignment,
+                event: 'assignment.teacher_snapshot_synchronized_from_input_refresh',
+            ));
+    }
+
+    private function syncSelectedAssignmentTeacherSnapshotFromMatrix(): void
+    {
+        if (! $this->assignmentId) {
+            return;
+        }
+
+        /** @var AssessmentPeriodAssignment|null $assignment */
+        $assignment = AssessmentPeriodAssignment::query()
+            ->with(['period', 'periodRombel'])
+            ->find($this->assignmentId);
+
+        if (! $assignment) {
+            return;
+        }
+
+        $this->syncAssignmentTeacherSnapshotFromMatrix(
+            assignment: $assignment,
+            event: 'assignment.teacher_snapshot_synchronized_from_input_refresh',
+        );
+    }
+
+    private function syncAssignmentTeacherSnapshotFromMatrix(AssessmentPeriodAssignment $assignment, string $event): int
+    {
+        if (! $assignment->period || ! $assignment->periodRombel) {
+            return 0;
+        }
+
+        if ($assignment->period->type !== static::$assessmentType) {
+            return 0;
+        }
+
+        if ($assignment->period->status !== AssessmentPeriodStatus::OPEN) {
+            return 0;
+        }
+
+        $sourceRombelId = $assignment->periodRombel->source_rombel_id;
+        if (! $sourceRombelId) {
+            return 0;
+        }
+
+        /** @var TeachingAssignment|null $teaching */
+        $teaching = TeachingAssignment::query()
+            ->where('assessment_semester_id', $assignment->period->assessment_semester_id)
+            ->where('rombel_id', $sourceRombelId)
+            ->where('assessment_subject_id', $assignment->assessment_subject_id)
+            ->where('is_active', true)
+            ->latest('updated_at')
+            ->first();
+
+        if (! $teaching) {
+            return 0;
+        }
+
+        $values = [
+            'source_teaching_assignment_id' => $teaching->getKey(),
+            'teacher_id' => $teaching->teacher_id,
+            'teacher_name_snapshot' => $teaching->teacher_name_snapshot,
+        ];
+
+        if ($assignment->only(array_keys($values)) === $values) {
+            return 0;
+        }
+
+        $old = $assignment->only([...array_keys($values), 'lock_version']);
+
+        $assignment->forceFill([
+            ...$values,
+            'lock_version' => (int) $assignment->lock_version + 1,
+        ])->save();
+
+        app(AssessmentAuditLogger::class)->record(
+            actor: auth()->user(),
+            event: $event,
+            subject: $assignment,
+            oldValues: $old,
+            newValues: $assignment->only([...array_keys($values), 'lock_version']),
+            reason: 'Refresh Input Nilai menyelaraskan guru dari Matriks Penugasan aktif tanpa mengubah nilai atau status.',
+        );
+
+        return 1;
     }
 
     protected function assignmentQuery(): Builder

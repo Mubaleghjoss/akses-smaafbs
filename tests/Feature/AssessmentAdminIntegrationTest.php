@@ -546,6 +546,119 @@ class AssessmentAdminIntegrationTest extends TestCase
         ]);
     }
 
+    public function test_input_score_refresh_synchronizes_stale_assignment_teacher_snapshot_from_matrix(): void
+    {
+        $year = AcademicYear::query()->create(['code' => 'INPUT-MATRIX', 'name' => 'Input Matrix Year']);
+        $semester = Semester::query()->create([
+            'assessment_academic_year_id' => $year->getKey(),
+            'code' => 'INPUT-MATRIX-1',
+            'name' => 'Input Matrix Semester',
+            'starts_on' => '2026-07-01',
+            'ends_on' => '2026-12-31',
+            'is_active' => true,
+        ]);
+        $category = SubjectCategory::query()->firstOrCreate(
+            ['code' => 'PILIHAN'],
+            ['name' => 'Mapel Pilihan', 'type' => SubjectCategory::TYPE_PILIHAN, 'sort_order' => 20, 'is_active' => true],
+        );
+        $subject = Subject::query()->create([
+            'code' => 'PKWU-REFRESH',
+            'name' => 'PKWU Refresh',
+            'report_group_code' => 'PILIHAN',
+            'report_group_name' => 'Mapel Pilihan',
+            'is_active' => true,
+        ]);
+        $rombel = Rombel::query()->create(['nama' => 'X Refresh', 'is_active' => true]);
+        $oldTeacher = GuruTendik::query()->create(['nama' => 'Guru Lama Refresh', 'status' => 'aktif']);
+        $newTeacher = GuruTendik::query()->create(['nama' => 'Guru Baru Refresh', 'status' => 'aktif']);
+        $oldUser = $this->createUser('old-refresh-teacher', 'guru_mapel', (int) $oldTeacher->getKey());
+        $newUser = $this->createUser('new-refresh-teacher', 'guru_mapel', (int) $newTeacher->getKey());
+
+        $old = TeachingAssignment::query()->create([
+            'assessment_semester_id' => $semester->getKey(),
+            'assessment_subject_id' => $subject->getKey(),
+            'assessment_subject_category_id' => $category->getKey(),
+            'teacher_id' => $oldTeacher->getKey(),
+            'rombel_id' => $rombel->getKey(),
+            'teacher_name_snapshot' => $oldTeacher->nama,
+            'subject_name_snapshot' => $subject->name,
+            'rombel_name_snapshot' => $rombel->nama,
+            'is_active' => false,
+        ]);
+        $active = TeachingAssignment::query()->create([
+            'assessment_semester_id' => $semester->getKey(),
+            'assessment_subject_id' => $subject->getKey(),
+            'assessment_subject_category_id' => $category->getKey(),
+            'teacher_id' => $newTeacher->getKey(),
+            'rombel_id' => $rombel->getKey(),
+            'teacher_name_snapshot' => $newTeacher->nama,
+            'subject_name_snapshot' => $subject->name,
+            'rombel_name_snapshot' => $rombel->nama,
+            'is_active' => true,
+        ]);
+        $period = AssessmentPeriod::query()->create([
+            'assessment_academic_year_id' => $year->getKey(),
+            'assessment_semester_id' => $semester->getKey(),
+            'code' => 'INPUT-MATRIX-ASTS',
+            'name' => 'ASTS Input Matrix',
+            'type' => AssessmentType::ASTS,
+            'status' => AssessmentPeriodStatus::OPEN,
+            'created_by' => $newUser->getKey(),
+        ]);
+        $periodRombel = AssessmentPeriodRombel::query()->create([
+            'assessment_period_id' => $period->getKey(),
+            'source_rombel_id' => $rombel->getKey(),
+            'rombel_name_snapshot' => $rombel->nama,
+            'is_active' => true,
+        ]);
+        $scheme = AssessmentScheme::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_subject_id' => null,
+            'assessment_period_rombel_id' => null,
+        ]);
+        AssessmentComponent::factory()->create([
+            'assessment_scheme_id' => $scheme->getKey(),
+            'name' => 'Nilai ASTS',
+        ]);
+        $periodAssignment = AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $periodRombel->getKey(),
+            'source_teaching_assignment_id' => $old->getKey(),
+            'assessment_subject_id' => $subject->getKey(),
+            'teacher_id' => $oldTeacher->getKey(),
+            'teacher_name_snapshot' => $oldTeacher->nama,
+            'subject_name_snapshot' => $subject->name,
+            'rombel_name_snapshot' => $rombel->nama,
+            'lock_version' => 4,
+        ]);
+        $score = AssessmentScore::factory()->create([
+            'assessment_period_assignment_id' => $periodAssignment->getKey(),
+        ]);
+
+        Livewire::actingAs($newUser)
+            ->test(AstsInputScores::class)
+            ->set('periodId', $period->getKey())
+            ->assertSet('assignmentId', $periodAssignment->getKey());
+
+        $fresh = $periodAssignment->fresh();
+        $this->assertSame((int) $periodAssignment->getKey(), (int) $fresh->getKey());
+        $this->assertSame((int) $active->getKey(), $fresh->source_teaching_assignment_id);
+        $this->assertSame((int) $newTeacher->getKey(), $fresh->teacher_id);
+        $this->assertSame($newTeacher->nama, $fresh->teacher_name_snapshot);
+        $this->assertSame(5, $fresh->lock_version);
+        $this->assertDatabaseHas('assessment_scores', ['id' => $score->getKey(), 'assessment_period_assignment_id' => $periodAssignment->getKey()]);
+        $this->assertDatabaseHas('assessment_audit_logs', [
+            'assessment_period_id' => $period->getKey(),
+            'event' => 'assignment.teacher_snapshot_synchronized_from_input_refresh',
+            'subject_id' => $periodAssignment->getKey(),
+        ]);
+
+        Livewire::actingAs($oldUser)
+            ->test(AstsInputScores::class)
+            ->set('periodId', $period->getKey())
+            ->assertSet('assignmentId', null);
+    }
+
     public function test_manage_user_sidebar_shows_staged_assessment_entries_without_child_pages(): void
     {
         $manager = $this->createUser('assessment-navigation-manager', 'kurikulum');
