@@ -292,7 +292,7 @@
         @endunless
 
         <article class="literasi-panel">
-            <h3 class="literasi-panel__title">Ranking 3 Kelas Jawaban Benar Terbanyak</h3>
+            <h3 class="literasi-panel__title">Ranking 3 Kelas Akurasi Jawaban Benar Tertinggi</h3>
             <div class="literasi-table-wrap">
                 <table class="literasi-table">
                     <thead>

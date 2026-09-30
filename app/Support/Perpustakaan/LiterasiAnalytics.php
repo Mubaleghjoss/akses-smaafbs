@@ -567,10 +567,11 @@ class LiterasiAnalytics
             ->selectRaw('count(distinct responses.id) as response_count')
             ->selectRaw('sum(case when perpustakaan_literasi_answers.score_earned is not null or perpustakaan_literasi_answers.is_correct is not null then coalesce(perpustakaan_literasi_answers.score_possible, 1) else 0 end) as graded_answers')
             ->selectRaw('sum(coalesce(perpustakaan_literasi_answers.score_earned, case when perpustakaan_literasi_answers.is_correct = 1 then 1 else 0 end)) as correct_answers')
+            ->selectRaw('sum(coalesce(perpustakaan_literasi_answers.score_earned, case when perpustakaan_literasi_answers.is_correct = 1 then 1 else 0 end)) / nullif(sum(case when perpustakaan_literasi_answers.score_earned is not null or perpustakaan_literasi_answers.is_correct is not null then coalesce(perpustakaan_literasi_answers.score_possible, 1) else 0 end), 0) as accuracy_ratio')
             ->groupBy('responses.student_class_snapshot')
             ->havingRaw('sum(coalesce(perpustakaan_literasi_answers.score_earned, case when perpustakaan_literasi_answers.is_correct = 1 then 1 else 0 end)) > 0')
+            ->orderByDesc('accuracy_ratio')
             ->orderByDesc('correct_answers')
-            ->orderByDesc('graded_answers')
             ->orderBy('responses.student_class_snapshot')
             ->when($limit !== null, fn (Builder $query): Builder => $query->limit($limit))
             ->get()
@@ -608,7 +609,7 @@ class LiterasiAnalytics
     }
 
     /**
-     * Peringkat SELURUH kelas berdasarkan jumlah jawaban benar.
+     * Peringkat SELURUH kelas berdasarkan akurasi jawaban yang sudah dinilai.
      *
      * Berbeda dengan classCorrectRanking() yang hanya mengambil kelas dengan
      * poin benar > 0 dan dibatasi limit, peringkat ini menyertakan setiap kelas
@@ -670,9 +671,8 @@ class LiterasiAnalytics
                 ];
             })
             ->sortBy([
-                ['correct_answers', 'desc'],
                 ['accuracy', 'desc'],
-                ['graded_answers', 'desc'],
+                ['correct_answers', 'desc'],
                 ['class', 'asc'],
             ])
             ->values();

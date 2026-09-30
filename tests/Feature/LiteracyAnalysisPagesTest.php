@@ -1060,6 +1060,12 @@ class LiteracyAnalysisPagesTest extends TestCase
             ]);
         }
 
+        $questionSalah = $material->questions()->create([
+            'sort_order' => 3,
+            'prompt' => 'Pertanyaan peringkat ketiga?',
+            'max_characters' => 500,
+        ]);
+
         // Kelas B: 1 poin benar + 1 jawaban tertunda -> potensi menyamai kelas A.
         $tertunda = $this->createResponse($material, $this->createStudent('Budi Tertunda', 'X 8'));
         PerpustakaanLiterasiAnswer::query()->create([
@@ -1078,6 +1084,37 @@ class LiteracyAnalysisPagesTest extends TestCase
             'character_count' => 44,
             'score_possible' => 1,
         ]);
+        PerpustakaanLiterasiAnswer::query()->create([
+            'response_id' => $tertunda->getKey(),
+            'question_id' => $questionSalah->getKey(),
+            'answer_text' => 'Jawaban salah kelas kedua.',
+            'character_count' => 26,
+            'is_correct' => false,
+            'score_earned' => 0,
+            'score_possible' => 1,
+        ]);
+
+        // Kelas C memiliki lebih sedikit jawaban benar, tetapi akurasi lebih tinggi.
+        PerpustakaanLiterasiAnswer::query()->create([
+            'response_id' => $unggul->getKey(),
+            'question_id' => $questionSalah->getKey(),
+            'answer_text' => 'Jawaban yang salah.',
+            'character_count' => 18,
+            'is_correct' => false,
+            'score_earned' => 0,
+            'score_possible' => 1,
+        ]);
+
+        $akurasiTinggi = $this->createResponse($material, $this->createStudent('Citra Akurasi', 'X 9'));
+        PerpustakaanLiterasiAnswer::query()->create([
+            'response_id' => $akurasiTinggi->getKey(),
+            'question_id' => $question->getKey(),
+            'answer_text' => 'Satu-satunya jawaban benar.',
+            'character_count' => 24,
+            'is_correct' => true,
+            'score_earned' => 1,
+            'score_possible' => 1,
+        ]);
 
         $component = Livewire::actingAs($this->createAdmin('admin-peringkat-benar'))
             ->test(AnalisisLiterasiPage::class)
@@ -1085,14 +1122,16 @@ class LiteracyAnalysisPagesTest extends TestCase
 
         $peringkat = collect($component->instance()->analytics['class_correct_ranking_full'])->keyBy('class');
 
-        $this->assertSame(1, $peringkat['X 7']['rank']);
+        $this->assertSame(1, $peringkat['X 9']['rank']);
+        $this->assertSame(100.0, $peringkat['X 9']['accuracy']);
+        $this->assertSame(2, $peringkat['X 7']['rank']);
         $this->assertSame(2, $peringkat['X 7']['correct_answers']);
         $this->assertSame(0, $peringkat['X 7']['pending_answers']);
         // Kelas teratas tetap ditandai sementara karena kelas lain masih bisa
         // menyamainya setelah penilaian tertunda selesai.
         $this->assertTrue($peringkat['X 7']['rank_provisional']);
 
-        $this->assertSame(2, $peringkat['X 8']['rank']);
+        $this->assertSame(3, $peringkat['X 8']['rank']);
         $this->assertSame(1, $peringkat['X 8']['correct_answers']);
         $this->assertSame(1, $peringkat['X 8']['pending_answers']);
         $this->assertSame(2, $peringkat['X 8']['potential_correct']);
@@ -1103,11 +1142,11 @@ class LiteracyAnalysisPagesTest extends TestCase
         );
 
         $component
-            ->assertSee('Peringkat Kelas: Jawaban Benar Terbanyak')
+            ->assertSee('Peringkat Kelas: Akurasi Jawaban Benar Tertinggi')
             ->assertSee('Masih bisa berubah');
 
         $teks = $component->instance()->shareSections()['peringkat'];
-        $this->assertStringContainsString('*PERINGKAT KELAS: JAWABAN BENAR TERBANYAK*', $teks);
+        $this->assertStringContainsString('*PERINGKAT KELAS: AKURASI JAWABAN BENAR TERTINGGI*', $teks);
         $this->assertStringContainsString('Belum final', $teks);
         $this->assertStringContainsString('potensi benar sampai 2', $teks);
     }

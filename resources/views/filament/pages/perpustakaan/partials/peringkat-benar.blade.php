@@ -9,16 +9,16 @@
 @endphp
 
 <x-filament::section collapsible collapsed>
-    <x-slot name="heading">Peringkat Kelas: Jawaban Benar Terbanyak</x-slot>
+    <x-slot name="heading">Peringkat Kelas: Akurasi Jawaban Benar Tertinggi</x-slot>
     <x-slot name="description">
-        Seluruh kelas pada lingkup aktif diurutkan dari jumlah poin benar terbanyak. Berbeda dengan tabel
-        "Akurasi Per Kelas" yang mengurutkan menurut persentase, peringkat ini memakai volume jawaban benar,
-        dan menyertakan kelas yang jawabannya masih menunggu penilaian.
+        Seluruh kelas pada lingkup aktif diurutkan dari persentase jawaban benar tertinggi, dihitung dari jawaban
+        yang sudah dinilai. Jika persentasenya sama, jumlah jawaban benar menjadi penentu berikutnya. Kelas yang
+        jawabannya masih menunggu penilaian tetap disertakan.
     </x-slot>
 
     @include('filament.pages.perpustakaan.partials.salin-bagian', [
         'teks' => $salinTeks ?? '',
-        'catatan' => 'Menyalin peringkat kelas berdasarkan jawaban benar beserta catatan penilaian tertunda.',
+        'catatan' => 'Menyalin peringkat kelas berdasarkan akurasi jawaban benar beserta catatan penilaian tertunda.',
     ])
 
     @if ($adaTertunda)

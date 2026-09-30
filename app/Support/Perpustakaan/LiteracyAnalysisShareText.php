@@ -388,7 +388,7 @@ final class LiteracyAnalysisShareText
     }
 
     /**
-     * Peringkat kelas menurut jawaban benar, lengkap dengan catatan bahwa
+     * Peringkat kelas menurut akurasi jawaban benar, lengkap dengan catatan bahwa
      * urutannya masih dapat berubah selama ada jawaban yang belum dinilai.
      *
      * @param  array<string, mixed>  $analytics
@@ -397,7 +397,7 @@ final class LiteracyAnalysisShareText
     private static function peringkatBenar(array $analytics): array
     {
         $rows = $analytics['class_correct_ranking_full'] ?? [];
-        $lines = ['*PERINGKAT KELAS: JAWABAN BENAR TERBANYAK*'];
+        $lines = ['*PERINGKAT KELAS: AKURASI JAWABAN BENAR TERTINGGI*'];
 
         if ($rows === []) {
             $lines[] = 'Belum ada jawaban pada lingkup ini.';
