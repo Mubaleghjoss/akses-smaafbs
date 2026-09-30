@@ -98,9 +98,8 @@
             <x-filament::section>
                 <x-slot name="heading">Rincian Per Hari</x-slot>
                 <x-slot name="description">
-                    Tiap hari ditampilkan sebagai kartu dengan dua kolom sejajar: siswa yang mengisi pada hari itu
-                    dan siswa yang sampai akhir hari itu masih belum mengisi. Kolom "belum" bersifat kumulatif,
-                    sehingga nama akan hilang begitu slotnya terisi pada hari berikutnya.
+                    Tiap hari ditampilkan sebagai kartu dengan dua kolom sejajar: siswa yang mengisi dan yang belum
+                    mengisi materi aktif pada tanggal tersebut. Materi dari tanggal lain tidak dihitung pada kartu hari ini.
                 </x-slot>
 
                 @if ($days === [])

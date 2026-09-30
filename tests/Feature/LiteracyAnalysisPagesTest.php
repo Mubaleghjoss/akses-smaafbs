@@ -1146,12 +1146,60 @@ class LiteracyAnalysisPagesTest extends TestCase
             array_column($rincian['days'][0]['pending_students'], 'name'),
         );
 
-        // Hari kedua: Budi menyusul, hanya Cici yang masih belum.
+        // Hari kedua memakai slot materi pada tanggalnya sendiri, sehingga
+        // Ahmad tidak dianggap sudah mengisi materi yang berbeda pada hari pertama.
         $this->assertSame(['Budi Harian'], array_column($rincian['days'][1]['students'], 'name'));
-        $this->assertSame(1, $rincian['days'][1]['pending_total']);
-        $this->assertSame($belum->nama, $rincian['days'][1]['pending_students'][0]['name']);
+        $this->assertSame(2, $rincian['days'][1]['pending_total']);
+        $this->assertSame(
+            ['Ahmad Harian', $belum->nama],
+            array_column($rincian['days'][1]['pending_students'], 'name'),
+        );
 
         $component->assertSee('Sudah mengisi')->assertSee('Belum mengisi');
+    }
+
+    public function test_halaman_rincian_harian_menghitung_slot_hanya_untuk_materi_pada_tanggal_itu(): void
+    {
+        $hariSatu = now()->setDate(2026, 9, 2)->startOfDay();
+        $hariDua = now()->setDate(2026, 9, 3)->startOfDay();
+        $materiHariSatu = $this->createMaterial('Materi 2 September', [
+            'opens_at' => $hariSatu->copy()->setTime(6, 0),
+            'closes_at' => $hariSatu->copy()->setTime(23, 59),
+        ]);
+        $materiHariDua = $this->createMaterial('Materi 3 September', [
+            'opens_at' => $hariDua->copy()->setTime(6, 0),
+            'closes_at' => $hariDua->copy()->setTime(23, 59),
+        ]);
+        $ahmad = $this->createStudent('Ahmad Tanggal', 'XII 2');
+        $budi = $this->createStudent('Budi Tanggal', 'XII 2');
+
+        $this->createResponse($materiHariSatu, $ahmad)->forceFill([
+            'submitted_at' => $hariSatu->copy()->setTime(7, 30),
+        ])->save();
+        $this->createResponse($materiHariDua, $budi)->forceFill([
+            'submitted_at' => $hariDua->copy()->setTime(7, 30),
+        ])->save();
+
+        $rincian = Livewire::actingAs($this->createAdmin('admin-rincian-per-tanggal'))
+            ->test(RincianHarianKelasPage::class, [
+                'kelas' => 'XII 2',
+                'dari' => '2026-09-01',
+                'sampai' => '2026-09-30',
+            ])
+            ->assertSuccessful()
+            ->instance()
+            ->rincian;
+
+        $this->assertCount(2, $rincian['days']);
+        $this->assertSame('2026-09-02', $rincian['days'][0]['date']);
+        $this->assertSame(['Ahmad Tanggal'], array_column($rincian['days'][0]['students'], 'name'));
+        $this->assertSame(1, $rincian['days'][0]['pending_total']);
+        $this->assertSame(['Budi Tanggal'], array_column($rincian['days'][0]['pending_students'], 'name'));
+
+        $this->assertSame('2026-09-03', $rincian['days'][1]['date']);
+        $this->assertSame(['Budi Tanggal'], array_column($rincian['days'][1]['students'], 'name'));
+        $this->assertSame(1, $rincian['days'][1]['pending_total']);
+        $this->assertSame(['Ahmad Tanggal'], array_column($rincian['days'][1]['pending_students'], 'name'));
     }
 
     public function test_timeline_menautkan_rincian_harian_ke_halaman_tersendiri(): void

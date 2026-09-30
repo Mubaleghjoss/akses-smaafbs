@@ -744,25 +744,47 @@ class LiterasiAnalytics
         $classes = [$class];
         $base = static::rangeBoundBase($material, $start, $end, $programCategory, $classes);
         $classBase = collect($base['classes'] ?? [])->firstWhere('class', $class) ?? [];
-        $days = static::dailySubmissionsByClass($material, $start, $end, $programCategory, $classes)
-            ->get($class, []);
 
-        $completed = collect($classBase['completed_students'] ?? []);
+        // Each card has its own respondent base. Reusing the monthly base here
+        // makes materials scheduled on other dates inflate the day's "belum" list.
+        $daily = [];
+        $date = $start->copy()->startOfDay();
+        $lastDate = $end->copy()->startOfDay();
 
-        // Slot yang sudah terisi tetapi tanggal kirimnya di luar rentang harian
-        // tidak dipakai; daftar "belum mengisi per hari" dihitung kumulatif dari
-        // slot yang pada akhir hari itu masih kosong.
-        $slots = collect($classBase['missing_students'] ?? [])
-            ->map(fn (array $slot): array => $slot + ['submitted_at' => null])
-            ->merge($completed)
-            ->values();
+        while ($date->lte($lastDate)) {
+            $dayStart = $date->copy()->startOfDay();
+            $dayEnd = $date->copy()->endOfDay();
+            $materialIds = $material !== null
+                ? [(int) $material->getKey()]
+                : LiteracyRespondentBase::materialIdsInScope($programCategory, $dayStart, $dayEnd);
 
-        $daily = collect($days)->map(function (array $day) use ($slots): array {
-            $cutoff = Carbon::parse($day['date'])->endOfDay();
+            if ($materialIds === []) {
+                $date->addDay();
 
-            $day['pending_students'] = $slots
-                ->filter(fn (array $slot): bool => $slot['submitted_at'] === null
-                    || $slot['submitted_at']->greaterThan($cutoff))
+                continue;
+            }
+
+            $dayBase = LiteracyRespondentBase::forMaterialIds($materialIds, $classes, $dayStart, $dayEnd);
+            $dayClassBase = collect($dayBase['classes'] ?? [])->firstWhere('class', $class) ?? [];
+            $daySubmissions = static::dailySubmissionsByClass($material, $dayStart, $dayEnd, $programCategory, $classes)
+                ->get($class, []);
+            $day = $daySubmissions[0] ?? [
+                'date' => $dayStart->toDateString(),
+                'total' => 0,
+                'first_at' => null,
+                'last_at' => null,
+                'students' => [],
+            ];
+
+            // A selected material must also be scheduled or answered on this date.
+            // Otherwise a material selected for 3 September appears on 2 September.
+            if ($material !== null && ! in_array((int) $material->getKey(), LiteracyRespondentBase::materialIdsInScope($programCategory, $dayStart, $dayEnd), true)) {
+                $date->addDay();
+
+                continue;
+            }
+
+            $day['pending_students'] = collect($dayClassBase['missing_students'] ?? [])
                 ->sortBy('name')
                 ->map(fn (array $slot): array => [
                     'student_id' => $slot['student_id'] ?? 0,
@@ -772,9 +794,10 @@ class LiterasiAnalytics
                 ->values()
                 ->all();
             $day['pending_total'] = count($day['pending_students']);
+            $daily[] = $day;
 
-            return $day;
-        })->values()->all();
+            $date->addDay();
+        }
 
         return [
             'class' => $class,
