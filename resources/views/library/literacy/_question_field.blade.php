@@ -213,9 +213,31 @@
             </div>
         </div>
     @else
+        <div class="mt-3" data-literacy-numeracy-toolbar>
+            <div class="flex flex-wrap items-center gap-1" role="toolbar" aria-label="Bantuan penulisan numerasi">
+                <span class="mr-1 text-xs font-semibold text-slate-500">Bantuan numerasi:</span>
+                @foreach([
+                    'wrap-parentheses' => ['()', 'Kurung'],
+                    'percent' => ['%', 'Persen'],
+                    'multiply' => ['&times;', 'Kali'],
+                    'divide' => ['&divide;', 'Bagi'],
+                    'add' => ['+', 'Tambah'],
+                    'subtract' => ['&minus;', 'Kurang'],
+                    'root' => ['&radic;', 'Akar kuadrat'],
+                ] as $action => [$symbol, $label])
+                    <button type="button" class="inline-flex min-h-8 min-w-8 items-center justify-center rounded-md border border-slate-200 bg-slate-50 px-1.5 text-sm font-semibold text-slate-700 hover:border-sky-400 hover:bg-sky-50 hover:text-sky-800 focus:outline-none focus:ring-2 focus:ring-sky-500" data-literacy-numeracy-action="{{ $action }}" data-literacy-numeracy-insert="{{ $action === 'percent' ? '%' : ($action === 'multiply' ? '×' : ($action === 'divide' ? '÷' : ($action === 'add' ? '+' : ($action === 'subtract' ? '−' : '')))) }}" aria-label="{{ $label }}" title="{{ $label }}">{!! $symbol !!}</button>
+                @endforeach
+                @foreach(range(2, 10) as $power)
+                    @php $superscript = strtr((string) $power, ['2' => '²', '3' => '³', '4' => '⁴', '5' => '⁵', '6' => '⁶', '7' => '⁷', '8' => '⁸', '9' => '⁹', '10' => '¹⁰']); @endphp
+                    <button type="button" class="inline-flex min-h-8 min-w-8 items-center justify-center rounded-md border border-slate-200 bg-slate-50 px-1.5 text-sm font-semibold text-slate-700 hover:border-sky-400 hover:bg-sky-50 hover:text-sky-800 focus:outline-none focus:ring-2 focus:ring-sky-500" data-literacy-numeracy-action="power" data-literacy-numeracy-exponent="{{ $superscript }}" aria-label="Pangkat {{ $power }}" title="Pangkat {{ $power }}">x{{ $superscript }}</button>
+                    <button type="button" class="inline-flex min-h-8 min-w-8 items-center justify-center rounded-md border border-slate-200 bg-slate-50 px-1.5 text-sm font-semibold text-slate-700 hover:border-sky-400 hover:bg-sky-50 hover:text-sky-800 focus:outline-none focus:ring-2 focus:ring-sky-500" data-literacy-numeracy-action="power" data-literacy-numeracy-exponent="⁻{{ $superscript }}" aria-label="Pangkat negatif {{ $power }}" title="Pangkat negatif {{ $power }}">x⁻{{ $superscript }}</button>
+                @endforeach
+            </div>
+        </div>
+
         <textarea
             id="question-{{ $question->getKey() }}"
-            class="input mt-3 min-h-40"
+            class="input mt-2 min-h-40"
             name="answers[{{ $question->getKey() }}]"
             minlength="{{ $minCharacters }}"
             maxlength="{{ $maxCharacters }}"

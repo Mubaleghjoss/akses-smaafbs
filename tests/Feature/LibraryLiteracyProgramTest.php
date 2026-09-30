@@ -447,6 +447,12 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('id="status-jawaban"', false)
             ->assertSee('data-literacy-scroll-target="#status-jawaban"', false)
             ->assertSee('data-literacy-answer-count', false)
+            ->assertSee('data-literacy-numeracy-toolbar', false)
+            ->assertSee('data-literacy-numeracy-action="root"', false)
+            ->assertSee('data-literacy-numeracy-action="power"', false)
+            ->assertSee('data-literacy-numeracy-action="wrap-parentheses"', false)
+            ->assertSee('data-literacy-numeracy-action="percent"', false)
+            ->assertSee("dispatchEvent(new Event('input'", false)
             ->assertSee('data-literacy-queue-panel', false)
             ->assertSee('Menyiapkan jalur antrean')
             ->assertSee('data-literacy-ticket-endpoint', false)
@@ -1097,7 +1103,7 @@ class LibraryLiteracyProgramTest extends TestCase
         }
     }
 
-    public function test_public_form_renders_three_question_types_and_speech_fallback(): void
+    public function test_public_form_renders_question_types_speech_fallback_and_numeracy_helper_toolbar(): void
     {
         $this->createStudent('Codex Tiga Jenis', 'XI 1');
         $material = $this->createMaterial('Materi Tiga Jenis Soal');
@@ -1150,7 +1156,21 @@ class LibraryLiteracyProgramTest extends TestCase
             ->assertSee('new ResizeObserver', false)
             ->assertSee('Jawab dengan Suara')
             ->assertSee('window.webkitSpeechRecognition', false)
-            ->assertSee("Jelaskan isi bacaan.\nGunakan bahasa sendiri.");
+            ->assertSee("Jelaskan isi bacaan.\nGunakan bahasa sendiri.")
+            ->assertSee('Bantuan numerasi:')
+            ->assertSee('data-literacy-numeracy-toolbar', false)
+            ->assertSee('data-literacy-numeracy-action="wrap-parentheses"', false)
+            ->assertSee('data-literacy-numeracy-action="percent"', false)
+            ->assertSee('data-literacy-numeracy-action="multiply"', false)
+            ->assertSee('data-literacy-numeracy-action="divide"', false)
+            ->assertSee('data-literacy-numeracy-action="add"', false)
+            ->assertSee('data-literacy-numeracy-action="subtract"', false)
+            ->assertSee('data-literacy-numeracy-action="root"', false)
+            ->assertSee('data-literacy-numeracy-exponent="²"', false)
+            ->assertSee('data-literacy-numeracy-exponent="⁻²"', false)
+            ->assertSee('data-literacy-numeracy-exponent="¹⁰"', false)
+            ->assertSee('data-literacy-numeracy-exponent="⁻¹⁰"', false)
+            ->assertSee('data-literacy-validation-for="answers.', false);
     }
 
     public function test_admin_objective_tables_preserve_stable_ids_and_canonical_configuration(): void

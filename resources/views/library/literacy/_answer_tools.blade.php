@@ -1228,6 +1228,40 @@
             }
 
             form.querySelectorAll('[data-literacy-answer-input]').forEach((textarea) => {
+                const toolbar = textarea.closest('section')?.querySelector('[data-literacy-numeracy-toolbar]');
+
+                toolbar?.querySelectorAll('[data-literacy-numeracy-action]').forEach((button) => {
+                    // Prevent the button click from replacing the textarea selection.
+                    button.addEventListener('mousedown', (event) => event.preventDefault());
+                    button.addEventListener('click', () => {
+                        const action = button.dataset.literacyNumeracyAction || '';
+                        const start = textarea.selectionStart;
+                        const end = textarea.selectionEnd;
+                        const selected = textarea.value.slice(start, end);
+                        const exponent = button.dataset.literacyNumeracyExponent || '';
+                        let replacement = button.dataset.literacyNumeracyInsert || '';
+                        let selectionStart = replacement.length;
+                        let selectionEnd = selectionStart;
+
+                        if (action === 'wrap-parentheses') {
+                            replacement = `(${selected})`;
+                            selectionStart = selected ? replacement.length : 1;
+                            selectionEnd = selectionStart;
+                        } else if (action === 'root') {
+                            replacement = selected ? `√(${selected})` : '√()';
+                            selectionStart = selected ? replacement.length : 2;
+                            selectionEnd = selectionStart;
+                        } else if (action === 'power') {
+                            replacement = selected ? `${selected}${exponent}` : exponent;
+                        }
+
+                        textarea.setRangeText(replacement, start, end, 'end');
+                        textarea.focus({ preventScroll: true });
+                        textarea.setSelectionRange(start + selectionStart, start + selectionEnd);
+                        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                    });
+                });
+
                 const wrapper = textarea.closest('section') || form;
                 const min = Number.parseInt(textarea.dataset.minCharacters || '0', 10);
                 const max = Math.max(1, Number.parseInt(textarea.dataset.maxCharacters || '1', 10));
