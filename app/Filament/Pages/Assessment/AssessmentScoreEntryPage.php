@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages\Assessment;
 
+use App\Actions\Assessment\ReconcileOpenPeriodAssignmentsFromMatrixAction;
 use App\Actions\Assessment\SaveAssessmentScoresAction;
 use App\Actions\Assessment\SubmitAssessmentAssignmentAction;
 use App\Enums\Assessment\AssessmentPeriodStatus;
@@ -117,6 +118,13 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
     public function mount(): void
     {
         $this->mode = $this->normalizedMode();
+
+        // Reconcile before scoping periods so a teacher's first matrix assignment is visible.
+        app(ReconcileOpenPeriodAssignmentsFromMatrixAction::class)->forOpenPeriodsOfType(
+            static::$assessmentType,
+            auth()->user() instanceof User ? auth()->user() : null,
+        );
+
         $periodIds = array_map('intval', array_keys($this->getPeriodOptions()));
 
         if (! $this->periodId || ! in_array($this->periodId, $periodIds, true)) {
@@ -706,6 +714,11 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
         if (! $period || $period->type !== static::$assessmentType || $period->status !== AssessmentPeriodStatus::OPEN) {
             return;
         }
+
+        app(ReconcileOpenPeriodAssignmentsFromMatrixAction::class)->forPeriod(
+            (int) $period->getKey(),
+            auth()->user() instanceof User ? auth()->user() : null,
+        );
 
         AssessmentPeriodAssignment::query()
             ->with(['period', 'periodRombel'])

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssessmentType;
+use App\Enums\Assessment\AssignmentStatus;
 use App\Filament\Pages\Assessment\AsasHub;
 use App\Filament\Pages\Assessment\AsasInputScores;
 use App\Filament\Pages\Assessment\AsatHub;
@@ -520,6 +521,24 @@ class AssessmentAdminIntegrationTest extends TestCase
         $score = AssessmentScore::factory()->create([
             'assessment_period_assignment_id' => $periodAssignment->getKey(),
         ]);
+        $missingSubject = Subject::query()->create([
+            'code' => 'PKWU-MATRIX-MISSING',
+            'name' => 'PKWU Matrix Missing',
+            'report_group_code' => 'PILIHAN',
+            'report_group_name' => 'Mapel Pilihan',
+            'is_active' => true,
+        ]);
+        $missingTeaching = TeachingAssignment::query()->create([
+            'assessment_semester_id' => $semester->getKey(),
+            'assessment_subject_id' => $missingSubject->getKey(),
+            'assessment_subject_category_id' => $category->getKey(),
+            'teacher_id' => $newTeacher->getKey(),
+            'rombel_id' => $rombel->getKey(),
+            'teacher_name_snapshot' => $newTeacher->nama,
+            'subject_name_snapshot' => $missingSubject->name,
+            'rombel_name_snapshot' => $rombel->nama,
+            'is_active' => true,
+        ]);
 
         Livewire::actingAs($manager)
             ->test(AssessmentTeachingMatrix::class)
@@ -528,13 +547,22 @@ class AssessmentAdminIntegrationTest extends TestCase
             ->call('simpan')
             ->assertHasNoErrors()
             ->set("matriks.{$rombel->getKey()}.{$subject->getKey()}", (string) $newTeacher->getKey())
+            ->set("matriks.{$rombel->getKey()}.{$missingSubject->getKey()}", (string) $newTeacher->getKey())
             ->call('simpan')
             ->assertHasNoErrors();
 
         $this->assertTrue($active->fresh()->is_active);
         $this->assertSame((int) $newTeacher->getKey(), $active->fresh()->teacher_id);
         $this->assertFalse($old->fresh()->is_active);
-        $this->assertSame(2, TeachingAssignment::query()->count());
+        $this->assertSame(3, TeachingAssignment::query()->count());
+        $createdAssignment = AssessmentPeriodAssignment::query()
+            ->where('assessment_period_id', $period->getKey())
+            ->where('assessment_period_rombel_id', $periodRombel->getKey())
+            ->where('assessment_subject_id', $missingSubject->getKey())
+            ->firstOrFail();
+        $this->assertSame((int) $missingTeaching->getKey(), $createdAssignment->source_teaching_assignment_id);
+        $this->assertSame((int) $newTeacher->getKey(), $createdAssignment->teacher_id);
+        $this->assertSame(AssignmentStatus::DRAFT, $createdAssignment->status);
         $this->assertSame((int) $periodAssignment->getKey(), (int) $periodAssignment->fresh()->getKey());
         $this->assertSame((int) $active->getKey(), $periodAssignment->fresh()->source_teaching_assignment_id);
         $this->assertSame((int) $newTeacher->getKey(), $periodAssignment->fresh()->teacher_id);
@@ -618,6 +646,24 @@ class AssessmentAdminIntegrationTest extends TestCase
             'rombel_name_snapshot' => $rombel->nama,
             'is_active' => true,
         ]);
+        $missingSubject = Subject::query()->create([
+            'code' => 'FIS-MISSING-REFRESH',
+            'name' => 'Fisika Baru Refresh',
+            'report_group_code' => 'PILIHAN',
+            'report_group_name' => 'Mapel Pilihan',
+            'is_active' => true,
+        ]);
+        $missingTeaching = TeachingAssignment::query()->create([
+            'assessment_semester_id' => $semester->getKey(),
+            'assessment_subject_id' => $missingSubject->getKey(),
+            'assessment_subject_category_id' => $category->getKey(),
+            'teacher_id' => $newTeacher->getKey(),
+            'rombel_id' => $rombel->getKey(),
+            'teacher_name_snapshot' => $newTeacher->nama,
+            'subject_name_snapshot' => $missingSubject->name,
+            'rombel_name_snapshot' => $rombel->nama,
+            'is_active' => true,
+        ]);
         $period = AssessmentPeriod::query()->create([
             'assessment_academic_year_id' => $year->getKey(),
             'assessment_semester_id' => $semester->getKey(),
@@ -657,10 +703,20 @@ class AssessmentAdminIntegrationTest extends TestCase
             'assessment_period_assignment_id' => $periodAssignment->getKey(),
         ]);
 
-        Livewire::actingAs($newUser)
+        $component = Livewire::actingAs($newUser)
             ->test(AstsInputScores::class)
-            ->set('periodId', $period->getKey())
-            ->assertSet('assignmentId', $periodAssignment->getKey());
+            ->set('periodId', $period->getKey());
+
+        $created = AssessmentPeriodAssignment::query()
+            ->where('assessment_period_id', $period->getKey())
+            ->where('assessment_period_rombel_id', $periodRombel->getKey())
+            ->where('assessment_subject_id', $missingSubject->getKey())
+            ->firstOrFail();
+        $this->assertSame((int) $missingTeaching->getKey(), $created->source_teaching_assignment_id);
+        $this->assertSame((int) $newTeacher->getKey(), $created->teacher_id);
+        $this->assertSame(AssignmentStatus::DRAFT, $created->status);
+        $this->assertArrayHasKey($periodAssignment->getKey(), $component->instance()->getAssignmentOptions());
+        $this->assertArrayHasKey($created->getKey(), $component->instance()->getAssignmentOptions());
 
         $fresh = $periodAssignment->fresh();
         $this->assertSame((int) $periodAssignment->getKey(), (int) $fresh->getKey());
