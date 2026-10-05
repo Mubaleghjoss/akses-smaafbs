@@ -344,7 +344,11 @@ class AssessmentTeacherExperienceTest extends TestCase
             ->set('assignmentId', $assignment->getKey())
             ->call('loadAssignment')
             ->assertSee('Upload Nilai Excel')
-            ->assertSee('Download Template Kelas Ini');
+            ->assertSee('Download Template Kelas Ini')
+            ->assertSee('Pilih File Excel')
+            ->assertSee('Preview Upload')
+            ->assertSeeHtml('assessment-upload-picker__label')
+            ->assertSeeHtml('assessment-upload-help');
         $preview = app(AssessmentScoreUploadPreview::class)->parse(
             $assignment,
             $file,
@@ -364,6 +368,14 @@ class AssessmentTeacherExperienceTest extends TestCase
         $this->assertSame('Valid', $preview[0]['status']);
         $this->assertSame('Error', $preview[1]['status']);
         $component->set('scoreUploadPreview', $preview)
+            ->assertSee('Preview Upload Nilai')
+            ->assertSee('Total Baris')
+            ->assertSee('Valid')
+            ->assertSee('Error')
+            ->assertSee('Terapkan 1 Baris Valid')
+            ->assertSeeHtml('assessment-upload-preview__table')
+            ->assertSeeHtml('assessment-upload-status is-valid')
+            ->assertSeeHtml('assessment-upload-status is-error')
             ->call('applyScoreUploadPreview')
             ->assertSet('scoreRows.'.$student->getKey().'.scores.'.array_key_first($preview[0]['scores']), 80.0);
     }

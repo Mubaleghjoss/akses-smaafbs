@@ -219,20 +219,40 @@
                             <h2 class="font-bold text-gray-950 dark:text-white">Upload Nilai Excel</h2>
                             <p class="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">Unduh template khusus kelas ini, isi nilai pada kolom manual, lalu periksa preview. Upload tidak menyimpan nilai ke server.</p>
                         </div>
-                        <div class="flex flex-wrap items-end gap-3">
+                        <div class="assessment-upload-actions">
                             <x-filament::button type="button" size="sm" color="gray" wire:click="downloadScoreUploadTemplate" icon="heroicon-o-arrow-down-tray">Download Template Kelas Ini</x-filament::button>
-                            <label class="assessment-score-field min-w-64">
-                                <span class="block text-xs font-bold text-gray-600 dark:text-gray-300">File .xlsx</span>
-                                <input wire:model="scoreUploadFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="mt-2 block w-full text-sm">
-                                @error('scoreUploadFile') <span class="mt-1 block text-xs text-danger-600">{{ $message }}</span> @enderror
-                            </label>
+                            <div class="assessment-upload-picker" x-data="{ fileName: '' }">
+                                <input
+                                    id="assessment-score-upload"
+                                    wire:model="scoreUploadFile"
+                                    x-on:change="fileName = $event.target.files[0]?.name || ''"
+                                    type="file"
+                                    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                    class="assessment-upload-picker__input"
+                                >
+                                <label for="assessment-score-upload" class="assessment-upload-picker__label">
+                                    <span class="assessment-upload-picker__icon"><x-filament::icon icon="heroicon-o-document-arrow-up" /></span>
+                                    <span class="assessment-upload-picker__copy">
+                                        <strong>Pilih File Excel</strong>
+                                        <small x-show="! fileName">Format .xlsx, maksimal 5 MB</small>
+                                        <small x-show="fileName" x-cloak>File terpilih: <span x-text="fileName"></span></small>
+                                    </span>
+                                    <span class="assessment-upload-picker__button">Pilih File</span>
+                                </label>
+                                @error('scoreUploadFile') <span class="assessment-upload-picker__error">{{ $message }}</span> @enderror
+                            </div>
                             <x-filament::button type="button" size="sm" wire:click="previewScoreUpload" wire:loading.attr="disabled" wire:target="scoreUploadFile,previewScoreUpload" icon="heroicon-o-eye">Preview Upload</x-filament::button>
                         </div>
                         @if ($scoreUploadPreview !== [])
                             @php($validUploadRows = collect($scoreUploadPreview)->where('status', 'Valid')->count())
-                            <div class="rounded-xl border border-gray-200 p-3 text-sm dark:border-white/10">
-                                <div class="flex flex-wrap items-center gap-3">
-                                    <strong>Preview: {{ $validUploadRows }} valid, {{ count($scoreUploadPreview) - $validUploadRows }} error</strong>
+                            @php($errorUploadRows = count($scoreUploadPreview) - $validUploadRows)
+                            <section class="assessment-upload-preview" aria-label="Preview Upload Nilai">
+                                <div class="assessment-upload-preview__head">
+                                    <div>
+                                        <span class="assessment-upload-preview__eyebrow">Pemeriksaan file</span>
+                                        <h3>Preview Upload Nilai</h3>
+                                        <p>Baris valid siap diterapkan ke formulir. Belum ada nilai yang disimpan ke server.</p>
+                                    </div>
                                     <x-filament::button
                                         type="button"
                                         size="sm"
@@ -240,17 +260,32 @@
                                         :disabled="$validUploadRows === 0"
                                         icon="heroicon-o-check"
                                     >
-                                        Terapkan ke Form
+                                        Terapkan {{ $validUploadRows }} Baris Valid
                                     </x-filament::button>
                                 </div>
-                                <div class="mt-3 max-h-56 overflow-auto">
-                                    <table class="w-full text-left text-xs"><thead><tr class="border-b dark:border-white/10"><th class="p-2">Baris</th><th class="p-2">Siswa</th><th class="p-2">Status</th><th class="p-2">Pesan</th></tr></thead><tbody>
-                                        @foreach ($scoreUploadPreview as $preview)
-                                            <tr class="border-b border-gray-100 dark:border-white/5"><td class="p-2">{{ $preview['row_number'] }}</td><td class="p-2">{{ $preview['student_name'] }}</td><td class="p-2 font-semibold {{ $preview['status'] === 'Valid' ? 'text-success-600' : 'text-danger-600' }}">{{ $preview['status'] }}</td><td class="p-2">{{ $preview['message'] }}</td></tr>
-                                        @endforeach
-                                    </tbody></table>
+                                <div class="assessment-upload-summary">
+                                    <div class="assessment-upload-summary__card"><span>Total Baris</span><strong>{{ count($scoreUploadPreview) }}</strong></div>
+                                    <div class="assessment-upload-summary__card is-valid"><span>Valid</span><strong>{{ $validUploadRows }}</strong></div>
+                                    <div class="assessment-upload-summary__card is-error"><span>Error</span><strong>{{ $errorUploadRows }}</strong></div>
                                 </div>
-                            </div>
+                                <div class="assessment-upload-preview__table-wrap">
+                                    <table class="assessment-upload-preview__table">
+                                        <thead><tr><th>Baris</th><th>Siswa</th><th>Status</th><th>Pesan</th></tr></thead>
+                                        <tbody>
+                                            @foreach ($scoreUploadPreview as $preview)
+                                                <tr class="{{ $preview['status'] === 'Valid' ? 'is-valid' : 'is-error' }}">
+                                                    <td data-label="Baris">{{ $preview['row_number'] }}</td>
+                                                    <td data-label="Siswa"><strong>{{ $preview['student_name'] }}</strong></td>
+                                                    <td data-label="Status"><span class="assessment-upload-status {{ $preview['status'] === 'Valid' ? 'is-valid' : 'is-error' }}">{{ $preview['status'] }}</span></td>
+                                                    <td data-label="Pesan">{{ $preview['message'] }}</td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </section>
+                        @else
+                            <p class="assessment-upload-help"><x-filament::icon icon="heroicon-o-information-circle" /> Pilih file template berformat .xlsx, lalu tekan <strong>Preview Upload</strong> untuk memeriksa setiap baris sebelum diterapkan.</p>
                         @endif
                     </section>
                 @endif
