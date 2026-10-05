@@ -2,16 +2,19 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Assessment\SubmitAssessmentAssignmentAction;
 use App\Enums\Assessment\AssessmentPeriodStatus;
+use App\Enums\Assessment\AssessmentType;
 use App\Enums\Assessment\AssignmentStatus;
 use App\Enums\Assessment\ScoreSource;
 use App\Filament\Pages\Assessment\AsasHomeroomRecap;
 use App\Filament\Pages\Assessment\AsasHub;
+use App\Filament\Pages\Assessment\AsasInputScores;
+use App\Filament\Pages\Assessment\AsasSubmissionStatus;
 use App\Filament\Pages\Assessment\AsatHub;
 use App\Filament\Pages\Assessment\AssessmentDashboard;
 use App\Filament\Pages\Assessment\AssessmentSetupWizard;
 use App\Filament\Pages\Assessment\AssessmentTeachingMatrix;
-use App\Filament\Pages\Assessment\AsasSubmissionStatus;
 use App\Filament\Pages\Assessment\AstsHomeroomRecap;
 use App\Filament\Pages\Assessment\AstsHub;
 use App\Filament\Pages\Assessment\AstsInputScores;
@@ -27,11 +30,12 @@ use App\Models\Assessment\AssessmentPeriodStudent;
 use App\Models\Assessment\AssessmentScheme;
 use App\Models\Assessment\AssessmentScore;
 use App\Models\Assessment\HomeroomReport;
-use App\Models\Assessment\Subject;
 use App\Models\Assessment\StudentSubjectResult;
+use App\Models\Assessment\Subject;
 use App\Models\User;
 use App\Support\Admin\AdminModuleAccess;
 use App\Support\Assessment\AssessmentActionFailureNotification;
+use App\Support\Assessment\AssessmentScoreUploadPreview;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +43,8 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Spatie\Permission\Models\Role;
 use Tests\Feature\Concerns\BootstrapsUserAndPermissionTables;
 use Tests\TestCase;
@@ -295,6 +301,73 @@ class AssessmentTeacherExperienceTest extends TestCase
             ->all());
     }
 
+    public function test_asts_score_upload_previews_valid_rows_and_applies_only_them_to_the_form(): void
+    {
+        $teacher = $this->teacher(348);
+        $period = AssessmentPeriod::factory()->asts()->create(['status' => AssessmentPeriodStatus::OPEN]);
+        $rombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'rombel_name_snapshot' => 'X ASTS Upload',
+        ]);
+        $subject = Subject::factory()->create(['name' => 'Fisika']);
+        AssessmentScheme::factory()->create(['assessment_period_id' => $period->getKey()]);
+        $assignment = AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'assessment_subject_id' => $subject->getKey(),
+            'teacher_id' => 348,
+            'teacher_name_snapshot' => 'Putra Kamulyan',
+            'subject_name_snapshot' => 'Fisika',
+            'rombel_name_snapshot' => 'X ASTS Upload',
+            'status' => AssignmentStatus::DRAFT,
+        ]);
+        $student = AssessmentPeriodStudent::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'nisn_snapshot' => '0012345678',
+            'student_name_snapshot' => 'Siswa Valid',
+            'rombel_name_snapshot' => 'X ASTS Upload',
+        ]);
+
+        $file = tempnam(sys_get_temp_dir(), 'asts-upload-').'.xlsx';
+        $workbook = new Spreadsheet;
+        $workbook->getActiveSheet()->fromArray([
+            ['No', 'ID Siswa Periode', 'NISN', 'Nama Siswa', 'Kelas', 'Ujian Harian 1', 'Ujian Harian 2', 'Ujian Harian 3', 'Nilai Murni ASTS'],
+            [1, $student->getKey(), $student->nisn_snapshot, $student->student_name_snapshot, 'X ASTS Upload', 80, '', 90, 85],
+            [2, 999999, '', 'Bukan Siswa Kelas Ini', 'X Lain', 80, 80, 80, 80],
+        ]);
+        (new Xlsx($workbook))->save($file);
+
+        $component = Livewire::actingAs($teacher)
+            ->test(AstsInputScores::class)
+            ->set('periodId', $period->getKey())
+            ->set('assignmentId', $assignment->getKey())
+            ->call('loadAssignment')
+            ->assertSee('Upload Nilai Excel')
+            ->assertSee('Download Template Kelas Ini');
+        $preview = app(AssessmentScoreUploadPreview::class)->parse(
+            $assignment,
+            $file,
+            collect($component->instance()->components)
+                ->where('score_source', 'manual')
+                ->map(fn (array $scoreComponent): array => [
+                    'id' => $scoreComponent['id'],
+                    'name' => $scoreComponent['name'],
+                    'minimum_score' => $scoreComponent['minimum_score'],
+                    'maximum_score' => $scoreComponent['maximum_score'],
+                ])
+                ->values()
+                ->all(),
+        );
+        unlink($file);
+
+        $this->assertSame('Valid', $preview[0]['status']);
+        $this->assertSame('Error', $preview[1]['status']);
+        $component->set('scoreUploadPreview', $preview)
+            ->call('applyScoreUploadPreview')
+            ->assertSet('scoreRows.'.$student->getKey().'.scores.'.array_key_first($preview[0]['scores']), 80.0);
+    }
+
     public function test_teacher_homeroom_input_only_lists_own_subjects_and_review_is_read_only(): void
     {
         $teacher = $this->teacher(348);
@@ -447,7 +520,7 @@ class AssessmentTeacherExperienceTest extends TestCase
         ]);
 
         Livewire::actingAs($teacher)
-            ->test(\App\Filament\Pages\Assessment\AsasInputScores::class)
+            ->test(AsasInputScores::class)
             ->set('periodId', $period->getKey())
             ->assertSet('assignmentId', null)
             ->assertSee('Belum ada mapel yang diampu')
@@ -1027,7 +1100,7 @@ class AssessmentTeacherExperienceTest extends TestCase
 
         $this->assertSame('Buka Input Nilai', $asasNotification['actions'][0]['label']);
         $this->assertSame(
-            \App\Filament\Pages\Assessment\AsasInputScores::getUrl([
+            AsasInputScores::getUrl([
                 'period' => $asasPeriod->getKey(),
                 'assignment' => $asasAssignment->getKey(),
             ]),
@@ -1047,11 +1120,11 @@ class AssessmentTeacherExperienceTest extends TestCase
             'status' => AssessmentPeriodStatus::OPEN,
         ]);
         $asatDraft = AssessmentPeriod::factory()->create([
-            'type' => \App\Enums\Assessment\AssessmentType::ASAT,
+            'type' => AssessmentType::ASAT,
             'status' => AssessmentPeriodStatus::DRAFT,
         ]);
         $asatVerification = AssessmentPeriod::factory()->create([
-            'type' => \App\Enums\Assessment\AssessmentType::ASAT,
+            'type' => AssessmentType::ASAT,
             'status' => AssessmentPeriodStatus::VERIFICATION,
         ]);
         $rombel = AssessmentPeriodRombel::factory()->create([
@@ -1163,7 +1236,7 @@ class AssessmentTeacherExperienceTest extends TestCase
             'assessment_component_id' => $components->last()->getKey(), 'score' => 90,
         ]);
         try {
-            app(\App\Actions\Assessment\SubmitAssessmentAssignmentAction::class)->execute($teacher, $assignment);
+            app(SubmitAssessmentAssignmentAction::class)->execute($teacher, $assignment);
             $this->fail('ASTS submission should require at least one UH score.');
         } catch (ValidationException $exception) {
             $this->assertArrayHasKey('scores', $exception->errors());
@@ -1176,7 +1249,7 @@ class AssessmentTeacherExperienceTest extends TestCase
             'assessment_component_id' => $components->first()->getKey(), 'score' => 90,
         ]);
         try {
-            app(\App\Actions\Assessment\SubmitAssessmentAssignmentAction::class)->execute($teacher, $assignment);
+            app(SubmitAssessmentAssignmentAction::class)->execute($teacher, $assignment);
             $this->fail('ASTS submission should require Nilai Murni ASTS.');
         } catch (ValidationException $exception) {
             $this->assertArrayHasKey('scores', $exception->errors());
@@ -1402,13 +1475,13 @@ class AssessmentTeacherExperienceTest extends TestCase
             ->assertSee('Kirim dengan Override Deadline');
 
         try {
-            app(\App\Actions\Assessment\SubmitAssessmentAssignmentAction::class)->execute($owner, $assignment);
+            app(SubmitAssessmentAssignmentAction::class)->execute($owner, $assignment);
             $this->fail('Teacher owner must not submit after the entry deadline.');
         } catch (ValidationException $exception) {
             $this->assertArrayHasKey('period', $exception->errors());
         }
 
-        app(\App\Actions\Assessment\SubmitAssessmentAssignmentAction::class)->execute($curriculum, $assignment);
+        app(SubmitAssessmentAssignmentAction::class)->execute($curriculum, $assignment);
         $this->assertSame(AssignmentStatus::SUBMITTED, $assignment->fresh()->status);
         $this->assertDatabaseHas('assessment_audit_logs', [
             'event' => 'assignment.submitted',

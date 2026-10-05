@@ -8,6 +8,7 @@ use App\Actions\Assessment\SubmitAssessmentAssignmentAction;
 use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssessmentType;
 use App\Enums\Assessment\AssignmentStatus;
+use App\Exports\AssessmentScoreImportTemplateExport;
 use App\Filament\Pages\Assessment\Concerns\HasAssessmentTypeNavigation;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodAssignment;
@@ -18,21 +19,26 @@ use App\Models\Assessment\TeachingAssignment;
 use App\Models\User;
 use App\Support\Assessment\AssessmentActionFailureNotification;
 use App\Support\Assessment\AssessmentAuditLogger;
-use App\Support\Assessment\AstsSchemeComponents;
 use App\Support\Assessment\AssessmentNumberFormatter;
 use App\Support\Assessment\AssessmentPageMap;
 use App\Support\Assessment\AssessmentSchemeResolver;
+use App\Support\Assessment\AssessmentScoreUploadPreview;
+use App\Support\Assessment\AstsSchemeComponents;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Url;
+use Livewire\Features\SupportFileUploads\WithFileUploads;
+use Maatwebsite\Excel\Facades\Excel;
 use Throwable;
 
 abstract class AssessmentScoreEntryPage extends AssessmentPage
 {
     use HasAssessmentTypeNavigation;
+    use WithFileUploads;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-pencil-square';
 
@@ -74,6 +80,11 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
     public string $bulkDescription = '';
 
     public bool $bulkFillEmptyOnly = false;
+
+    public mixed $scoreUploadFile = null;
+
+    /** @var array<int, array<string, mixed>> */
+    public array $scoreUploadPreview = [];
 
     public static function canAccess(): bool
     {
@@ -323,6 +334,8 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
         $this->assignmentMeta = null;
         $this->lockVersion = 0;
         $this->selectedStudentIds = [];
+        $this->scoreUploadFile = null;
+        $this->scoreUploadPreview = [];
 
         if (! $this->assignmentId) {
             return;
@@ -528,6 +541,86 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
                 $assignment->period,
             );
         }
+    }
+
+    public function downloadScoreUploadTemplate()
+    {
+        $assignment = $this->uploadableAssignment();
+        $components = $this->manualComponents();
+        $students = $assignment->period->students()
+            ->where('assessment_period_rombel_id', $assignment->assessment_period_rombel_id)
+            ->where('is_active', true)
+            ->orderBy('student_name_snapshot')
+            ->get();
+        $headings = ['No', 'ID Siswa Periode', 'NISN', 'Nama Siswa', 'Kelas', ...array_column($components, 'name')];
+        $rows = $students->values()->map(fn ($student, int $index): array => [
+            $index + 1,
+            $student->getKey(),
+            $student->nisn_snapshot,
+            $student->student_name_snapshot,
+            $student->rombel_name_snapshot,
+            ...array_fill(0, count($components), ''),
+        ])->all();
+
+        return Excel::download(
+            new AssessmentScoreImportTemplateExport($headings, $rows),
+            'template-nilai-'.Str::slug($assignment->subject_name_snapshot).'-'.Str::slug($assignment->rombel_name_snapshot).'.xlsx',
+        );
+    }
+
+    public function previewScoreUpload(): void
+    {
+        $assignment = $this->uploadableAssignment();
+        $this->validate(['scoreUploadFile' => ['required', 'file', 'mimes:xlsx', 'max:5120']]);
+        $this->scoreUploadPreview = app(AssessmentScoreUploadPreview::class)->parse(
+            $assignment,
+            $this->scoreUploadFile,
+            $this->manualComponents(),
+        );
+    }
+
+    public function applyScoreUploadPreview(): void
+    {
+        $this->uploadableAssignment();
+        $applied = 0;
+        foreach ($this->scoreUploadPreview as $preview) {
+            if (($preview['status'] ?? null) !== 'Valid' || ! isset($this->scoreRows[$preview['student_id']])) {
+                continue;
+            }
+            foreach ($preview['scores'] as $componentId => $score) {
+                $this->scoreRows[$preview['student_id']]['scores'][$componentId] = $score;
+            }
+            $applied++;
+        }
+        $this->dispatch('assessment-upload-applied', key: $this->draftKey());
+        Notification::make()
+            ->title("{$applied} baris diterapkan ke formulir")
+            ->body('Data belum disimpan. Periksa nilai lalu tekan Simpan Draf.')
+            ->success()
+            ->send();
+    }
+
+    /** @return array<int, array{id:int,name:string,minimum_score:float,maximum_score:float}> */
+    protected function manualComponents(): array
+    {
+        return collect($this->components)
+            ->where('score_source', 'manual')
+            ->map(fn (array $component): array => [
+                'id' => (int) $component['id'],
+                'name' => (string) $component['name'],
+                'minimum_score' => (float) $component['minimum_score'],
+                'maximum_score' => (float) $component['maximum_score'],
+            ])
+            ->values()
+            ->all();
+    }
+
+    protected function uploadableAssignment(): AssessmentPeriodAssignment
+    {
+        $assignment = $this->selectedAssignment();
+        abort_unless($assignment && data_get($this->assignmentMeta, 'editable'), 403);
+
+        return $assignment;
     }
 
     public function usesDescriptions(): bool

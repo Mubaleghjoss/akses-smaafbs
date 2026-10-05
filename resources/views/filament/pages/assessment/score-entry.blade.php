@@ -156,7 +156,7 @@
                         this.staleSavedAt = null;
                     }
                 }"
-                x-init="restoreLocal(); window.addEventListener('assessment-draft-cleared', (event) => { if (event.detail?.key === draftKey) localStorage.removeItem(draftKey) }); window.addEventListener('assessment-bulk-applied', (event) => { if (event.detail?.key === draftKey) setTimeout(() => persistRenderedFields(), 50) })"
+                x-init="restoreLocal(); window.addEventListener('assessment-draft-cleared', (event) => { if (event.detail?.key === draftKey) localStorage.removeItem(draftKey) }); window.addEventListener('assessment-bulk-applied', (event) => { if (event.detail?.key === draftKey) setTimeout(() => persistRenderedFields(), 50) }); window.addEventListener('assessment-upload-applied', (event) => { if (event.detail?.key === draftKey) setTimeout(() => persistRenderedFields(), 50) })"
                 x-on:input.debounce.250ms="saveLocal($event)"
                 class="space-y-4"
             >
@@ -212,6 +212,46 @@
                                 Terapkan ke Form
                             </x-filament::button>
                         </div>
+                    </section>
+
+                    <section class="assessment-bulk-card">
+                        <div>
+                            <h2 class="font-bold text-gray-950 dark:text-white">Upload Nilai Excel</h2>
+                            <p class="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">Unduh template khusus kelas ini, isi nilai pada kolom manual, lalu periksa preview. Upload tidak menyimpan nilai ke server.</p>
+                        </div>
+                        <div class="flex flex-wrap items-end gap-3">
+                            <x-filament::button type="button" size="sm" color="gray" wire:click="downloadScoreUploadTemplate" icon="heroicon-o-arrow-down-tray">Download Template Kelas Ini</x-filament::button>
+                            <label class="assessment-score-field min-w-64">
+                                <span class="block text-xs font-bold text-gray-600 dark:text-gray-300">File .xlsx</span>
+                                <input wire:model="scoreUploadFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="mt-2 block w-full text-sm">
+                                @error('scoreUploadFile') <span class="mt-1 block text-xs text-danger-600">{{ $message }}</span> @enderror
+                            </label>
+                            <x-filament::button type="button" size="sm" wire:click="previewScoreUpload" wire:loading.attr="disabled" wire:target="scoreUploadFile,previewScoreUpload" icon="heroicon-o-eye">Preview Upload</x-filament::button>
+                        </div>
+                        @if ($scoreUploadPreview !== [])
+                            @php($validUploadRows = collect($scoreUploadPreview)->where('status', 'Valid')->count())
+                            <div class="rounded-xl border border-gray-200 p-3 text-sm dark:border-white/10">
+                                <div class="flex flex-wrap items-center gap-3">
+                                    <strong>Preview: {{ $validUploadRows }} valid, {{ count($scoreUploadPreview) - $validUploadRows }} error</strong>
+                                    <x-filament::button
+                                        type="button"
+                                        size="sm"
+                                        wire:click="applyScoreUploadPreview"
+                                        :disabled="$validUploadRows === 0"
+                                        icon="heroicon-o-check"
+                                    >
+                                        Terapkan ke Form
+                                    </x-filament::button>
+                                </div>
+                                <div class="mt-3 max-h-56 overflow-auto">
+                                    <table class="w-full text-left text-xs"><thead><tr class="border-b dark:border-white/10"><th class="p-2">Baris</th><th class="p-2">Siswa</th><th class="p-2">Status</th><th class="p-2">Pesan</th></tr></thead><tbody>
+                                        @foreach ($scoreUploadPreview as $preview)
+                                            <tr class="border-b border-gray-100 dark:border-white/5"><td class="p-2">{{ $preview['row_number'] }}</td><td class="p-2">{{ $preview['student_name'] }}</td><td class="p-2 font-semibold {{ $preview['status'] === 'Valid' ? 'text-success-600' : 'text-danger-600' }}">{{ $preview['status'] }}</td><td class="p-2">{{ $preview['message'] }}</td></tr>
+                                        @endforeach
+                                    </tbody></table>
+                                </div>
+                            </div>
+                        @endif
                     </section>
                 @endif
 
