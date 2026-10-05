@@ -26,11 +26,7 @@ class EnsureGuruChangedDefaultPassword
             return $next($request);
         }
 
-        if ($request->isMethod('GET') || $request->isMethod('HEAD')) {
-            return $next($request);
-        }
-
-        return redirect()->to('/admin');
+        return redirect()->route('filament.admin.pages.force-guru-password-change');
     }
 
     protected function isAllowedRoute(string $routeName): bool

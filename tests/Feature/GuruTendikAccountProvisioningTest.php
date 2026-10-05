@@ -7,17 +7,20 @@ use App\Models\User;
 use App\Support\GuruTendik\GuruTendikAccountProvisioner;
 use Illuminate\Support\Facades\Hash;
 use Tests\Feature\Concerns\BootstrapsAdminFeatureTables;
+use Tests\Feature\Concerns\BootstrapsAssessmentTables;
 use Tests\TestCase;
 
 class GuruTendikAccountProvisioningTest extends TestCase
 {
     use BootstrapsAdminFeatureTables;
+    use BootstrapsAssessmentTables;
 
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->bootstrapAdminFeatureTables();
+        $this->bootstrapAssessmentTables();
     }
 
     public function test_bulk_provisioning_creates_linked_guru_accounts_with_unique_defaults(): void
@@ -159,17 +162,46 @@ class GuruTendikAccountProvisioningTest extends TestCase
         $this->assertStringContainsString('<pre', $html);
     }
 
-    public function test_guru_with_default_password_sees_blocking_modal_on_admin_pages(): void
+    public function test_guru_with_default_password_is_redirected_to_the_force_change_page(): void
     {
         $guru = GuruTendik::query()->create(['nama' => 'Ustadz Rafi', 'jenis_ptk' => 'Guru', 'status' => 'aktif']);
         $result = app(GuruTendikAccountProvisioner::class)->provisionOrResetForGuru($guru);
         $guruUser = $result['user']->fresh();
+        $forceChangeUrl = route('filament.admin.pages.force-guru-password-change');
 
         $this->actingAs($guruUser)
             ->get('/admin')
+            ->assertRedirect($forceChangeUrl);
+
+        $this->actingAs($guruUser)
+            ->get($forceChangeUrl)
             ->assertOk()
-            ->assertSee('Wajib Ganti Password')
-            ->assertSee('Simpan Password Baru');
+            ->assertSee('Ganti Password Pertama');
+    }
+
+    public function test_non_default_guru_is_not_redirected_from_the_dashboard(): void
+    {
+        $guru = GuruTendik::query()->create(['nama' => 'Ustadz Fikri', 'jenis_ptk' => 'Guru', 'status' => 'aktif']);
+        $result = app(GuruTendikAccountProvisioner::class)->provisionOrResetForGuru($guru);
+        $guruUser = $result['user'];
+        $guruUser->forceFill(['uses_default_password' => false])->save();
+
+        $this->actingAs($guruUser)
+            ->get('/admin')
+            ->assertOk();
+    }
+
+    public function test_admin_is_not_redirected_from_the_dashboard_when_the_default_flag_is_set(): void
+    {
+        $adminUser = User::factory()->create([
+            'username' => 'admin.tidak.default',
+            'uses_default_password' => true,
+        ]);
+        $adminUser->assignRole('admin');
+
+        $this->actingAs($adminUser)
+            ->get('/admin')
+            ->assertOk();
     }
 
     public function test_guru_is_unblocked_after_forced_password_change(): void
