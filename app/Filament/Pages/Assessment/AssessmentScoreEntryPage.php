@@ -136,6 +136,11 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             auth()->user() instanceof User ? auth()->user() : null,
         );
 
+        app(ReconcileOpenPeriodAssignmentsFromMatrixAction::class)->homeroomsForOpenPeriodsOfType(
+            static::$assessmentType,
+            auth()->user() instanceof User ? auth()->user() : null,
+        );
+
         $periodIds = array_map('intval', array_keys($this->getPeriodOptions()));
 
         if (! $this->periodId || ! in_array($this->periodId, $periodIds, true)) {

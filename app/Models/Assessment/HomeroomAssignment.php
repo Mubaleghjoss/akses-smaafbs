@@ -28,6 +28,19 @@ class HomeroomAssignment extends Model
     protected static function booted(): void
     {
         static::saved(function (self $assignment): void {
+            // A reassignment affects both accounts; the previous teacher may no
+            // longer have an active matrix-derived scope after this save.
+            collect([$assignment->getOriginal('teacher_id'), $assignment->teacher_id])
+                ->filter()
+                ->unique()
+                ->each(function (int|string $teacherId): void {
+                    User::query()
+                        ->where('guru_tendik_id', $teacherId)
+                        ->each(fn (User $user) => $user->syncAssessmentHomeroomRole());
+                });
+        });
+
+        static::deleted(function (self $assignment): void {
             User::query()
                 ->where('guru_tendik_id', $assignment->teacher_id)
                 ->each(fn (User $user) => $user->syncAssessmentHomeroomRole());

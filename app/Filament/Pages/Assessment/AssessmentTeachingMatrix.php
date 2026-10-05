@@ -376,12 +376,14 @@ class AssessmentTeachingMatrix extends AssessmentPage
         $dinonaktifkan = 0;
         $waliTersimpan = 0;
         $snapshotDisinkronkan = 0;
+        $waliSnapshotDisinkronkan = 0;
         $assignmentDitambahkan = 0;
         $actor = auth()->user();
 
         DB::transaction(function () use (
             $guru, $namaRombel, $namaMapel, $kategoriMapel, $actor,
-            &$tersimpan, &$dinonaktifkan, &$waliTersimpan, &$snapshotDisinkronkan, &$assignmentDitambahkan
+            &$tersimpan, &$dinonaktifkan, &$waliTersimpan, &$snapshotDisinkronkan,
+            &$waliSnapshotDisinkronkan, &$assignmentDitambahkan
         ): void {
             foreach ($this->getRombelRows() as $r) {
                 foreach ($this->getSubjectColumns() as $m) {
@@ -449,6 +451,8 @@ class AssessmentTeachingMatrix extends AssessmentPage
 
             $assignmentDitambahkan += app(ReconcileOpenPeriodAssignmentsFromMatrixAction::class)
                 ->forSemester((int) $this->semesterId, $actor instanceof User ? $actor : null);
+            $waliSnapshotDisinkronkan += app(ReconcileOpenPeriodAssignmentsFromMatrixAction::class)
+                ->homeroomsForSemester((int) $this->semesterId, $actor instanceof User ? $actor : null);
         });
 
         $this->muatData();
@@ -460,8 +464,9 @@ class AssessmentTeachingMatrix extends AssessmentPage
                 $tersimpan,
                 $waliTersimpan,
                 ($dinonaktifkan > 0 ? " {$dinonaktifkan} penugasan dinonaktifkan (tidak dihapus)." : '')
-                    . ($snapshotDisinkronkan > 0 ? " {$snapshotDisinkronkan} snapshot periode terbuka disinkronkan." : '')
-                    . ($assignmentDitambahkan > 0 ? " {$assignmentDitambahkan} assignment periode terbuka ditambahkan." : ''),
+                    .($snapshotDisinkronkan > 0 ? " {$snapshotDisinkronkan} snapshot guru periode terbuka disinkronkan." : '')
+                    .($waliSnapshotDisinkronkan > 0 ? " {$waliSnapshotDisinkronkan} snapshot wali periode terbuka disinkronkan." : '')
+                    .($assignmentDitambahkan > 0 ? " {$assignmentDitambahkan} assignment periode terbuka ditambahkan." : ''),
             ))
             ->success()
             ->duration(10000)

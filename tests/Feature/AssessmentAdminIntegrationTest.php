@@ -26,15 +26,16 @@ use App\Filament\Resources\GuruTendikResource\Pages\EditGuruTendik;
 use App\Filament\Resources\GuruTendikResource\RelationManagers\AssessmentHomeroomAssignmentsRelationManager;
 use App\Filament\Resources\GuruTendikResource\RelationManagers\AssessmentTeachingAssignmentsRelationManager;
 use App\Models\Assessment\AcademicYear;
+use App\Models\Assessment\AssessmentComponent;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodAssignment;
+use App\Models\Assessment\AssessmentPeriodHomeroom;
 use App\Models\Assessment\AssessmentPeriodRombel;
 use App\Models\Assessment\AssessmentScheme;
-use App\Models\Assessment\AssessmentComponent;
 use App\Models\Assessment\AssessmentScore;
-use App\Models\Assessment\ReportSnapshot;
 use App\Models\Assessment\AuditLog;
 use App\Models\Assessment\HomeroomAssignment;
+use App\Models\Assessment\ReportSnapshot;
 use App\Models\Assessment\Semester;
 use App\Models\Assessment\Subject;
 use App\Models\Assessment\SubjectCategory;
@@ -508,6 +509,24 @@ class AssessmentAdminIntegrationTest extends TestCase
             'rombel_name_snapshot' => $rombel->nama,
             'is_active' => true,
         ]);
+        $oldWaliUser = $this->createUser('matrix-old-wali', 'guru', (int) $oldTeacher->getKey());
+        $newWaliUser = $this->createUser('matrix-new-wali', 'guru', (int) $newTeacher->getKey());
+        $oldHomeroom = HomeroomAssignment::query()->create([
+            'assessment_semester_id' => $semester->getKey(),
+            'teacher_id' => $oldTeacher->getKey(),
+            'rombel_id' => $rombel->getKey(),
+            'teacher_name_snapshot' => $oldTeacher->nama,
+            'rombel_name_snapshot' => $rombel->nama,
+            'is_active' => true,
+        ]);
+        $periodHomeroom = AssessmentPeriodHomeroom::query()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $periodRombel->getKey(),
+            'source_homeroom_assignment_id' => $oldHomeroom->getKey(),
+            'teacher_id' => $oldTeacher->getKey(),
+            'teacher_name_snapshot' => $oldTeacher->nama,
+            'rombel_name_snapshot' => $rombel->nama,
+        ]);
         $periodAssignment = AssessmentPeriodAssignment::factory()->create([
             'assessment_period_id' => $period->getKey(),
             'assessment_period_rombel_id' => $periodRombel->getKey(),
@@ -573,6 +592,49 @@ class AssessmentAdminIntegrationTest extends TestCase
             'event' => 'assignment.teacher_snapshot_synchronized_from_matrix',
             'subject_id' => $periodAssignment->getKey(),
         ]);
+
+        Livewire::actingAs($manager)
+            ->test(AssessmentTeachingMatrix::class)
+            ->set('semesterId', $semester->getKey())
+            ->set("wali.{$rombel->getKey()}", (string) $newTeacher->getKey())
+            ->call('simpan')
+            ->assertHasNoErrors();
+
+        $this->assertSame((int) $newTeacher->getKey(), $periodHomeroom->fresh()->teacher_id);
+        $this->assertSame((int) HomeroomAssignment::query()
+            ->where('assessment_semester_id', $semester->getKey())
+            ->where('rombel_id', $rombel->getKey())
+            ->value('id'), $periodHomeroom->fresh()->source_homeroom_assignment_id);
+        $this->assertSame($newTeacher->nama, $periodHomeroom->fresh()->teacher_name_snapshot);
+        $this->assertSame([], $oldWaliUser->fresh()->assessmentHomeroomScopes());
+        $this->assertSame([$rombel->nama], $newWaliUser->fresh()->assessmentHomeroomScopes());
+        $this->assertTrue($newWaliUser->fresh()->hasRole('wali_kelas'));
+        $this->assertDatabaseHas('assessment_audit_logs', [
+            'assessment_period_id' => $period->getKey(),
+            'event' => 'homeroom.teacher_snapshot_synchronized_from_matrix',
+            'subject_id' => $periodHomeroom->getKey(),
+        ]);
+
+        // Simulate the production state left by a matrix save before snapshot
+        // synchronization existed. Opening the score page must repair scope.
+        $periodHomeroom->forceFill([
+            'source_homeroom_assignment_id' => $oldHomeroom->getKey(),
+            'teacher_id' => $oldTeacher->getKey(),
+            'teacher_name_snapshot' => $oldTeacher->nama,
+        ])->save();
+
+        Livewire::actingAs($oldWaliUser->fresh())
+            ->test(AstsInputScores::class)
+            ->assertSet('periodId', null);
+        Livewire::actingAs($newWaliUser->fresh())
+            ->test(AstsInputScores::class)
+            ->assertSet('periodId', (int) $period->getKey());
+
+        $this->assertSame((int) $newTeacher->getKey(), $periodHomeroom->fresh()->teacher_id);
+        $this->assertSame((int) HomeroomAssignment::query()
+            ->where('assessment_semester_id', $semester->getKey())
+            ->where('rombel_id', $rombel->getKey())
+            ->value('id'), $periodHomeroom->fresh()->source_homeroom_assignment_id);
 
         $lockVersionBeforeClear = $periodAssignment->fresh()->lock_version;
 

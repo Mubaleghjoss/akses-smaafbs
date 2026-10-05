@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages\Assessment;
 
+use App\Actions\Assessment\ReconcileOpenPeriodAssignmentsFromMatrixAction;
 use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssessmentType;
 use App\Enums\Assessment\AssignmentStatus;
@@ -70,6 +71,10 @@ class AssessmentDashboard extends AssessmentPage
 
     public function mount(): void
     {
+        // Dashboard spans every assessment type, so reconcile all open periods.
+        app(ReconcileOpenPeriodAssignmentsFromMatrixAction::class)->homeroomsForOpenPeriods(
+            auth()->user() instanceof User ? auth()->user() : null,
+        );
         $ids = array_map('intval', array_keys($this->getPeriodOptions()));
         if (! $this->periodId || ! in_array($this->periodId, $ids, true)) {
             $this->periodId = $ids[0] ?? null;

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages\Assessment;
 
+use App\Actions\Assessment\ReconcileOpenPeriodAssignmentsFromMatrixAction;
 use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssessmentType;
 use App\Filament\Pages\Assessment\Concerns\HasAssessmentTypeNavigation;
@@ -172,6 +173,11 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
 
     public function mount(): void
     {
+        app(ReconcileOpenPeriodAssignmentsFromMatrixAction::class)->homeroomsForOpenPeriodsOfType(
+            static::$assessmentType,
+            auth()->user() instanceof User ? auth()->user() : null,
+        );
+
         $periodIds = array_map('intval', array_keys($this->getPeriodOptions()));
         if (! $this->periodId || ! in_array($this->periodId, $periodIds, true)) {
             $this->periodId = $periodIds[0] ?? null;

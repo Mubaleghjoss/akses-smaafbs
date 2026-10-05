@@ -7,7 +7,9 @@ use App\Enums\Assessment\AssessmentType;
 use App\Enums\Assessment\AssignmentStatus;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodAssignment;
+use App\Models\Assessment\AssessmentPeriodHomeroom;
 use App\Models\Assessment\AssessmentPeriodRombel;
+use App\Models\Assessment\HomeroomAssignment;
 use App\Models\Assessment\TeachingAssignment;
 use App\Models\User;
 use App\Support\Assessment\AssessmentAuditLogger;
@@ -38,6 +40,97 @@ final class ReconcileOpenPeriodAssignmentsFromMatrixAction
             ->where('status', AssessmentPeriodStatus::OPEN->value)
             ->pluck('id')
             ->sum(fn (int $periodId): int => $this->forPeriod($periodId, $actor));
+    }
+
+    /**
+     * Reconciles homeroom snapshots without touching scores, reports, or
+     * assignment workflow state. A blank/inactive matrix row intentionally
+     * leaves the existing snapshot untouched.
+     */
+    public function homeroomsForSemester(int $semesterId, ?User $actor = null): int
+    {
+        return AssessmentPeriod::query()
+            ->where('assessment_semester_id', $semesterId)
+            ->where('status', AssessmentPeriodStatus::OPEN->value)
+            ->pluck('id')
+            ->sum(fn (int $periodId): int => $this->homeroomsForPeriod($periodId, $actor));
+    }
+
+    public function homeroomsForOpenPeriods(?User $actor = null): int
+    {
+        return AssessmentPeriod::query()
+            ->where('status', AssessmentPeriodStatus::OPEN->value)
+            ->pluck('id')
+            ->sum(fn (int $periodId): int => $this->homeroomsForPeriod($periodId, $actor));
+    }
+
+    public function homeroomsForOpenPeriodsOfType(AssessmentType $type, ?User $actor = null): int
+    {
+        return AssessmentPeriod::query()
+            ->where('type', $type->value)
+            ->where('status', AssessmentPeriodStatus::OPEN->value)
+            ->pluck('id')
+            ->sum(fn (int $periodId): int => $this->homeroomsForPeriod($periodId, $actor));
+    }
+
+    public function homeroomsForPeriod(int $periodId, ?User $actor = null): int
+    {
+        return DB::transaction(function () use ($periodId, $actor): int {
+            /** @var AssessmentPeriod|null $period */
+            $period = AssessmentPeriod::query()->lockForUpdate()->find($periodId);
+            if (! $period || $period->status !== AssessmentPeriodStatus::OPEN) {
+                return 0;
+            }
+
+            $snapshots = AssessmentPeriodHomeroom::query()
+                ->where('assessment_period_id', $period->getKey())
+                ->with('periodRombel:id,source_rombel_id')
+                ->lockForUpdate()
+                ->get();
+            if ($snapshots->isEmpty()) {
+                return 0;
+            }
+
+            $homerooms = HomeroomAssignment::query()
+                ->where('assessment_semester_id', $period->assessment_semester_id)
+                ->where('is_active', true)
+                ->whereIn('rombel_id', $snapshots->pluck('periodRombel.source_rombel_id')->filter())
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('rombel_id');
+
+            $updated = 0;
+            foreach ($snapshots as $snapshot) {
+                $homeroom = $homerooms->get($snapshot->periodRombel?->source_rombel_id);
+                if (! $homeroom) {
+                    continue;
+                }
+
+                $values = [
+                    'source_homeroom_assignment_id' => $homeroom->getKey(),
+                    'teacher_id' => $homeroom->teacher_id,
+                    'teacher_name_snapshot' => $homeroom->teacher_name_snapshot,
+                    'rombel_name_snapshot' => $homeroom->rombel_name_snapshot,
+                ];
+                if ($snapshot->only(array_keys($values)) === $values) {
+                    continue;
+                }
+
+                $old = $snapshot->only(array_keys($values));
+                $snapshot->forceFill($values)->save();
+                $this->audit->record(
+                    actor: $actor,
+                    event: 'homeroom.teacher_snapshot_synchronized_from_matrix',
+                    subject: $snapshot,
+                    oldValues: $old,
+                    newValues: $snapshot->only(array_keys($values)),
+                    reason: 'Rekonsiliasi menyelaraskan wali kelas aktif pada periode terbuka dengan Matriks Penugasan.',
+                );
+                $updated++;
+            }
+
+            return $updated;
+        }, 3);
     }
 
     public function forPeriod(int $periodId, ?User $actor = null): int
