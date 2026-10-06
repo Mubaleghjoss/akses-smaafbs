@@ -3,6 +3,7 @@
 namespace App\Filament\Pages\Assessment;
 
 use App\Actions\Assessment\ReconcileOpenPeriodAssignmentsFromMatrixAction;
+use App\Actions\Assessment\ReconcileOpenPeriodStudentsAction;
 use App\Actions\Assessment\SaveAssessmentScoresAction;
 use App\Actions\Assessment\SubmitAssessmentAssignmentAction;
 use App\Enums\Assessment\AssessmentPeriodStatus;
@@ -144,6 +145,8 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             static::$assessmentType,
             auth()->user() instanceof User ? auth()->user() : null,
         );
+
+        app(ReconcileOpenPeriodStudentsAction::class)->forOpenPeriodsOfType(static::$assessmentType);
 
         $periodIds = array_map('intval', array_keys($this->getPeriodOptions()));
 
@@ -351,6 +354,10 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             return;
         }
 
+        if ($this->periodId) {
+            app(ReconcileOpenPeriodStudentsAction::class)->forPeriod($this->periodId);
+        }
+
         $this->syncSelectedAssignmentTeacherSnapshotFromMatrix();
 
         /** @var AssessmentPeriodAssignment|null $assignment */
@@ -372,6 +379,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
         $students = $assignment->period->students()
             ->where('assessment_period_rombel_id', $assignment->assessment_period_rombel_id)
             ->where('is_active', true)
+            ->eligibleForScoreEntry()
             ->orderBy('student_name_snapshot')
             ->get();
         $scores = AssessmentScore::query()
@@ -569,6 +577,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
         $students = $assignment->period->students()
             ->where('assessment_period_rombel_id', $assignment->assessment_period_rombel_id)
             ->where('is_active', true)
+            ->eligibleForScoreEntry()
             ->orderBy('student_name_snapshot')
             ->get();
         $headings = ['No', 'ID Siswa Periode', 'NISN', 'Nama Siswa', 'Kelas', ...array_column($components, 'name')];

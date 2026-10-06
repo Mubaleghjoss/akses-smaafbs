@@ -108,6 +108,7 @@ final class SaveAssessmentScoresAction
                     ->where('assessment_period_id', $locked->assessment_period_id)
                     ->where('assessment_period_rombel_id', $locked->assessment_period_rombel_id)
                     ->where('is_active', true)
+                    ->eligibleForScoreEntry()
                     ->first();
 
                 if (! $student) {

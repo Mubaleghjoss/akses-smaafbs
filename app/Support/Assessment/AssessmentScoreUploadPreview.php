@@ -50,6 +50,7 @@ final class AssessmentScoreUploadPreview
             ->where('assessment_period_id', $assignment->assessment_period_id)
             ->where('assessment_period_rombel_id', $assignment->assessment_period_rombel_id)
             ->where('is_active', true)
+            ->eligibleForScoreEntry()
             ->get();
         $seen = [];
         $preview = [];

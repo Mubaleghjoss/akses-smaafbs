@@ -32,6 +32,7 @@ use App\Models\Assessment\AssessmentScore;
 use App\Models\Assessment\HomeroomReport;
 use App\Models\Assessment\StudentSubjectResult;
 use App\Models\Assessment\Subject;
+use App\Models\DataSiswa;
 use App\Models\User;
 use App\Support\Admin\AdminModuleAccess;
 use App\Support\Assessment\AssessmentActionFailureNotification;
@@ -241,6 +242,172 @@ class AssessmentTeacherExperienceTest extends TestCase
 
         $this->assertSame(AssignmentStatus::DRAFT, $assignment->refresh()->status);
         $this->assertSame(AssignmentStatus::SUBMITTED, $submittedAssignment->refresh()->status);
+    }
+
+    public function test_open_asts_input_excludes_students_who_are_inactive_or_in_mutasi_rombel_without_deleting_snapshots(): void
+    {
+        Schema::create('data_siswa', function (Blueprint $table): void {
+            $table->id();
+            $table->string('nama');
+            $table->string('rombel_saat_ini')->nullable();
+            $table->string('status')->nullable();
+            $table->timestamps();
+        });
+
+        $teacher = $this->teacher(348);
+        $period = AssessmentPeriod::factory()->asts()->create(['status' => AssessmentPeriodStatus::OPEN]);
+        $rombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'rombel_name_snapshot' => 'X ASTS',
+        ]);
+        $subject = Subject::factory()->create(['name' => 'Matematika']);
+        $scheme = AssessmentScheme::factory()->create(['assessment_period_id' => $period->getKey()]);
+        $component = AssessmentComponent::factory()->create([
+            'assessment_scheme_id' => $scheme->getKey(),
+            'name' => 'Nilai ASTS',
+        ]);
+        $assignment = AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'assessment_subject_id' => $subject->getKey(),
+            'teacher_id' => 348,
+            'teacher_name_snapshot' => 'Putra Kamulyan',
+            'subject_name_snapshot' => 'Matematika',
+            'rombel_name_snapshot' => 'X ASTS',
+            'status' => AssignmentStatus::DRAFT,
+        ]);
+        DataSiswa::query()->insert([
+            ['id' => 501, 'nama' => 'Siswa Aktif', 'rombel_saat_ini' => 'X ASTS', 'status' => 'aktif'],
+            ['id' => 502, 'nama' => 'Siswa Pindah', 'rombel_saat_ini' => 'X ASTS', 'status' => 'pindah'],
+            ['id' => 503, 'nama' => 'Siswa Rombel Mutasi', 'rombel_saat_ini' => 'Mutasi', 'status' => 'aktif'],
+        ]);
+        $active = AssessmentPeriodStudent::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'student_id' => 501,
+            'student_name_snapshot' => 'Siswa Aktif',
+            'rombel_name_snapshot' => 'X ASTS',
+        ]);
+        $pindah = AssessmentPeriodStudent::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'student_id' => 502,
+            'student_name_snapshot' => 'Siswa Pindah',
+            'rombel_name_snapshot' => 'X ASTS',
+        ]);
+        $mutasi = AssessmentPeriodStudent::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'student_id' => 503,
+            'student_name_snapshot' => 'Siswa Rombel Mutasi',
+            'rombel_name_snapshot' => 'X ASTS',
+        ]);
+        AssessmentScore::factory()->create([
+            'assessment_period_assignment_id' => $assignment->getKey(),
+            'assessment_period_student_id' => $pindah->getKey(),
+            'assessment_component_id' => $component->getKey(),
+            'score' => '88.0000',
+        ]);
+
+        $entry = Livewire::actingAs($teacher)
+            ->test(AstsInputScores::class)
+            ->set('periodId', $period->getKey())
+            ->set('assignmentId', $assignment->getKey())
+            ->call('loadAssignment')
+            ->assertSee('Siswa Aktif')
+            ->assertDontSee('Siswa Pindah')
+            ->assertDontSee('Siswa Rombel Mutasi');
+
+        $rows = $entry->instance()->scoreRows;
+        $this->assertArrayHasKey($active->getKey(), $rows);
+        $this->assertArrayNotHasKey($pindah->getKey(), $rows);
+        $this->assertArrayNotHasKey($mutasi->getKey(), $rows);
+        $this->assertDatabaseHas('assessment_scores', [
+            'assessment_period_student_id' => $pindah->getKey(),
+            'score' => '88.0000',
+        ]);
+    }
+
+    public function test_asts_input_hides_and_deactivates_students_who_are_mutated_without_deleting_stale_scores(): void
+    {
+        Schema::create('data_siswa', function (Blueprint $table): void {
+            $table->id();
+            $table->string('nama');
+            $table->string('nis')->nullable();
+            $table->string('nisn')->nullable();
+            $table->string('rombel_saat_ini')->nullable();
+            $table->string('status')->nullable();
+            $table->timestamps();
+        });
+
+        $teacher = $this->teacher(348);
+        $period = AssessmentPeriod::factory()->asts()->create(['status' => AssessmentPeriodStatus::OPEN]);
+        $rombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'rombel_name_snapshot' => 'X 1',
+        ]);
+        $subject = Subject::factory()->create(['name' => 'Matematika']);
+        $scheme = AssessmentScheme::factory()->create(['assessment_period_id' => $period->getKey()]);
+        $component = AssessmentComponent::factory()->create([
+            'assessment_scheme_id' => $scheme->getKey(),
+            'name' => 'Nilai ASTS',
+        ]);
+        $assignment = AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'assessment_subject_id' => $subject->getKey(),
+            'teacher_id' => 348,
+            'teacher_name_snapshot' => 'Putra Kamulyan',
+            'subject_name_snapshot' => 'Matematika',
+            'rombel_name_snapshot' => 'X 1',
+            'status' => AssignmentStatus::DRAFT,
+        ]);
+        $active = DataSiswa::query()->create([
+            'nama' => 'Siswa Aktif',
+            'rombel_saat_ini' => 'X 1',
+            'status' => 'aktif',
+        ]);
+        $mutated = DataSiswa::query()->create([
+            'nama' => 'M. Afrand Arfiga Azhari',
+            'rombel_saat_ini' => 'Mutasi',
+            'status' => 'pindah',
+        ]);
+        $activeSnapshot = AssessmentPeriodStudent::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'student_id' => $active->getKey(),
+            'student_name_snapshot' => $active->nama,
+            'rombel_name_snapshot' => 'X 1',
+        ]);
+        $mutatedSnapshot = AssessmentPeriodStudent::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'student_id' => $mutated->getKey(),
+            'student_name_snapshot' => $mutated->nama,
+            'rombel_name_snapshot' => 'X 1',
+        ]);
+        $staleScore = AssessmentScore::factory()->create([
+            'assessment_period_assignment_id' => $assignment->getKey(),
+            'assessment_period_student_id' => $mutatedSnapshot->getKey(),
+            'assessment_component_id' => $component->getKey(),
+            'score' => '80.0000',
+        ]);
+
+        $entry = Livewire::actingAs($teacher)
+            ->test(AstsInputScores::class)
+            ->set('periodId', $period->getKey())
+            ->set('assignmentId', $assignment->getKey())
+            ->call('loadAssignment')
+            ->assertSee('Siswa Aktif')
+            ->assertDontSee('M. Afrand Arfiga Azhari');
+
+        $this->assertArrayHasKey($activeSnapshot->getKey(), $entry->instance()->scoreRows);
+        $this->assertArrayNotHasKey($mutatedSnapshot->getKey(), $entry->instance()->scoreRows);
+        $this->assertDatabaseHas('assessment_period_students', [
+            'id' => $mutatedSnapshot->getKey(),
+            'is_active' => false,
+        ]);
+        $this->assertDatabaseHas('assessment_scores', ['id' => $staleScore->getKey()]);
     }
 
     public function test_asts_input_automatically_provides_three_daily_columns_and_pure_score(): void

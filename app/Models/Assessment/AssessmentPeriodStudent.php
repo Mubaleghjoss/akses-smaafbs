@@ -4,10 +4,12 @@ namespace App\Models\Assessment;
 
 use App\Models\DataSiswa;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\Schema;
 
 class AssessmentPeriodStudent extends Model
 {
@@ -48,6 +50,21 @@ class AssessmentPeriodStudent extends Model
     public function student(): BelongsTo
     {
         return $this->belongsTo(DataSiswa::class, 'student_id');
+    }
+
+    /**
+     * Limit live score entry to students still eligible in the source roster.
+     * The period snapshot (and any historical scores) remains intact.
+     */
+    public function scopeEligibleForScoreEntry(Builder $query): Builder
+    {
+        if (! Schema::hasTable((new DataSiswa)->getTable())) {
+            return $query;
+        }
+
+        return $query->whereHas('student', fn (Builder $student): Builder => $student
+            ->where('status', 'aktif')
+            ->whereRaw("LOWER(COALESCE(rombel_saat_ini, '')) NOT LIKE ?", ['%mutasi%']));
     }
 
     public function scores(): HasMany
