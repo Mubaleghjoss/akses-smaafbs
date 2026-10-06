@@ -19,6 +19,7 @@ use App\Models\Assessment\TeachingAssignment;
 use App\Models\User;
 use App\Support\Assessment\AssessmentActionFailureNotification;
 use App\Support\Assessment\AssessmentAuditLogger;
+use App\Support\Assessment\AssessmentCalculator;
 use App\Support\Assessment\AssessmentNumberFormatter;
 use App\Support\Assessment\AssessmentPageMap;
 use App\Support\Assessment\AssessmentSchemeResolver;
@@ -66,6 +67,9 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
 
     /** @var array<int, array<string, mixed>> */
     public array $components = [];
+
+    /** @var array<string, mixed> */
+    public array $calculationScheme = [];
 
     /** @var array<string, mixed>|null */
     public ?array $assignmentMeta = null;
@@ -336,6 +340,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
     {
         $this->scoreRows = [];
         $this->components = [];
+        $this->calculationScheme = [];
         $this->assignmentMeta = null;
         $this->lockVersion = 0;
         $this->selectedStudentIds = [];
@@ -379,6 +384,12 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             ->get()
             ->keyBy('assessment_period_student_id');
 
+        $this->calculationScheme = [
+            'minimum_score' => (float) $scheme->minimum_score,
+            'maximum_score' => (float) $scheme->maximum_score,
+            'rounding_precision' => (int) $scheme->rounding_precision,
+            'settings' => (array) $scheme->settings,
+        ];
         $this->components = $scheme->components
             ->map(fn ($component): array => [
                 'id' => (int) $component->getKey(),
@@ -395,6 +406,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
                 'score_source' => $component->score_source instanceof \BackedEnum
                     ? $component->score_source->value
                     : (string) $component->score_source,
+                'settings' => (array) $component->settings,
             ])
             ->values()
             ->all();
@@ -427,6 +439,8 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
                 'final_score' => $results->get($student->getKey())?->final_score,
             ];
         }
+
+        $this->refreshCalculatedRows();
 
         $status = $assignment->status instanceof AssignmentStatus
             ? $assignment->status
@@ -597,6 +611,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             }
             $applied++;
         }
+        $this->refreshCalculatedRows();
         $this->dispatch('assessment-upload-applied', key: $this->draftKey());
         Notification::make()
             ->title("{$applied} baris diterapkan ke formulir")
@@ -744,6 +759,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             }
         }
 
+        $this->refreshCalculatedRows();
         $this->dispatch('assessment-bulk-applied', key: $this->draftKey());
         Notification::make()
             ->title("Diterapkan ke {$changed} siswa")
@@ -781,6 +797,43 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
         }
 
         return "Timpa {$overwritten} nilai/deskripsi lama pada {$selected->count()} siswa terpilih? Perubahan masih harus disimpan melalui tombol Simpan Draf.";
+    }
+
+    public function updatedScoreRows(): void
+    {
+        $this->refreshCalculatedRows();
+    }
+
+    /**
+     * Recalculate the browser-only preview; score persistence remains in saveDraft().
+     */
+    private function refreshCalculatedRows(): void
+    {
+        if ($this->components === [] || $this->calculationScheme === []) {
+            return;
+        }
+
+        $calculator = app(AssessmentCalculator::class);
+
+        foreach ($this->scoreRows as $studentId => $row) {
+            try {
+                $calculation = $calculator->calculate(
+                    $this->components,
+                    $row['scores'] ?? [],
+                    $this->calculationScheme,
+                );
+                $this->scoreRows[$studentId]['daily_average'] = data_get($calculation->detail, 'daily_average');
+                $this->scoreRows[$studentId]['final_score'] = $calculation->finalScore;
+                $this->scoreRows[$studentId]['predicate'] = $calculation->predicate;
+                $this->scoreRows[$studentId]['is_complete'] = $calculation->isComplete;
+            } catch (Throwable) {
+                // Keep invalid in-progress input visible; save/submit still owns validation.
+                $this->scoreRows[$studentId]['daily_average'] = null;
+                $this->scoreRows[$studentId]['final_score'] = null;
+                $this->scoreRows[$studentId]['predicate'] = null;
+                $this->scoreRows[$studentId]['is_complete'] = false;
+            }
+        }
     }
 
     public function draftKey(): string

@@ -321,6 +321,12 @@
                                             <span class="assessment-matrix-component__meta">{{ $this->formatComponentMeta($component) }}</span>
                                         </th>
                                     @endforeach
+                                    @if (! $this->usesDescriptions())
+                                        <th>Rata-rata UH</th>
+                                        <th>Nilai Akhir ASTS</th>
+                                        <th>Predikat</th>
+                                        <th>Hasil</th>
+                                    @endif
                                     @if ($this->usesDescriptions())
                                         <th>Deskripsi Capaian</th>
                                     @endif
@@ -342,9 +348,6 @@
                                                     @endif
                                                 </span>
                                             </label>
-                                            @if ($row['final_score'] !== null)
-                                                <div class="assessment-final-score mt-2">Nilai akhir: {{ \App\Support\Assessment\AssessmentNumberFormatter::score($row['final_score']) }}</div>
-                                            @endif
                                         </td>
                                         @foreach ($components as $component)
                                             <td @class(['assessment-matrix-score-cell', 'is-manual' => $component['score_source'] === 'manual', 'is-automatic' => $component['score_source'] !== 'manual'])>
@@ -356,11 +359,17 @@
                                                     class="assessment-score-input"
                                                     aria-label="{{ $component['name'] }} untuk {{ $row['student_name'] }}"
                                                     data-assessment-path="scoreRows.{{ $studentId }}.scores.{{ $component['id'] }}"
-                                                    wire:model.blur="scoreRows.{{ $studentId }}.scores.{{ $component['id'] }}"
+                                                    wire:model.live.debounce.250ms="scoreRows.{{ $studentId }}.scores.{{ $component['id'] }}"
                                                     @disabled(! $assignmentMeta['editable'] || $component['score_source'] !== 'manual')
                                                 >
                                             </td>
                                         @endforeach
+                                        @if (! $this->usesDescriptions())
+                                            <td class="assessment-matrix-score-cell">{{ $row['daily_average'] === null ? '-' : \App\Support\Assessment\AssessmentNumberFormatter::score($row['daily_average']) }}</td>
+                                            <td class="assessment-matrix-score-cell">{{ $row['final_score'] === null ? '-' : \App\Support\Assessment\AssessmentNumberFormatter::score($row['final_score']) }}</td>
+                                            <td class="assessment-matrix-score-cell">{{ $row['predicate'] ?? '-' }}</td>
+                                            <td class="assessment-matrix-score-cell">{{ $row['is_complete'] ? 'Lengkap' : 'Belum lengkap' }}</td>
+                                        @endif
                                         @if ($this->usesDescriptions())
                                             <td>
                                                 <textarea
@@ -398,8 +407,13 @@
                                 </label>
                                     <span class="assessment-score-pill">{{ $index + 1 }}/{{ count($scoreRows) }}</span>
                                 </div>
-                                @if ($row['final_score'] !== null)
-                                    <div class="assessment-final-score">Nilai akhir: {{ \App\Support\Assessment\AssessmentNumberFormatter::score($row['final_score']) }}</div>
+                                @if (! $this->usesDescriptions())
+                                    <dl class="mt-3 grid grid-cols-2 gap-2 text-sm">
+                                        <div><dt class="text-gray-500">Rata-rata UH</dt><dd class="font-semibold">{{ $row['daily_average'] === null ? '-' : \App\Support\Assessment\AssessmentNumberFormatter::score($row['daily_average']) }}</dd></div>
+                                        <div><dt class="text-gray-500">Nilai Akhir ASTS</dt><dd class="font-semibold">{{ $row['final_score'] === null ? '-' : \App\Support\Assessment\AssessmentNumberFormatter::score($row['final_score']) }}</dd></div>
+                                        <div><dt class="text-gray-500">Predikat</dt><dd class="font-semibold">{{ $row['predicate'] ?? '-' }}</dd></div>
+                                        <div><dt class="text-gray-500">Hasil</dt><dd class="font-semibold">{{ $row['is_complete'] ? 'Lengkap' : 'Belum lengkap' }}</dd></div>
+                                    </dl>
                                 @endif
                             <div class="assessment-mobile-grid">
                                 @foreach ($components as $component)
@@ -418,7 +432,7 @@
                                             max="{{ $component['maximum_score'] }}"
                                             class="assessment-score-input"
                                             data-assessment-path="scoreRows.{{ $studentId }}.scores.{{ $component['id'] }}"
-                                            wire:model.blur="scoreRows.{{ $studentId }}.scores.{{ $component['id'] }}"
+                                            wire:model.live.debounce.250ms="scoreRows.{{ $studentId }}.scores.{{ $component['id'] }}"
                                             @disabled(! $assignmentMeta['editable'] || $component['score_source'] !== 'manual')
                                         >
                                     </label>

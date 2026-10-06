@@ -301,6 +301,80 @@ class AssessmentTeacherExperienceTest extends TestCase
             ->all());
     }
 
+    public function test_asts_score_entry_recalculates_preview_without_persisting_until_draft_is_saved(): void
+    {
+        $teacher = $this->teacher(348);
+        $period = AssessmentPeriod::factory()->asts()->create(['status' => AssessmentPeriodStatus::OPEN]);
+        $rombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'rombel_name_snapshot' => 'X Preview ASTS',
+        ]);
+        $student = AssessmentPeriodStudent::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'rombel_name_snapshot' => 'X Preview ASTS',
+        ]);
+        $subject = Subject::factory()->create(['name' => 'Kimia']);
+        $scheme = AssessmentScheme::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'settings' => ['asts' => ['daily_weight' => 50, 'pure_weight' => 50]],
+        ]);
+        $components = collect([
+            ['UH1', 'Ujian Harian 1', 16.6667, false],
+            ['UH2', 'Ujian Harian 2', 16.6667, false],
+            ['UH3', 'Ujian Harian 3', 16.6666, false],
+            ['ASTS_MURNI', 'Nilai Murni ASTS', 50, true],
+        ])->map(fn (array $component, int $order): AssessmentComponent => AssessmentComponent::factory()->create([
+            'assessment_scheme_id' => $scheme->getKey(),
+            'code' => $component[0],
+            'name' => $component[1],
+            'weight' => $component[2],
+            'is_required' => $component[3],
+            'sort_order' => $order,
+        ]));
+        $assignment = AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'assessment_subject_id' => $subject->getKey(),
+            'teacher_id' => 348,
+            'teacher_name_snapshot' => 'Putra Kamulyan',
+            'subject_name_snapshot' => 'Kimia',
+            'rombel_name_snapshot' => 'X Preview ASTS',
+            'status' => AssignmentStatus::DRAFT,
+        ]);
+
+        $entry = Livewire::actingAs($teacher)
+            ->test(AstsInputScores::class)
+            ->set('periodId', $period->getKey())
+            ->set('assignmentId', $assignment->getKey())
+            ->call('loadAssignment')
+            ->set("scoreRows.{$student->getKey()}.scores.{$components[0]->getKey()}", 80)
+            ->set("scoreRows.{$student->getKey()}.scores.{$components[3]->getKey()}", 90)
+            ->assertSet("scoreRows.{$student->getKey()}.daily_average", 80.0)
+            ->assertSet("scoreRows.{$student->getKey()}.final_score", 85.0)
+            ->assertSet("scoreRows.{$student->getKey()}.predicate", 'B - Baik')
+            ->assertSet("scoreRows.{$student->getKey()}.is_complete", true)
+            ->assertSee('Rata-rata UH')
+            ->assertSee('Nilai Akhir ASTS')
+            ->assertSee('B - Baik')
+            ->set('selectedStudentIds', [$student->getKey()])
+            ->set('bulkComponentId', $components[1]->getKey())
+            ->set('bulkScore', '100')
+            ->call('applyBulkValues')
+            ->assertSet("scoreRows.{$student->getKey()}.daily_average", 90.0)
+            ->assertSet("scoreRows.{$student->getKey()}.final_score", 90.0)
+            ->assertSet("scoreRows.{$student->getKey()}.predicate", 'A - Sangat Baik');
+
+        $this->assertDatabaseMissing('assessment_scores', [
+            'assessment_period_assignment_id' => $assignment->getKey(),
+            'assessment_period_student_id' => $student->getKey(),
+        ]);
+        $this->assertDatabaseMissing('assessment_student_subject_results', [
+            'assessment_period_assignment_id' => $assignment->getKey(),
+            'assessment_period_student_id' => $student->getKey(),
+        ]);
+    }
+
     public function test_asts_score_upload_previews_valid_rows_and_applies_only_them_to_the_form(): void
     {
         $teacher = $this->teacher(348);
@@ -377,7 +451,10 @@ class AssessmentTeacherExperienceTest extends TestCase
             ->assertSeeHtml('assessment-upload-status is-valid')
             ->assertSeeHtml('assessment-upload-status is-error')
             ->call('applyScoreUploadPreview')
-            ->assertSet('scoreRows.'.$student->getKey().'.scores.'.array_key_first($preview[0]['scores']), 80.0);
+            ->assertSet('scoreRows.'.$student->getKey().'.scores.'.array_key_first($preview[0]['scores']), 80.0)
+            ->assertSet('scoreRows.'.$student->getKey().'.daily_average', 85.0)
+            ->assertSet('scoreRows.'.$student->getKey().'.final_score', 85.0)
+            ->assertSet('scoreRows.'.$student->getKey().'.predicate', 'B - Baik');
     }
 
     public function test_teacher_homeroom_input_only_lists_own_subjects_and_review_is_read_only(): void
@@ -501,7 +578,10 @@ class AssessmentTeacherExperienceTest extends TestCase
             ->call('loadAssignment')
             ->assertSet('assignmentMeta.subject', 'Matematika')
             ->assertSet('assignmentMeta.editable', false)
-            ->assertSee('Mode Tinjau Wali Kelas');
+            ->assertSee('Mode Tinjau Wali Kelas')
+            ->assertSee('Nilai Akhir ASTS')
+            ->assertSee('Predikat')
+            ->assertDontSeeHtml('wire:click="saveDraft"');
 
         $hub = Livewire::actingAs($teacher)
             ->test(AstsHub::class)
