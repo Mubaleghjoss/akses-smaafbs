@@ -70,12 +70,12 @@ final class PublishAssessmentPeriodAction
                     ->where('assessment_period_id', $locked->getKey())
                     ->where('assessment_report_template_id', $templateId)
                     ->max('revision');
-            $expected = $locked->students()->where('is_active', true)->count();
+            $expected = $locked->students()->eligibleForAssessment()->count();
             $snapshots = ReportSnapshot::query()
                 ->where('assessment_period_id', $locked->getKey())
                 ->where('assessment_report_template_id', $templateId)
                 ->where('revision', $latestRevision)
-                ->whereHas('student', fn ($query) => $query->where('is_active', true))
+                ->whereHas('student', fn ($query) => $query->eligibleForAssessment())
                 ->get();
             $validSnapshots = $snapshots->filter(
                 function (ReportSnapshot $snapshot): bool {
@@ -100,7 +100,7 @@ final class PublishAssessmentPeriodAction
             }
 
             $periodRombelIds = $locked->students()
-                ->where('is_active', true)
+                ->eligibleForAssessment()
                 ->distinct()
                 ->pluck('assessment_period_rombel_id')
                 ->map(fn (mixed $id): int => (int) $id)

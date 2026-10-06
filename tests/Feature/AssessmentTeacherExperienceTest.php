@@ -410,6 +410,107 @@ class AssessmentTeacherExperienceTest extends TestCase
         $this->assertDatabaseHas('assessment_scores', ['id' => $staleScore->getKey()]);
     }
 
+    public function test_submission_status_counts_only_eligible_students_and_preserves_mutation_scores(): void
+    {
+        Schema::create('data_siswa', function (Blueprint $table): void {
+            $table->id();
+            $table->string('nama');
+            $table->string('nis')->nullable();
+            $table->string('nisn')->nullable();
+            $table->string('rombel_saat_ini')->nullable();
+            $table->string('status')->nullable();
+            $table->timestamps();
+        });
+
+        $teacher = $this->teacher(348);
+        $period = AssessmentPeriod::factory()->asts()->create(['status' => AssessmentPeriodStatus::OPEN]);
+        $rombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'rombel_name_snapshot' => 'X 2',
+        ]);
+        $subject = Subject::factory()->create(['name' => 'Matematika']);
+        $assignment = AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'assessment_subject_id' => $subject->getKey(),
+            'teacher_id' => 348,
+            'teacher_name_snapshot' => 'Putra Kamulyan',
+            'subject_name_snapshot' => 'Matematika',
+            'rombel_name_snapshot' => 'X 2',
+            'status' => AssignmentStatus::SUBMITTED,
+        ]);
+
+        $incompleteAssignment = AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'assessment_subject_id' => Subject::factory()->create(['name' => 'Bahasa Indonesia'])->getKey(),
+            'teacher_id' => 348,
+            'teacher_name_snapshot' => 'Putra Kamulyan',
+            'subject_name_snapshot' => 'Bahasa Indonesia',
+            'rombel_name_snapshot' => 'X 2',
+            'status' => AssignmentStatus::DRAFT,
+        ]);
+        $activeStudents = collect(range(1, 22))->map(function (int $number) use ($period, $rombel): AssessmentPeriodStudent {
+            $student = DataSiswa::query()->create([
+                'nama' => "Siswa Aktif {$number}",
+                'rombel_saat_ini' => 'X 2',
+                'status' => 'aktif',
+            ]);
+
+            return AssessmentPeriodStudent::factory()->create([
+                'assessment_period_id' => $period->getKey(),
+                'assessment_period_rombel_id' => $rombel->getKey(),
+                'student_id' => $student->getKey(),
+                'student_name_snapshot' => $student->nama,
+                'rombel_name_snapshot' => 'X 2',
+            ]);
+        });
+        $mutated = DataSiswa::query()->create([
+            'nama' => 'M. Afrand Arfiga Azhari',
+            'rombel_saat_ini' => 'Mutasi',
+            'status' => 'pindah',
+        ]);
+        $mutatedSnapshot = AssessmentPeriodStudent::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'student_id' => $mutated->getKey(),
+            'student_name_snapshot' => $mutated->nama,
+            'rombel_name_snapshot' => 'X 2',
+            'is_active' => false,
+        ]);
+
+        foreach ($activeStudents->push($mutatedSnapshot) as $student) {
+            StudentSubjectResult::query()->create([
+                'assessment_period_id' => $period->getKey(),
+                'assessment_period_student_id' => $student->getKey(),
+                'assessment_period_assignment_id' => $assignment->getKey(),
+                'final_score' => 80,
+            ]);
+        }
+
+        StudentSubjectResult::query()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_student_id' => $mutatedSnapshot->getKey(),
+            'assessment_period_assignment_id' => $incompleteAssignment->getKey(),
+            'final_score' => 80,
+        ]);
+
+        $status = Livewire::actingAs($teacher)
+            ->test(AstsSubmissionStatus::class)
+            ->set('periodId', $period->getKey());
+
+        $rows = collect($status->instance()->getAssignmentRows())->keyBy('subject');
+        $this->assertSame(22, $rows['Matematika']['student_count']);
+        $this->assertSame(22, $rows['Matematika']['completed_count']);
+        $this->assertSame(100, $rows['Matematika']['completion_percent']);
+        $this->assertSame(0, $rows['Bahasa Indonesia']['completed_count']);
+        $this->assertSame(0, $rows['Bahasa Indonesia']['completion_percent']);
+        $this->assertDatabaseHas('assessment_student_subject_results', [
+            'assessment_period_student_id' => $mutatedSnapshot->getKey(),
+            'final_score' => '80.0000',
+        ]);
+    }
+
     public function test_asts_input_automatically_provides_three_daily_columns_and_pure_score(): void
     {
         $teacher = $this->teacher(348);

@@ -250,7 +250,7 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
             ->keyBy('assessment_period_student_id');
         $students = $homeroom->period->students()
             ->where('assessment_period_rombel_id', $homeroom->assessment_period_rombel_id)
-            ->where('is_active', true)
+            ->eligibleForAssessment()
             ->orderBy('student_name_snapshot')
             ->get();
 

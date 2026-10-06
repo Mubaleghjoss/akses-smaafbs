@@ -67,6 +67,15 @@ class AssessmentPeriodStudent extends Model
             ->whereRaw("LOWER(COALESCE(rombel_saat_ini, '')) NOT LIKE ?", ['%mutasi%']));
     }
 
+    /**
+     * Keep operational progress and completeness aligned with the live roster.
+     * Historical snapshots, scores, and results are deliberately left untouched.
+     */
+    public function scopeEligibleForAssessment(Builder $query): Builder
+    {
+        return $query->where('is_active', true)->eligibleForScoreEntry();
+    }
+
     public function scores(): HasMany
     {
         return $this->hasMany(AssessmentScore::class, 'assessment_period_student_id');

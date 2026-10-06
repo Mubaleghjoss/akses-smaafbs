@@ -34,7 +34,7 @@ final class AssessmentReportPreflight
             ->orderBy('subject_name_snapshot')
             ->get();
         $students = $period->students()
-            ->where('is_active', true)
+            ->eligibleForAssessment()
             ->whereIn('assessment_period_rombel_id', $selectedRombelIds)
             ->orderBy('rombel_name_snapshot')
             ->orderBy('student_name_snapshot')

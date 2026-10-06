@@ -114,7 +114,7 @@ final class AssessmentReportProgress
             if ($homerooms->isNotEmpty()) {
                 $rombelIds = $homerooms->pluck('assessment_period_rombel_id');
                 $studentIds = $period->students()
-                    ->where('is_active', true)
+                    ->eligibleForAssessment()
                     ->whereIn('assessment_period_rombel_id', $rombelIds)
                     ->pluck('id');
                 $total = $studentIds->count();

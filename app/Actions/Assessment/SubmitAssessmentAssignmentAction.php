@@ -60,7 +60,7 @@ final class SubmitAssessmentAssignmentAction
             $scheme = $this->schemeResolver->forAssignment($locked);
             $students = $locked->period->students()
                 ->where('assessment_period_rombel_id', $locked->assessment_period_rombel_id)
-                ->where('is_active', true)
+                ->eligibleForAssessment()
                 ->orderBy('student_name_snapshot')
                 ->get();
 

@@ -4,6 +4,7 @@ namespace App\Support\Assessment\Reporting;
 
 use App\Contracts\SiteSettingsAccessor;
 use App\Models\Assessment\AssessmentPeriod;
+use App\Models\Assessment\AssessmentPeriodStudent;
 use App\Models\Assessment\AuditLog;
 use App\Models\Assessment\ClassReportArtifact;
 use App\Models\Assessment\ReportGenerationRun;
@@ -117,9 +118,9 @@ class CreateReportSnapshotsAction
             }
 
             $revision = $existingRevision + 1;
-            $students = DB::table('assessment_period_students')
+            $students = AssessmentPeriodStudent::query()
                 ->where('assessment_period_id', $period->getKey())
-                ->where('is_active', true)
+                ->eligibleForAssessment()
                 ->orderBy('assessment_period_rombel_id')
                 ->orderBy('student_name_snapshot')
                 ->get();

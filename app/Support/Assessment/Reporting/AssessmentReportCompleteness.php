@@ -95,7 +95,7 @@ class AssessmentReportCompleteness
         $siswaIds = AssessmentPeriodStudent::query()
             ->where('assessment_period_id', $periodId)
             ->where('assessment_period_rombel_id', $rombelId)
-            ->where('is_active', true)
+            ->eligibleForAssessment()
             ->pluck('id');
 
         $jumlahSiswa = $siswaIds->count();

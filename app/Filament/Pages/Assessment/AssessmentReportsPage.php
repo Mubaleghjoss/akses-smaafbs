@@ -288,7 +288,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
         }
 
         $students = $this->selectedPeriod()?->students()
-            ->where('is_active', true);
+            ->eligibleForAssessment();
 
         if (! $students) {
             return [];
@@ -360,7 +360,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
 
         return $this->selectedPeriod()?->students()
             ->where('assessment_period_rombel_id', $this->previewClassId)
-            ->where('is_active', true)
+            ->eligibleForAssessment()
             ->orderBy('student_name_snapshot')
             ->get()
             ->map(function ($student) use ($snapshots): array {
@@ -883,7 +883,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
                     ->where('revision', $artifact->revision)
                     ->whereHas('student', fn ($students) => $students
                         ->where('assessment_period_rombel_id', $artifact->assessment_period_rombel_id)
-                        ->where('is_active', true));
+                        ->eligibleForAssessment());
 
                 return [
                     'id' => (int) $artifact->getKey(),

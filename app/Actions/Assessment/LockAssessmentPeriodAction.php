@@ -72,13 +72,13 @@ final class LockAssessmentPeriodAction
                 ]);
             }
 
-            $expectedResults = $assignments->sum(function (AssessmentPeriodAssignment $assignment): int {
-                return (int) DB::table('assessment_period_students')
-                    ->where('assessment_period_id', $assignment->assessment_period_id)
-                    ->where('assessment_period_rombel_id', $assignment->assessment_period_rombel_id)
-                    ->where('is_active', true)
-                    ->count();
-            });
+            $eligibleStudents = $locked->students()
+                ->eligibleForAssessment()
+                ->get(['id', 'assessment_period_rombel_id']);
+            $eligibleStudentIds = $eligibleStudents->pluck('id');
+            $expectedResults = $assignments->sum(fn (AssessmentPeriodAssignment $assignment): int => $eligibleStudents
+                ->where('assessment_period_rombel_id', $assignment->assessment_period_rombel_id)
+                ->count());
             $completeResults = (int) DB::table('assessment_student_subject_results as results')
                 ->join(
                     'assessment_period_students as result_students',
@@ -93,7 +93,7 @@ final class LockAssessmentPeriodAction
                     'results.assessment_period_assignment_id',
                 )
                 ->where('results.assessment_period_id', $locked->getKey())
-                ->where('result_students.is_active', true)
+                ->whereIn('result_students.id', $eligibleStudentIds->all() ?: [0])
                 ->whereColumn(
                     'result_students.assessment_period_rombel_id',
                     'result_assignments.assessment_period_rombel_id',
@@ -108,7 +108,7 @@ final class LockAssessmentPeriodAction
             }
 
             if ($this->periodType($locked) === AssessmentType::ASAS) {
-                $activeStudentIds = $locked->students()->where('is_active', true)->pluck('id');
+                $activeStudentIds = $locked->students()->eligibleForAssessment()->pluck('id');
                 $homeroomCount = HomeroomReport::query()
                     ->where('assessment_period_id', $locked->getKey())
                     ->whereIn('assessment_period_student_id', $activeStudentIds)

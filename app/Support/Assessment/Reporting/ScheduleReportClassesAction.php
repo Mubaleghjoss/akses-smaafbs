@@ -79,7 +79,7 @@ final class ScheduleReportClassesAction
                 ],
                 [
                     'status' => 'prepared',
-                    'total_students' => $period->students()->where('is_active', true)->count(),
+                    'total_students' => $period->students()->eligibleForAssessment()->count(),
                     'total_classes' => $period->periodRombels()->count(),
                     'requested_by' => $actor->getKey(),
                 ],

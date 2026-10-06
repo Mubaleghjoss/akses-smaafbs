@@ -360,14 +360,16 @@ abstract class AssessmentSubmissionStatusPage extends AssessmentPage
         $activeRombelId = $this->resolvedActiveRombelId();
 
         $studentCounts = $period->students()
+            ->eligibleForAssessment()
             ->selectRaw('assessment_period_rombel_id, COUNT(*) as aggregate')
-            ->where('is_active', true)
             ->groupBy('assessment_period_rombel_id')
             ->pluck('aggregate', 'assessment_period_rombel_id');
         $query = $this->scopeAssignments(
             $period->assignments()->getQuery()->withCount([
                 'results',
-                'results as completed_results_count' => fn (Builder $builder): Builder => $builder->whereNotNull('final_score'),
+                'results as completed_results_count' => fn (Builder $builder): Builder => $builder
+                    ->whereNotNull('final_score')
+                    ->whereHas('student', fn (Builder $student): Builder => $student->eligibleForAssessment()),
             ]),
         );
 

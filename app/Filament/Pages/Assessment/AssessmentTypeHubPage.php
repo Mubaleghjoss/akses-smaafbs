@@ -182,7 +182,7 @@ abstract class AssessmentTypeHubPage extends AssessmentPage
             ->values();
         $studentCount = $period->students()
             ->whereIn('assessment_period_rombel_id', $rombelIds)
-            ->where('is_active', true)
+            ->eligibleForAssessment()
             ->count();
         $classCount = $rombelIds->count();
         $homeroomCount = $this->scopeHomerooms(
