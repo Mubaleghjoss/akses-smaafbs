@@ -907,6 +907,8 @@ class AssessmentReportingTest extends TestCase
         $this->assertSame(2, substr_count($html, '<col class="identity__col--asts-secondary-value">'));
         $this->assertSame(4, substr_count($html, 'identity__value--asts identity__value--asts-primary identity__value--asts-nowrap'));
         $this->assertSame(4, substr_count($html, 'identity__value--asts identity__value--asts-secondary identity__value--asts-nowrap'));
+        $this->assertSame(5, substr_count($html, 'identity__separator--asts-left'));
+        $this->assertSame(5, substr_count($html, 'identity__separator--asts-right'));
         foreach ([$scorePage, $summaryPage] as $page) {
             $this->assertStringContainsString($longStudentName, $page);
             $this->assertMatchesRegularExpression(
@@ -1326,6 +1328,12 @@ class AssessmentReportingTest extends TestCase
         $this->assertSame(2, substr_count($html, '<col class="identity__col--asts-secondary-value">'));
         $this->assertSame(4, substr_count($html, 'identity__value--asts identity__value--asts-primary identity__value--asts-nowrap'));
         $this->assertSame(4, substr_count($html, 'identity__value--asts identity__value--asts-secondary identity__value--asts-nowrap'));
+        $this->assertSame(5, substr_count($html, 'identity__separator--asts-left'));
+        $this->assertSame(5, substr_count($html, 'identity__separator--asts-right'));
+        $this->assertStringContainsString('.identity--asts .identity__label--asts-primary { width: 15%; }', $html);
+        $this->assertStringContainsString('.identity--asts .identity__label--asts-secondary { width: 10%; }', $html);
+        $this->assertStringContainsString('.identity--asts .identity__separator--asts-left { width: 2%; }', $html);
+        $this->assertStringContainsString('.identity--asts .identity__separator--asts-right { width: 2%; }', $html);
         $this->assertStringContainsString('.identity--asts .identity__col--asts-primary-value { width: 47%; }', $html);
         $this->assertStringContainsString('.identity--asts .identity__col--asts-secondary-value { width: 24%; }', $html);
         $this->assertStringContainsString('.identity--asts .identity__value--asts-nowrap { overflow: hidden; font-size: 9pt; text-overflow: ellipsis; white-space: nowrap; }', $html);

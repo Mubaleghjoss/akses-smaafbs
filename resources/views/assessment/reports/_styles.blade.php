@@ -23,10 +23,14 @@
     .identity--asts { table-layout: fixed; }
     .identity--asts .identity__col--asts-left-label { width: 15%; }
     .identity--asts .identity__col--asts-left-separator { width: 2%; }
+    .identity--asts .identity__label--asts-primary { width: 15%; }
+    .identity--asts .identity__separator--asts-left { width: 2%; }
     .identity--asts .identity__col--asts-primary-value { width: 47%; }
     .identity--asts .identity__col--asts-spacer { width: 1%; }
     .identity--asts .identity__col--asts-right-label { width: 10%; }
     .identity--asts .identity__col--asts-right-separator { width: 2%; }
+    .identity--asts .identity__label--asts-secondary { width: 10%; }
+    .identity--asts .identity__separator--asts-right { width: 2%; }
     .identity--asts .identity__col--asts-secondary-value { width: 24%; }
     .identity--asts .identity__label { white-space: nowrap; }
     .identity--asts .identity__separator--asts { padding-left: 0; padding-right: 0; text-align: center; }
