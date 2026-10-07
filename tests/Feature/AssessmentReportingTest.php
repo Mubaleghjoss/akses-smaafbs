@@ -853,10 +853,11 @@ class AssessmentReportingTest extends TestCase
 
     public function test_asts_uses_two_page_score_and_homeroom_layout_without_competency_descriptions(): void
     {
+        $longStudentName = 'Dea '.str_repeat('Rahmawati Kusuma ', 12);
         $snapshot = [
             'school' => ['name' => 'SMA AFBS'],
             'period' => ['academic_year' => 'Demo 2025/2026', 'semester' => 'Ganjil'],
-            'student' => ['name' => 'Siswa Uji', 'nisn' => '0085713398', 'class_name' => 'XI IPA 1'],
+            'student' => ['name' => $longStudentName, 'nisn' => '0085713398', 'class_name' => 'XI IPA 1'],
             'subjects' => [
                 // Deliberately stale predicates verify ASTS uses the displayed KKTP scale.
                 ['name' => 'Nilai 69', 'final_score' => 69, 'predicate' => 'A', 'description' => 'Tidak boleh tampil.', 'group_code' => 'WAJIB'],
@@ -901,6 +902,22 @@ class AssessmentReportingTest extends TestCase
         $this->assertStringContainsString('Nama Siswa', $summaryPage);
         $this->assertStringContainsString('NIS / NISN', $summaryPage);
         $this->assertStringContainsString('Kelas', $summaryPage);
+        $this->assertSame(2, substr_count($html, '<table class="identity identity--asts'));
+        $this->assertSame(2, substr_count($html, '<col class="identity__col--asts-primary-value">'));
+        $this->assertSame(2, substr_count($html, '<col class="identity__col--asts-secondary-value">'));
+        $this->assertSame(4, substr_count($html, 'identity__value--asts identity__value--asts-primary'));
+        $this->assertSame(4, substr_count($html, 'identity__value--asts identity__value--asts-secondary'));
+        foreach ([$scorePage, $summaryPage] as $page) {
+            $this->assertStringContainsString($longStudentName, $page);
+            $this->assertMatchesRegularExpression(
+                '/identity__value--asts-primary">'.preg_quote($longStudentName, '/').'<\\/td>\\s*<td class="identity__spacer"[^>]*><\\/td>\\s*<td class="identity__label identity__label--asts-secondary">Kelas<\\/td>/s',
+                $page,
+            );
+            $this->assertMatchesRegularExpression(
+                '/identity__label identity__label--asts-secondary">Semester<\\/td>\\s*<td class="identity__separator identity__separator--asts">:<\\/td>\\s*<td class="identity__value--asts identity__value--asts-secondary">Ganjil<\\/td>/s',
+                $page,
+            );
+        }
         $this->assertStringContainsString('Semester', $scorePage);
         $this->assertStringContainsString('Semester', $summaryPage);
         $this->assertStringNotContainsString('Jenis Laporan', $html);
@@ -1291,7 +1308,7 @@ class AssessmentReportingTest extends TestCase
         $this->assertStringContainsString('Siswa 1 - XI 1 - Rapor ASTS.pdf', $downloadDisposition);
     }
 
-    public function test_asts_identity_columns_keep_class_and_semester_labels_on_one_line(): void
+    public function test_asts_identity_fixed_columns_reserve_class_and_semester_fields(): void
     {
         [$period, , $students, $template] = $this->reportingFoundation();
         $template->forceFill(['settings' => ['school_name' => 'SMA Template Test']])->save();
@@ -1305,10 +1322,13 @@ class AssessmentReportingTest extends TestCase
 
         $this->assertSame(2, substr_count($html, 'identity identity--asts'));
         $this->assertSame(2, substr_count($html, 'identity__label--asts-secondary">Semester'));
-        $this->assertSame(8, substr_count($html, 'class="identity__value--asts"'));
-        $this->assertStringContainsString('.identity--asts .identity__label { width: 76px; white-space: nowrap; }', $html);
-        $this->assertStringContainsString('.identity--asts .identity__separator { width: 4px;', $html);
-        $this->assertStringContainsString('.identity--asts .identity__value--asts { white-space: nowrap; }', $html);
+        $this->assertSame(2, substr_count($html, '<col class="identity__col--asts-primary-value">'));
+        $this->assertSame(2, substr_count($html, '<col class="identity__col--asts-secondary-value">'));
+        $this->assertSame(4, substr_count($html, 'identity__value--asts identity__value--asts-primary'));
+        $this->assertSame(4, substr_count($html, 'identity__value--asts identity__value--asts-secondary'));
+        $this->assertStringContainsString('.identity--asts .identity__col--asts-primary-value { width: 39%; }', $html);
+        $this->assertStringContainsString('.identity--asts .identity__col--asts-secondary-value { width: 24%; }', $html);
+        $this->assertStringContainsString('.identity--asts .identity__value--asts-primary { white-space: normal; }', $html);
         $this->assertStringContainsString('SMA Template Test', $html);
     }
 

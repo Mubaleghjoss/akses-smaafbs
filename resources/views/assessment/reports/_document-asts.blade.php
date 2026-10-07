@@ -49,13 +49,7 @@
     @include($letterhead)
     <h1 class="report-title">LAPORAN HASIL ASESMEN SUMATIF TENGAH SEMESTER (ASTS)</h1>
     <p class="report-subtitle">Tahun Pelajaran {{ $academicYear }} &middot; Semester {{ data_get($period, 'semester', '-') }}</p>
-    <table class="identity identity--asts"><tr>
-        <td class="identity__label">Nama Siswa</td><td class="identity__separator">:</td><td class="identity__value--asts">{{ data_get($student, 'name', '-') }}</td>
-        <td class="identity__label identity__label--asts-secondary">Kelas</td><td class="identity__separator">:</td><td class="identity__value--asts">{{ $className ?: '-' }}</td>
-    </tr><tr>
-        <td class="identity__label">NIS / NISN</td><td class="identity__separator">:</td><td class="identity__value--asts">{{ $studentNis }} / {{ $studentNisn }}</td>
-        <td class="identity__label identity__label--asts-secondary">Semester</td><td class="identity__separator">:</td><td class="identity__value--asts">{{ data_get($period, 'semester', '-') }}</td>
-    </tr></table>
+    @include('assessment.reports._asts-identity')
 
     @foreach ($subjectGroups as $groupName => $groupSubjects)
         @if ($usesChoiceGroups || $loop->first)<p class="asts-subject-group">{{ $groupName }}</p>@endif
@@ -74,13 +68,7 @@
 <section class="report-page report-page--asts-summary">
     @include($letterhead)
     <h1 class="report-title">LAPORAN HASIL ASESMEN SUMATIF TENGAH SEMESTER (ASTS)</h1>
-    <table class="identity identity--asts asts-summary-identity"><tr>
-        <td class="identity__label">Nama Siswa</td><td class="identity__separator">:</td><td class="identity__value--asts">{{ data_get($student, 'name', '-') }}</td>
-        <td class="identity__label identity__label--asts-secondary">Kelas</td><td class="identity__separator">:</td><td class="identity__value--asts">{{ $className ?: '-' }}</td>
-    </tr><tr>
-        <td class="identity__label">NIS / NISN</td><td class="identity__separator">:</td><td class="identity__value--asts">{{ $studentNis }} / {{ $studentNisn }}</td>
-        <td class="identity__label identity__label--asts-secondary">Semester</td><td class="identity__separator">:</td><td class="identity__value--asts">{{ data_get($period, 'semester', '-') }}</td>
-    </tr></table>
+    @include('assessment.reports._asts-identity', ['summary' => true])
     <table class="asts-summary-grid{{ empty($extracurricular) ? ' asts-summary-grid--attendance-only' : '' }}"><tr><td>
         <p class="section-title">Ketidakhadiran</p>
         <table class="summary-table summary-table--attendance"><tr><th>Sakit</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'sick_days', 0) }}&nbsp;hari</span></td></tr><tr><th>Izin</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'permission_days', 0) }}&nbsp;hari</span></td></tr><tr><th>Tanpa Keterangan</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'absent_days', 0) }}&nbsp;hari</span></td></tr></table>
