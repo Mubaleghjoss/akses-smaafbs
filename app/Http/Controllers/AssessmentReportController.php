@@ -188,7 +188,7 @@ class AssessmentReportController extends Controller
         $students = AssessmentPeriodStudent::query()
             ->where('assessment_period_id', $assessmentPeriod->getKey())
             ->where('assessment_period_rombel_id', $periodRombel->getKey())
-            ->where('is_active', true)
+            ->eligibleForAssessment()
             ->orderBy('student_name_snapshot')
             ->get();
         abort_if($students->isEmpty(), 404, 'Tidak ada siswa aktif pada kelas ini.');
