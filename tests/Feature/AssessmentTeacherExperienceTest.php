@@ -1188,6 +1188,30 @@ class AssessmentTeacherExperienceTest extends TestCase
         $this->assertSame(0, $unselectedReport->sick_days);
         $this->assertNull($unselectedReport->homeroom_note);
         $this->assertSame('Catatan ASAS tetap.', $asasReport->refresh()->homeroom_note);
+
+        $astsComponent
+            ->set("reportRows.{$selectedStudentId}.sick_days", '0')
+            ->set("reportRows.{$selectedStudentId}.permission_days", '0')
+            ->set("reportRows.{$selectedStudentId}.absent_days", '0')
+            ->call('saveReports')
+            ->assertHasNoErrors();
+
+        $savedReport->refresh();
+        $this->assertSame(0, $savedReport->sick_days);
+        $this->assertSame(0, $savedReport->permission_days);
+        $this->assertSame(0, $savedReport->absent_days);
+
+        $astsComponent
+            ->set("reportRows.{$selectedStudentId}.sick_days", null)
+            ->set("reportRows.{$selectedStudentId}.permission_days", '')
+            ->set("reportRows.{$selectedStudentId}.absent_days", null)
+            ->call('saveReports')
+            ->assertHasNoErrors();
+
+        $savedReport->refresh();
+        $this->assertSame(0, $savedReport->sick_days);
+        $this->assertSame(0, $savedReport->permission_days);
+        $this->assertSame(0, $savedReport->absent_days);
     }
 
     public function test_curriculum_can_complete_legacy_structured_homeroom_items_while_other_teacher_is_denied(): void

@@ -923,6 +923,13 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
     {
         return collect($this->reportRows)
             ->map(function (array $row): array {
+                foreach ($this->getRecapFieldDefinitions() as $field => $definition) {
+                    if ($definition['input'] === 'number' && blank($row[$field] ?? null)) {
+                        // Empty attendance inputs represent no absences, not omitted required values.
+                        $row[$field] = 0;
+                    }
+                }
+
                 $row['extracurricular_items'] = $this->normalizeStructuredItems(
                     $row['extracurricular_items'] ?? [],
                     true,

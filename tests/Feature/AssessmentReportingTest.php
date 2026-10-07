@@ -855,7 +855,7 @@ class AssessmentReportingTest extends TestCase
         $snapshot = [
             'school' => ['name' => 'SMA AFBS'],
             'period' => ['academic_year' => 'Demo 2025/2026', 'semester' => 'Ganjil'],
-            'student' => ['name' => 'Siswa Uji', 'class_name' => 'XI IPA 1'],
+            'student' => ['name' => 'Siswa Uji', 'nisn' => '0085713398', 'class_name' => 'XI IPA 1'],
             'subjects' => [
                 // Deliberately stale predicates verify ASTS uses the displayed KKTP scale.
                 ['name' => 'Nilai 69', 'final_score' => 69, 'predicate' => 'A', 'description' => 'Tidak boleh tampil.', 'group_code' => 'WAJIB'],
@@ -900,8 +900,11 @@ class AssessmentReportingTest extends TestCase
         $this->assertStringContainsString('Nama Siswa', $summaryPage);
         $this->assertStringContainsString('NIS / NISN', $summaryPage);
         $this->assertStringContainsString('Kelas', $summaryPage);
-        $this->assertStringContainsString('Jenis Laporan', $summaryPage);
+        $this->assertStringContainsString('Semester', $scorePage);
+        $this->assertStringContainsString('Semester', $summaryPage);
+        $this->assertStringNotContainsString('Jenis Laporan', $html);
         $this->assertStringContainsString('ASTS', $summaryPage);
+        $this->assertStringContainsString('- / 0085713398', $html);
         $this->assertStringContainsString('class="scores asts-scores"', $scorePage);
         foreach ([69 => 'D', 70 => 'C', 75 => 'C', 76 => 'B', 85 => 'B', 86 => 'A'] as $score => $predicate) {
             $this->assertMatchesRegularExpression('/'.$score.'<\/td><td class="scores__predicate">'.$predicate.'<\/td>/', $html);
@@ -1287,7 +1290,7 @@ class AssessmentReportingTest extends TestCase
         $this->assertStringContainsString('Siswa 1 - XI 1 - Rapor ASTS.pdf', $downloadDisposition);
     }
 
-    public function test_asts_identity_columns_keep_class_and_report_type_labels_on_one_line(): void
+    public function test_asts_identity_columns_keep_class_and_semester_labels_on_one_line(): void
     {
         [$period, , $students, $template] = $this->reportingFoundation();
         $template->forceFill(['settings' => ['school_name' => 'SMA Template Test']])->save();
@@ -1300,8 +1303,9 @@ class AssessmentReportingTest extends TestCase
         ])->render();
 
         $this->assertSame(2, substr_count($html, 'identity identity--asts'));
-        $this->assertSame(2, substr_count($html, 'identity__label--asts-secondary">Jenis Laporan'));
+        $this->assertSame(2, substr_count($html, 'identity__label--asts-secondary">Semester'));
         $this->assertStringContainsString('.identity--asts .identity__label { width: 88px; white-space: nowrap; }', $html);
+        $this->assertStringContainsString('.identity--asts .identity__value--asts { white-space: nowrap; }', $html);
         $this->assertStringContainsString('SMA Template Test', $html);
     }
 

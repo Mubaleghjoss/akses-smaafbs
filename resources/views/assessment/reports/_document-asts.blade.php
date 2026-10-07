@@ -10,6 +10,8 @@
     $logoIsSafe = preg_match('#^data:image/(?:png|jpeg|webp);base64,#i', $logo) === 1;
     $academicYear = data_get($period, 'academic_year', 'Demo 2025/2026');
     $className = (string) data_get($student, 'class_name', '');
+    $studentNis = trim((string) data_get($student, 'nis', '')) ?: '-';
+    $studentNisn = trim((string) data_get($student, 'nisn', '')) ?: '-';
     $usesChoiceGroups = preg_match('/(?:^|\s)(?:XI|XII|11|12)(?:\s|$)/i', $className) === 1;
     $isChoiceSubject = static function (mixed $subject): bool {
         $group = strtolower(trim((string) data_get($subject, 'group_code', '').' '.data_get($subject, 'group_name', '')));
@@ -43,10 +45,10 @@
     <p class="report-subtitle">Tahun Pelajaran {{ $academicYear }} &middot; Semester {{ data_get($period, 'semester', '-') }}</p>
     <table class="identity identity--asts"><tr>
         <td class="identity__label">Nama Siswa</td><td class="identity__separator">:</td><td>{{ data_get($student, 'name', '-') }}</td>
-        <td class="identity__label identity__label--asts-secondary">Kelas</td><td class="identity__separator">:</td><td>{{ $className ?: '-' }}</td>
+        <td class="identity__label identity__label--asts-secondary">Kelas</td><td class="identity__separator">:</td><td class="identity__value--asts">{{ $className ?: '-' }}</td>
     </tr><tr>
-        <td class="identity__label">NIS / NISN</td><td class="identity__separator">:</td><td>{{ data_get($student, 'nis', '-') }} / {{ data_get($student, 'nisn', '-') }}</td>
-        <td class="identity__label identity__label--asts-secondary">Jenis Laporan</td><td class="identity__separator">:</td><td>ASTS</td>
+        <td class="identity__label">NIS / NISN</td><td class="identity__separator">:</td><td>{{ $studentNis }} / {{ $studentNisn }}</td>
+        <td class="identity__label identity__label--asts-secondary">Semester</td><td class="identity__separator">:</td><td class="identity__value--asts">{{ data_get($period, 'semester', '-') }}</td>
     </tr></table>
 
     @foreach ($subjectGroups as $groupName => $groupSubjects)
@@ -68,10 +70,10 @@
     <h1 class="report-title">LAPORAN HASIL ASESMEN SUMATIF TENGAH SEMESTER (ASTS)</h1>
     <table class="identity identity--asts asts-summary-identity"><tr>
         <td class="identity__label">Nama Siswa</td><td class="identity__separator">:</td><td>{{ data_get($student, 'name', '-') }}</td>
-        <td class="identity__label identity__label--asts-secondary">Kelas</td><td class="identity__separator">:</td><td>{{ $className ?: '-' }}</td>
+        <td class="identity__label identity__label--asts-secondary">Kelas</td><td class="identity__separator">:</td><td class="identity__value--asts">{{ $className ?: '-' }}</td>
     </tr><tr>
-        <td class="identity__label">NIS / NISN</td><td class="identity__separator">:</td><td>{{ data_get($student, 'nis', '-') }} / {{ data_get($student, 'nisn', '-') }}</td>
-        <td class="identity__label identity__label--asts-secondary">Jenis Laporan</td><td class="identity__separator">:</td><td>ASTS</td>
+        <td class="identity__label">NIS / NISN</td><td class="identity__separator">:</td><td>{{ $studentNis }} / {{ $studentNisn }}</td>
+        <td class="identity__label identity__label--asts-secondary">Semester</td><td class="identity__separator">:</td><td class="identity__value--asts">{{ data_get($period, 'semester', '-') }}</td>
     </tr></table>
     <table class="asts-summary-grid"><tr><td>
         <p class="section-title">Ketidakhadiran</p>

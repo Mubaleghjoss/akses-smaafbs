@@ -22,6 +22,8 @@
     $reportKind = strtoupper($reportKind);
     $title = $reportTitles[$reportKind] ?? $reportTitles['ASTS'];
     $academicYear = data_get($period, 'academic_year', '-');
+    $studentNis = trim((string) data_get($student, 'nis', '')) ?: '-';
+    $studentNisn = trim((string) data_get($student, 'nisn', '')) ?: '-';
     $scoreLabel = trim((string) data_get($templateSettings, 'score_label', 'Nilai')) ?: 'Nilai';
     $predicateLabel = trim((string) data_get($templateSettings, 'predicate_label', 'Predikat')) ?: 'Predikat';
     $showPredicate = (bool) data_get($templateSettings, 'show_predicate', true);
@@ -56,7 +58,7 @@
         <td class="identity__label">Nama Siswa</td><td class="identity__separator">:</td><td>{{ data_get($student, 'name', '-') }}</td>
         <td class="identity__label">Kelas</td><td class="identity__separator">:</td><td>{{ data_get($student, 'class_name', '-') }}</td>
     </tr><tr>
-        <td class="identity__label">NIS / NISN</td><td class="identity__separator">:</td><td>{{ data_get($student, 'nis', '-') }} / {{ data_get($student, 'nisn', '-') }}</td>
+        <td class="identity__label">NIS / NISN</td><td class="identity__separator">:</td><td>{{ $studentNis }} / {{ $studentNisn }}</td>
         <td class="identity__label">Jenis Laporan</td><td class="identity__separator">:</td><td>{{ $reportKind }}</td>
     </tr></table>
     <table class="scores"><thead><tr>
