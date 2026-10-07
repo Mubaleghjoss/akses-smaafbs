@@ -1266,6 +1266,7 @@ class AssessmentReportingTest extends TestCase
             ->assertSee('Preview')
             ->assertSee('Download')
             ->assertSeeHtml('href="'.$previewUrl.'"')
+            ->assertSeeHtml('href="'.$previewUrl.'" target="_blank"')
             ->assertSeeHtml('href="'.$downloadUrl.'"')
             ->assertDontSee('Distribusi opsional')
             ->assertDontSee('Periksa tampilan PDF dan watermark')
@@ -1284,6 +1285,24 @@ class AssessmentReportingTest extends TestCase
         $downloadDisposition = (string) $downloadResponse->headers->get('Content-Disposition');
         $this->assertStringContainsString('attachment', $downloadDisposition);
         $this->assertStringContainsString('Siswa 1 - XI 1 - Rapor ASTS.pdf', $downloadDisposition);
+    }
+
+    public function test_asts_identity_columns_keep_class_and_report_type_labels_on_one_line(): void
+    {
+        [$period, , $students, $template] = $this->reportingFoundation();
+        $template->forceFill(['settings' => ['school_name' => 'SMA Template Test']])->save();
+
+        $preview = app(BuildAssessmentReportPreviewSnapshot::class)->build($period, $template, $students[0]);
+        $html = view('assessment.reports.asts', [
+            'snapshot' => $preview->snapshot_data,
+            'templateSettings' => data_get($preview->snapshot_data, 'template.settings', []),
+            'pdfMode' => true,
+        ])->render();
+
+        $this->assertSame(2, substr_count($html, 'identity identity--asts'));
+        $this->assertSame(2, substr_count($html, 'identity__label--asts-secondary">Jenis Laporan'));
+        $this->assertStringContainsString('.identity--asts .identity__label { width: 88px; white-space: nowrap; }', $html);
+        $this->assertStringContainsString('SMA Template Test', $html);
     }
 
     public function test_homeroom_teacher_can_preview_own_class_reports_but_not_another_class(): void

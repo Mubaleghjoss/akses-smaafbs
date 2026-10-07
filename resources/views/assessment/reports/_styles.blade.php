@@ -19,6 +19,11 @@
     .identity { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
     .identity td { padding: 1.5px 3px; border: 0; vertical-align: top; }
     .identity__label { width: 82px; } .identity__separator { width: 7px; }
+    /* Fixed ASTS identity columns keep the right-side labels on one line in Dompdf. */
+    .identity--asts { table-layout: fixed; }
+    .identity--asts .identity__label { width: 88px; white-space: nowrap; }
+    .identity--asts .identity__label--asts-secondary { width: 104px; }
+    .identity--asts .identity__separator { width: 8px; }
     .scores, .summary-table { width: 100%; border-collapse: collapse; }
     .scores th, .scores td, .summary-table th, .summary-table td { padding: 3.5px 4.5px; border: 1px solid #4b5563; vertical-align: top; }
     .scores th { background: #e5e7eb; text-align: center; font-weight: 700; }

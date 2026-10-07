@@ -41,12 +41,12 @@
     @include($letterhead)
     <h1 class="report-title">LAPORAN HASIL ASESMEN SUMATIF TENGAH SEMESTER (ASTS)</h1>
     <p class="report-subtitle">Tahun Pelajaran {{ $academicYear }} &middot; Semester {{ data_get($period, 'semester', '-') }}</p>
-    <table class="identity"><tr>
+    <table class="identity identity--asts"><tr>
         <td class="identity__label">Nama Siswa</td><td class="identity__separator">:</td><td>{{ data_get($student, 'name', '-') }}</td>
-        <td class="identity__label">Kelas</td><td class="identity__separator">:</td><td>{{ $className ?: '-' }}</td>
+        <td class="identity__label identity__label--asts-secondary">Kelas</td><td class="identity__separator">:</td><td>{{ $className ?: '-' }}</td>
     </tr><tr>
         <td class="identity__label">NIS / NISN</td><td class="identity__separator">:</td><td>{{ data_get($student, 'nis', '-') }} / {{ data_get($student, 'nisn', '-') }}</td>
-        <td class="identity__label">Jenis Laporan</td><td class="identity__separator">:</td><td>ASTS</td>
+        <td class="identity__label identity__label--asts-secondary">Jenis Laporan</td><td class="identity__separator">:</td><td>ASTS</td>
     </tr></table>
 
     @foreach ($subjectGroups as $groupName => $groupSubjects)
@@ -66,12 +66,12 @@
 <section class="report-page report-page--asts-summary">
     @include($letterhead)
     <h1 class="report-title">LAPORAN HASIL ASESMEN SUMATIF TENGAH SEMESTER (ASTS)</h1>
-    <table class="identity asts-summary-identity"><tr>
+    <table class="identity identity--asts asts-summary-identity"><tr>
         <td class="identity__label">Nama Siswa</td><td class="identity__separator">:</td><td>{{ data_get($student, 'name', '-') }}</td>
-        <td class="identity__label">Kelas</td><td class="identity__separator">:</td><td>{{ $className ?: '-' }}</td>
+        <td class="identity__label identity__label--asts-secondary">Kelas</td><td class="identity__separator">:</td><td>{{ $className ?: '-' }}</td>
     </tr><tr>
         <td class="identity__label">NIS / NISN</td><td class="identity__separator">:</td><td>{{ data_get($student, 'nis', '-') }} / {{ data_get($student, 'nisn', '-') }}</td>
-        <td class="identity__label">Jenis Laporan</td><td class="identity__separator">:</td><td>ASTS</td>
+        <td class="identity__label identity__label--asts-secondary">Jenis Laporan</td><td class="identity__separator">:</td><td>ASTS</td>
     </tr></table>
     <table class="asts-summary-grid"><tr><td>
         <p class="section-title">Ketidakhadiran</p>
