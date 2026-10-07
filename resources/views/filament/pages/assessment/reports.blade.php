@@ -2,6 +2,69 @@
     <div class="assessment-reports-page">
         @include('filament.pages.assessment.partials.type-navigation', ['showAccess' => false])
 
+        @if ($this->isSimpleAstsReportPage())
+            <section class="assessment-report-card is-step">
+                <span class="assessment-report-step">1</span>
+                <div class="assessment-report-card__body">
+                    <div class="assessment-report-card__head">
+                        <div>
+                            <span class="assessment-report-eyebrow">Rapor ASTS</span>
+                            <h2>Pilih periode dan template</h2>
+                            <p>Pilih kelas untuk melihat rapor siswa, lalu preview, unduh per siswa, atau unduh satu ZIP kelas.</p>
+                        </div>
+                    </div>
+                    <div class="assessment-report-form-grid">
+                        <label><span>Periode</span>
+                            <select wire:model.live="periodId">
+                                @foreach ($this->getPeriodOptions() as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach
+                            </select>
+                        </label>
+                        <label><span>Template</span>
+                            <select wire:model.live="templateId">
+                                @foreach ($this->getTemplateOptions() as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach
+                            </select>
+                        </label>
+                    </div>
+                </div>
+            </section>
+
+            <section class="assessment-report-card is-step">
+                <span class="assessment-report-step">2</span>
+                <div class="assessment-report-card__body">
+                    <div class="assessment-report-card__head">
+                        <div>
+                            <span class="assessment-report-eyebrow">Daftar siswa</span>
+                            <h2>Rapor per kelas</h2>
+                            <p>Preview membuka PDF di browser. Download mengunduh PDF siswa tanpa membuat antrean.</p>
+                        </div>
+                    </div>
+                    <div class="assessment-report-preview-row">
+                        <label><span>Kelas</span>
+                            <select wire:model.live="previewClassId">
+                                <option value="">Pilih kelas</option>
+                                @foreach ($this->getClassOptions() as $id => $label)<option value="{{ $id }}">{{ $label }}</option>@endforeach
+                            </select>
+                        </label>
+                        @if ($this->classZipUrl())
+                            <x-filament::button tag="a" href="{{ $this->classZipUrl() }}" color="primary" icon="heroicon-o-archive-box-arrow-down">Download ZIP Kelas</x-filament::button>
+                        @endif
+                    </div>
+                    <div class="assessment-report-student-list">
+                        @forelse ($this->getSimpleClassStudentRows() as $row)
+                            <article>
+                                <div class="assessment-report-student-copy"><strong>{{ $row['student'] }}</strong></div>
+                                <div class="assessment-report-student-actions">
+                                    <x-filament::button tag="a" href="{{ $row['preview_url'] }}" target="_blank" size="sm" color="gray" icon="heroicon-o-eye">Preview</x-filament::button>
+                                    <x-filament::button tag="a" href="{{ $row['download_url'] }}" size="sm" color="primary" icon="heroicon-o-arrow-down-tray">Download</x-filament::button>
+                                </div>
+                            </article>
+                        @empty
+                            <div class="assessment-report-empty">Pilih kelas untuk melihat siswa aktif yang dapat dicetak.</div>
+                        @endforelse
+                    </div>
+                </div>
+            </section>
+        @else
         @if ($this->isHomeroomReportView())
             <section class="assessment-report-card border-primary-200 bg-primary-50/60 dark:border-primary-500/25 dark:bg-primary-950/15">
                 <div class="assessment-report-card__body">
@@ -411,6 +474,7 @@
                 <x-filament::button color="warning" wire:click="restartWithNewRevision" wire:confirm="Siapkan revisi baru dan hentikan seluruh revisi terbuka untuk periode serta template ini?">Ya, Siapkan Revisi Baru</x-filament::button>
             </x-slot>
         </x-filament::modal>
+        @endif
         @endif
     </div>
 </x-filament-panels::page>

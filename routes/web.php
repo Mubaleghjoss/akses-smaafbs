@@ -90,6 +90,13 @@ Route::middleware('auth')->group(function (): void {
         ->name('assessment.reports.live-preview');
 
     Route::get(
+        '/admin/penilaian/rapor/unduh/{assessmentPeriod}/{reportTemplate}/{periodStudent}',
+        [AssessmentReportController::class, 'liveDownload'],
+    )
+        ->middleware('throttle:10,1')
+        ->name('assessment.reports.live-download');
+
+    Route::get(
         '/admin/penilaian/rapor/kelas/{assessmentPeriod}/{reportTemplate}/{periodRombel}/zip',
         [AssessmentReportController::class, 'downloadClassZip'],
     )

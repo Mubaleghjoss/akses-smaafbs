@@ -68,6 +68,35 @@ class AssessmentReportController extends Controller
         ]);
     }
 
+    public function liveDownload(
+        AssessmentPeriod $assessmentPeriod,
+        ReportTemplate $reportTemplate,
+        AssessmentPeriodStudent $periodStudent,
+        AssessmentReportRenderer $renderer,
+        AssessmentReportRenderGate $renderGate,
+        BuildAssessmentReportPreviewSnapshot $builder,
+    ): Response {
+        $this->abortUnlessEnabled();
+        Gate::authorize('view', $assessmentPeriod);
+        Gate::authorize('view', $reportTemplate);
+        Gate::authorize('view', $periodStudent);
+        abort_unless((int) $periodStudent->assessment_period_id === (int) $assessmentPeriod->getKey(), 404);
+        $this->abortUnlessMatchingTemplate($assessmentPeriod, $reportTemplate);
+
+        $report = $builder->build($assessmentPeriod, $reportTemplate, $periodStudent);
+
+        try {
+            $contents = $renderGate->run(fn (): string => $renderer->renderStudent($report));
+        } catch (AssessmentReportRenderBusy $exception) {
+            return $this->busyResponse($exception);
+        }
+
+        return response($contents, 200, $this->downloadHeaders() + [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$this->liveReportFilename($assessmentPeriod, $periodStudent).'"',
+        ]);
+    }
+
     public function preview(
         ReportSnapshot $reportSnapshot,
         AssessmentReportRenderer $renderer,
@@ -310,6 +339,23 @@ class AssessmentReportController extends Controller
         $usedNames[$filename] = true;
 
         return $filename;
+    }
+
+    private function liveReportFilename(AssessmentPeriod $period, AssessmentPeriodStudent $student): string
+    {
+        $type = $period->type instanceof \BackedEnum ? $period->type->value : (string) $period->type;
+        $studentName = $this->safeFilenamePart((string) $student->student_name_snapshot, 'Siswa');
+        $className = $this->safeFilenamePart((string) $student->rombel_name_snapshot, 'Kelas');
+
+        return "{$studentName} - {$className} - Rapor ".strtoupper($type).'.pdf';
+    }
+
+    private function safeFilenamePart(string $value, string $fallback): string
+    {
+        $value = trim((string) preg_replace('/[^A-Za-z0-9 ._-]+/', ' ', Str::ascii($value)));
+        $value = trim((string) preg_replace('/\s+/', ' ', $value));
+
+        return $value !== '' ? mb_substr($value, 0, 100) : $fallback;
     }
 
     private function classZipFilename(AssessmentPeriod $period, AssessmentPeriodRombel $rombel): string

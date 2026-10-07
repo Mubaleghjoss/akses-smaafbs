@@ -337,6 +337,43 @@ abstract class AssessmentReportsPage extends AssessmentPage
         return auth()->user() instanceof User && auth()->user()->hasFullAdminAccess();
     }
 
+    public function isSimpleAstsReportPage(): bool
+    {
+        return static::$assessmentType === AssessmentType::ASTS;
+    }
+
+    /**
+     * @return array<int, array{student:string,preview_url:string,download_url:string}>
+     */
+    public function getSimpleClassStudentRows(): array
+    {
+        if (! $this->periodId || ! $this->templateId || ! $this->previewClassId
+            || ! array_key_exists($this->previewClassId, $this->getClassOptions())) {
+            return [];
+        }
+
+        return $this->selectedPeriod()?->students()
+            ->where('assessment_period_rombel_id', $this->previewClassId)
+            ->eligibleForAssessment()
+            ->orderBy('student_name_snapshot')
+            ->get()
+            ->map(fn ($student): array => [
+                'student' => (string) $student->student_name_snapshot,
+                'preview_url' => route('assessment.reports.live-preview', [
+                    'assessmentPeriod' => $this->periodId,
+                    'reportTemplate' => $this->templateId,
+                    'periodStudent' => $student->getKey(),
+                ]),
+                'download_url' => route('assessment.reports.live-download', [
+                    'assessmentPeriod' => $this->periodId,
+                    'reportTemplate' => $this->templateId,
+                    'periodStudent' => $student->getKey(),
+                ]),
+            ])
+            ->values()
+            ->all() ?? [];
+    }
+
     /**
      * @return array<int, array{student:string,preview_url:string,source:string}>
      */

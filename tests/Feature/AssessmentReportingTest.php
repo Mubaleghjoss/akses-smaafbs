@@ -714,10 +714,10 @@ class AssessmentReportingTest extends TestCase
         Queue::assertNothingPushed();
     }
 
-    public function test_report_progress_polls_only_while_generation_run_is_running(): void
+    public function test_simplified_asts_page_omits_advanced_pipeline_polling(): void
     {
         [$period, , , $template] = $this->reportingFoundation();
-        $run = ReportGenerationRun::query()->create([
+        ReportGenerationRun::query()->create([
             'assessment_period_id' => $period->getKey(),
             'assessment_report_template_id' => $template->getKey(),
             'revision' => 1,
@@ -734,11 +734,6 @@ class AssessmentReportingTest extends TestCase
             ->test(AstsReports::class)
             ->set('periodId', $period->getKey())
             ->set('templateId', $template->getKey());
-
-        $this->assertStringContainsString('wire:poll.5s.visible', $component->html());
-
-        $run->forceFill(['status' => 'completed', 'completed_at' => now()])->save();
-        $component->call('$refresh');
 
         $this->assertStringNotContainsString('wire:poll.5s.visible', $component->html());
     }
@@ -1244,16 +1239,17 @@ class AssessmentReportingTest extends TestCase
             ->assertNotFound();
         $this->get(route('assessment.reports.class.download', $artifact))
             ->assertNotFound();
+        $this->get(route('assessment.reports.live-download', [$period, $template, $students[0]]))
+            ->assertNotFound();
         $this->get(route('assessment.reports.shared.download', str_repeat('a', 43)))
             ->assertNotFound();
         $this->assertDatabaseCount('assessment_audit_logs', 0);
     }
 
-    public function test_report_page_and_private_preview_render_with_card_workflow(): void
+    public function test_asts_report_page_lists_students_without_optional_distribution(): void
     {
         Storage::fake('local');
-        [$period, $rombel, $students, $template] = $this->reportingFoundation();
-        $snapshot = $this->snapshot($period, $students[0], $template, 1);
+        [$period, , $students, $template] = $this->reportingFoundation();
         $this->actingAs(User::query()->findOrFail(99));
 
         $this->get(AstsReports::getUrl([
@@ -1261,54 +1257,27 @@ class AssessmentReportingTest extends TestCase
             'template' => $template->getKey(),
         ]))
             ->assertOk()
-            ->assertSee('Preview Semua Rapor Kelas Ini')
-            ->assertSee('Download ZIP Rapor Kelas Ini')
-            ->assertSee('Opsi lanjutan administrasi PDF dan revisi')
-            ->assertSee('Atur Guru Mapel')
-            ->assertSee('Atur Wali Kelas')
-            ->assertSee('Lihat Detail Template')
-            ->assertSee('Buka Wizard Kelengkapan')
-            ->assertSeeHtml('assessment-report-preflight-issue is-actionable')
+            ->assertSee('Rapor per kelas')
+            ->assertSee('Download ZIP Kelas')
+            ->assertSee($students[0]->student_name_snapshot)
+            ->assertSee('Preview')
+            ->assertSee('Download')
+            ->assertDontSee('Distribusi opsional')
+            ->assertDontSee('Periksa tampilan PDF dan watermark')
             ->assertSeeHtml('assessment-report-card');
 
-        $subject = Subject::query()->create([
-            'code' => 'BIO-PREFLIGHT',
-            'name' => 'Biologi Preflight',
-            'report_group_code' => 'A',
-            'report_group_name' => 'Kelompok A',
-            'report_group_sort_order' => 1,
-            'sort_order' => 1,
-            'is_active' => true,
-        ]);
-        AssessmentPeriodAssignment::query()->create([
-            'assessment_period_id' => $period->getKey(),
-            'assessment_period_rombel_id' => $rombel->getKey(),
-            'teacher_id' => 41,
-            'assessment_subject_id' => $subject->getKey(),
-            'teacher_name_snapshot' => 'Guru Biologi',
-            'subject_name_snapshot' => 'Biologi Preflight',
-            'subject_group_code_snapshot' => 'A',
-            'subject_group_name_snapshot' => 'Kelompok A',
-            'subject_group_sort_order_snapshot' => 1,
-            'subject_sort_order_snapshot' => 1,
-            'rombel_name_snapshot' => $rombel->rombel_name_snapshot,
-            'status' => 'draft',
-            'lock_version' => 0,
-        ]);
-
-        $this->get(AstsReports::getUrl([
-            'period' => $period->getKey(),
-            'template' => $template->getKey(),
-        ]))
-            ->assertOk()
-            ->assertSee('Buka Status Pengumpulan')
-            ->assertSee('Buka Input Nilai');
-
-        $previewResponse = $this->get(route('assessment.reports.preview', $snapshot));
-        $previewResponse
-            ->assertOk()
-            ->assertHeader('Content-Type', 'application/pdf');
+        $previewResponse = $this->get(route('assessment.reports.live-preview', [$period, $template, $students[0]]));
+        $previewResponse->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringContainsString('inline', (string) $previewResponse->headers->get('Content-Disposition'));
         $this->assertStringContainsString('no-store', (string) $previewResponse->headers->get('Cache-Control'));
+
+        $downloadResponse = $this->get(route('assessment.reports.live-download', [$period, $template, $students[0]]));
+        $downloadResponse->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringContainsString('attachment', (string) $downloadResponse->headers->get('Content-Disposition'));
+        $this->assertStringContainsString(
+            'Siswa 1 - XI 1 - Rapor ASTS.pdf',
+            (string) $downloadResponse->headers->get('Content-Disposition'),
+        );
     }
 
     public function test_homeroom_teacher_can_preview_own_class_reports_but_not_another_class(): void
@@ -1359,15 +1328,22 @@ class AssessmentReportingTest extends TestCase
 
         Livewire::test(AstsReports::class)
             ->set('periodId', $period->getKey())
-            ->assertSee('Rapor Kelas Saya')
-            ->assertSee('Preview Rapor Kelas Saya')
-            ->assertSee('XI 1')
-            ->assertDontSee('XI 2');
+            ->set('templateId', $template->getKey())
+            ->set('previewClassId', $ownRombel->getKey())
+            ->assertSee($students[0]->student_name_snapshot)
+            ->assertSee('Preview')
+            ->assertSee('Download')
+            ->assertSee('Download ZIP Kelas')
+            ->assertDontSee('Distribusi opsional')
+            ->assertDontSee('XI 2')
+            ->assertDontSee($otherStudent->student_name_snapshot);
 
         $this->get(route('assessment.reports.preview', $ownSnapshot))->assertOk();
         $this->get(route('assessment.reports.preview', $otherSnapshot))->assertRedirect();
         $this->get(route('assessment.reports.live-preview', [$period, $template, $students[0]]))->assertOk();
         $this->get(route('assessment.reports.live-preview', [$period, $template, $otherStudent]))->assertRedirect();
+        $this->get(route('assessment.reports.live-download', [$period, $template, $students[0]]))->assertOk();
+        $this->get(route('assessment.reports.live-download', [$period, $template, $otherStudent]))->assertRedirect();
     }
 
     public function test_report_authorization_failure_links_to_period_report_access_help(): void
@@ -1404,11 +1380,10 @@ class AssessmentReportingTest extends TestCase
         $this->assertSame(AstsReports::getUrl(['period' => $period->getKey()]), $notification['actions'][0]['url']);
     }
 
-    public function test_class_preview_lists_each_student_without_scheduling_pdf_jobs(): void
+    public function test_asts_class_student_list_uses_live_preview_and_download_without_jobs(): void
     {
         Queue::fake();
         [$period, $rombel, $students, $template] = $this->reportingFoundation(studentCount: 2);
-        $snapshot = $this->snapshot($period, $students[0], $template, 1);
         $this->actingAs(User::query()->findOrFail(99));
 
         $page = Livewire::test(AstsReports::class)
@@ -1416,18 +1391,13 @@ class AssessmentReportingTest extends TestCase
             ->set('templateId', $template->getKey())
             ->set('previewClassId', $rombel->getKey());
 
-        $rows = $page->instance()->getClassPreviewRows();
+        $rows = $page->instance()->getSimpleClassStudentRows();
 
         $this->assertCount(2, $rows);
-        $this->assertSame('Snapshot revisi terbaru', $rows[0]['source']);
-        $this->assertSame(route('assessment.reports.preview', $snapshot), $rows[0]['preview_url']);
-        $this->assertSame('Pratinjau langsung', $rows[1]['source']);
-        $this->assertSame(route('assessment.reports.live-preview', [
-            'assessmentPeriod' => $period->getKey(),
-            'reportTemplate' => $template->getKey(),
-            'periodStudent' => $students[1]->getKey(),
-        ]), $rows[1]['preview_url']);
-        $page->assertSee('Preview Semua Rapor Kelas Ini');
+        $this->assertSame(route('assessment.reports.live-preview', [$period, $template, $students[0]]), $rows[0]['preview_url']);
+        $this->assertSame(route('assessment.reports.live-download', [$period, $template, $students[0]]), $rows[0]['download_url']);
+        $page->assertSee('Download ZIP Kelas');
+        $page->assertSee($students[0]->student_name_snapshot);
         Queue::assertNothingPushed();
     }
 
