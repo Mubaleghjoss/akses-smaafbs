@@ -165,6 +165,66 @@ class AssessmentCalculatorTest extends TestCase
 
         $this->assertTrue($result->isComplete);
         $this->assertSame(85.0, $result->finalScore);
+        $this->assertSame('B - Baik', $result->predicate);
+    }
+
+    public function test_asts_calculator_assigns_predicates_at_score_boundaries(): void
+    {
+        $calculator = new AssessmentCalculator;
+
+        $boundaryExpectations = [
+            86 => 'A - Sangat Baik',
+            85 => 'B - Baik',
+            76 => 'B - Baik',
+            75 => 'C - Cukup',
+            70 => 'C - Cukup',
+            69 => 'D - Kurang',
+        ];
+
+        foreach ($boundaryExpectations as $score => $expectedPredicate) {
+            $result = $calculator->calculate(
+                components: $this->astsComponents(),
+                scores: [1 => $score, 4 => $score],
+                scheme: $this->scheme(),
+            );
+
+            $this->assertSame((float) $score, $result->finalScore);
+            $this->assertSame($expectedPredicate, $result->predicate, "Score {$score} should produce predicate {$expectedPredicate}.");
+        }
+    }
+
+    public function test_asts_calculator_falls_back_to_default_predicates_when_scheme_predicates_empty(): void
+    {
+        $calculator = new AssessmentCalculator;
+
+        $scheme = $this->scheme();
+        $scheme['settings'] = ['predicates' => []];
+
+        $score86 = $calculator->calculate($this->astsComponents(), [1 => 86, 4 => 86], $scheme);
+        $score85 = $calculator->calculate($this->astsComponents(), [1 => 85, 4 => 85], $scheme);
+
+        $this->assertSame('A - Sangat Baik', $score86->predicate);
+        $this->assertSame('B - Baik', $score85->predicate);
+    }
+
+    public function test_asts_calculator_ignores_legacy_generic_predicate_boundaries(): void
+    {
+        $calculator = new AssessmentCalculator;
+
+        $scheme = $this->scheme();
+        $scheme['settings'] = [
+            'predicates' => [
+                ['label' => 'A', 'minimum_score' => 90],
+                ['label' => 'B', 'minimum_score' => 80],
+                ['label' => 'C', 'minimum_score' => 70],
+            ],
+        ];
+
+        $score86 = $calculator->calculate($this->astsComponents(), [1 => 86, 4 => 86], $scheme);
+        $score85 = $calculator->calculate($this->astsComponents(), [1 => 85, 4 => 85], $scheme);
+
+        $this->assertSame('A - Sangat Baik', $score86->predicate);
+        $this->assertSame('B - Baik', $score85->predicate);
     }
 
     public function test_asts_calculator_blocks_final_score_without_any_daily_score_or_pure_score(): void

@@ -270,7 +270,15 @@ final class AssessmentCalculator
             ? (($dailyAverage * $asts['daily_weight']) + ($pureScore * $asts['pure_weight'])) / 100
             : null;
         $finalScore = $unroundedFinal !== null ? round($unroundedFinal, $precision, PHP_ROUND_HALF_UP) : null;
-        $predicateSettings = $settings + ['predicates' => self::defaultAstsPredicates(), 'fallback_predicate' => 'D - Kurang'];
+        $configuredPredicates = data_get($settings, 'asts.predicates', []);
+        $predicates = is_array($configuredPredicates) && $configuredPredicates !== []
+            ? $configuredPredicates
+            : self::defaultAstsPredicates();
+        $predicateSettings = array_merge(
+            ['fallback_predicate' => 'D - Kurang'],
+            $settings,
+            ['predicates' => $predicates],
+        );
         $predicate = $finalScore !== null ? $this->predicate($finalScore, $predicateSettings) : null;
         $description = $finalScore !== null ? $this->description($components, $settings) : null;
 
@@ -307,7 +315,7 @@ final class AssessmentCalculator
     }
 
     /** @return list<array{label: string, minimum_score: int}> */
-    private static function defaultAstsPredicates(): array
+    public static function defaultAstsPredicates(): array
     {
         return [
             ['label' => 'A - Sangat Baik', 'minimum_score' => 86],

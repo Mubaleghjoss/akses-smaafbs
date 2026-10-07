@@ -30,7 +30,7 @@
 
         $score = (float) $score;
 
-        return $score < 70 ? 'D' : ($score <= 75 ? 'C' : ($score <= 85 ? 'B' : 'A'));
+        return $score >= 86 ? 'A' : ($score >= 76 ? 'B' : ($score >= 70 ? 'C' : 'D'));
     };
 @endphp
 

@@ -338,6 +338,11 @@ class SeedAssessmentDemoData extends Command
             $settings = ['kkm' => 75, 'predicates' => [['label' => 'A', 'minimum_score' => 90], ['label' => 'B', 'minimum_score' => 80], ['label' => 'C', 'minimum_score' => 70]], 'demo_owner' => self::MARKER];
             if ($type === AssessmentType::ASTS) {
                 $settings['asts'] = ['daily_weight' => 50, 'pure_weight' => 50];
+                $settings['predicates'] = [
+                    ['label' => 'A', 'minimum_score' => 86],
+                    ['label' => 'B', 'minimum_score' => 76],
+                    ['label' => 'C', 'minimum_score' => 70],
+                ];
             }
             $scheme = AssessmentScheme::query()->create(['assessment_period_id' => $period->getKey(), 'assessment_subject_id' => $subject->getKey(), 'name' => 'DEMO-SKEMA-'.$subject->code, 'rounding_precision' => 2, 'minimum_score' => 0, 'maximum_score' => 100, 'settings' => $settings, 'is_active' => true]);
             $components = match ($type) {
