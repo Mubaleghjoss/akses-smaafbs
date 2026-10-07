@@ -86,6 +86,7 @@
     .asts-summary-grid > tbody > tr > td { width: 50%; padding: 0 5px; vertical-align: top; }
     .asts-summary-grid > tbody > tr > td:first-child { padding-left: 0; }
     .asts-summary-grid > tbody > tr > td:last-child { padding-right: 0; }
+    .asts-summary-grid--attendance-only > tbody > tr > td { width: 100%; padding-right: 0; }
     .asts-summary-grid .section-title { margin-top: 0; }
     .asts-extracurricular th, .asts-extracurricular td { text-align: center; }
     .asts-extracurricular th:nth-child(2), .asts-extracurricular td:nth-child(2) { text-align: left; }

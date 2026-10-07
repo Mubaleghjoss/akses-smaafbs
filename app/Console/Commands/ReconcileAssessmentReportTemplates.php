@@ -18,14 +18,17 @@ class ReconcileAssessmentReportTemplates extends Command
         {--actor= : ID admin/kurikulum untuk audit dan authorization}
         {--period= : ID periode yang revisi terbukanya akan dihentikan}
         {--cancel-open : Hentikan revisi prepared/running/failed pada periode terpilih}
-        {--prepare-new : Siapkan revisi baru sesudah rekonsiliasi tanpa menjadwalkan job PDF}';
+        {--prepare-new : Siapkan revisi baru sesudah rekonsiliasi tanpa menjadwalkan job PDF}
+        {--sync-kop : Sinkronkan kop resmi ke semua template aktif (memerlukan --apply)}';
 
     protected $description = 'Audit dan rekonsiliasi template utama ASTS-ASAS tanpa menghapus snapshot historis';
 
     /** @var list<string> */
     private const SHARED_IDENTITY_KEYS = [
+        'foundation_name',
         'school_name',
         'school_address',
+        'school_contact',
         'place',
         'principal_name',
         'principal_identifier',
@@ -60,6 +63,7 @@ class ReconcileAssessmentReportTemplates extends Command
                 ['Sumber identitas ASTS tiga halaman', $astsPrimary?->name ?: 'Belum tersedia'],
                 ['Revisi terbuka periode', (string) $openRunCount],
                 ['Siapkan revisi baru', $this->option('prepare-new') ? 'Ya, tanpa antrean PDF' : 'Tidak'],
+                ['Sinkronkan kop resmi', $this->option('sync-kop') ? 'Ya, hanya template aktif' : 'Tidak'],
                 ['Mode', $this->option('apply') ? 'APPLY' : 'DRY-RUN'],
             ],
         );
@@ -99,6 +103,23 @@ class ReconcileAssessmentReportTemplates extends Command
                     ->firstOrFail();
                 $astsSettings = is_array($asts->settings) ? $asts->settings : [];
                 $asasSettings = is_array($asas->settings) ? $asas->settings : [];
+
+                if ($this->option('sync-kop')) {
+                    $kop = collect($defaults)->firstWhere('code', 'ASTS-SMAAFBS-3P')['settings'];
+
+                    ReportTemplate::query()->where('is_active', true)->each(function (ReportTemplate $template) use ($kop): void {
+                        $settings = is_array($template->settings) ? $template->settings : [];
+                        foreach (['foundation_name', 'school_name', 'school_address', 'school_contact'] as $key) {
+                            data_set($settings, $key, data_get($kop, $key));
+                        }
+                        $template->forceFill(['settings' => $settings])->save();
+                    });
+
+                    $asts->refresh();
+                    $asas->refresh();
+                    $astsSettings = is_array($asts->settings) ? $asts->settings : [];
+                    $asasSettings = is_array($asas->settings) ? $asas->settings : [];
+                }
 
                 foreach (self::SHARED_IDENTITY_KEYS as $key) {
                     if (filled(data_get($astsSettings, $key))) {

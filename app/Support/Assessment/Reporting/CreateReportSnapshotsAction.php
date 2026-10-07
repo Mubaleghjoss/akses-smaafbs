@@ -196,6 +196,9 @@ class CreateReportSnapshotsAction
                 $collectPromotionStatus = $this->enumValue($period->type) === 'asas';
             }
             $school = $this->schoolSnapshot();
+            if (filled(data_get($templateSettings, 'foundation_name'))) {
+                $school['foundation_name'] = trim((string) data_get($templateSettings, 'foundation_name'));
+            }
             if (filled(data_get($templateSettings, 'school_name'))) {
                 $school['name'] = trim((string) data_get($templateSettings, 'school_name'));
             }
@@ -467,7 +470,7 @@ class CreateReportSnapshotsAction
     }
 
     /**
-     * @return array{name:string,address:?string,contact:?string,logo_data_uri:?string}
+     * @return array{foundation_name:string,name:string,address:?string,contact:?string,logo_data_uri:?string}
      */
     private function schoolSnapshot(): array
     {
@@ -477,6 +480,7 @@ class CreateReportSnapshotsAction
             : null;
 
         return [
+            'foundation_name' => 'YAYASAN DAR AL FURQON AL HAKIM',
             'name' => $profile?->nama_sekolah ?: $settings->siteName(),
             'address' => $profile?->alamat,
             'contact' => collect([

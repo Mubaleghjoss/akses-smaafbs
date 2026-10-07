@@ -14,8 +14,10 @@
     $signatures = is_array(data_get($snapshot, 'signatures')) ? data_get($snapshot, 'signatures') : [];
     $logo = trim((string) data_get($school, 'logo_data_uri'));
     $logoIsSafe = preg_match('#^data:image/(?:png|jpeg|webp);base64,#i', $logo) === 1;
-    $letterheadAddress = trim((string) data_get($school, 'address')) ?: 'JL. UNTUNG SUROPATI 1 NO. 8 RT/RW 003/003, CIMONE JAYA, KARAWACI, KOTA TANGERANG, BANTEN.';
-    $letterheadContact = trim((string) data_get($school, 'contact')) ?: '+6285178494207';
+    $letterheadFoundation = trim((string) data_get($school, 'foundation_name')) ?: 'YAYASAN DAR AL FURQON AL HAKIM';
+    $letterheadSchoolName = trim((string) data_get($school, 'name')) ?: 'SMA AL FURQON BOARDING SCHOOL';
+    $letterheadAddress = trim((string) data_get($school, 'address')) ?: 'Jl. Untung Suropati 1 No.8 RT/RW 003/003, Kel. Cimone Jaya, Kec. Karawaci, Kota Tangerang, Banten';
+    $letterheadContact = trim((string) data_get($school, 'contact')) ?: 'No Wa +6285178494207 | email : smaafbs@gmail.com | website: smaafbs.sch.id';
     $reportTitles = [
         'ASTS' => 'LAPORAN HASIL ASESMEN SUMATIF TENGAH SEMESTER (ASTS)',
         'ASAS' => 'LAPORAN HASIL ASESMEN SUMATIF AKHIR SEMESTER (ASAS)',
@@ -48,7 +50,7 @@
 <section class="report-page report-page--scores">
     <table class="letterhead"><tr>
         <td class="letterhead__logo">@if ($logoIsSafe)<img src="{{ $logo }}" alt="">@endif</td>
-        <td class="letterhead__school"><p class="letterhead__school-name">{{ data_get($school, 'name', 'SMA AFBS') }}</p>
+        <td class="letterhead__school"><p class="letterhead__foundation">{{ $letterheadFoundation }}</p><p class="letterhead__school-name">{{ $letterheadSchoolName }}</p>
             <p class="letterhead__school-info">{{ $letterheadAddress }}</p>
             <p class="letterhead__school-info">{{ $letterheadContact }}</p>
         </td><td class="letterhead__logo"></td>

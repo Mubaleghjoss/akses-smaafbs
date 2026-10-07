@@ -163,6 +163,10 @@ class AssessmentReportTemplateResource extends Resource
             Section::make('Kop dan Judul')
                 ->columns(['default' => 1, 'md' => 2])
                 ->schema([
+                    Forms\Components\TextInput::make('settings.foundation_name')
+                        ->label('Nama Yayasan')
+                        ->maxLength(150)
+                        ->columnSpanFull(),
                     Forms\Components\TextInput::make('settings.school_name')
                         ->label('Nama Sekolah')
                         ->required()

@@ -150,9 +150,10 @@ class InstallAssessmentDefaults extends Command
         $baseSettings = [
             'paper' => 'a4',
             'orientation' => 'portrait',
-            'school_name' => 'SMA AFBS',
-            'school_address' => 'JL. UNTUNG SUROPATI 1 NO. 8 RT/RW 003/003, CIMONE JAYA, KARAWACI, KOTA TANGERANG, BANTEN.',
-            'school_contact' => '+6285178494207',
+            'foundation_name' => 'YAYASAN DAR AL FURQON AL HAKIM',
+            'school_name' => 'SMA AL FURQON BOARDING SCHOOL',
+            'school_address' => 'Jl. Untung Suropati 1 No.8 RT/RW 003/003, Kel. Cimone Jaya, Kec. Karawaci, Kota Tangerang, Banten',
+            'school_contact' => 'No Wa +6285178494207 | email : smaafbs@gmail.com | website: smaafbs.sch.id',
             'place' => null,
             'principal_name' => null,
             'principal_identifier' => null,

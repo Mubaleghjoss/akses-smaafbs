@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Actions\Assessment\CancelOpenReportRevisionsAction;
 use App\Actions\Assessment\PublishAssessmentPeriodAction;
 use App\Actions\Assessment\SetPrimaryReportTemplateAction;
+use App\Console\Commands\InstallAssessmentDefaults;
 use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Enums\Assessment\AssessmentType;
 use App\Enums\Assessment\ReportGenerationStatus;
@@ -1311,21 +1312,60 @@ class AssessmentReportingTest extends TestCase
         $this->assertStringContainsString('SMA Template Test', $html);
     }
 
-    public function test_report_letterheads_use_the_current_address_and_phone_defaults(): void
+    public function test_report_letterheads_render_the_official_kop_defaults(): void
     {
-        $address = 'JL. UNTUNG SUROPATI 1 NO. 8 RT/RW 003/003, CIMONE JAYA, KARAWACI, KOTA TANGERANG, BANTEN.';
-        $phone = '+6285178494207';
+        $foundation = 'YAYASAN DAR AL FURQON AL HAKIM';
+        $schoolName = 'SMA AL FURQON BOARDING SCHOOL';
+        $address = 'Jl. Untung Suropati 1 No.8 RT/RW 003/003, Kel. Cimone Jaya, Kec. Karawaci, Kota Tangerang, Banten';
+        $contact = 'No Wa +6285178494207 | email : smaafbs@gmail.com | website: smaafbs.sch.id';
+        $snapshot = ['school' => [], 'period' => [], 'student' => [], 'subjects' => [], 'homeroom' => [], 'signatures' => []];
 
-        $astsLetterhead = file_get_contents(resource_path('views/assessment/reports/_asts-letterhead.blade.php'));
-        $genericDocument = file_get_contents(resource_path('views/assessment/reports/_document.blade.php'));
-        $defaults = file_get_contents(app_path('Console/Commands/InstallAssessmentDefaults.php'));
+        foreach (['asts', 'asas', 'asat'] as $report) {
+            $html = view('assessment.reports.'.$report, [
+                'snapshot' => $snapshot,
+                'templateSettings' => [],
+                'pdfMode' => false,
+            ])->render();
 
-        $this->assertStringContainsString($address, $astsLetterhead);
-        $this->assertStringContainsString($phone, $astsLetterhead);
-        $this->assertStringContainsString($address, $genericDocument);
-        $this->assertStringContainsString($phone, $genericDocument);
-        $this->assertStringContainsString("'school_address' => '{$address}'", $defaults);
-        $this->assertStringContainsString("'school_contact' => '{$phone}'", $defaults);
+            foreach ([$foundation, $schoolName, $address, $contact] as $value) {
+                $this->assertStringContainsString($value, $html);
+            }
+        }
+
+        $defaults = InstallAssessmentDefaults::defaultTemplates();
+        foreach ($defaults as $template) {
+            $this->assertSame($foundation, data_get($template, 'settings.foundation_name'));
+            $this->assertSame($schoolName, data_get($template, 'settings.school_name'));
+            $this->assertSame($address, data_get($template, 'settings.school_address'));
+            $this->assertSame($contact, data_get($template, 'settings.school_contact'));
+        }
+    }
+
+    public function test_asts_omits_the_extracurricular_column_when_no_valid_items_exist(): void
+    {
+        $snapshot = [
+            'school' => [],
+            'period' => [],
+            'student' => [],
+            'subjects' => [],
+            'homeroom' => ['extracurricular_data' => [['name' => ''], []]],
+            'signatures' => [],
+        ];
+
+        $empty = view('assessment.reports.asts', ['snapshot' => $snapshot, 'templateSettings' => [], 'pdfMode' => false])->render();
+        $withItem = view('assessment.reports.asts', [
+            'snapshot' => array_replace_recursive($snapshot, [
+                'homeroom' => ['extracurricular_data' => [['name' => 'Pramuka', 'description' => 'Baik']]],
+            ]),
+            'templateSettings' => [],
+            'pdfMode' => false,
+        ])->render();
+
+        $this->assertStringNotContainsString('Nama Ekstrakurikuler', $empty);
+        $this->assertStringContainsString('asts-summary-grid--attendance-only', $empty);
+        $this->assertStringContainsString('Nama Ekstrakurikuler', $withItem);
+        $this->assertStringContainsString('Pramuka', $withItem);
+        $this->assertSame(1, substr_count($withItem, '<td>Pramuka</td>'));
     }
 
     public function test_homeroom_teacher_can_preview_own_class_reports_but_not_another_class(): void
@@ -1857,11 +1897,15 @@ class AssessmentReportingTest extends TestCase
             '--period' => $period->getKey(),
             '--cancel-open' => true,
             '--prepare-new' => true,
+            '--sync-kop' => true,
         ]));
 
         $asas = ReportTemplate::query()->where('code', 'ASAS-SMAAFBS-3P')->firstOrFail();
         $this->assertTrue($asas->is_active);
         $this->assertSame('Kepala Sekolah', data_get($asas->settings, 'principal_name'));
+        $this->assertSame('YAYASAN DAR AL FURQON AL HAKIM', data_get($asas->settings, 'foundation_name'));
+        $this->assertSame('SMA AL FURQON BOARDING SCHOOL', data_get($asas->settings, 'school_name'));
+        $this->assertSame('No Wa +6285178494207 | email : smaafbs@gmail.com | website: smaafbs.sch.id', data_get($asas->settings, 'school_contact'));
         $this->assertTrue(app(AssessmentReportLayout::class)->requiresSemesterStatus($asas->settings));
 
         // Setiap jenis yang PUNYA template harus punya tepat satu template utama.

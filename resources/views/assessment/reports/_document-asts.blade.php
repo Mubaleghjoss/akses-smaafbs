@@ -22,7 +22,13 @@
         ? ['Kelompok Umum' => array_values(array_filter($subjects, fn ($subject) => ! $isChoiceSubject($subject))), 'Kelompok Pilihan' => array_values(array_filter($subjects, $isChoiceSubject))]
         : ['Kelompok Umum' => $subjects];
     $extracurricular = data_get($homeroom, 'extracurricular', data_get($homeroom, 'extracurricular_data', []));
-    $extracurricular = is_array($extracurricular) ? array_slice($extracurricular, 0, 5) : [];
+    $extracurricular = is_array($extracurricular)
+        ? collect($extracurricular)
+            ->filter(fn ($item): bool => filled(trim((string) data_get($item, 'name'))))
+            ->take(5)
+            ->values()
+            ->all()
+        : [];
     $homeroomSignature = collect($signatures)->first(fn ($signature) => str_contains(strtolower((string) data_get($signature, 'label')), 'wali kelas'));
     $signatureDate = data_get($homeroomSignature, 'place_date', collect($signatures)->pluck('place_date')->filter()->first());
     $astsPredicate = static function (mixed $score): string {
@@ -75,13 +81,13 @@
         <td class="identity__label">NIS / NISN</td><td class="identity__separator">:</td><td class="identity__value--asts">{{ $studentNis }} / {{ $studentNisn }}</td>
         <td class="identity__label identity__label--asts-secondary">Semester</td><td class="identity__separator">:</td><td class="identity__value--asts">{{ data_get($period, 'semester', '-') }}</td>
     </tr></table>
-    <table class="asts-summary-grid"><tr><td>
+    <table class="asts-summary-grid{{ empty($extracurricular) ? ' asts-summary-grid--attendance-only' : '' }}"><tr><td>
         <p class="section-title">Ketidakhadiran</p>
         <table class="summary-table summary-table--attendance"><tr><th>Sakit</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'sick_days', 0) }}&nbsp;hari</span></td></tr><tr><th>Izin</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'permission_days', 0) }}&nbsp;hari</span></td></tr><tr><th>Tanpa Keterangan</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'absent_days', 0) }}&nbsp;hari</span></td></tr></table>
-    </td><td>
+    </td>@if (filled($extracurricular))<td>
         <p class="section-title">Ekstrakurikuler</p>
-        <table class="summary-table asts-extracurricular"><thead><tr><th>No.</th><th>Nama Ekstrakurikuler</th><th>Predikat</th></tr></thead><tbody>@foreach (range(1, 5) as $index) @php($item = $extracurricular[$index - 1] ?? [])<tr><td>{{ $index }}</td><td>{{ data_get($item, 'name', '-') }}</td><td>{{ data_get($item, 'grade', data_get($item, 'description', data_get($item, 'level', '-'))) }}</td></tr>@endforeach</tbody></table>
-    </td></tr></table>
+        <table class="summary-table asts-extracurricular"><thead><tr><th>No.</th><th>Nama Ekstrakurikuler</th><th>Predikat</th></tr></thead><tbody>@foreach ($extracurricular as $index => $item)<tr><td>{{ $index + 1 }}</td><td>{{ data_get($item, 'name') }}</td><td>{{ data_get($item, 'grade', data_get($item, 'description', data_get($item, 'level', '-'))) }}</td></tr>@endforeach</tbody></table>
+    </td>@endif</tr></table>
 
     <table class="signatures asts-signatures"><tr><td>Orang Tua/Wali</td><td>{{ $signatureDate ?: 'Tangerang, ....................' }}<br>Wali Kelas</td></tr><tr class="signature-spaces"><td><div class="signature-space"></div></td><td><div class="signature-space"></div></td></tr><tr class="signature-names"><td><div class="signature-name signature-name--blank">(................................................)</div></td><td><div class="signature-name">{{ filled(data_get($homeroomSignature, 'name')) && data_get($homeroomSignature, 'name') !== '-' ? data_get($homeroomSignature, 'name') : '................................................' }}</div></td></tr></table>
 </section>

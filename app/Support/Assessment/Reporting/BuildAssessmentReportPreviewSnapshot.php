@@ -38,6 +38,9 @@ final class BuildAssessmentReportPreviewSnapshot
         data_set($settings, 'preview_data_incomplete', ! $preflight['ready']);
 
         $school = $this->schoolSnapshot();
+        if (filled(data_get($settings, 'foundation_name'))) {
+            $school['foundation_name'] = trim((string) data_get($settings, 'foundation_name'));
+        }
         if (filled(data_get($settings, 'school_name'))) {
             $school['name'] = trim((string) data_get($settings, 'school_name'));
         }
@@ -171,7 +174,7 @@ final class BuildAssessmentReportPreviewSnapshot
     }
 
     /**
-     * @return array{name:string,address:?string,contact:?string,logo_data_uri:?string}
+     * @return array{foundation_name:string,name:string,address:?string,contact:?string,logo_data_uri:?string}
      */
     private function schoolSnapshot(): array
     {
@@ -181,6 +184,7 @@ final class BuildAssessmentReportPreviewSnapshot
             : null;
 
         return [
+            'foundation_name' => 'YAYASAN DAR AL FURQON AL HAKIM',
             'name' => $profile?->nama_sekolah ?: $settings->siteName(),
             'address' => $profile?->alamat,
             'contact' => collect([$profile?->kontak_telepon, $profile?->kontak_email])->filter()->implode(' | ') ?: null,
