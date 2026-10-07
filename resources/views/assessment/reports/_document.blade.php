@@ -14,6 +14,8 @@
     $signatures = is_array(data_get($snapshot, 'signatures')) ? data_get($snapshot, 'signatures') : [];
     $logo = trim((string) data_get($school, 'logo_data_uri'));
     $logoIsSafe = preg_match('#^data:image/(?:png|jpeg|webp);base64,#i', $logo) === 1;
+    $letterheadAddress = trim((string) data_get($school, 'address')) ?: 'JL. UNTUNG SUROPATI 1 NO. 8 RT/RW 003/003, CIMONE JAYA, KARAWACI, KOTA TANGERANG, BANTEN.';
+    $letterheadContact = trim((string) data_get($school, 'contact')) ?: '+6285178494207';
     $reportTitles = [
         'ASTS' => 'LAPORAN HASIL ASESMEN SUMATIF TENGAH SEMESTER (ASTS)',
         'ASAS' => 'LAPORAN HASIL ASESMEN SUMATIF AKHIR SEMESTER (ASAS)',
@@ -47,8 +49,8 @@
     <table class="letterhead"><tr>
         <td class="letterhead__logo">@if ($logoIsSafe)<img src="{{ $logo }}" alt="">@endif</td>
         <td class="letterhead__school"><p class="letterhead__school-name">{{ data_get($school, 'name', 'SMA AFBS') }}</p>
-            @if (filled(data_get($school, 'address')))<p class="letterhead__school-info">{{ data_get($school, 'address') }}</p>@endif
-            @if (filled(data_get($school, 'contact')))<p class="letterhead__school-info">{{ data_get($school, 'contact') }}</p>@endif
+            <p class="letterhead__school-info">{{ $letterheadAddress }}</p>
+            <p class="letterhead__school-info">{{ $letterheadContact }}</p>
         </td><td class="letterhead__logo"></td>
     </tr></table>
     <hr class="letterhead-rule">

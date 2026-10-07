@@ -44,6 +44,9 @@ final class BuildAssessmentReportPreviewSnapshot
         if (filled(data_get($settings, 'school_address'))) {
             $school['address'] = trim((string) data_get($settings, 'school_address'));
         }
+        if (filled(data_get($settings, 'school_contact'))) {
+            $school['contact'] = trim((string) data_get($settings, 'school_contact'));
+        }
 
         $homeroom = $student->homeroomReport;
         // The class assignment list is the report syllabus. Results are optional

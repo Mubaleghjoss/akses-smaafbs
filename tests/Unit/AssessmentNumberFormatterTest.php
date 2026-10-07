@@ -16,4 +16,11 @@ class AssessmentNumberFormatterTest extends TestCase
         $this->assertSame('-', AssessmentNumberFormatter::score(null));
         $this->assertSame('-', AssessmentNumberFormatter::score(''));
     }
+
+    public function test_it_rounds_numeric_rapor_scores_to_whole_numbers(): void
+    {
+        $this->assertSame('94', AssessmentNumberFormatter::scoreRapor('93.50'));
+        $this->assertSame('93', AssessmentNumberFormatter::scoreRapor('93.49'));
+        $this->assertSame('90', AssessmentNumberFormatter::scoreRapor('90.33'));
+    }
 }

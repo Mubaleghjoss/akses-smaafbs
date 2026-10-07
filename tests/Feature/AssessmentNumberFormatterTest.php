@@ -35,11 +35,12 @@ class AssessmentNumberFormatterTest extends TestCase
         $this->assertSame('0', AssessmentNumberFormatter::scoreRapor(0.0));
     }
 
-    public function test_pembulatan_dan_nilai_bukan_angka_tetap_seperti_semula(): void
+    public function test_rapor_rounds_scores_to_whole_numbers_and_preserves_non_numeric_values(): void
     {
         $this->assertSame('75', AssessmentNumberFormatter::scoreRapor(75.00));
-        $this->assertSame('75.25', AssessmentNumberFormatter::scoreRapor(75.25));
-        $this->assertSame('75.3', AssessmentNumberFormatter::scoreRapor(75.30));
+        $this->assertSame('94', AssessmentNumberFormatter::scoreRapor(93.50));
+        $this->assertSame('93', AssessmentNumberFormatter::scoreRapor(93.49));
+        $this->assertSame('90', AssessmentNumberFormatter::scoreRapor(90.33));
 
         // Teks bukan angka diteruskan apa adanya (mis. predikat manual).
         $this->assertSame('Tuntas', AssessmentNumberFormatter::scoreRapor('Tuntas'));

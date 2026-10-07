@@ -689,7 +689,7 @@ class AssessmentReportingTest extends TestCase
             'templateSettings' => [],
             'pdfMode' => false,
         ])->render();
-        $this->assertStringContainsString('88.5', $renderedReport);
+        $this->assertStringContainsString('89', $renderedReport);
         $this->assertStringNotContainsString('Menguasai operasi numerik.', $renderedReport);
         $this->assertStringNotContainsString('Capaian Kompetensi', $renderedReport);
         $this->assertStringNotContainsString('(belum diisi)', $renderedReport);
@@ -1304,9 +1304,28 @@ class AssessmentReportingTest extends TestCase
 
         $this->assertSame(2, substr_count($html, 'identity identity--asts'));
         $this->assertSame(2, substr_count($html, 'identity__label--asts-secondary">Semester'));
-        $this->assertStringContainsString('.identity--asts .identity__label { width: 88px; white-space: nowrap; }', $html);
+        $this->assertSame(8, substr_count($html, 'class="identity__value--asts"'));
+        $this->assertStringContainsString('.identity--asts .identity__label { width: 76px; white-space: nowrap; }', $html);
+        $this->assertStringContainsString('.identity--asts .identity__separator { width: 4px;', $html);
         $this->assertStringContainsString('.identity--asts .identity__value--asts { white-space: nowrap; }', $html);
         $this->assertStringContainsString('SMA Template Test', $html);
+    }
+
+    public function test_report_letterheads_use_the_current_address_and_phone_defaults(): void
+    {
+        $address = 'JL. UNTUNG SUROPATI 1 NO. 8 RT/RW 003/003, CIMONE JAYA, KARAWACI, KOTA TANGERANG, BANTEN.';
+        $phone = '+6285178494207';
+
+        $astsLetterhead = file_get_contents(resource_path('views/assessment/reports/_asts-letterhead.blade.php'));
+        $genericDocument = file_get_contents(resource_path('views/assessment/reports/_document.blade.php'));
+        $defaults = file_get_contents(app_path('Console/Commands/InstallAssessmentDefaults.php'));
+
+        $this->assertStringContainsString($address, $astsLetterhead);
+        $this->assertStringContainsString($phone, $astsLetterhead);
+        $this->assertStringContainsString($address, $genericDocument);
+        $this->assertStringContainsString($phone, $genericDocument);
+        $this->assertStringContainsString("'school_address' => '{$address}'", $defaults);
+        $this->assertStringContainsString("'school_contact' => '{$phone}'", $defaults);
     }
 
     public function test_homeroom_teacher_can_preview_own_class_reports_but_not_another_class(): void

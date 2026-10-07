@@ -202,6 +202,9 @@ class CreateReportSnapshotsAction
             if (filled(data_get($templateSettings, 'school_address'))) {
                 $school['address'] = trim((string) data_get($templateSettings, 'school_address'));
             }
+            if (filled(data_get($templateSettings, 'school_contact'))) {
+                $school['contact'] = trim((string) data_get($templateSettings, 'school_contact'));
+            }
             $snapshots = new EloquentCollection;
 
             foreach ($students as $student) {

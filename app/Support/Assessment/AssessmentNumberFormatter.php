@@ -42,6 +42,15 @@ final class AssessmentNumberFormatter
      */
     public static function scoreRapor(mixed $value, int $maximumDecimals = 2): string
     {
-        return static::score($value, $maximumDecimals, self::BELUM_DIISI);
+        if ($value === null || $value === '') {
+            return self::BELUM_DIISI;
+        }
+
+        if (! is_numeric($value)) {
+            return trim((string) $value) !== '' ? (string) $value : self::BELUM_DIISI;
+        }
+
+        // Rapor prints whole-number scores; PHP rounds .5 and above upward.
+        return number_format((float) $value, 0, '.', '');
     }
 }

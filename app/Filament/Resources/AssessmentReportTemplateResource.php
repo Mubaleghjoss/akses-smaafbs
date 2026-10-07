@@ -176,6 +176,10 @@ class AssessmentReportTemplateResource extends Resource
                         ->rows(2)
                         ->maxLength(500)
                         ->columnSpanFull(),
+                    Forms\Components\TextInput::make('settings.school_contact')
+                        ->label('Telepon Sekolah')
+                        ->tel()
+                        ->maxLength(50),
                     Forms\Components\TextInput::make('settings.score_label')
                         ->label('Istilah Nilai')
                         ->default('Nilai Akhir')

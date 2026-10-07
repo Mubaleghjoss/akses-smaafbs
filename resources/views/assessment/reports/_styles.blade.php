@@ -19,11 +19,11 @@
     .identity { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
     .identity td { padding: 1.5px 3px; border: 0; vertical-align: top; }
     .identity__label { width: 82px; } .identity__separator { width: 7px; }
-    /* Fixed ASTS identity columns keep the right-side labels on one line in Dompdf. */
+    /* Compact fixed columns keep every ASTS identity field on one line in Dompdf. */
     .identity--asts { table-layout: fixed; }
-    .identity--asts .identity__label { width: 88px; white-space: nowrap; }
-    .identity--asts .identity__label--asts-secondary { width: 104px; }
-    .identity--asts .identity__separator { width: 8px; }
+    .identity--asts .identity__label { width: 76px; white-space: nowrap; }
+    .identity--asts .identity__label--asts-secondary { width: 66px; }
+    .identity--asts .identity__separator { width: 4px; padding-left: 0; padding-right: 0; text-align: center; }
     .identity--asts .identity__value--asts { white-space: nowrap; }
     .scores, .summary-table { width: 100%; border-collapse: collapse; }
     .scores th, .scores td, .summary-table th, .summary-table td { padding: 3.5px 4.5px; border: 1px solid #4b5563; vertical-align: top; }
