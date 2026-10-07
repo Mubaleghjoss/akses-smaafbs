@@ -900,7 +900,7 @@ class AssessmentReportingTest extends TestCase
         );
         [$scorePage, $summaryPage] = explode('<div class="report-page-break"></div>', $html, 2);
         $this->assertStringContainsString('Nama Siswa', $summaryPage);
-        $this->assertStringContainsString('NIS / NISN', $summaryPage);
+        $this->assertStringContainsString('NIS/NISN', $summaryPage);
         $this->assertStringContainsString('Kelas', $summaryPage);
         $this->assertSame(2, substr_count($html, '<table class="identity identity--asts'));
         $this->assertSame(2, substr_count($html, '<col class="identity__col--asts-primary-value">'));
@@ -916,7 +916,7 @@ class AssessmentReportingTest extends TestCase
                 $page,
             );
             $this->assertMatchesRegularExpression(
-                '/identity__label identity__label--asts-secondary">Semester<\\/td>\\s*<td class="identity__separator identity__separator--asts">:<\\/td>\\s*<td class="identity__value--asts identity__value--asts-secondary identity__value--asts-nowrap">Ganjil<\\/td>/s',
+                '/identity__label identity__label--asts-secondary">Semester<\\/td>\\s*<td class="identity__separator identity__separator--asts[^"]*">:<\\/td>\\s*<td class="identity__value--asts identity__value--asts-secondary identity__value--asts-nowrap">Ganjil<\\/td>/s',
                 $page,
             );
         }
@@ -1328,6 +1328,7 @@ class AssessmentReportingTest extends TestCase
         $this->assertSame(2, substr_count($html, '<col class="identity__col--asts-secondary-value">'));
         $this->assertSame(4, substr_count($html, 'identity__value--asts identity__value--asts-primary identity__value--asts-nowrap'));
         $this->assertSame(4, substr_count($html, 'identity__value--asts identity__value--asts-secondary identity__value--asts-nowrap'));
+        $this->assertSame(2, substr_count($html, 'identity__label--asts-primary">NIS/NISN<'));
         $this->assertSame(5, substr_count($html, 'identity__separator--asts-left'));
         $this->assertSame(5, substr_count($html, 'identity__separator--asts-right'));
         $this->assertStringContainsString('.identity--asts .identity__label--asts-primary { width: 15%; }', $html);
@@ -1336,6 +1337,8 @@ class AssessmentReportingTest extends TestCase
         $this->assertStringContainsString('.identity--asts .identity__separator--asts-right { width: 2%; }', $html);
         $this->assertStringContainsString('.identity--asts .identity__col--asts-primary-value { width: 47%; }', $html);
         $this->assertStringContainsString('.identity--asts .identity__col--asts-secondary-value { width: 24%; }', $html);
+        $this->assertStringContainsString('.identity--asts .identity__value--asts-primary { width: 47%; }', $html);
+        $this->assertStringContainsString('.identity--asts .identity__value--asts-secondary { width: 24%; }', $html);
         $this->assertStringContainsString('.identity--asts .identity__value--asts-nowrap { overflow: hidden; font-size: 9pt; text-overflow: ellipsis; white-space: nowrap; }', $html);
         $this->assertStringContainsString('SMA Template Test', $html);
     }

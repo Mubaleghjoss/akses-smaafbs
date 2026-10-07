@@ -32,9 +32,11 @@
     .identity--asts .identity__label--asts-secondary { width: 10%; }
     .identity--asts .identity__separator--asts-right { width: 2%; }
     .identity--asts .identity__col--asts-secondary-value { width: 24%; }
+    .identity--asts .identity__value--asts-primary { width: 47%; }
+    .identity--asts .identity__value--asts-secondary { width: 24%; }
     .identity--asts .identity__label { white-space: nowrap; }
     .identity--asts .identity__separator--asts { padding-left: 0; padding-right: 0; text-align: center; }
-    .identity--asts .identity__spacer { padding: 0; }
+    .identity--asts .identity__spacer { width: 1%; padding: 0; }
     .identity--asts .identity__value--asts-nowrap { overflow: hidden; font-size: 9pt; text-overflow: ellipsis; white-space: nowrap; }
     .scores, .summary-table { width: 100%; border-collapse: collapse; }
     .scores th, .scores td, .summary-table th, .summary-table td { padding: 3.5px 4.5px; border: 1px solid #4b5563; vertical-align: top; }

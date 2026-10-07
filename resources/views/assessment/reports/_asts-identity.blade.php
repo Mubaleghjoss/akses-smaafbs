@@ -18,7 +18,7 @@
         <td class="identity__value--asts identity__value--asts-secondary identity__value--asts-nowrap">{{ $className ?: '-' }}</td>
     </tr>
     <tr>
-        <td class="identity__label identity__label--asts-primary">NIS / NISN</td>
+        <td class="identity__label identity__label--asts-primary">NIS/NISN</td>
         <td class="identity__separator identity__separator--asts identity__separator--asts-left">:</td>
         <td class="identity__value--asts identity__value--asts-primary identity__value--asts-nowrap">{{ $studentNis }} / {{ $studentNisn }}</td>
         <td class="identity__spacer" aria-hidden="true"></td>
