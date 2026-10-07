@@ -905,16 +905,16 @@ class AssessmentReportingTest extends TestCase
         $this->assertSame(2, substr_count($html, '<table class="identity identity--asts'));
         $this->assertSame(2, substr_count($html, '<col class="identity__col--asts-primary-value">'));
         $this->assertSame(2, substr_count($html, '<col class="identity__col--asts-secondary-value">'));
-        $this->assertSame(4, substr_count($html, 'identity__value--asts identity__value--asts-primary'));
-        $this->assertSame(4, substr_count($html, 'identity__value--asts identity__value--asts-secondary'));
+        $this->assertSame(4, substr_count($html, 'identity__value--asts identity__value--asts-primary identity__value--asts-nowrap'));
+        $this->assertSame(4, substr_count($html, 'identity__value--asts identity__value--asts-secondary identity__value--asts-nowrap'));
         foreach ([$scorePage, $summaryPage] as $page) {
             $this->assertStringContainsString($longStudentName, $page);
             $this->assertMatchesRegularExpression(
-                '/identity__value--asts-primary">'.preg_quote($longStudentName, '/').'<\\/td>\\s*<td class="identity__spacer"[^>]*><\\/td>\\s*<td class="identity__label identity__label--asts-secondary">Kelas<\\/td>/s',
+                '/identity__value--asts-primary identity__value--asts-nowrap">'.preg_quote($longStudentName, '/').'<\\/td>\\s*<td class="identity__spacer"[^>]*><\\/td>\\s*<td class="identity__label identity__label--asts-secondary">Kelas<\\/td>/s',
                 $page,
             );
             $this->assertMatchesRegularExpression(
-                '/identity__label identity__label--asts-secondary">Semester<\\/td>\\s*<td class="identity__separator identity__separator--asts">:<\\/td>\\s*<td class="identity__value--asts identity__value--asts-secondary">Ganjil<\\/td>/s',
+                '/identity__label identity__label--asts-secondary">Semester<\\/td>\\s*<td class="identity__separator identity__separator--asts">:<\\/td>\\s*<td class="identity__value--asts identity__value--asts-secondary identity__value--asts-nowrap">Ganjil<\\/td>/s',
                 $page,
             );
         }
@@ -1324,11 +1324,11 @@ class AssessmentReportingTest extends TestCase
         $this->assertSame(2, substr_count($html, 'identity__label--asts-secondary">Semester'));
         $this->assertSame(2, substr_count($html, '<col class="identity__col--asts-primary-value">'));
         $this->assertSame(2, substr_count($html, '<col class="identity__col--asts-secondary-value">'));
-        $this->assertSame(4, substr_count($html, 'identity__value--asts identity__value--asts-primary'));
-        $this->assertSame(4, substr_count($html, 'identity__value--asts identity__value--asts-secondary'));
-        $this->assertStringContainsString('.identity--asts .identity__col--asts-primary-value { width: 39%; }', $html);
+        $this->assertSame(4, substr_count($html, 'identity__value--asts identity__value--asts-primary identity__value--asts-nowrap'));
+        $this->assertSame(4, substr_count($html, 'identity__value--asts identity__value--asts-secondary identity__value--asts-nowrap'));
+        $this->assertStringContainsString('.identity--asts .identity__col--asts-primary-value { width: 47%; }', $html);
         $this->assertStringContainsString('.identity--asts .identity__col--asts-secondary-value { width: 24%; }', $html);
-        $this->assertStringContainsString('.identity--asts .identity__value--asts-primary { white-space: normal; }', $html);
+        $this->assertStringContainsString('.identity--asts .identity__value--asts-nowrap { overflow: hidden; font-size: 9pt; text-overflow: ellipsis; white-space: nowrap; }', $html);
         $this->assertStringContainsString('SMA Template Test', $html);
     }
 

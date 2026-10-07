@@ -19,21 +19,19 @@
     .identity { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
     .identity td { padding: 1.5px 3px; border: 0; vertical-align: top; }
     .identity__label { width: 82px; } .identity__separator { width: 7px; }
-    /* Fixed columns reserve the right-side fields while long student data wraps safely. */
+    /* Fixed columns preserve both identity groups while each value remains on one line. */
     .identity--asts { table-layout: fixed; }
-    .identity--asts .identity__col--asts-left-label { width: 17%; }
+    .identity--asts .identity__col--asts-left-label { width: 15%; }
     .identity--asts .identity__col--asts-left-separator { width: 2%; }
-    .identity--asts .identity__col--asts-primary-value { width: 39%; }
-    .identity--asts .identity__col--asts-spacer { width: 3%; }
-    .identity--asts .identity__col--asts-right-label { width: 13%; }
+    .identity--asts .identity__col--asts-primary-value { width: 47%; }
+    .identity--asts .identity__col--asts-spacer { width: 1%; }
+    .identity--asts .identity__col--asts-right-label { width: 10%; }
     .identity--asts .identity__col--asts-right-separator { width: 2%; }
     .identity--asts .identity__col--asts-secondary-value { width: 24%; }
     .identity--asts .identity__label { white-space: nowrap; }
     .identity--asts .identity__separator--asts { padding-left: 0; padding-right: 0; text-align: center; }
     .identity--asts .identity__spacer { padding: 0; }
-    .identity--asts .identity__value--asts { overflow-wrap: break-word; word-wrap: break-word; }
-    .identity--asts .identity__value--asts-primary { white-space: normal; }
-    .identity--asts .identity__value--asts-secondary { white-space: normal; }
+    .identity--asts .identity__value--asts-nowrap { overflow: hidden; font-size: 9pt; text-overflow: ellipsis; white-space: nowrap; }
     .scores, .summary-table { width: 100%; border-collapse: collapse; }
     .scores th, .scores td, .summary-table th, .summary-table td { padding: 3.5px 4.5px; border: 1px solid #4b5563; vertical-align: top; }
     .scores th { background: #e5e7eb; text-align: center; font-weight: 700; }
