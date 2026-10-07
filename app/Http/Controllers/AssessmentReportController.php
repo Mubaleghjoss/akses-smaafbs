@@ -60,7 +60,7 @@ class AssessmentReportController extends Controller
 
         return response($contents, 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="pratinjau-rapor.pdf"',
+            'Content-Disposition' => 'inline; filename="'.$this->livePreviewFilename($assessmentPeriod, $periodStudent).'"',
             'Cache-Control' => 'private, no-store, max-age=0, must-revalidate',
             'Pragma' => 'no-cache',
             'X-Content-Type-Options' => 'nosniff',
@@ -339,6 +339,11 @@ class AssessmentReportController extends Controller
         $usedNames[$filename] = true;
 
         return $filename;
+    }
+
+    private function livePreviewFilename(AssessmentPeriod $period, AssessmentPeriodStudent $student): string
+    {
+        return 'Preview - '.$this->liveReportFilename($period, $student);
     }
 
     private function liveReportFilename(AssessmentPeriod $period, AssessmentPeriodStudent $student): string

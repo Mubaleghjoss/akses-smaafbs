@@ -1252,6 +1252,9 @@ class AssessmentReportingTest extends TestCase
         [$period, , $students, $template] = $this->reportingFoundation();
         $this->actingAs(User::query()->findOrFail(99));
 
+        $previewUrl = route('assessment.reports.live-preview', [$period, $template, $students[0]]);
+        $downloadUrl = route('assessment.reports.live-download', [$period, $template, $students[0]]);
+
         $this->get(AstsReports::getUrl([
             'period' => $period->getKey(),
             'template' => $template->getKey(),
@@ -1262,22 +1265,25 @@ class AssessmentReportingTest extends TestCase
             ->assertSee($students[0]->student_name_snapshot)
             ->assertSee('Preview')
             ->assertSee('Download')
+            ->assertSeeHtml('href="'.$previewUrl.'"')
+            ->assertSeeHtml('href="'.$downloadUrl.'"')
             ->assertDontSee('Distribusi opsional')
             ->assertDontSee('Periksa tampilan PDF dan watermark')
             ->assertSeeHtml('assessment-report-card');
 
-        $previewResponse = $this->get(route('assessment.reports.live-preview', [$period, $template, $students[0]]));
+        $previewResponse = $this->get($previewUrl);
         $previewResponse->assertOk()->assertHeader('Content-Type', 'application/pdf');
-        $this->assertStringContainsString('inline', (string) $previewResponse->headers->get('Content-Disposition'));
+        $previewDisposition = (string) $previewResponse->headers->get('Content-Disposition');
+        $this->assertStringContainsString('inline', $previewDisposition);
+        $this->assertStringNotContainsString('attachment', $previewDisposition);
+        $this->assertStringContainsString('Preview - Siswa 1 - XI 1 - Rapor ASTS.pdf', $previewDisposition);
         $this->assertStringContainsString('no-store', (string) $previewResponse->headers->get('Cache-Control'));
 
-        $downloadResponse = $this->get(route('assessment.reports.live-download', [$period, $template, $students[0]]));
+        $downloadResponse = $this->get($downloadUrl);
         $downloadResponse->assertOk()->assertHeader('Content-Type', 'application/pdf');
-        $this->assertStringContainsString('attachment', (string) $downloadResponse->headers->get('Content-Disposition'));
-        $this->assertStringContainsString(
-            'Siswa 1 - XI 1 - Rapor ASTS.pdf',
-            (string) $downloadResponse->headers->get('Content-Disposition'),
-        );
+        $downloadDisposition = (string) $downloadResponse->headers->get('Content-Disposition');
+        $this->assertStringContainsString('attachment', $downloadDisposition);
+        $this->assertStringContainsString('Siswa 1 - XI 1 - Rapor ASTS.pdf', $downloadDisposition);
     }
 
     public function test_homeroom_teacher_can_preview_own_class_reports_but_not_another_class(): void
