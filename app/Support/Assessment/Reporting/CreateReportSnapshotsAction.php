@@ -148,40 +148,29 @@ class CreateReportSnapshotsAction
                 'requested_by' => $generatedBy,
             ]);
 
-            $results = DB::table('assessment_student_subject_results as results')
-                ->join(
-                    'assessment_period_assignments as assignments',
-                    'assignments.id',
-                    '=',
-                    'results.assessment_period_assignment_id',
-                )
-                ->join(
-                    'assessment_subjects as subjects',
-                    'subjects.id',
-                    '=',
-                    'assignments.assessment_subject_id',
-                )
-                ->where('results.assessment_period_id', $period->getKey())
+            // Assignments define the subjects printed for each class. Keep them
+            // separate from results so unfinished subjects produce blank rows.
+            $assignmentsByRombel = DB::table('assessment_period_assignments')
+                ->where('assessment_period_id', $period->getKey())
+                ->whereIn('assessment_period_rombel_id', $periodRombelIds)
                 ->select([
-                    'results.assessment_period_student_id',
-                    'results.final_score',
-                    'results.predicate',
-                    'results.description',
-                    'results.calculation_detail',
-                    'results.formula_version',
-                    'assignments.assessment_subject_id',
-                    'assignments.subject_name_snapshot',
-                    'assignments.subject_group_code_snapshot',
-                    'assignments.subject_group_name_snapshot',
-                    'assignments.subject_group_sort_order_snapshot',
-                    'assignments.subject_sort_order_snapshot',
-                    'assignments.teacher_name_snapshot',
+                    'id', 'assessment_period_rombel_id', 'assessment_subject_id',
+                    'subject_name_snapshot', 'subject_group_code_snapshot',
+                    'subject_group_name_snapshot', 'subject_group_sort_order_snapshot',
+                    'subject_sort_order_snapshot', 'teacher_name_snapshot',
                 ])
-                ->orderBy('assignments.subject_group_sort_order_snapshot')
-                ->orderBy('assignments.subject_sort_order_snapshot')
-                ->orderBy('assignments.subject_name_snapshot')
+                ->orderBy('subject_group_sort_order_snapshot')
+                ->orderBy('subject_sort_order_snapshot')
+                ->orderBy('subject_name_snapshot')
                 ->get()
-                ->groupBy('assessment_period_student_id');
+                ->groupBy('assessment_period_rombel_id');
+            $assignmentIds = $assignmentsByRombel->flatten(1)->pluck('id');
+            $results = DB::table('assessment_student_subject_results')
+                ->where('assessment_period_id', $period->getKey())
+                ->whereIn('assessment_period_student_id', $students->modelKeys())
+                ->whereIn('assessment_period_assignment_id', $assignmentIds)
+                ->get(['assessment_period_student_id', 'assessment_period_assignment_id', 'final_score', 'predicate', 'description', 'calculation_detail', 'formula_version'])
+                ->keyBy(fn (object $result): string => $result->assessment_period_student_id.'|'.$result->assessment_period_assignment_id);
 
             $homeroomReports = DB::table('assessment_homeroom_reports')
                 ->where('assessment_period_id', $period->getKey())
@@ -218,12 +207,15 @@ class CreateReportSnapshotsAction
             foreach ($students as $student) {
                 $homeroom = $homeroomReports->get($student->id);
                 $homeroomAssignment = $homerooms->get($student->assessment_period_rombel_id);
+                $studentAssignments = $assignmentsByRombel->get($student->assessment_period_rombel_id, collect());
+                $studentResults = $studentAssignments
+                    ->map(fn (object $assignment) => $results->get($student->id.'|'.$assignment->id))
+                    ->filter();
                 $snapshotData = [
                         'meta' => [
                             'revision' => $revision,
                             'snapshotted_at' => Carbon::now()->toIso8601String(),
-                            'formula_versions' => $results
-                                ->get($student->id, collect())
+                            'formula_versions' => $studentResults
                                 ->pluck('formula_version')
                                 ->filter()
                                 ->unique()
@@ -249,27 +241,27 @@ class CreateReportSnapshotsAction
                             'gender' => $student->gender_snapshot,
                             'class_name' => $student->rombel_name_snapshot,
                         ],
-                        'subjects' => $results
-                            ->get($student->id, collect())
-                            ->map(function (object $result): array {
-                                $detail = $this->decodeJson($result->calculation_detail);
+                        'subjects' => $studentAssignments
+                            ->map(function (object $assignment) use ($results, $student): array {
+                                $result = $results->get($student->id.'|'.$assignment->id);
+                                $detail = $this->decodeJson($result?->calculation_detail);
                                 $precision = min(4, max(0, (int) data_get($detail, 'rounding_precision', 2)));
 
                                 return [
-                                    'subject_id' => $result->assessment_subject_id,
-                                    'name' => $result->subject_name_snapshot,
-                                    'teacher_name' => $result->teacher_name_snapshot,
-                                    'group_code' => $result->subject_group_code_snapshot,
-                                    'group_name' => $result->subject_group_name_snapshot,
-                                    'group_sort_order' => (int) $result->subject_group_sort_order_snapshot,
-                                    'sort_order' => (int) $result->subject_sort_order_snapshot,
-                                    'final_score' => $result->final_score !== null
+                                    'subject_id' => $assignment->assessment_subject_id,
+                                    'name' => $assignment->subject_name_snapshot,
+                                    'teacher_name' => $assignment->teacher_name_snapshot,
+                                    'group_code' => $assignment->subject_group_code_snapshot,
+                                    'group_name' => $assignment->subject_group_name_snapshot,
+                                    'group_sort_order' => (int) $assignment->subject_group_sort_order_snapshot,
+                                    'sort_order' => (int) $assignment->subject_sort_order_snapshot,
+                                    'final_score' => $result?->final_score !== null
                                         ? number_format((float) $result->final_score, $precision, '.', '')
                                         : null,
-                                    'predicate' => $result->predicate,
-                                    'description' => $result->description,
+                                    'predicate' => $result?->final_score !== null ? $result->predicate : null,
+                                    'description' => $result?->description,
                                     'calculation_detail' => $detail,
-                                    'formula_version' => $result->formula_version,
+                                    'formula_version' => $result?->formula_version,
                                 ];
                             })
                             ->values()

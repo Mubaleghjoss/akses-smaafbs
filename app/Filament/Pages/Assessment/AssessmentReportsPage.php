@@ -399,6 +399,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
                 $period,
                 $template,
                 $this->selectedClassIds,
+                static::$assessmentType === AssessmentType::ASTS,
             );
             $snapshots = app(CreateReportSnapshotsAction::class)->execute(
                 $period,

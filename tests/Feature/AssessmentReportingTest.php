@@ -38,6 +38,7 @@ use App\Support\Assessment\Reporting\AssessmentReportRenderer;
 use App\Support\Assessment\Reporting\AssessmentReportShareService;
 use App\Support\Assessment\Reporting\AssessmentReportStorage;
 use App\Support\Assessment\Reporting\AssessmentReportWatermark;
+use App\Support\Assessment\Reporting\BuildAssessmentReportPreviewSnapshot;
 use App\Support\Assessment\Reporting\AssessmentReportCacheCleaner;
 use App\Support\Assessment\Reporting\CreateReportSnapshotsAction;
 use App\Support\Assessment\Reporting\RetryReportGenerationAction;
@@ -1503,6 +1504,89 @@ class AssessmentReportingTest extends TestCase
         $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
         $this->assertDatabaseCount('assessment_report_snapshots', 0);
         $this->assertDatabaseCount('jobs', 0);
+    }
+
+    public function test_asts_live_preview_uses_class_assignments_and_blanks_missing_scores_without_jobs(): void
+    {
+        Queue::fake();
+        [$period, $rombel, $students, $template] = $this->reportingFoundation();
+        $assignedSubject = Subject::query()->create([
+            'code' => 'FIS-ASSIGNED',
+            'name' => 'Fisika Kelas Ini',
+            'report_group_code' => 'A',
+            'report_group_name' => 'Kelompok A',
+            'report_group_sort_order' => 1,
+            'sort_order' => 1,
+            'is_active' => true,
+        ]);
+        $otherSubject = Subject::query()->create([
+            'code' => 'KIM-OTHER',
+            'name' => 'Kimia Kelas Lain',
+            'report_group_code' => 'A',
+            'report_group_name' => 'Kelompok A',
+            'report_group_sort_order' => 1,
+            'sort_order' => 2,
+            'is_active' => true,
+        ]);
+        $otherRombel = AssessmentPeriodRombel::query()->create([
+            'assessment_period_id' => $period->getKey(),
+            'source_rombel_id' => 102,
+            'rombel_name_snapshot' => 'XI 2',
+            'grade_level' => 'XI',
+            'is_active' => true,
+        ]);
+        foreach ([[$rombel, $assignedSubject], [$otherRombel, $otherSubject]] as [$assignedRombel, $subject]) {
+            AssessmentPeriodAssignment::query()->create([
+                'assessment_period_id' => $period->getKey(),
+                'assessment_period_rombel_id' => $assignedRombel->getKey(),
+                'teacher_id' => 41,
+                'assessment_subject_id' => $subject->getKey(),
+                'teacher_name_snapshot' => 'Guru Mapel',
+                'subject_name_snapshot' => $subject->name,
+                'subject_group_code_snapshot' => 'A',
+                'subject_group_name_snapshot' => 'Kelompok A',
+                'subject_group_sort_order_snapshot' => 1,
+                'subject_sort_order_snapshot' => $subject->sort_order,
+                'rombel_name_snapshot' => $assignedRombel->rombel_name_snapshot,
+                'status' => 'locked',
+                'lock_version' => 1,
+            ]);
+        }
+
+        $preview = app(BuildAssessmentReportPreviewSnapshot::class)->build($period, $template, $students[0]);
+
+        $this->assertSame([[
+            'subject_id' => $assignedSubject->getKey(),
+            'name' => 'Fisika Kelas Ini',
+            'teacher_name' => 'Guru Mapel',
+            'group_code' => 'A',
+            'group_name' => 'Kelompok A',
+            'group_sort_order' => 1,
+            'sort_order' => 1,
+            'final_score' => null,
+            'predicate' => null,
+            'description' => null,
+            'calculation_detail' => [],
+            'formula_version' => null,
+        ]], data_get($preview->snapshot_data, 'subjects'));
+        $snapshot = app(CreateReportSnapshotsAction::class)->execute($period, $template, generatedBy: 99)->sole();
+        $this->assertSame(data_get($preview->snapshot_data, 'subjects'), data_get($snapshot->snapshot_data, 'subjects'));
+        $rendered = view('assessment.reports.asts', [
+            'snapshot' => $preview->snapshot_data,
+            'templateSettings' => [],
+            'pdfMode' => false,
+        ])->render();
+        $this->assertStringContainsString('Fisika Kelas Ini', $rendered);
+        $this->assertStringNotContainsString('Kimia Kelas Lain', $rendered);
+        $this->assertStringNotContainsString('(belum diisi)', $rendered);
+        $this->assertStringContainsString('<td class="scores__score"></td><td class="scores__predicate"></td>', $rendered);
+
+        $this->actingAs(User::query()->findOrFail(99));
+        $this->get(route('assessment.reports.live-preview', [$period, $template, $students[0]]))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
+        Queue::assertNothingPushed();
+        $this->assertDatabaseCount('assessment_report_snapshots', 1);
     }
 
     public function test_watermark_is_frozen_as_private_data_without_leaking_path(): void

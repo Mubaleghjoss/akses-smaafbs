@@ -252,15 +252,17 @@ final class AssessmentReportPreflight
     /**
      * @param  array<int, int|string>  $periodRombelIds
      */
-    public function assertReady(AssessmentPeriod $period, ReportTemplate $template, array $periodRombelIds = []): void
+    public function assertReady(AssessmentPeriod $period, ReportTemplate $template, array $periodRombelIds = [], bool $allowMissingResults = false): void
     {
         $result = $this->inspect($period, $template, $periodRombelIds);
-        if ($result['ready']) {
+        $issues = collect($result['groups'])
+            ->flatMap(fn (array $group): Collection => collect($group['issues']))
+            ->reject(fn (array $issue): bool => $allowMissingResults && $issue['code'] === 'results_missing');
+        if ($issues->isEmpty()) {
             return;
         }
 
-        $messages = collect($result['groups'])
-            ->flatMap(fn (array $group): Collection => collect($group['issues']))
+        $messages = $issues
             ->map(fn (array $issue): string => $issue['message'].' ('.$issue['count'].')')
             ->take(4)
             ->implode(' ');

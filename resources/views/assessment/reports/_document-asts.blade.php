@@ -52,7 +52,7 @@
     @foreach ($subjectGroups as $groupName => $groupSubjects)
         @if ($usesChoiceGroups || $loop->first)<p class="asts-subject-group">{{ $groupName }}</p>@endif
         <table class="scores asts-scores"><thead><tr><th class="scores__number">No.</th><th>Mata Pelajaran</th><th class="scores__score">Nilai</th><th class="scores__predicate">Predikat</th></tr></thead><tbody>
-            @forelse ($groupSubjects as $index => $subject)<tr><td class="scores__number">{{ $index + 1 }}</td><td>{{ data_get($subject, 'name', data_get($subject, 'subject_name', '-')) }}</td><td class="scores__score">{{ \App\Support\Assessment\AssessmentNumberFormatter::scoreRapor(data_get($subject, 'final_score', data_get($subject, 'score'))) }}</td><td class="scores__predicate">{{ $astsPredicate(data_get($subject, 'final_score', data_get($subject, 'score'))) }}</td></tr>
+            @forelse ($groupSubjects as $index => $subject)<tr><td class="scores__number">{{ $index + 1 }}</td><td>{{ data_get($subject, 'name', data_get($subject, 'subject_name', '-')) }}</td><td class="scores__score">{{ \App\Support\Assessment\AssessmentNumberFormatter::score(data_get($subject, 'final_score', data_get($subject, 'score')), empty: '') }}</td><td class="scores__predicate">{{ data_get($subject, 'final_score', data_get($subject, 'score')) !== null && data_get($subject, 'final_score', data_get($subject, 'score')) !== '' ? $astsPredicate(data_get($subject, 'final_score', data_get($subject, 'score'))) : '' }}</td></tr>
             @empty<tr><td class="empty-row" colspan="4">Belum ada mata pelajaran pada kelompok ini.</td></tr>@endforelse
         </tbody></table>
     @endforeach

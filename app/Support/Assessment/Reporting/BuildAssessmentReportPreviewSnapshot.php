@@ -46,36 +46,40 @@ final class BuildAssessmentReportPreviewSnapshot
         }
 
         $homeroom = $student->homeroomReport;
-        $subjectResults = $student->results
+        // The class assignment list is the report syllabus. Results are optional
+        // so an unfinished subject remains visible without being treated as zero.
+        $assignments = $period->assignments()
+            ->where('assessment_period_rombel_id', $student->assessment_period_rombel_id)
+            ->orderBy('subject_group_sort_order_snapshot')
+            ->orderBy('subject_sort_order_snapshot')
+            ->orderBy('subject_name_snapshot')
+            ->get();
+        $resultsByAssignment = $student->results
             ->filter(fn ($result): bool => (int) $result->assessment_period_id === (int) $period->getKey())
-            ->sortBy(fn ($result): string => sprintf(
-                '%04d|%04d|%010d',
-                (int) ($result->assignment?->subject_group_sort_order_snapshot ?? 999),
-                (int) ($result->assignment?->subject_sort_order_snapshot ?? 0),
-                (int) $result->getKey(),
-            ))
-            ->map(function ($result): array {
-                $assignment = $result->assignment;
-                $detail = is_array($result->calculation_detail)
+            ->keyBy('assessment_period_assignment_id');
+        $subjectResults = $assignments
+            ->map(function ($assignment) use ($resultsByAssignment): array {
+                $result = $resultsByAssignment->get($assignment->getKey());
+                $detail = is_array($result?->calculation_detail)
                     ? $result->calculation_detail
-                    : (json_decode((string) $result->calculation_detail, true) ?: []);
+                    : (json_decode((string) $result?->calculation_detail, true) ?: []);
                 $precision = min(4, max(0, (int) data_get($detail, 'rounding_precision', 2)));
 
                 return [
-                    'subject_id' => $assignment?->assessment_subject_id,
-                    'name' => $assignment?->subject_name_snapshot,
-                    'teacher_name' => $assignment?->teacher_name_snapshot,
-                    'group_code' => $assignment?->subject_group_code_snapshot ?: 'BELUM',
-                    'group_name' => $assignment?->subject_group_name_snapshot ?: 'Belum Dikelompokkan',
-                    'group_sort_order' => (int) ($assignment?->subject_group_sort_order_snapshot ?? 999),
-                    'sort_order' => (int) ($assignment?->subject_sort_order_snapshot ?? 0),
-                    'final_score' => $result->final_score !== null
+                    'subject_id' => $assignment->assessment_subject_id,
+                    'name' => $assignment->subject_name_snapshot,
+                    'teacher_name' => $assignment->teacher_name_snapshot,
+                    'group_code' => $assignment->subject_group_code_snapshot ?: 'BELUM',
+                    'group_name' => $assignment->subject_group_name_snapshot ?: 'Belum Dikelompokkan',
+                    'group_sort_order' => (int) ($assignment->subject_group_sort_order_snapshot ?? 999),
+                    'sort_order' => (int) ($assignment->subject_sort_order_snapshot ?? 0),
+                    'final_score' => $result?->final_score !== null
                         ? number_format((float) $result->final_score, $precision, '.', '')
                         : null,
-                    'predicate' => $result->predicate,
-                    'description' => $result->description,
+                    'predicate' => $result?->final_score !== null ? $result->predicate : null,
+                    'description' => $result?->description,
                     'calculation_detail' => $detail,
-                    'formula_version' => $result->formula_version,
+                    'formula_version' => $result?->formula_version,
                 ];
             })
             ->values()
