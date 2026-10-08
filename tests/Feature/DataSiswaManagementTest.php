@@ -641,6 +641,65 @@ class DataSiswaManagementTest extends TestCase
         $this->assertDatabaseHas('data_siswa', ['id' => $omitted->id, 'nama' => 'Tidak Diunggah']);
     }
 
+    public function test_import_resolves_nisn_conflict_to_existing_owner_without_unique_violation(): void
+    {
+        Schema::table('data_siswa', function (Blueprint $table): void {
+            $table->unique('nisn');
+            $table->unique('nipd');
+        });
+
+        $rowFromTemplate = DataSiswa::query()->create([
+            'nama' => 'Siswa Yang Sama',
+            'nisn' => 'OLD-NISN',
+            'nipd' => 'OLD-NIPD',
+            'status' => 'aktif',
+        ]);
+        $nisnOwner = DataSiswa::query()->create([
+            'nama' => 'Siswa Yang Sama',
+            'nisn' => '0115796062',
+            'nipd' => 'OWNER-NIPD',
+            'status' => 'aktif',
+        ]);
+
+        $path = $this->createDataSiswaWorkbook([
+            ['id', 'nama', 'nisn', 'nipd', 'rombel_saat_ini', 'status'],
+            [$rowFromTemplate->id, 'Siswa Yang Sama', '0115796062', 'OWNER-NIPD', 'XI A', 'aktif'],
+        ]);
+
+        try {
+            $result = app(DataSiswaWorkbookImporter::class)->import($path);
+        } finally {
+            @unlink($path);
+        }
+
+        $this->assertSame(['created' => 0, 'updated' => 1, 'skipped' => 0], $result);
+        $this->assertDatabaseHas('data_siswa', [
+            'id' => $nisnOwner->id,
+            'nisn' => '0115796062',
+            'nipd' => 'OWNER-NIPD',
+            'rombel_saat_ini' => 'XI A',
+        ]);
+        $this->assertDatabaseHas('data_siswa', ['id' => $rowFromTemplate->id, 'nisn' => 'OLD-NISN']);
+    }
+
+    public function test_import_blocks_conflicting_identities_with_different_names(): void
+    {
+        $rowFromTemplate = DataSiswa::query()->create(['nama' => 'Siswa A', 'nisn' => 'NISN-A', 'status' => 'aktif']);
+        DataSiswa::query()->create(['nama' => 'Siswa B', 'nisn' => 'NISN-B', 'status' => 'aktif']);
+
+        $path = $this->createDataSiswaWorkbook([
+            ['id', 'nama', 'nisn', 'status'],
+            [$rowFromTemplate->id, 'Siswa A', 'NISN-B', 'aktif'],
+        ]);
+
+        try {
+            $this->expectException(\Illuminate\Validation\ValidationException::class);
+            app(DataSiswaWorkbookImporter::class)->import($path);
+        } finally {
+            @unlink($path);
+        }
+    }
+
     public function test_template_export_and_data_export_follow_available_columns(): void
     {
         DataSiswa::query()->create([

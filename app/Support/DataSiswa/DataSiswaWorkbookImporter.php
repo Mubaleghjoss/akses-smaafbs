@@ -74,18 +74,43 @@ class DataSiswaWorkbookImporter
     /** @param array<string, mixed> $payload */
     protected function findExisting(array $payload, int $row): ?DataSiswa
     {
+        $matchesByIdentity = [];
+
         foreach (['id', 'nisn', 'nipd'] as $field) {
             $value = $payload[$field] ?? null;
             if (blank($value)) {
                 continue;
             }
+
             $matches = DataSiswa::query()->where($field, $value)->limit(2)->get();
             if ($matches->count() > 1) {
-                throw ValidationException::withMessages(['import' => "Baris {$row}: {$field} '{$value}' cocok ke lebih dari satu siswa."]);
+                throw ValidationException::withMessages(['import' => "Baris {$row}: {$field} '{$value}' terdaftar pada lebih dari satu siswa. Periksa data master terlebih dahulu."]);
             }
             if ($matches->isNotEmpty()) {
-                return $matches->first();
+                $matchesByIdentity[$field] = $matches->first();
             }
+        }
+
+        $identityOwners = collect($matchesByIdentity)->unique('id')->values();
+        if ($identityOwners->count() > 1) {
+            $names = $identityOwners->pluck('nama')->filter()->map(fn ($name): string => $this->normalizeName($name))->unique();
+            if ($names->count() > 1) {
+                $details = collect($matchesByIdentity)
+                    ->map(fn (DataSiswa $student, string $field): string => strtoupper($field).' milik "'.$student->nama.'" (ID '.$student->id.')')
+                    ->unique()
+                    ->implode('; ');
+                throw ValidationException::withMessages(['import' => "Baris {$row}: identitas siswa tidak konsisten. {$details}. Tidak ada data yang ditimpa."]);
+            }
+
+            // A changed NISN/NIPD is resolved to its current owner instead of
+            // attempting an update that would violate the unique index.
+            foreach (['nisn', 'nipd', 'id'] as $field) {
+                if (isset($matchesByIdentity[$field])) {
+                    return $matchesByIdentity[$field];
+                }
+            }
+        } elseif ($identityOwners->isNotEmpty()) {
+            return $identityOwners->first();
         }
 
         $name = trim((string) ($payload['nama'] ?? ''));
@@ -95,10 +120,15 @@ class DataSiswaWorkbookImporter
         }
         $matches = DataSiswa::query()->where('nama', $name)->where('rombel_saat_ini', $rombel)->limit(2)->get();
         if ($matches->count() > 1) {
-            throw ValidationException::withMessages(['import' => "Baris {$row}: nama dan rombel cocok ke lebih dari satu siswa."]);
+            throw ValidationException::withMessages(['import' => "Baris {$row}: nama dan rombel cocok ke lebih dari satu siswa. Periksa identitas sebelum mengimpor."]);
         }
 
         return $matches->first();
+    }
+
+    protected function normalizeName(mixed $name): string
+    {
+        return strtolower(trim((string) preg_replace('/\\s+/', ' ', (string) $name)));
     }
 
     /** @param array<string, mixed> $payload @return array<string, mixed> */
