@@ -67,7 +67,7 @@
     .summary-table--attendance td { white-space: nowrap; }
     .attendance-value { display: inline-block; white-space: nowrap; }
     .report-writing-space { height: 46px; max-height: 46px; overflow: hidden; vertical-align: top; }
-    .signatures { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 14px; page-break-inside: avoid; }
+    .signatures { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: var(--table-signature-spacing, 14pt); page-break-inside: avoid; }
     .signatures td { width: 33.333%; padding: 0 6px; text-align: center; vertical-align: top; }
     .signature-date { margin-bottom: 2px; }
     .signature-labels td { height: 16px; font-weight: 400; }
@@ -118,8 +118,10 @@
     .asts-extracurricular th:nth-child(2), .asts-extracurricular td:nth-child(2) { text-align: left; }
     .asts-extracurricular th:first-child { width: 27px; }
     .asts-extracurricular th:last-child { width: 48px; }
-    .asts-signatures { margin-top: 24px; }
+    .asts-signatures { margin-top: var(--table-signature-spacing, 24pt); }
     /* Leave room for handwritten signatures on the ASTS summary page. */
-    .asts-signatures .signature-space { height: 64px; }
+    .asts-signatures .signature-space { height: var(--signature-space-height, 64pt); }
+    .signatures--stacked .signature-space--manual { height: var(--signature-space-height, 100pt); }
+    .signatures--stacked .signature-space--principal { height: 72px; }
     .asts-signatures td { width: 50%; }
 </style>

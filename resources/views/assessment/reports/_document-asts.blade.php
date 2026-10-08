@@ -12,6 +12,12 @@
     $className = (string) data_get($student, 'class_name', '');
     $studentNis = trim((string) data_get($student, 'nis', '')) ?: '-';
     $studentNisn = trim((string) data_get($student, 'nisn', '')) ?: '-';
+    $reportTitle = trim((string) data_get($templateSettings, 'report_title')) ?: 'LAPORAN HASIL ASESMEN SUMATIF TENGAH SEMESTER (ASTS)';
+    $footerText = trim((string) data_get($templateSettings, 'footer_text')) ?: 'Dengan Teladan Menjadi Mulia · Rapor ASTS '.(trim((string) data_get($school, 'name')) ?: 'SMA Al Furqon Boarding School').' · Tahun Pelajaran '.$academicYear;
+    $scoreLabel = trim((string) data_get($templateSettings, 'score_label', 'Nilai')) ?: 'Nilai';
+    $predicateLabel = trim((string) data_get($templateSettings, 'predicate_label', 'Predikat')) ?: 'Predikat';
+    $tableSignatureSpacing = min(24, max(0, (float) data_get($templateSettings, 'report_layout.table_signature_spacing', 24)));
+    $signatureSpacing = min(110, max(32, (float) data_get($templateSettings, 'report_layout.signature_spacing', 64)));
     $kopTitleSpacing = min(16, max(0, (float) data_get($templateSettings, 'report_layout.kop_title_spacing', 7)));
     $titleIdentitySpacing = min(16, max(0, (float) data_get($templateSettings, 'report_layout.title_identity_spacing', 4)));
     $usesChoiceGroups = preg_match('/(?:^|\s)(?:XI|XII|11|12)(?:\s|$)/i', $className) === 1;
@@ -44,18 +50,18 @@
     };
 @endphp
 
-<div class="report-footer">Dengan Teladan Menjadi Mulia &middot; Rapor ASTS SMA Al Furqon Boarding School&middot; Tahun Pelajaran {{ $academicYear }}</div>
+<div class="report-footer">{{ $footerText }}</div>
 
 @php($letterhead = 'assessment.reports._asts-letterhead')
 <section class="report-page report-page--asts-scores" style="--kop-title-spacing: {{ $kopTitleSpacing }}pt; --title-identity-spacing: {{ $titleIdentitySpacing }}pt;">
     @include($letterhead)
-    <h1 class="report-title">LAPORAN HASIL ASESMEN SUMATIF TENGAH SEMESTER (ASTS)</h1>
+    <h1 class="report-title">{{ $reportTitle }}</h1>
     <p class="report-subtitle">Tahun Pelajaran {{ $academicYear }} &middot; Semester {{ data_get($period, 'semester', '-') }}</p>
     @include('assessment.reports._asts-identity')
 
     @foreach ($subjectGroups as $groupName => $groupSubjects)
         @if ($usesChoiceGroups || $loop->first)<p class="asts-subject-group">{{ $groupName }}</p>@endif
-        <table class="scores asts-scores"><thead><tr><th class="scores__number">No.</th><th>Mata Pelajaran</th><th class="scores__score">Nilai</th><th class="scores__predicate">Predikat</th></tr></thead><tbody>
+        <table class="scores asts-scores"><thead><tr><th class="scores__number">No.</th><th>Mata Pelajaran</th><th class="scores__score">{{ $scoreLabel }}</th><th class="scores__predicate">{{ $predicateLabel }}</th></tr></thead><tbody>
             @forelse ($groupSubjects as $index => $subject)<tr><td class="scores__number">{{ $index + 1 }}</td><td>{{ data_get($subject, 'name', data_get($subject, 'subject_name', '-')) }}</td><td class="scores__score">{{ \App\Support\Assessment\AssessmentNumberFormatter::score(data_get($subject, 'final_score', data_get($subject, 'score')), 0, '') }}</td><td class="scores__predicate">{{ data_get($subject, 'final_score', data_get($subject, 'score')) !== null && data_get($subject, 'final_score', data_get($subject, 'score')) !== '' ? $astsPredicate(data_get($subject, 'final_score', data_get($subject, 'score'))) : '' }}</td></tr>
             @empty<tr><td class="empty-row" colspan="4">Belum ada mata pelajaran pada kelompok ini.</td></tr>@endforelse
         </tbody></table>
@@ -69,7 +75,7 @@
 
 <section class="report-page report-page--asts-summary" style="--kop-title-spacing: {{ $kopTitleSpacing }}pt; --title-identity-spacing: {{ $titleIdentitySpacing }}pt;">
     @include($letterhead)
-    <h1 class="report-title">LAPORAN HASIL ASESMEN SUMATIF TENGAH SEMESTER (ASTS)</h1>
+    <h1 class="report-title">{{ $reportTitle }}</h1>
     @include('assessment.reports._asts-identity', ['summary' => true])
     <table class="asts-summary-grid{{ empty($extracurricular) ? ' asts-summary-grid--attendance-only' : '' }}"><tr><td>
         <p class="section-title">Ketidakhadiran</p>
@@ -79,5 +85,5 @@
         <table class="summary-table asts-extracurricular"><thead><tr><th>No.</th><th>Nama Ekstrakurikuler</th><th>Predikat</th></tr></thead><tbody>@foreach ($extracurricular as $index => $item)<tr><td>{{ $index + 1 }}</td><td>{{ data_get($item, 'name') }}</td><td>{{ data_get($item, 'grade', data_get($item, 'description', data_get($item, 'level', '-'))) }}</td></tr>@endforeach</tbody></table>
     </td>@endif</tr></table>
 
-    <table class="signatures asts-signatures"><tr><td>Orang Tua/Wali</td><td>{{ $signatureDate ?: 'Tangerang, ....................' }}<br>Wali Kelas</td></tr><tr class="signature-spaces"><td><div class="signature-space"></div></td><td><div class="signature-space"></div></td></tr><tr class="signature-names"><td><div class="signature-name signature-name--blank">(................................................)</div></td><td><div class="signature-name">{{ filled(data_get($homeroomSignature, 'name')) && data_get($homeroomSignature, 'name') !== '-' ? data_get($homeroomSignature, 'name') : '................................................' }}</div></td></tr></table>
+    <table class="signatures asts-signatures" style="--table-signature-spacing: {{ $tableSignatureSpacing }}pt; --signature-space-height: {{ $signatureSpacing }}pt;"><tr><td>{{ data_get($signatures, '0.label', 'Orang Tua/Wali') }}</td><td>{{ $signatureDate ?: 'Tangerang, ....................' }}<br>{{ data_get($homeroomSignature, 'label', 'Wali Kelas') }}</td></tr><tr class="signature-spaces"><td><div class="signature-space"></div></td><td><div class="signature-space"></div></td></tr><tr class="signature-names"><td><div class="signature-name signature-name--blank">(................................................)</div></td><td><div class="signature-name">{{ filled(data_get($homeroomSignature, 'name')) && data_get($homeroomSignature, 'name') !== '-' ? data_get($homeroomSignature, 'name') : '................................................' }}</div></td></tr></table>
 </section>

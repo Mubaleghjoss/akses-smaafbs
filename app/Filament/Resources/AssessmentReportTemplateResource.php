@@ -124,6 +124,8 @@ class AssessmentReportTemplateResource extends Resource
             'kop_title_spacing' => [0, 16],
             'title_identity_spacing' => [0, 16],
             'logo_size' => [32, 60],
+            'table_signature_spacing' => [0, 24],
+            'signature_spacing' => [32, 110],
         ] as $field => [$min, $max]) {
             $defaults = [
                 'identity_font_size' => 9,
@@ -131,8 +133,15 @@ class AssessmentReportTemplateResource extends Resource
                 'kop_title_spacing' => 7,
                 'title_identity_spacing' => 4,
                 'logo_size' => 48,
+                'table_signature_spacing' => 14,
+                'signature_spacing' => 64,
             ];
-            $value = data_get($settings, "report_layout.{$field}", $defaults[$field]);
+            $value = data_get($settings, "report_layout.{$field}");
+            // New spacing fields remain absent on old templates, preserving their frozen approved layout.
+            if ($value === null && in_array($field, ['table_signature_spacing', 'signature_spacing'], true)) {
+                continue;
+            }
+            $value ??= $defaults[$field];
             if (! is_numeric($value) || (float) $value < $min || (float) $value > $max) {
                 throw ValidationException::withMessages([
                     "data.settings.report_layout.{$field}" => "Nilai harus antara {$min} dan {$max}.",
@@ -152,7 +161,7 @@ class AssessmentReportTemplateResource extends Resource
         data_set($settings, 'report_layout.kop_alignment', $kopAlignment);
         data_set($settings, 'report_layout.show_logo', (bool) data_get($settings, 'report_layout.show_logo', true));
 
-        foreach (['student_name' => 'Nama Siswa', 'student_number' => 'NIS/NISN', 'class' => 'Kelas', 'semester' => 'Semester'] as $field => $default) {
+        foreach (['student_name' => 'Nama Siswa', 'student_number' => 'NIS/NISN', 'class' => 'Kelas', 'semester' => 'Semester', 'report_type' => 'Jenis Laporan'] as $field => $default) {
             $label = trim((string) data_get($settings, "report_layout.labels.{$field}", $default));
             if ($label === '' || mb_strlen($label) > 60) {
                 throw ValidationException::withMessages([
@@ -226,7 +235,7 @@ class AssessmentReportTemplateResource extends Resource
                             : 'Draf/arsip. Simpan dan pratinjau dahulu, lalu gunakan aksi Jadikan Template Utama.'),
                 ]),
             Section::make('Pengaturan Kop & Layout Rapor')
-                ->description('Edit kop, judul, identitas, dan jarak layout di sini. NIS rapor diambil dari Data Siswa (NIPD); struktur tabel dan target dua halaman ASTS tetap dijaga.')
+                ->description('Edit isi kop, judul, label tabel, dan tampilan aman rapor di sini. HTML atau Blade bebas tetap tidak dapat dimasukkan.')
                 ->columns(['default' => 1, 'md' => 2])
                 ->schema([
                     Forms\Components\TextInput::make('settings.foundation_name')
@@ -238,9 +247,10 @@ class AssessmentReportTemplateResource extends Resource
                         ->required()
                         ->maxLength(150),
                     Forms\Components\TextInput::make('settings.report_title')
-                        ->label('Judul Dokumen')
+                        ->label('Judul Dokumen/Rapor')
                         ->required()
-                        ->maxLength(150),
+                        ->maxLength(150)
+                        ->helperText('Dipakai sebagai judul ASTS, ASAS, atau ASAT pada rapor baru dan pratinjau.'),
                     Forms\Components\Textarea::make('settings.school_address')
                         ->label('Alamat Sekolah')
                         ->rows(2)
@@ -275,6 +285,15 @@ class AssessmentReportTemplateResource extends Resource
                         ->label('Istilah Predikat')
                         ->default('Predikat')
                         ->maxLength(50),
+                    Forms\Components\TextInput::make('settings.description_label')
+                        ->label('Istilah Capaian/Deskripsi')
+                        ->default('Capaian Kompetensi')
+                        ->maxLength(50),
+                    Forms\Components\TextInput::make('settings.footer_text')
+                        ->label('Teks Footer/Motto')
+                        ->maxLength(200)
+                        ->columnSpanFull()
+                        ->helperText('Kosongkan untuk footer resmi sekolah dan tahun pelajaran.'),
                     Forms\Components\Toggle::make('settings.show_predicate')
                         ->label('Tampilkan Kolom Predikat')
                         ->default(true)
@@ -332,9 +351,23 @@ class AssessmentReportTemplateResource extends Resource
                         ->default(3)
                         ->suffix('pt')
                         ->helperText('Standar saat ini setara 3 pt; batasi agar rapor ASTS tetap dua halaman.'),
-                    Forms\Components\Placeholder::make('layout_scope')
-                        ->label('Cakupan')
-                        ->content('Berlaku pada area sebelum tabel nilai. Struktur tabel, kop, dan halaman tetap memakai layout resmi.'),
+                    Forms\Components\TextInput::make('settings.report_layout.table_signature_spacing')
+                        ->label('Jarak tabel ke tanda tangan')
+                        ->numeric()
+                        ->minValue(0)
+                        ->maxValue(24)
+                        ->step(0.5)
+                        ->default(14)
+                        ->suffix('pt'),
+                    Forms\Components\TextInput::make('settings.report_layout.signature_spacing')
+                        ->label('Ruang tanda tangan')
+                        ->numeric()
+                        ->minValue(32)
+                        ->maxValue(110)
+                        ->step(1)
+                        ->default(64)
+                        ->suffix('pt')
+                        ->helperText('Tinggi ruang kosong untuk tanda tangan basah.'),
                     Forms\Components\TextInput::make('settings.report_layout.labels.student_name')
                         ->label('Label Nama Siswa')
                         ->default('Nama Siswa')
@@ -355,10 +388,27 @@ class AssessmentReportTemplateResource extends Resource
                         ->default('Semester')
                         ->required()
                         ->maxLength(60),
+                    Forms\Components\TextInput::make('settings.report_layout.labels.report_type')
+                        ->label('Label Jenis Laporan')
+                        ->default('Jenis Laporan')
+                        ->required()
+                        ->maxLength(60),
                 ]),
             Section::make('Tanda Tangan')
+                ->description('Nama wali kelas dan tanggal rapor tetap berasal dari snapshot. Perubahan template hanya berlaku pada snapshot/rapor baru.')
                 ->columns(['default' => 1, 'md' => 2])
                 ->schema([
+                    Forms\Components\TextInput::make('settings.parent_signature_label')
+                        ->label('Label Orang Tua/Wali')
+                        ->default('Orang Tua/Wali')
+                        ->maxLength(80),
+                    Forms\Components\TextInput::make('settings.parent_signature_name')
+                        ->label('Nama Orang Tua/Wali (opsional)')
+                        ->maxLength(150),
+                    Forms\Components\TextInput::make('settings.principal_signature_label')
+                        ->label('Label Kepala Sekolah')
+                        ->default('Kepala Sekolah')
+                        ->maxLength(80),
                     Forms\Components\TextInput::make('settings.principal_name')
                         ->label('Nama Kepala Sekolah')
                         ->maxLength(150),

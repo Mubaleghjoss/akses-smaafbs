@@ -27,11 +27,21 @@
         'ASAT' => 'LAPORAN HASIL ASESMEN SUMATIF AKHIR TAHUN (ASAT)',
     ];
     $reportKind = strtoupper($reportKind);
-    $title = $reportTitles[$reportKind] ?? $reportTitles['ASTS'];
+    $title = trim((string) data_get($templateSettings, 'report_title')) ?: ($reportTitles[$reportKind] ?? $reportTitles['ASTS']);
     $academicYear = data_get($period, 'academic_year', '-');
     $studentNis = trim((string) data_get($student, 'nis', '')) ?: '-';
     $studentNisn = trim((string) data_get($student, 'nisn', '')) ?: '-';
+    $footerText = trim((string) data_get($templateSettings, 'footer_text')) ?: 'Dengan Teladan Menjadi Mulia · Rapor '.$reportKind.' '.(trim((string) data_get($school, 'name')) ?: 'SMA Al Furqon Boarding School').' · Tahun Pelajaran '.$academicYear;
+    $identityLabels = [
+        'student_name' => trim((string) data_get($templateSettings, 'report_layout.labels.student_name', 'Nama Siswa')) ?: 'Nama Siswa',
+        'student_number' => trim((string) data_get($templateSettings, 'report_layout.labels.student_number', 'NIS / NISN')) ?: 'NIS / NISN',
+        'class' => trim((string) data_get($templateSettings, 'report_layout.labels.class', 'Kelas')) ?: 'Kelas',
+        'report_type' => trim((string) data_get($templateSettings, 'report_layout.labels.report_type', 'Jenis Laporan')) ?: 'Jenis Laporan',
+    ];
+    $tableSignatureSpacing = min(24, max(0, (float) data_get($templateSettings, 'report_layout.table_signature_spacing', 14)));
+    $signatureSpacing = min(110, max(32, (float) data_get($templateSettings, 'report_layout.signature_spacing', 72)));
     $scoreLabel = trim((string) data_get($templateSettings, 'score_label', 'Nilai')) ?: 'Nilai';
+    $descriptionLabel = trim((string) data_get($templateSettings, 'description_label', 'Capaian Kompetensi')) ?: 'Capaian Kompetensi';
     $predicateLabel = trim((string) data_get($templateSettings, 'predicate_label', 'Predikat')) ?: 'Predikat';
     $showPredicate = (bool) data_get($templateSettings, 'show_predicate', true);
     $showDescription = (bool) data_get($templateSettings, 'show_description', true);
@@ -48,7 +58,7 @@
     $compactList = fn (array $items): string => \Illuminate\Support\Str::limit(collect($items)->map(fn ($item) => is_array($item) ? data_get($item, 'name', '-').' - '.data_get($item, 'description', data_get($item, 'grade', data_get($item, 'level', '-'))) : (string) $item)->implode('; ') ?: '-', 380);
 @endphp
 
-<div class="report-footer">Dengan Teladan Menjadi Mulia &middot; Rapor {{ $reportKind }} {{ data_get($school, 'name', 'SMA Al Furqon Boarding School') }}&middot; Tahun Pelajaran {{ $academicYear }}</div>
+<div class="report-footer">{{ $footerText }}</div>
 
 <section class="report-page report-page--scores">
     <table class="letterhead letterhead--{{ $kopAlignment }}" style="--letterhead-logo-size: {{ $logoSize }}px;"><tr>
@@ -62,16 +72,16 @@
     <h1 class="report-title">{{ $title }}</h1>
     <p class="report-subtitle">Tahun Pelajaran {{ $academicYear }} &middot; Semester {{ data_get($period, 'semester', '-') }}</p>
     <table class="identity"><tr>
-        <td class="identity__label">Nama Siswa</td><td class="identity__separator">:</td><td>{{ data_get($student, 'name', '-') }}</td>
-        <td class="identity__label">Kelas</td><td class="identity__separator">:</td><td>{{ data_get($student, 'class_name', '-') }}</td>
+        <td class="identity__label">{{ $identityLabels['student_name'] }}</td><td class="identity__separator">:</td><td>{{ data_get($student, 'name', '-') }}</td>
+        <td class="identity__label">{{ $identityLabels['class'] }}</td><td class="identity__separator">:</td><td>{{ data_get($student, 'class_name', '-') }}</td>
     </tr><tr>
-        <td class="identity__label">NIS / NISN</td><td class="identity__separator">:</td><td>{{ $studentNis }} / {{ $studentNisn }}</td>
-        <td class="identity__label">Jenis Laporan</td><td class="identity__separator">:</td><td>{{ $reportKind }}</td>
+        <td class="identity__label">{{ $identityLabels['student_number'] }}</td><td class="identity__separator">:</td><td>{{ $studentNis }} / {{ $studentNisn }}</td>
+        <td class="identity__label">{{ $identityLabels['report_type'] }}</td><td class="identity__separator">:</td><td>{{ $reportKind }}</td>
     </tr></table>
     <table class="scores"><thead><tr>
         <th class="scores__number">No.</th><th>Mata Pelajaran</th><th class="scores__score">{{ $scoreLabel }}</th>
         @if ($showPredicate)<th class="scores__predicate">{{ $predicateLabel }}</th>@endif
-        @if ($showDescription)<th>Capaian Kompetensi</th>@endif
+        @if ($showDescription)<th>{{ $descriptionLabel }}</th>@endif
     </tr></thead><tbody>
         @forelse ($subjects as $index => $subject)<tr>
             <td class="scores__number">{{ $index + 1 }}</td><td>{{ data_get($subject, 'name', data_get($subject, 'subject_name', '-')) }}</td>
@@ -129,7 +139,7 @@
             return ['name' => filled($name) && $name !== '-' ? $name : '................................................', 'blank' => ! filled($name) || $name === '-'];
         };
     @endphp
-    <table class="signatures signatures--stacked">
+    <table class="signatures signatures--stacked" style="--table-signature-spacing: {{ $tableSignatureSpacing }}pt; --signature-space-height: {{ $signatureSpacing }}pt;">
         <tr class="signature-labels"><td>{{ data_get($signatureParent, 'label', 'Orang Tua/Wali') }}</td><td><div class="signature-date">{{ $signatureDate ?: 'Tangerang, ....................' }}</div>{{ data_get($signatureHomeroom, 'label', 'Wali Kelas') }}</td></tr>
         <tr class="signature-spaces"><td><div class="signature-space signature-space--manual"></div></td><td><div class="signature-space signature-space--manual"></div></td></tr>
         <tr class="signature-names"><td>@php($rendered = $renderSignature($signatureParent))<div class="signature-name{{ $rendered['blank'] ? ' signature-name--blank' : '' }}">{{ $rendered['name'] }}</div>@if (filled(data_get($signatureParent, 'identifier')))<div class="signature-identifier">{{ data_get($signatureParent, 'identifier') }}</div>@endif</td><td>@php($rendered = $renderSignature($signatureHomeroom))<div class="signature-name{{ $rendered['blank'] ? ' signature-name--blank' : '' }}">{{ $rendered['name'] }}</div>@if (filled(data_get($signatureHomeroom, 'identifier')))<div class="signature-identifier">{{ data_get($signatureHomeroom, 'identifier') }}</div>@endif</td></tr>

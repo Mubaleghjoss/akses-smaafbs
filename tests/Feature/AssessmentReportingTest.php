@@ -864,7 +864,7 @@ class AssessmentReportingTest extends TestCase
         ] as $kind => $expectedTitle) {
             $html = view('assessment.reports.'.strtolower($kind), [
                 'snapshot' => $snapshot,
-                'templateSettings' => ['report_title' => 'Judul lama tidak boleh dipakai'],
+                'templateSettings' => [],
                 'pdfMode' => false,
             ])->render();
 
@@ -882,6 +882,51 @@ class AssessmentReportingTest extends TestCase
             $this->assertStringNotContainsString('font-size: 9.5px', $html);
             $this->assertStringNotContainsString('Dokumen snapshot', $html);
             $this->assertStringNotContainsString('Template v', $html);
+        }
+    }
+
+    public function test_report_template_content_overrides_render_safely(): void
+    {
+        $snapshot = [
+            'school' => ['name' => 'SMA Snapshot'],
+            'period' => ['academic_year' => '2025/2026', 'semester' => 'GANJIL'],
+            'student' => ['name' => 'Siswa Uji', 'nis' => '123', 'nisn' => '456', 'class_name' => 'XI 1'],
+            'subjects' => [['name' => 'Matematika', 'final_score' => 90, 'predicate' => 'A', 'description' => 'Tuntas.']],
+            'homeroom' => [],
+            'signatures' => [
+                ['label' => 'Wali Murid', 'name' => '-'],
+                ['label' => 'Pembimbing Kelas', 'name' => 'Ibu Wali', 'place_date' => 'Bogor, 1 Juli 2026'],
+            ],
+        ];
+        $settings = [
+            'report_title' => 'HASIL BELAJAR UJI',
+            'footer_text' => 'Motto Rapor Uji',
+            'score_label' => 'Skor',
+            'predicate_label' => 'Mutu',
+            'description_label' => 'Uraian Capaian',
+            'report_layout' => [
+                'table_signature_spacing' => 18,
+                'signature_spacing' => 80,
+                'labels' => [
+                    'student_name' => 'Peserta', 'student_number' => 'Nomor Peserta',
+                    'class' => 'Rombel', 'semester' => 'Periode', 'report_type' => 'Dokumen',
+                ],
+            ],
+        ];
+
+        foreach (['asts', 'asas'] as $report) {
+            $html = view('assessment.reports.'.$report, compact('snapshot', 'settings') + [
+                'templateSettings' => $settings,
+                'pdfMode' => false,
+            ])->render();
+            foreach (['HASIL BELAJAR UJI', 'Motto Rapor Uji', 'Skor', 'Mutu', '--table-signature-spacing: 18pt;', '--signature-space-height: 80pt;'] as $value) {
+                $this->assertStringContainsString($value, $html);
+            }
+        }
+
+        $asas = view('assessment.reports.asas', ['snapshot' => $snapshot, 'templateSettings' => $settings, 'pdfMode' => false])->render();
+        foreach (['Peserta', 'Nomor Peserta', 'Rombel', 'Dokumen', 'Uraian Capaian'] as $value) {
+            $this->assertStringContainsString($value, $asas);
         }
     }
 
