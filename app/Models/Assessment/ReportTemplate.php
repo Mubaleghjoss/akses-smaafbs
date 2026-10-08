@@ -4,6 +4,7 @@ namespace App\Models\Assessment;
 
 use App\Enums\Assessment\AssessmentType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Support\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -40,13 +41,30 @@ class ReportTemplate extends Model
      */
     public function getTypeAttribute(mixed $value): AssessmentType|string|null
     {
-        if ($value === null) {
+        if ($value === null || ! is_scalar($value)) {
             return null;
         }
 
         $type = strtolower(trim((string) $value));
 
         return AssessmentType::tryFrom($type) ?? $type;
+    }
+
+    /**
+     * Legacy templates can contain dates that predate current validation.
+     * Return null so the record remains readable and can be corrected in admin.
+     */
+    public function getEffectiveFromAttribute(mixed $value): ?Carbon
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        try {
+            return $this->asDate($value);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     public function setTypeAttribute(mixed $value): void

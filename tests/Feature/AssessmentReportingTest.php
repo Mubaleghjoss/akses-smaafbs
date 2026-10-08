@@ -827,10 +827,15 @@ class AssessmentReportingTest extends TestCase
             'view_path' => 'assessment.reports.asts',
             'settings' => [
                 'layout' => ['sections' => 'legacy-section-list'],
-                'watermark_enabled' => 'false',
+                'watermark_enabled' => true,
                 'watermark_opacity' => ['unexpected'],
-                'watermark_position' => null,
-                'school_name' => null,
+                'watermark_position' => ['unexpected'],
+                'school_name' => ['unexpected'],
+                'school_address' => ['unexpected'],
+                'principal_name' => ['unexpected'],
+                'principal_identifier' => ['unexpected'],
+                'place' => ['unexpected'],
+                'homeroom_title' => ['unexpected'],
                 'report_layout' => 'legacy-layout',
             ],
         ]);
@@ -838,18 +843,53 @@ class AssessmentReportingTest extends TestCase
         // Bypass model casts to mirror legacy data that predates enum validation.
         DB::table('assessment_report_templates')
             ->whereKey($template->getKey())
-            ->update(['type' => 'historical']);
+            ->update([
+                'type' => 'historical',
+                'effective_from' => 'not-a-date',
+            ]);
 
         $this->actingAs(User::query()->findOrFail(99))
             ->get(AssessmentReportTemplateResource::getUrl('view', ['record' => $template]))
             ->assertOk()
             ->assertSee('Layout standar satu halaman.')
-            ->assertSee('Tidak aktif');
+            ->assertSee('Aktif')
+            ->assertSee('-');
 
         Livewire::actingAs(User::query()->findOrFail(99))
             ->test(ViewAssessmentReportTemplate::class, ['record' => $template->getKey()])
             ->assertOk()
             ->assertSee('Template Legacy');
+
+        Livewire::actingAs(User::query()->findOrFail(99))
+            ->test(EditAssessmentReportTemplate::class, ['record' => $template->getKey()])
+            ->assertOk();
+    }
+
+    public function test_template_index_tolerates_legacy_type_date_and_settings_values(): void
+    {
+        $template = ReportTemplate::query()->create([
+            'code' => 'LEGACY-INDEX',
+            'type' => AssessmentType::ASTS,
+            'name' => 'Template Legacy Index',
+            'version' => 1,
+            'view_path' => 'assessment.reports.asts',
+            'settings' => [
+                'school_name' => ['not', 'a', 'string'],
+                'watermark_enabled' => ['not-a-boolean'],
+            ],
+        ]);
+
+        DB::table('assessment_report_templates')
+            ->whereKey($template->getKey())
+            ->update([
+                'type' => 'historical',
+                'effective_from' => 'not-a-date',
+            ]);
+
+        $this->actingAs(User::query()->findOrFail(99))
+            ->get(AssessmentReportTemplateResource::getUrl())
+            ->assertOk()
+            ->assertSee('Template Legacy Index');
     }
 
     public function test_saved_template_preview_renders_custom_settings_with_sample_data_without_persisting_artifacts(): void

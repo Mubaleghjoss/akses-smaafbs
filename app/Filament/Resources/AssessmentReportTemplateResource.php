@@ -792,12 +792,12 @@ class AssessmentReportTemplateResource extends Resource
                 Section::make('Identitas dan Tanda Tangan')
                     ->columns(['default' => 1, 'md' => 2])
                     ->schema([
-                        TextEntry::make('school_name')->label('Nama Sekolah')->state(fn (ReportTemplate $record): mixed => data_get(static::displaySettings($record), 'school_name'))->placeholder('-'),
-                        TextEntry::make('school_address')->label('Alamat Sekolah')->state(fn (ReportTemplate $record): mixed => data_get(static::displaySettings($record), 'school_address'))->placeholder('-'),
-                        TextEntry::make('principal_name')->label('Kepala Sekolah')->state(fn (ReportTemplate $record): mixed => data_get(static::displaySettings($record), 'principal_name'))->placeholder('-'),
-                        TextEntry::make('principal_identifier')->label('NIP/NIY')->state(fn (ReportTemplate $record): mixed => data_get(static::displaySettings($record), 'principal_identifier'))->placeholder('-'),
-                        TextEntry::make('place')->label('Tempat Terbit')->state(fn (ReportTemplate $record): mixed => data_get(static::displaySettings($record), 'place'))->placeholder('-'),
-                        TextEntry::make('homeroom_title')->label('Sebutan Wali Kelas')->state(fn (ReportTemplate $record): mixed => data_get(static::displaySettings($record), 'homeroom_title'))->placeholder('-'),
+                        TextEntry::make('school_name')->label('Nama Sekolah')->state(fn (ReportTemplate $record): ?string => static::displayScalarSetting($record, 'school_name'))->placeholder('-'),
+                        TextEntry::make('school_address')->label('Alamat Sekolah')->state(fn (ReportTemplate $record): ?string => static::displayScalarSetting($record, 'school_address'))->placeholder('-'),
+                        TextEntry::make('principal_name')->label('Kepala Sekolah')->state(fn (ReportTemplate $record): ?string => static::displayScalarSetting($record, 'principal_name'))->placeholder('-'),
+                        TextEntry::make('principal_identifier')->label('NIP/NIY')->state(fn (ReportTemplate $record): ?string => static::displayScalarSetting($record, 'principal_identifier'))->placeholder('-'),
+                        TextEntry::make('place')->label('Tempat Terbit')->state(fn (ReportTemplate $record): ?string => static::displayScalarSetting($record, 'place'))->placeholder('-'),
+                        TextEntry::make('homeroom_title')->label('Sebutan Wali Kelas')->state(fn (ReportTemplate $record): ?string => static::displayScalarSetting($record, 'homeroom_title'))->placeholder('-'),
                     ]),
                 Section::make('Susunan dan Watermark')
                     ->columns(['default' => 1, 'md' => 2])
@@ -813,7 +813,7 @@ class AssessmentReportTemplateResource extends Resource
                         TextEntry::make('watermark_summary')
                             ->label('Watermark')
                             ->state(fn (ReportTemplate $record): string => static::watermarkIsEnabled($record)
-                                ? 'Aktif · '.data_get(static::displaySettings($record), 'watermark_opacity', 10).'% · '.data_get(static::displaySettings($record), 'watermark_position', 'center')
+                                ? 'Aktif · '.(static::displayScalarSetting($record, 'watermark_opacity') ?? '10').'% · '.(static::displayScalarSetting($record, 'watermark_position') ?? 'center')
                                 : 'Tidak aktif'),
                     ]),
             ]);
@@ -839,6 +839,15 @@ class AssessmentReportTemplateResource extends Resource
             data_get(static::displaySettings($template), 'watermark_enabled', false),
             FILTER_VALIDATE_BOOLEAN,
         );
+    }
+
+    private static function displayScalarSetting(ReportTemplate $template, string $path): ?string
+    {
+        $value = data_get(static::displaySettings($template), $path);
+
+        return is_scalar($value) || $value instanceof \Stringable
+            ? (string) $value
+            : null;
     }
 
     private static function typeLabel(mixed $type): string
