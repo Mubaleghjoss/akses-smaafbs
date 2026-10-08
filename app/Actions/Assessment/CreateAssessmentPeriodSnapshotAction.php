@@ -44,18 +44,24 @@ final class CreateAssessmentPeriodSnapshotAction
             /** @var AssessmentPeriod $locked */
             $locked = AssessmentPeriod::query()->lockForUpdate()->findOrFail($period->getKey());
 
-            if ($this->isStatus($locked, AssessmentPeriodStatus::OPEN)) {
-                $this->authorize($actor, 'view', $locked);
+            $operationalStatuses = [
+                AssessmentPeriodStatus::OPEN,
+                AssessmentPeriodStatus::ENTRY_CLOSED,
+                AssessmentPeriodStatus::VERIFICATION,
+                AssessmentPeriodStatus::LOCKED,
+            ];
+            $isDraft = $this->isStatus($locked, AssessmentPeriodStatus::DRAFT);
 
-                return $locked->refresh();
+            if ($isDraft) {
+                $this->authorize($actor, 'open', $locked);
+            } else {
+                $this->authorize($actor, 'updateOperationalSettings', $locked);
+                $this->guard->periodStatus(
+                    $locked,
+                    $operationalStatuses,
+                    'Kelas hanya dapat diselaraskan sebelum periode diterbitkan.',
+                );
             }
-
-            $this->authorize($actor, 'open', $locked);
-            $this->guard->periodStatus(
-                $locked,
-                [AssessmentPeriodStatus::DRAFT],
-                'Snapshot hanya dapat dibuat dari periode berstatus draf.',
-            );
 
             if (! Semester::query()
                 ->whereKey($locked->assessment_semester_id)
@@ -76,6 +82,21 @@ final class CreateAssessmentPeriodSnapshotAction
                 throw ValidationException::withMessages([
                     'settings.rombel_ids' => 'Pilih minimal satu kelas sebelum membuka periode penilaian.',
                 ]);
+            }
+
+            // Existing snapshots are historical records. Do not silently remove
+            // them (and their linked scores/results) when the class selection changes.
+            if (! $isDraft) {
+                $removedRombelIds = $locked->periodRombels()
+                    ->pluck('source_rombel_id')
+                    ->map(fn (mixed $id): int => (int) $id)
+                    ->diff($rombelIds);
+
+                if ($removedRombelIds->isNotEmpty()) {
+                    throw ValidationException::withMessages([
+                        'settings.rombel_ids' => 'Kelas yang sudah memiliki snapshot tidak dapat dihapus setelah periode dibuka. Riwayat nilai tetap dilindungi.',
+                    ]);
+                }
             }
 
             /** @var Collection<int, Rombel> $rombels */
@@ -259,20 +280,33 @@ final class CreateAssessmentPeriodSnapshotAction
                 }
             });
 
-            $oldStatus = $locked->status->value;
-            $locked->forceFill(['status' => AssessmentPeriodStatus::OPEN])->save();
-            $this->audit->record(
-                actor: $actor,
-                event: 'period.opened',
-                subject: $locked,
-                oldValues: ['status' => $oldStatus],
-                newValues: [
-                    'status' => AssessmentPeriodStatus::OPEN->value,
-                    'rombel_count' => $periodRombels->count(),
-                    'student_count' => $locked->students()->count(),
-                    'assignment_count' => $locked->assignments()->count(),
-                ],
-            );
+            if ($isDraft) {
+                $oldStatus = $locked->status->value;
+                $locked->forceFill(['status' => AssessmentPeriodStatus::OPEN])->save();
+                $this->audit->record(
+                    actor: $actor,
+                    event: 'period.opened',
+                    subject: $locked,
+                    oldValues: ['status' => $oldStatus],
+                    newValues: [
+                        'status' => AssessmentPeriodStatus::OPEN->value,
+                        'rombel_count' => $periodRombels->count(),
+                        'student_count' => $locked->students()->count(),
+                        'assignment_count' => $locked->assignments()->count(),
+                    ],
+                );
+            } else {
+                $this->audit->record(
+                    actor: $actor,
+                    event: 'period.rombels_reconciled',
+                    subject: $locked,
+                    newValues: [
+                        'added_rombel_count' => $periodRombels->count(),
+                        'student_count' => $locked->students()->count(),
+                        'assignment_count' => $locked->assignments()->count(),
+                    ],
+                );
+            }
 
             return $locked->refresh();
         }, 3);

@@ -1064,7 +1064,7 @@ class AssessmentAdminIntegrationTest extends TestCase
         $this->assertFalse(AssessmentPeriodResource::canDelete($period));
 
         $period->forceFill(['status' => AssessmentPeriodStatus::LOCKED])->save();
-        $this->assertFalse(AssessmentPeriodResource::canEdit($period));
+        $this->assertTrue(AssessmentPeriodResource::canEdit($period));
         $this->assertFalse(AssessmentPeriodResource::canDelete($period));
 
         $period->forceFill(['status' => AssessmentPeriodStatus::PUBLISHED])->save();
@@ -1104,12 +1104,23 @@ class AssessmentAdminIntegrationTest extends TestCase
         Livewire::actingAs($admin)
             ->test(EditAssessmentPeriod::class, ['record' => $period->getRouteKey()])
             ->assertSee('Batas Input Nilai')
-            ->fillForm(['entry_end_at' => '2026-08-05 17:30:00'])
+            ->fillForm([
+                'entry_start_at' => '2026-08-02 08:00:00',
+                'entry_end_at' => '2026-08-05 17:30:00',
+                'report_date' => '2026-08-10',
+                'settings.report_place' => 'Bandung',
+                'settings.collect_promotion_status' => true,
+            ])
             ->call('save')
             ->assertHasNoFormErrors();
 
-        $this->assertSame('2026-08-05 17:30:00', $period->fresh()->entry_end_at?->format('Y-m-d H:i:s'));
-        $this->assertSame(AssessmentPeriodStatus::OPEN, $period->fresh()->status);
+        $freshPeriod = $period->fresh();
+        $this->assertSame('2026-08-02 08:00:00', $freshPeriod->entry_start_at?->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-08-05 17:30:00', $freshPeriod->entry_end_at?->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-08-10', $freshPeriod->report_date?->toDateString());
+        $this->assertSame('Bandung', data_get($freshPeriod->settings, 'report_place'));
+        $this->assertTrue((bool) data_get($freshPeriod->settings, 'collect_promotion_status'));
+        $this->assertSame(AssessmentPeriodStatus::OPEN, $freshPeriod->status);
 
     }
 

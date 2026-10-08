@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\AssessmentPeriodResource\Pages;
 
+use App\Actions\Assessment\CreateAssessmentPeriodSnapshotAction;
 use App\Enums\Assessment\AssessmentPeriodStatus;
 use App\Filament\Resources\AssessmentPeriodResource;
 use App\Models\Assessment\AssessmentPeriod;
@@ -25,9 +26,9 @@ class EditAssessmentPeriod extends EditRecord
             ->firstOrFail();
 
         if ($period->status !== AssessmentPeriodStatus::DRAFT
-            && ! AssessmentPeriodResource::canEditInputDeadline($period)) {
+            && ! AssessmentPeriodResource::canEditOperationalSettings($period)) {
             throw ValidationException::withMessages([
-                'data.entry_end_at' => 'Batas input hanya dapat diubah saat periode berstatus Dibuka.',
+                'data.entry_end_at' => 'Jadwal dan kelas hanya dapat diubah sebelum periode diterbitkan.',
             ]);
         }
     }
@@ -58,12 +59,25 @@ class EditAssessmentPeriod extends EditRecord
         abort_unless(AssessmentPeriodResource::canEdit($record), 403);
 
         if ($record->status !== AssessmentPeriodStatus::DRAFT) {
-            abort_unless(AssessmentPeriodResource::canEditInputDeadline($record), 403);
+            abort_unless(AssessmentPeriodResource::canEditOperationalSettings($record), 403);
 
-            // A period snapshot is immutable after opening; only its score-entry deadline may move.
-            return parent::handleRecordUpdate($record, [
+            // Identity fields remain immutable; only operational schedule/settings may change.
+            $currentRombelIds = data_get($record->settings, 'rombel_ids');
+            $updated = parent::handleRecordUpdate($record, [
+                'entry_start_at' => $data['entry_start_at'] ?? $record->entry_start_at,
                 'entry_end_at' => $data['entry_end_at'] ?? $record->entry_end_at,
+                'report_date' => $data['report_date'] ?? $record->report_date,
+                'settings' => $data['settings'] ?? $record->settings,
             ]);
+
+            $selectedRombelIds = data_get($data, 'settings.rombel_ids');
+            if (is_array($selectedRombelIds)
+                && collect($selectedRombelIds)->map(fn (mixed $id): int => (int) $id)->sort()->values()->all()
+                    !== collect($currentRombelIds)->map(fn (mixed $id): int => (int) $id)->sort()->values()->all()) {
+                app(CreateAssessmentPeriodSnapshotAction::class)->execute(auth()->user(), $updated);
+            }
+
+            return $updated->refresh();
         }
 
         unset($data['status'], $data['created_by']);

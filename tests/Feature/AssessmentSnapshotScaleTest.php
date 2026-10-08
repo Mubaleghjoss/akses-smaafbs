@@ -10,6 +10,7 @@ use App\Models\Assessment\AcademicYear;
 use App\Models\Assessment\AssessmentComponent;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentScheme;
+use App\Models\Assessment\AssessmentScore;
 use App\Models\Assessment\HomeroomAssignment;
 use App\Models\Assessment\Semester;
 use App\Models\Assessment\Subject;
@@ -198,12 +199,79 @@ class AssessmentSnapshotScaleTest extends TestCase
             );
         }
 
+        $existingAssignment = $opened->assignments()->firstOrFail();
+        $existingStudent = $opened->students()->firstOrFail();
+        $existingComponent = AssessmentComponent::query()->firstOrFail();
+        $score = AssessmentScore::query()->create([
+            'assessment_period_assignment_id' => $existingAssignment->getKey(),
+            'assessment_period_student_id' => $existingStudent->getKey(),
+            'assessment_component_id' => $existingComponent->getKey(),
+            'score' => 87,
+        ]);
+
+        $additionalRombel = Rombel::query()->create([
+            'nama' => 'XI 8',
+            'angkatan' => 'XI',
+            'is_active' => true,
+        ]);
+        $additionalTeacher = GuruTendik::query()->create([
+            'nama' => 'Guru Skala Tambahan',
+            'jenis_ptk' => 'Guru',
+            'status' => 'Aktif',
+        ]);
+        User::query()->create([
+            'name' => $additionalTeacher->nama,
+            'username' => 'guru-assessment-scale-tambahan',
+            'password' => 'secret123',
+            'guru_tendik_id' => $additionalTeacher->getKey(),
+        ])->assignRole('guru_mapel');
+        DataSiswa::query()->create([
+            'nama' => 'Siswa Skala Tambahan',
+            'nisn' => '9999999999',
+            'rombel_saat_ini' => $additionalRombel->nama,
+            'jk' => 'L',
+            'status' => 'aktif',
+        ]);
+        foreach ($subjects as $subject) {
+            TeachingAssignment::query()->create([
+                'assessment_semester_id' => $semester->getKey(),
+                'assessment_subject_id' => $subject->getKey(),
+                'assessment_subject_category_id' => SubjectCategory::query()->where('code', 'WAJIB')->value('id'),
+                'teacher_id' => $additionalTeacher->getKey(),
+                'rombel_id' => $additionalRombel->getKey(),
+                'teacher_name_snapshot' => $additionalTeacher->nama,
+                'subject_name_snapshot' => $subject->name,
+                'rombel_name_snapshot' => $additionalRombel->nama,
+                'is_active' => true,
+            ]);
+        }
+        HomeroomAssignment::query()->create([
+            'assessment_semester_id' => $semester->getKey(),
+            'teacher_id' => $additionalTeacher->getKey(),
+            'rombel_id' => $additionalRombel->getKey(),
+            'teacher_name_snapshot' => $additionalTeacher->nama,
+            'rombel_name_snapshot' => $additionalRombel->nama,
+            'is_active' => true,
+        ]);
+        $opened->forceFill([
+            'settings' => ['rombel_ids' => [...$rombelIds, $additionalRombel->getKey()]],
+        ])->save();
+
         $reopened = app(CreateAssessmentPeriodSnapshotAction::class)
             ->execute($curriculumUser, $opened);
 
-        $this->assertSame(7, $reopened->periodRombels()->count());
-        $this->assertSame(162, $reopened->students()->count());
-        $this->assertSame(14, $reopened->assignments()->count());
-        $this->assertSame(7, $reopened->homerooms()->count());
+        $this->assertSame(8, $reopened->periodRombels()->count());
+        $this->assertSame(163, $reopened->students()->count());
+        $this->assertSame(16, $reopened->assignments()->count());
+        $this->assertSame(8, $reopened->homerooms()->count());
+        $this->assertDatabaseHas('assessment_scores', ['id' => $score->getKey(), 'score' => 87]);
+
+        $reopened->forceFill(['settings' => ['rombel_ids' => $rombelIds]])->save();
+        try {
+            app(CreateAssessmentPeriodSnapshotAction::class)->execute($curriculumUser, $reopened);
+            $this->fail('Removing an opened period class must be rejected.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey('settings.rombel_ids', $exception->errors());
+        }
     }
 }

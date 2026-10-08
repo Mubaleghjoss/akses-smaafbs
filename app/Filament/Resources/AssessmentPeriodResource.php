@@ -66,15 +66,20 @@ class AssessmentPeriodResource extends Resource
             && (
                 ($record->status === AssessmentPeriodStatus::DRAFT
                     && auth()->user()?->can('update', $record) === true)
-                || static::canEditInputDeadline($record)
+                || static::canEditOperationalSettings($record)
             );
     }
 
     public static function canEditInputDeadline(AssessmentPeriod $record): bool
     {
+        return static::canEditOperationalSettings($record);
+    }
+
+    public static function canEditOperationalSettings(AssessmentPeriod $record): bool
+    {
         return static::canAccess()
             && static::canManageAssessment()
-            && auth()->user()?->can('updateDeadline', $record) === true;
+            && auth()->user()?->can('updateOperationalSettings', $record) === true;
     }
 
     public static function canDelete(Model $record): bool
@@ -172,13 +177,12 @@ class AssessmentPeriodResource extends Resource
                         ->dehydrated(false),
                 ]),
             Section::make('Kelas dan Jadwal')
-                ->description('Snapshot hanya mengambil kelas yang dipilih. Setelah periode dibuka, master tidak lagi mengubah isi periode.')
+                ->description('Setelah periode dibuka, kelas baru akan dibuatkan snapshot dengan aman. Penghapusan kelas yang sudah tersnapshot diblokir untuk melindungi nilai dan riwayat.')
                 ->columns(['default' => 1, 'md' => 2])
-                ->disabled(fn (?AssessmentPeriod $record): bool => $record !== null && $record->status !== AssessmentPeriodStatus::DRAFT)
+                ->disabled(fn (?AssessmentPeriod $record): bool => $record?->status === AssessmentPeriodStatus::PUBLISHED)
                 ->schema([
                     Forms\Components\Select::make('settings.rombel_ids')
                         ->label('Kelas Peserta')
-                        ->disabled(fn (?AssessmentPeriod $record): bool => static::locksSnapshotFields($record))
                         ->options(fn (): array => Rombel::query()
                             ->where('is_active', true)
                             ->orderBy('nama')
@@ -200,7 +204,6 @@ class AssessmentPeriodResource extends Resource
                         ->maxLength(100),
                     Forms\Components\Toggle::make('settings.collect_promotion_status')
                         ->label('Catat Status Semester')
-                        ->disabled(fn (?AssessmentPeriod $record): bool => static::locksSnapshotFields($record))
                         ->default(false)
                         ->inline(false)
                         ->helperText('Aktifkan untuk kenaikan/kelulusan atau status akhir semester. Default aktif saat jenis ASAS dipilih.')
@@ -213,9 +216,7 @@ class AssessmentPeriodResource extends Resource
                         ->label('Batas Input Nilai')
                         ->seconds(false)
                         ->after('entry_start_at')
-                        ->disabled(fn (?AssessmentPeriod $record): bool => $record !== null
-                            && $record->status !== AssessmentPeriodStatus::DRAFT
-                            && ! static::canEditInputDeadline($record)),
+                        ->disabled(fn (?AssessmentPeriod $record): bool => $record?->status === AssessmentPeriodStatus::PUBLISHED),
                 ]),
         ]);
     }
