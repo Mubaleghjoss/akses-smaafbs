@@ -173,6 +173,11 @@ class InstallAssessmentDefaults extends Command
                 'identity_style' => 'two_column_compact',
                 'identity_font_size' => 9,
                 'identity_table_spacing' => 3,
+                'subject_group_spacing' => 4,
+                'subject_group_table_spacing' => 1,
+                'score_table_row_padding' => 2.5,
+                'score_table_kktp_spacing' => 3,
+                'kktp_next_section_spacing' => 3,
                 'labels' => [
                     'student_name' => 'Nama Siswa',
                     'student_number' => 'NIS/NISN',

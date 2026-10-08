@@ -123,6 +123,11 @@ class AssessmentReportTemplateResource extends Resource
             'identity_table_spacing' => [0, 24],
             'kop_title_spacing' => [0, 16],
             'title_identity_spacing' => [0, 16],
+            'subject_group_spacing' => [0, 16],
+            'subject_group_table_spacing' => [0, 12],
+            'score_table_row_padding' => [1, 6],
+            'score_table_kktp_spacing' => [0, 16],
+            'kktp_next_section_spacing' => [0, 16],
             'logo_size' => [32, 60],
             'table_signature_spacing' => [0, 24],
             'signature_spacing' => [32, 110],
@@ -132,6 +137,11 @@ class AssessmentReportTemplateResource extends Resource
                 'identity_table_spacing' => 3,
                 'kop_title_spacing' => 7,
                 'title_identity_spacing' => 4,
+                'subject_group_spacing' => 4,
+                'subject_group_table_spacing' => 1,
+                'score_table_row_padding' => 2.5,
+                'score_table_kktp_spacing' => 3,
+                'kktp_next_section_spacing' => 3,
                 'logo_size' => 48,
                 'table_signature_spacing' => 14,
                 'signature_spacing' => 64,
@@ -406,6 +416,34 @@ class AssessmentReportTemplateResource extends Resource
                         ->default('Jenis Laporan')
                         ->required()
                         ->maxLength(60),
+                ]),
+            Section::make('Jarak & Kerapian Tabel Rapor')
+                ->description('Khusus ASTS. Sesuaikan bertahap agar tabel lebih lega tanpa membuat rapor melampaui dua halaman. Simpan lalu Pratinjau Template untuk memeriksa hasil karena pratinjau belum mengikuti perubahan yang belum disimpan.')
+                ->collapsible()
+                ->collapsed()
+                ->columns(['default' => 1, 'md' => 2])
+                ->schema([
+                    Forms\Components\TextInput::make('settings.report_layout.subject_group_spacing')
+                        ->label('Jarak antar kelompok mapel')
+                        ->numeric()->minValue(0)->maxValue(16)->step(0.5)->default(4)->suffix('pt')
+                        ->helperText('Jarak sebelum judul kelompok mapel berikutnya.'),
+                    Forms\Components\TextInput::make('settings.report_layout.subject_group_table_spacing')
+                        ->label('Jarak judul kelompok ke tabel')
+                        ->numeric()->minValue(0)->maxValue(12)->step(0.5)->default(1)->suffix('pt')
+                        ->helperText('Ruang antara judul Kelompok Umum/Pilihan dan tabel nilainya.'),
+                    Forms\Components\TextInput::make('settings.report_layout.score_table_row_padding')
+                        ->label('Padding/tinggi baris tabel nilai')
+                        ->numeric()->minValue(1)->maxValue(6)->step(0.5)->default(2.5)->suffix('pt')
+                        ->helperText('Padding atas dan bawah tiap baris nilai; naikkan bila isi tabel terasa rapat.'),
+                    Forms\Components\TextInput::make('settings.report_layout.score_table_kktp_spacing')
+                        ->label('Jarak tabel nilai ke tabel KKTP/keterangan predikat')
+                        ->numeric()->minValue(0)->maxValue(16)->step(0.5)->default(3)->suffix('pt')
+                        ->helperText('Ruang setelah tabel nilai terakhir sebelum judul dan tabel interval KKTP.'),
+                    Forms\Components\TextInput::make('settings.report_layout.kktp_next_section_spacing')
+                        ->label('Jarak tabel KKTP ke bagian berikutnya/halaman 2')
+                        ->numeric()->minValue(0)->maxValue(16)->step(0.5)->default(3)->suffix('pt')
+                        ->helperText('Menyisakan ruang setelah KKTP sebelum pemisah halaman agar halaman pertama tidak terasa sesak.')
+                        ->columnSpanFull(),
                 ]),
             Section::make('Tanda Tangan')
                 ->description('Nama wali kelas dan tanggal rapor tetap berasal dari snapshot. Perubahan template hanya berlaku pada snapshot/rapor baru.')

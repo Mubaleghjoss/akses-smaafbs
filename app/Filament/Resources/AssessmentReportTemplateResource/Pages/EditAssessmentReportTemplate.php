@@ -62,7 +62,10 @@ class EditAssessmentReportTemplate extends EditRecord
             'report_layout.kop_title_spacing', 'report_layout.title_identity_spacing',
             'report_layout.identity_style', 'report_layout.identity_font_size',
             'report_layout.identity_table_spacing', 'report_layout.table_signature_spacing',
-            'report_layout.signature_spacing', 'report_layout.labels.student_name',
+            'report_layout.subject_group_spacing', 'report_layout.subject_group_table_spacing',
+            'report_layout.score_table_row_padding', 'report_layout.score_table_kktp_spacing',
+            'report_layout.kktp_next_section_spacing', 'report_layout.signature_spacing',
+            'report_layout.labels.student_name',
             'report_layout.labels.student_number', 'report_layout.labels.class',
             'report_layout.labels.semester', 'report_layout.labels.report_type',
         ] as $path) {

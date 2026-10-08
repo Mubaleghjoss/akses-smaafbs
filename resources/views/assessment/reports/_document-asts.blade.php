@@ -21,6 +21,11 @@
     $signatureSpacing = min(110, max(32, (float) data_get($templateSettings, 'report_layout.signature_spacing', 64)));
     $kopTitleSpacing = min(16, max(0, (float) data_get($templateSettings, 'report_layout.kop_title_spacing', 7)));
     $titleIdentitySpacing = min(16, max(0, (float) data_get($templateSettings, 'report_layout.title_identity_spacing', 4)));
+    $subjectGroupSpacing = min(16, max(0, (float) data_get($templateSettings, 'report_layout.subject_group_spacing', 4)));
+    $subjectGroupTableSpacing = min(12, max(0, (float) data_get($templateSettings, 'report_layout.subject_group_table_spacing', 1)));
+    $scoreTableRowPadding = min(6, max(1, (float) data_get($templateSettings, 'report_layout.score_table_row_padding', 2.5)));
+    $scoreTableKktpSpacing = min(16, max(0, (float) data_get($templateSettings, 'report_layout.score_table_kktp_spacing', 3)));
+    $kktpNextSectionSpacing = min(16, max(0, (float) data_get($templateSettings, 'report_layout.kktp_next_section_spacing', 3)));
     $usesChoiceGroups = preg_match('/(?:^|\s)(?:XI|XII|11|12)(?:\s|$)/i', $className) === 1;
     $isChoiceSubject = static function (mixed $subject): bool {
         $group = strtolower(trim((string) data_get($subject, 'group_code', '').' '.data_get($subject, 'group_name', '')));
@@ -54,7 +59,7 @@
 <div class="report-footer">{{ $footerText }}</div>
 
 @php($letterhead = 'assessment.reports._asts-letterhead')
-<section class="report-page report-page--asts-scores" style="--kop-title-spacing: {{ $kopTitleSpacing }}pt; --title-identity-spacing: {{ $titleIdentitySpacing }}pt;">
+<section class="report-page report-page--asts-scores" style="--kop-title-spacing: {{ $kopTitleSpacing }}pt; --title-identity-spacing: {{ $titleIdentitySpacing }}pt; --asts-subject-group-spacing: {{ $subjectGroupSpacing }}pt; --asts-subject-group-table-spacing: {{ $subjectGroupTableSpacing }}pt; --asts-score-row-padding: {{ $scoreTableRowPadding }}pt; --asts-score-kktp-spacing: {{ $scoreTableKktpSpacing }}pt; --asts-kktp-next-section-spacing: {{ $kktpNextSectionSpacing }}pt;">
     @include($letterhead)
     <h1 class="report-title">{{ $reportTitle }}</h1>
     <p class="report-subtitle">Tahun Pelajaran {{ $academicYear }}</p>

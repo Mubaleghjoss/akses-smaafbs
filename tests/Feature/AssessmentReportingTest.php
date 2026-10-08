@@ -835,6 +835,10 @@ class AssessmentReportingTest extends TestCase
         Livewire::actingAs(User::query()->findOrFail(99))
             ->test(EditAssessmentReportTemplate::class, ['record' => $template->getKey()])
             ->assertSee('Pratinjau Template')
+            ->assertSee('Jarak & Kerapian Tabel Rapor')
+            ->assertSee('Simpan lalu Pratinjau Template')
+            ->assertSee('Jarak antar kelompok mapel')
+            ->assertSee('Padding/tinggi baris tabel nilai')
             ->assertSee(url('/admin/penilaian/pengaturan/template-rapor/'.$template->getRouteKey().'/preview'));
     }
 
@@ -944,6 +948,11 @@ class AssessmentReportingTest extends TestCase
                 'report_title' => 'RAPOR KHUSUS PRATINJAU',
                 'report_layout' => [
                     'labels' => ['student_name' => 'Peserta Contoh'],
+                    'subject_group_spacing' => 8,
+                    'subject_group_table_spacing' => 3,
+                    'score_table_row_padding' => 4,
+                    'score_table_kktp_spacing' => 7,
+                    'kktp_next_section_spacing' => 6,
                 ],
             ],
         ]);
@@ -956,7 +965,12 @@ class AssessmentReportingTest extends TestCase
             ->assertSee('SMA Pratinjau Aktif')
             ->assertSee('RAPOR KHUSUS PRATINJAU')
             ->assertSee('Peserta Contoh')
-            ->assertSee('Siswa Contoh');
+            ->assertSee('Siswa Contoh')
+            ->assertSee('--asts-subject-group-spacing: 8pt;')
+            ->assertSee('--asts-subject-group-table-spacing: 3pt;')
+            ->assertSee('--asts-score-row-padding: 4pt;')
+            ->assertSee('--asts-score-kktp-spacing: 7pt;')
+            ->assertSee('--asts-kktp-next-section-spacing: 6pt;');
         $this->assertSame([], Storage::disk('local')->allFiles());
         $this->assertDatabaseCount('assessment_report_snapshots', 0);
         $this->assertDatabaseCount('jobs', 0);
@@ -1000,7 +1014,23 @@ class AssessmentReportingTest extends TestCase
         $this->assertTrue(data_get($data, 'settings.report_layout.show_logo'));
         $this->assertSame(48.0, data_get($data, 'settings.report_layout.logo_size'));
         $this->assertSame(7.0, data_get($data, 'settings.report_layout.kop_title_spacing'));
+        $this->assertSame(4.0, data_get($data, 'settings.report_layout.subject_group_spacing'));
+        $this->assertSame(1.0, data_get($data, 'settings.report_layout.subject_group_table_spacing'));
+        $this->assertSame(2.5, data_get($data, 'settings.report_layout.score_table_row_padding'));
+        $this->assertSame(3.0, data_get($data, 'settings.report_layout.score_table_kktp_spacing'));
+        $this->assertSame(3.0, data_get($data, 'settings.report_layout.kktp_next_section_spacing'));
         $this->assertSame('Nama Siswa', data_get($data, 'settings.report_layout.labels.student_name'));
+
+        $html = view('assessment.reports.asts', [
+            'snapshot' => ['student' => ['name' => 'Siswa Uji'], 'subjects' => []],
+            'templateSettings' => [],
+            'pdfMode' => false,
+        ])->render();
+        $this->assertStringContainsString('--asts-subject-group-spacing: 4pt;', $html);
+        $this->assertStringContainsString('--asts-subject-group-table-spacing: 1pt;', $html);
+        $this->assertStringContainsString('--asts-score-row-padding: 2.5pt;', $html);
+        $this->assertStringContainsString('--asts-score-kktp-spacing: 3pt;', $html);
+        $this->assertStringContainsString('--asts-kktp-next-section-spacing: 3pt;', $html);
     }
 
     public function test_asts_report_header_layout_renders_custom_labels_spacing_font_and_one_column_style(): void

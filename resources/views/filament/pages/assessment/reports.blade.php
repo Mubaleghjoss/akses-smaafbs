@@ -66,7 +66,7 @@
                                     <x-filament::button tag="a" href="{{ $row['download_url'] }}" size="sm" color="primary" icon="heroicon-o-arrow-down-tray">Download</x-filament::button>
                                     <x-filament::button tag="a" href="{{ $row['docx_url'] }}" size="sm" color="gray" icon="heroicon-o-document-arrow-down">Download MS Word</x-filament::button>
                                     @if ($this->canShareReports())
-                                        <x-filament::button wire:click="issueParentShareLink({{ $row['id'] }})" wire:loading.attr="disabled" size="sm" color="success" icon="heroicon-o-share">Share Orang Tua</x-filament::button>
+                                        <x-filament::button wire:click="issueParentShareLink({{ $row['id'] }})" wire:loading.attr="disabled" size="sm" color="success" icon="heroicon-o-share">Share Orang Tua / Share Link</x-filament::button>
                                     @endif
                                 </div>
                             </article>
