@@ -35,6 +35,8 @@
     .identity--asts .identity__value--asts-primary { width: 47%; }
     .identity--asts .identity__value--asts-secondary { width: 24%; }
     .identity--asts .identity__label { white-space: nowrap; }
+    /* Center the compact value type with its label and fixed colon columns. */
+    .identity--asts .identity__label, .identity--asts .identity__separator--asts, .identity--asts .identity__value--asts-nowrap { line-height: 1.2; vertical-align: middle; }
     .identity--asts .identity__separator--asts { padding-left: 0; padding-right: 0; text-align: center; }
     .identity--asts .identity__spacer { width: 1%; padding: 0; }
     .identity--asts .identity__value--asts-nowrap { overflow: hidden; font-size: 9pt; text-overflow: ellipsis; white-space: nowrap; }

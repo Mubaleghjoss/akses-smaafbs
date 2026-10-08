@@ -131,6 +131,11 @@ abstract class AssessmentReportsPage extends AssessmentPage
             && ($user->hasFullAdminAccess() || $user->can('penilaian.publish'));
     }
 
+    public function canShareReports(): bool
+    {
+        return $this->canGenerateReports() || $this->isHomeroomReportView();
+    }
+
     /**
      * Wali kelas gets a focused shortcut; broader report roles keep the
      * existing administration-oriented workflow unchanged.
@@ -733,8 +738,10 @@ abstract class AssessmentReportsPage extends AssessmentPage
 
     public function issueParentShareLink(int $studentId): void
     {
-        $this->authorizeAssessment('penilaian.publish');
-        $student = $this->selectedPeriod()?->students()
+        $period = $this->selectedPeriod();
+        $template = $this->selectedTemplate();
+        abort_unless($period && $template, 404);
+        $student = $period->students()
             ->eligibleForAssessment()
             ->when($this->visiblePeriodRombelIds() !== null, fn ($query) => $query->whereIn('assessment_period_rombel_id', $this->visiblePeriodRombelIds()))
             ->findOrFail($studentId);
@@ -744,26 +751,15 @@ abstract class AssessmentReportsPage extends AssessmentPage
             ->latest('id')
             ->first();
 
-        if (! $snapshot) {
-            Notification::make()
-                ->title('Rapor belum siap dibagikan')
-                ->body('Bagikan rapor setelah revisi dipublikasikan agar orang tua hanya menerima rapor resmi.')
-                ->warning()
-                ->send();
-
-            return;
-        }
-
         try {
-            $issued = app(AssessmentReportShareService::class)->issue(
-                $snapshot,
-                (int) auth()->id(),
-                $this->shareExpiryDays,
-            );
+            $shares = app(AssessmentReportShareService::class);
+            $issued = $snapshot
+                ? $shares->issue($snapshot, (int) auth()->id(), $this->shareExpiryDays)
+                : $shares->issueLivePreview($period, $template, $student, (int) auth()->id(), $this->shareExpiryDays);
             $this->latestShareUrl = route('assessment.reports.shared.landing', ['token' => $issued['token']]);
             Notification::make()
                 ->title('Tautan orang tua dibuat')
-                ->body('Salin tautan pratinjau yang muncul di halaman. Tautan berlaku sementara dan dapat dicabut dari revisi rapor.')
+                ->body('Salin tautan yang muncul di halaman. Tautan berlaku sementara dan dapat dicabut kapan saja.')
                 ->success()
                 ->duration(12000)
                 ->send();

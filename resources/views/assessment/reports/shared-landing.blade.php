@@ -30,7 +30,7 @@
 <body>
 <main>
     <div class="eyebrow">SMA Al Furqon Boarding School</div>
-    <h1>Preview Rapor {{ $type }}</h1>
+    <h1>Rapor {{ $type }}</h1>
     <p class="student">{{ $student }}</p>
     <p>{{ $class }}@if(filled($period)) &middot; {{ $period }}@endif</p>
     <p>Tautan ini hanya untuk melihat dan mengunduh rapor siswa.</p>

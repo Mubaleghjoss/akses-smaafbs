@@ -1327,7 +1327,8 @@ class AssessmentReportingTest extends TestCase
         $this->get(route('assessment.reports.shared.landing', ['token' => $issued['token']]))
             ->assertOk()
             ->assertSee('og:title', false)
-            ->assertSee('Preview Rapor ASTS - Siswa 1 - XI 1')
+            ->assertSee('Rapor ASTS - Siswa 1 - XI 1')
+            ->assertDontSee('Preview Rapor')
             ->assertDontSee('88.50')
             ->assertSee(route('assessment.reports.shared.preview', ['token' => $issued['token']]), false)
             ->assertSee(route('assessment.reports.shared.download', ['token' => $issued['token']]), false);
@@ -1342,6 +1343,42 @@ class AssessmentReportingTest extends TestCase
         $issued['link']->forceFill(['expires_at' => now()->subMinute()])->save();
         $this->get(route('assessment.reports.shared.landing', ['token' => $issued['token']]))->assertGone();
         $this->get(route('assessment.reports.shared.landing', ['token' => str_repeat('a', 43)]))->assertNotFound();
+    }
+
+    public function test_parent_share_uses_a_live_stream_snapshot_before_the_period_is_published(): void
+    {
+        Storage::fake('local');
+        [$period, $rombel, $students, $template] = $this->reportingFoundation();
+        $this->actingAs(User::query()->findOrFail(99));
+        $page = Livewire::test(AstsReports::class)
+            ->set('periodId', $period->getKey())
+            ->set('templateId', $template->getKey())
+            ->set('previewClassId', $rombel->getKey())
+            ->call('issueParentShareLink', $students[0]->getKey());
+        $token = basename((string) parse_url((string) $page->instance()->latestShareUrl, PHP_URL_PATH));
+
+        $this->assertMatchesRegularExpression('/^[A-Za-z0-9_-]{43}$/', $token);
+        $this->assertDatabaseHas('assessment_report_snapshots', [
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_student_id' => $students[0]->getKey(),
+            'assessment_report_template_id' => $template->getKey(),
+            'revision' => 0,
+            'generation_status' => 'ready',
+            'delivery_mode' => 'stream',
+            'pdf_path' => null,
+        ]);
+
+        $this->get(route('assessment.reports.shared.landing', ['token' => $token]))
+            ->assertOk()
+            ->assertSee('Rapor ASTS - Siswa 1 - XI 1')
+            ->assertDontSee('Preview Rapor')
+            ->assertDontSee('88.50');
+        $this->get(route('assessment.reports.shared.preview', ['token' => $token]))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
+        $this->get(route('assessment.reports.shared.download', ['token' => $token]))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
     }
 
     public function test_live_report_signature_date_defaults_to_today_without_mutating_the_period(): void
@@ -1389,6 +1426,7 @@ class AssessmentReportingTest extends TestCase
         $this->assertStringContainsString('.identity--asts .identity__col--asts-secondary-value { width: 24%; }', $html);
         $this->assertStringContainsString('.identity--asts .identity__value--asts-primary { width: 47%; }', $html);
         $this->assertStringContainsString('.identity--asts .identity__value--asts-secondary { width: 24%; }', $html);
+        $this->assertStringContainsString('.identity--asts .identity__label, .identity--asts .identity__separator--asts, .identity--asts .identity__value--asts-nowrap { line-height: 1.2; vertical-align: middle; }', $html);
         $this->assertStringContainsString('.identity--asts .identity__value--asts-nowrap { overflow: hidden; font-size: 9pt; text-overflow: ellipsis; white-space: nowrap; }', $html);
         $this->assertStringContainsString('SMA Template Test', $html);
     }

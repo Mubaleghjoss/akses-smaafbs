@@ -19,7 +19,7 @@ class ReportShareLinkPolicy extends AssessmentPolicy
 
     public function create(User $user): bool
     {
-        return $this->canPublish($user);
+        return $this->canView($user);
     }
 
     public function update(User $user, ReportShareLink $link): bool

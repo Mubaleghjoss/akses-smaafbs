@@ -62,7 +62,7 @@
                                 <div class="assessment-report-student-actions">
                                     <x-filament::button tag="a" href="{{ $row['preview_url'] }}" target="_blank" size="sm" color="gray" icon="heroicon-o-eye">Preview</x-filament::button>
                                     <x-filament::button tag="a" href="{{ $row['download_url'] }}" size="sm" color="primary" icon="heroicon-o-arrow-down-tray">Download</x-filament::button>
-                                    @if ($this->canPublishReports())
+                                    @if ($this->canShareReports())
                                         <x-filament::button wire:click="issueParentShareLink({{ $row['id'] }})" wire:loading.attr="disabled" size="sm" color="success" icon="heroicon-o-share">Share Orang Tua</x-filament::button>
                                     @endif
                                 </div>

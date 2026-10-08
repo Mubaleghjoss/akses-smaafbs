@@ -287,7 +287,7 @@ class AssessmentReportController extends Controller
         $type = strtoupper(trim((string) data_get($data, 'period.type', 'ASTS')));
 
         return response()->view('assessment.reports.shared-landing', [
-            'title' => "Preview Rapor {$type} - {$student} - {$class}",
+            'title' => "Rapor {$type} - {$student} - {$class}",
             'description' => 'SMA Al Furqon Boarding School'.(filled(data_get($data, 'period.name')) ? ' - '.data_get($data, 'period.name') : ''),
             'student' => $student,
             'class' => $class,

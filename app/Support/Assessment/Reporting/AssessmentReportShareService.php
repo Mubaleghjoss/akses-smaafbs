@@ -3,9 +3,11 @@
 namespace App\Support\Assessment\Reporting;
 
 use App\Models\Assessment\AssessmentPeriod;
+use App\Models\Assessment\AssessmentPeriodStudent;
 use App\Models\Assessment\AuditLog;
 use App\Models\Assessment\ReportShareLink;
 use App\Models\Assessment\ReportSnapshot;
+use App\Models\Assessment\ReportTemplate;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +24,7 @@ class AssessmentReportShareService
     public function __construct(
         private readonly AssessmentReportStorage $storage,
         private readonly AssessmentSnapshotIntegrity $integrity,
+        private readonly BuildAssessmentReportPreviewSnapshot $previewBuilder,
     ) {}
 
     /**
@@ -45,13 +48,11 @@ class AssessmentReportShareService
 
         $actor = User::query()->findOrFail($createdBy);
         Gate::forUser($actor)->authorize('create', ReportShareLink::class);
+        Gate::forUser($actor)->authorize('view', $snapshot);
 
         return DB::transaction(function () use ($snapshot, $createdBy, $expiryDays): array {
-            $period = AssessmentPeriod::query()
-                ->lockForUpdate()
-                ->findOrFail($snapshot->assessment_period_id);
             $snapshot = ReportSnapshot::query()->lockForUpdate()->findOrFail($snapshot->getKey());
-            $this->assertPublishedAndDownloadable($snapshot, $period);
+            $this->assertDownloadable($snapshot);
             $token = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
 
             $link = ReportShareLink::query()->create([
@@ -83,6 +84,59 @@ class AssessmentReportShareService
 
             return compact('link', 'token');
         }, 3);
+    }
+
+    /**
+     * Persist a stream-only snapshot when a live report is shared before a
+     * formal generation revision exists; no PDF file is stored.
+     *
+     * @return array{link:ReportShareLink,token:string}
+     */
+    public function issueLivePreview(
+        AssessmentPeriod $period,
+        ReportTemplate $template,
+        AssessmentPeriodStudent $student,
+        int $createdBy,
+        ?int $expiryDays = null,
+    ): array {
+        $actor = User::query()->findOrFail($createdBy);
+        Gate::forUser($actor)->authorize('create', ReportShareLink::class);
+        Gate::forUser($actor)->authorize('view', $period);
+        Gate::forUser($actor)->authorize('view', $template);
+        Gate::forUser($actor)->authorize('view', $student);
+        abort_unless((int) $student->assessment_period_id === (int) $period->getKey(), 404);
+
+        $snapshot = DB::transaction(function () use ($period, $template, $student, $createdBy): ReportSnapshot {
+            $existing = ReportSnapshot::query()
+                ->where('assessment_period_id', $period->getKey())
+                ->where('assessment_period_student_id', $student->getKey())
+                ->where('assessment_report_template_id', $template->getKey())
+                ->where('revision', 0)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing) {
+                return $existing;
+            }
+
+            $preview = $this->previewBuilder->build($period, $template, $student);
+            $data = $preview->snapshot_data;
+
+            return ReportSnapshot::query()->create([
+                'assessment_period_id' => $period->getKey(),
+                'assessment_period_student_id' => $student->getKey(),
+                'assessment_report_template_id' => $template->getKey(),
+                'revision' => 0,
+                'template_version' => $template->version,
+                'snapshot_data' => $data,
+                'snapshot_checksum' => $this->integrity->checksum($data),
+                'generation_status' => 'ready',
+                'delivery_mode' => 'stream',
+                'generated_by' => $createdBy,
+            ]);
+        }, 3);
+
+        return $this->issue($snapshot, $createdBy, $expiryDays);
     }
 
     public function revoke(ReportShareLink $link, int $actorId, ?string $reason = null): void
@@ -163,7 +217,7 @@ class AssessmentReportShareService
             throw new GoneHttpException('Rapor pada tautan ini sudah tidak tersedia.');
         }
 
-        $this->assertPublishedAndDownloadable($snapshot);
+        $this->assertDownloadable($snapshot);
         $link->setRelation('snapshot', $snapshot);
 
         return $link;
@@ -175,10 +229,7 @@ class AssessmentReportShareService
         ?string $userAgent,
     ): ReportShareLink {
         return DB::transaction(function () use ($link, $ipAddress, $userAgent): ReportShareLink {
-            $initialSnapshot = ReportSnapshot::query()->findOrFail($link->assessment_report_snapshot_id);
-            $period = AssessmentPeriod::query()
-                ->lockForUpdate()
-                ->findOrFail($initialSnapshot->assessment_period_id);
+            ReportSnapshot::query()->findOrFail($link->assessment_report_snapshot_id);
             $locked = ReportShareLink::query()->lockForUpdate()->findOrFail($link->getKey());
 
             if ($locked->revoked_at !== null || $locked->expires_at === null || $locked->expires_at->isPast()) {
@@ -191,7 +242,7 @@ class AssessmentReportShareService
             ])->save();
 
             $snapshot = ReportSnapshot::query()->findOrFail($locked->assessment_report_snapshot_id);
-            $this->assertPublishedAndDownloadable($snapshot, $period);
+            $this->assertDownloadable($snapshot);
 
             AuditLog::query()->create([
                 'assessment_period_id' => $snapshot->assessment_period_id,
@@ -216,10 +267,7 @@ class AssessmentReportShareService
         }, 3);
     }
 
-    private function assertPublishedAndDownloadable(
-        ReportSnapshot $snapshot,
-        ?AssessmentPeriod $period = null,
-    ): void {
+    private function assertDownloadable(ReportSnapshot $snapshot): void {
         $status = $snapshot->generation_status;
         $status = $status instanceof \BackedEnum ? $status->value : (string) $status;
 
@@ -231,32 +279,6 @@ class AssessmentReportShareService
             throw new GoneHttpException('Rapor belum tersedia atau snapshot tidak valid.');
         }
 
-        $periodStatus = $period?->status
-            ?? AssessmentPeriod::query()->whereKey($snapshot->assessment_period_id)->value('status');
-        $periodStatus = $periodStatus instanceof \BackedEnum ? $periodStatus->value : (string) $periodStatus;
-
-        if ($periodStatus !== 'published') {
-            throw new GoneHttpException('Rapor belum dipublikasikan.');
-        }
-
-        $period ??= AssessmentPeriod::query()->find($snapshot->assessment_period_id);
-        $settings = is_array($period?->settings) ? $period->settings : [];
-        $publishedTemplateId = (int) data_get($settings, '_reporting.published.template_id');
-        $publishedRevision = (int) data_get($settings, '_reporting.published.revision');
-        $latestRevision = (int) ReportSnapshot::query()
-            ->where('assessment_period_id', $snapshot->assessment_period_id)
-            ->where('assessment_report_template_id', $snapshot->assessment_report_template_id)
-            ->max('revision');
-
-        if (
-            $publishedTemplateId < 1
-            || $publishedRevision < 1
-            || (int) $snapshot->assessment_report_template_id !== $publishedTemplateId
-            || (int) $snapshot->revision !== $publishedRevision
-            || (int) $snapshot->revision !== $latestRevision
-        ) {
-            throw new GoneHttpException('Revisi rapor ini bukan revisi aktif yang dipublikasikan.');
-        }
     }
 
     private function limitedUserAgent(?string $userAgent): ?string
