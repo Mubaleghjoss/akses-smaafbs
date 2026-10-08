@@ -13,9 +13,16 @@ final class BuildAssessmentReportTemplatePreviewSnapshot
     public function build(ReportTemplate $template): ReportSnapshot
     {
         $type = $template->type instanceof \BackedEnum ? $template->type->value : (string) $template->type;
-        $settings = app(AssessmentReportWatermark::class)->freezeSettings(
-            is_array($template->settings) ? $template->settings : [],
-        );
+        // Legacy templates may contain stale watermark paths or malformed values. A
+        // preview must remain usable even when the saved template predates validation.
+        $rawSettings = is_array($template->settings) ? $template->settings : [];
+        try {
+            $settings = app(AssessmentReportWatermark::class)->freezeSettings($rawSettings);
+        } catch (\Throwable) {
+            $settings = $rawSettings;
+            unset($settings['watermark_path'], $settings['watermark_data_uri']);
+            data_set($settings, 'watermark_enabled', false);
+        }
         $schoolName = trim((string) data_get($settings, 'school_name')) ?: 'SMA Contoh Nusantara';
 
         return new ReportSnapshot([

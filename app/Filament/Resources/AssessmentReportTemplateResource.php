@@ -204,7 +204,8 @@ class AssessmentReportTemplateResource extends Resource
                         ->label('Jenis Rapor')
                         ->options(AssessmentType::options())
                         ->required()
-                        ->native(false),
+                        ->native(false)
+                        ->helperText('Pilih ASTS, ASAS, atau ASAT. Jenis ini menentukan judul, isi, dan format rapor.'),
                     Forms\Components\TextInput::make('name')
                         ->label('Nama Template')
                         ->required()
@@ -216,14 +217,15 @@ class AssessmentReportTemplateResource extends Resource
                         ->default(1)
                         ->required(),
                     Forms\Components\Select::make('view_path')
-                        ->label('Layout')
+                        ->label('Layout Dokumen')
                         ->options([
                             'assessment.reports.asts' => 'Standar ASTS A4',
                             'assessment.reports.asas' => 'Standar ASAS A4',
                             'assessment.reports.asat' => 'Standar ASAT A4',
                         ])
                         ->required()
-                        ->native(false),
+                        ->native(false)
+                        ->helperText('Gunakan layout standar sesuai jenis rapor. Jangan mengubahnya kecuali memahami format dokumen resmi.'),
                     Forms\Components\DatePicker::make('effective_from')
                         ->label('Berlaku Mulai'),
                     Forms\Components\Hidden::make('is_active')
@@ -440,7 +442,9 @@ class AssessmentReportTemplateResource extends Resource
                         ->visible(fn (Get $get): bool => (string) $get('type') === AssessmentType::ASAS->value),
                 ]),
             Section::make('Tabel Nilai & Susunan Halaman')
-                ->description('Pilih bagian tabel nilai yang ditampilkan, halaman 1–3, dan urutannya. Identitas, minimal satu bagian akademik, serta tanda tangan wajib tersedia.')
+                ->description('Pengaturan lanjutan: pilih bagian tabel nilai, halaman, dan urutannya. Biarkan nilai bawaan jika belum perlu penyesuaian.')
+                ->collapsible()
+                ->collapsed()
                 ->schema([
                     Forms\Components\Repeater::make('settings.layout.sections')
                         ->label('Bagian Rapor')
@@ -482,7 +486,9 @@ class AssessmentReportTemplateResource extends Resource
                         ->columnSpanFull(),
                 ]),
             Section::make('Footer & Watermark')
-                ->description('Footer diatur pada bagian Kop & Judul. Gambar watermark disimpan privat dan dibekukan ke snapshot. Untuk template yang sudah dipakai, buat versi baru.')
+                ->description('Pengaturan lanjutan untuk watermark. Footer diatur pada bagian Kop & Judul; watermark dibekukan ke snapshot dan tetap privat.')
+                ->collapsible()
+                ->collapsed()
                 ->columns(['default' => 1, 'md' => 2])
                 ->schema([
                     Forms\Components\Toggle::make('settings.watermark_enabled')
