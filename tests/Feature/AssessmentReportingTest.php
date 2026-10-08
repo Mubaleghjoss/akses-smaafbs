@@ -1580,9 +1580,12 @@ class AssessmentReportingTest extends TestCase
 
         $previewResponse = $this->get($previewUrl);
         $previewResponse->assertOk()->assertHeader('Content-Type', 'text/html; charset=UTF-8');
-        $previewResponse->assertSee(route('assessment.reports.live-preview-stream', [$period, $template, $students[0]]), false)
-            ->assertSee('Download PDF')
-            ->assertSee('<iframe', false);
+        $previewResponse->assertSee('LAPORAN HASIL ASESMEN SUMATIF TENGAH SEMESTER (ASTS)')
+            ->assertSee($students[0]->student_name_snapshot)
+            ->assertSee('Mata Pelajaran')
+            ->assertSee('<article class="report-document"', false)
+            ->assertSee(route('assessment.reports.live-preview-stream', [$period, $template, $students[0]]), false)
+            ->assertSee('Download PDF');
 
         $streamResponse = $this->get(route('assessment.reports.live-preview-stream', [$period, $template, $students[0]]));
         $streamResponse->assertOk()->assertHeader('Content-Type', 'application/pdf');
@@ -1597,6 +1600,70 @@ class AssessmentReportingTest extends TestCase
         $downloadDisposition = (string) $downloadResponse->headers->get('Content-Disposition');
         $this->assertStringContainsString('attachment', $downloadDisposition);
         $this->assertStringContainsString('Siswa 1 - XI 1 - Rapor ASTS.pdf', $downloadDisposition);
+    }
+
+    public function test_live_report_uses_current_student_identity_and_subject_master_without_changing_snapshots(): void
+    {
+        [$period, $rombel, $students, $template] = $this->reportingFoundation();
+        Schema::create('data_siswa', function (Blueprint $table): void {
+            $table->id();
+            $table->string('nipd')->nullable();
+            $table->string('nisn')->nullable();
+            $table->string('status')->default('aktif');
+            $table->string('rombel_saat_ini')->nullable();
+        });
+        DB::table('data_siswa')->insert([
+            'id' => $students[0]->student_id,
+            'nipd' => 'NIPD-Terbaru',
+            'nisn' => 'NISN-Terbaru',
+            'status' => 'aktif',
+            'rombel_saat_ini' => 'XI 1',
+        ]);
+        $subject = Subject::query()->create([
+            'code' => 'MAT',
+            'name' => 'Matematika Terbaru',
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+        $assignment = AssessmentPeriodAssignment::query()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'teacher_id' => 41,
+            'assessment_subject_id' => $subject->getKey(),
+            'teacher_name_snapshot' => 'Guru Matematika',
+            'subject_name_snapshot' => 'Matematika Lama',
+            'rombel_name_snapshot' => $rombel->rombel_name_snapshot,
+            'status' => 'locked',
+            'lock_version' => 1,
+        ]);
+        StudentSubjectResult::query()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_student_id' => $students[0]->getKey(),
+            'assessment_period_assignment_id' => $assignment->getKey(),
+            'final_score' => 88,
+            'predicate' => 'B',
+        ]);
+
+        $preview = app(BuildAssessmentReportPreviewSnapshot::class)->build($period, $template, $students[0]);
+        $html = view('assessment.reports.asts', [
+            'snapshot' => $preview->snapshot_data,
+            'templateSettings' => data_get($preview->snapshot_data, 'template.settings', []),
+            'pdfMode' => false,
+        ])->render();
+
+        $this->assertSame('NIPD-Terbaru', data_get($preview->snapshot_data, 'student.nis'));
+        $this->assertSame('NISN-Terbaru', data_get($preview->snapshot_data, 'student.nisn'));
+        $this->assertSame('Matematika Terbaru', data_get($preview->snapshot_data, 'subjects.0.name'));
+        $this->assertStringContainsString('NIPD-Terbaru / NISN-Terbaru', $html);
+        $this->assertStringContainsString('Matematika Terbaru', $html);
+        $this->assertStringNotContainsString('Matematika Lama', $html);
+        $stored = app(CreateReportSnapshotsAction::class)->execute($period, $template, generatedBy: 99)->firstOrFail();
+        $this->assertSame('NIPD-Terbaru', data_get($stored->snapshot_data, 'student.nis'));
+        $this->assertSame('NISN-Terbaru', data_get($stored->snapshot_data, 'student.nisn'));
+        $this->assertSame('Matematika Terbaru', data_get($stored->snapshot_data, 'subjects.0.name'));
+        $this->assertStringContainsString('Tahun Pelajaran 2025/2026</p>', $html);
+        $this->assertStringNotContainsString('Tahun Pelajaran Tahun Pelajaran', $html);
+        $this->assertStringNotContainsString('Semester Ganjil</p>', $html);
     }
 
     public function test_parent_share_landing_hides_scores_and_serves_pdf_with_a_valid_token(): void

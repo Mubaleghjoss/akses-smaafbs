@@ -15,6 +15,8 @@ use App\Models\User;
 use App\Support\Assessment\AssessmentActionFailureNotification;
 use App\Support\Assessment\AssessmentAstsHomeroomRanking;
 use App\Support\Assessment\AssessmentExtracurricularReportResolver;
+use App\Support\Assessment\HomeroomExtracurricularImport;
+use App\Support\Assessment\HomeroomExtracurricularImportException;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
@@ -24,11 +26,13 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Url;
+use Livewire\WithFileUploads;
 use Throwable;
 
 abstract class AssessmentHomeroomRecapPage extends AssessmentPage
 {
     use HasAssessmentTypeNavigation;
+    use WithFileUploads;
 
     /**
      * @var array<string, array{header: string, bulk_label: string, input: string, max: int}>
@@ -148,6 +152,8 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
     ];
 
     public string $bulkStructuredMode = 'append';
+
+    public mixed $extracurricularImportFile = null;
 
     public static function canAccess(): bool
     {
@@ -637,6 +643,41 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
             ->success()
             ->duration(12000)
             ->send();
+    }
+
+    public function importExtracurricular(): void
+    {
+        $homeroom = $this->homeroomId ? $this->homeroomQuery()->with('period')->find($this->homeroomId) : null;
+        if (! $this->isAstsHomeroomRecap() || ! $homeroom || ! data_get($this->homeroomMeta, 'editable')) {
+            Notification::make()->title('Import ekstrakurikuler tidak tersedia untuk kelas ini')->warning()->send();
+
+            return;
+        }
+
+        $this->validate(['extracurricularImportFile' => ['required', 'file', 'mimes:xlsx', 'max:10240']], [
+            'extracurricularImportFile.mimes' => 'File harus berformat Excel .xlsx.',
+            'extracurricularImportFile.max' => 'Ukuran file Excel maksimal 10 MB.',
+        ]);
+
+        try {
+            Gate::forUser(auth()->user())->authorize('view', $homeroom);
+            $result = app(HomeroomExtracurricularImport::class)->import(
+                $homeroom,
+                $this->extracurricularImportFile->getRealPath(),
+                (int) auth()->id(),
+            );
+            $this->reset('extracurricularImportFile');
+            $this->loadReports();
+            Notification::make()
+                ->title('Ekstrakurikuler berhasil diimpor')
+                ->body("{$result['items_imported']} ekskul untuk {$result['students_updated']} siswa diperbarui. Data kehadiran tidak diubah.")
+                ->success()->send();
+        } catch (HomeroomExtracurricularImportException $exception) {
+            $this->addError('extracurricularImportFile', implode(' ', array_slice($exception->errors, 0, 5)));
+        } catch (Throwable $exception) {
+            report($exception);
+            Notification::make()->title('Import ekstrakurikuler gagal')->body('Periksa template Excel lalu coba kembali.')->danger()->send();
+        }
     }
 
     public function saveReports(): void

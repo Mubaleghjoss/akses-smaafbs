@@ -167,6 +167,9 @@ class CreateReportSnapshotsAction
                 ->get()
                 ->groupBy('assessment_period_rombel_id');
             $assignmentIds = $assignmentsByRombel->flatten(1)->pluck('id');
+            $subjectNamesById = DB::table('assessment_subjects')
+                ->whereIn('id', $assignmentsByRombel->flatten(1)->pluck('assessment_subject_id')->filter()->unique())
+                ->pluck('name', 'id');
             $results = DB::table('assessment_student_subject_results')
                 ->where('assessment_period_id', $period->getKey())
                 ->whereIn('assessment_period_student_id', $students->modelKeys())
@@ -210,10 +213,13 @@ class CreateReportSnapshotsAction
             if (filled(data_get($templateSettings, 'school_contact'))) {
                 $school['contact'] = trim((string) data_get($templateSettings, 'school_contact'));
             }
-            // NIS in reports is the current Data Siswa NIPD, not a legacy field.
-            $nipdByStudentId = Schema::hasTable('data_siswa')
-                ? DataSiswa::query()->whereIn('id', $students->pluck('student_id')->filter()->unique())->pluck('nipd', 'id')
-                : $students->pluck('nis_snapshot', 'student_id');
+            // New snapshots capture current Data Siswa identity; existing snapshots remain immutable.
+            $studentIdentityById = Schema::hasTable('data_siswa')
+                ? DataSiswa::query()
+                    ->whereIn('id', $students->pluck('student_id')->filter()->unique())
+                    ->get(['id', 'nipd', 'nisn'])
+                    ->keyBy('id')
+                : collect();
             $snapshots = new EloquentCollection;
 
             foreach ($students as $student) {
@@ -248,20 +254,26 @@ class CreateReportSnapshotsAction
                         'student' => [
                             'id' => $student->student_id,
                             'name' => $student->student_name_snapshot,
-                            'nis' => $nipdByStudentId->get($student->student_id),
-                            'nisn' => $student->nisn_snapshot,
+                            'nis' => filled($studentIdentityById->get($student->student_id)?->nipd)
+                                ? trim((string) $studentIdentityById->get($student->student_id)->nipd)
+                                : $student->nis_snapshot,
+                            'nisn' => filled($studentIdentityById->get($student->student_id)?->nisn)
+                                ? trim((string) $studentIdentityById->get($student->student_id)->nisn)
+                                : $student->nisn_snapshot,
                             'gender' => $student->gender_snapshot,
                             'class_name' => $student->rombel_name_snapshot,
                         ],
                         'subjects' => $studentAssignments
-                            ->map(function (object $assignment) use ($results, $student): array {
+                            ->map(function (object $assignment) use ($results, $student, $subjectNamesById): array {
                                 $result = $results->get($student->id.'|'.$assignment->id);
                                 $detail = $this->decodeJson($result?->calculation_detail);
                                 $precision = min(4, max(0, (int) data_get($detail, 'rounding_precision', 2)));
 
                                 return [
                                     'subject_id' => $assignment->assessment_subject_id,
-                                    'name' => $assignment->subject_name_snapshot,
+                                    'name' => filled($subjectNamesById->get($assignment->assessment_subject_id))
+                                        ? trim((string) $subjectNamesById->get($assignment->assessment_subject_id))
+                                        : $assignment->subject_name_snapshot,
                                     'teacher_name' => $assignment->teacher_name_snapshot,
                                     'group_code' => $assignment->subject_group_code_snapshot,
                                     'group_name' => $assignment->subject_group_name_snapshot,

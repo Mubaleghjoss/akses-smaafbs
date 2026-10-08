@@ -54,10 +54,14 @@ class AssessmentReportController extends Controller
         AssessmentPeriod $assessmentPeriod,
         ReportTemplate $reportTemplate,
         AssessmentPeriodStudent $periodStudent,
+        AssessmentReportRenderer $renderer,
+        BuildAssessmentReportPreviewSnapshot $builder,
     ): Response {
         $this->authorizeLivePreview($assessmentPeriod, $reportTemplate, $periodStudent);
+        $preview = $builder->build($assessmentPeriod, $reportTemplate, $periodStudent);
 
         return response()->view('assessment.reports.preview', [
+            'reportHtml' => $renderer->renderTemplatePreview($preview),
             'streamUrl' => route('assessment.reports.live-preview-stream', [$assessmentPeriod, $reportTemplate, $periodStudent]),
             'downloadUrl' => route('assessment.reports.live-download', [$assessmentPeriod, $reportTemplate, $periodStudent]),
             'filename' => $this->livePreviewFilename($assessmentPeriod, $periodStudent),

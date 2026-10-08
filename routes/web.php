@@ -69,6 +69,8 @@ Route::middleware('auth')->group(function (): void {
         ->name('admin.assessment.asts.status.export');
     Route::get('/admin/penilaian/asts/{assessmentPeriod}/rekap-wali-kelas/{homeroom}/export', [AssessmentAstsExportController::class, 'homeroom'])
         ->name('admin.assessment.asts.homeroom.export');
+    Route::get('/admin/penilaian/asts/{assessmentPeriod}/rekap-wali-kelas/{homeroom}/template-ekskul', [AssessmentAstsExportController::class, 'homeroomExtracurricularTemplate'])
+        ->name('admin.assessment.asts.homeroom.extracurricular-template');
 
     Route::get(
         '/admin/penilaian/rapor/siswa/{reportSnapshot}/download',

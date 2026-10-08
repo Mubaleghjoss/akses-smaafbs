@@ -8,7 +8,7 @@
     $signatures = is_array(data_get($snapshot, 'signatures')) ? data_get($snapshot, 'signatures') : [];
     $logo = trim((string) data_get($school, 'logo_data_uri'));
     $logoIsSafe = preg_match('#^data:image/(?:png|jpeg|webp);base64,#i', $logo) === 1;
-    $academicYear = data_get($period, 'academic_year', 'Demo 2025/2026');
+    $academicYear = preg_replace('/^\s*Tahun\s+Pelajaran\s+/iu', '', (string) data_get($period, 'academic_year', 'Demo 2025/2026')) ?: 'Demo 2025/2026';
     $className = (string) data_get($student, 'class_name', '');
     $studentNis = trim((string) data_get($student, 'nis', '')) ?: '-';
     $studentNisn = trim((string) data_get($student, 'nisn', '')) ?: '-';
@@ -56,7 +56,7 @@
 <section class="report-page report-page--asts-scores" style="--kop-title-spacing: {{ $kopTitleSpacing }}pt; --title-identity-spacing: {{ $titleIdentitySpacing }}pt;">
     @include($letterhead)
     <h1 class="report-title">{{ $reportTitle }}</h1>
-    <p class="report-subtitle">Tahun Pelajaran {{ $academicYear }} &middot; Semester {{ data_get($period, 'semester', '-') }}</p>
+    <p class="report-subtitle">Tahun Pelajaran {{ $academicYear }}</p>
     @include('assessment.reports._asts-identity')
 
     @foreach ($subjectGroups as $groupName => $groupSubjects)

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Enums\Assessment\AssessmentType;
 use App\Exports\AssessmentAstsWorkbookExport;
+use App\Exports\HomeroomExtracurricularTemplateExport;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodAssignment;
 use App\Models\Assessment\AssessmentPeriodHomeroom;
@@ -63,6 +64,17 @@ class AssessmentAstsExportController
         ]), "asts-status-pengumpulan-{$assessmentPeriod->getKey()}.xlsx");
     }
 
+    public function homeroomExtracurricularTemplate(Request $request, AssessmentPeriod $assessmentPeriod, AssessmentPeriodHomeroom $homeroom): BinaryFileResponse
+    {
+        $this->ensureAstsAndUser($assessmentPeriod);
+        abort_unless((int) $homeroom->assessment_period_id === (int) $assessmentPeriod->getKey() && $this->canViewHomeroom($request->user(), $homeroom), 403);
+
+        return $this->download(
+            new HomeroomExtracurricularTemplateExport($homeroom->load('period')),
+            "asts-template-ekskul-{$assessmentPeriod->getKey()}-{$homeroom->getKey()}.xlsx",
+        );
+    }
+
     public function homeroom(Request $request, AssessmentPeriod $assessmentPeriod, AssessmentPeriodHomeroom $homeroom): BinaryFileResponse
     {
         $this->ensureAstsAndUser($assessmentPeriod);
@@ -109,7 +121,7 @@ class AssessmentAstsExportController
         return static::temporaryDirectory();
     }
 
-    private function download(AssessmentAstsWorkbookExport $export, string $filename): BinaryFileResponse
+    private function download(object $export, string $filename): BinaryFileResponse
     {
         $temporaryPath = static::temporaryDirectory();
 

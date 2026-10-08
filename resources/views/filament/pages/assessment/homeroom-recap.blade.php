@@ -23,10 +23,26 @@
 
         @if ($homeroomMeta)
             @if ($this->isAstsHomeroomRecap())
-                <div class="flex justify-end">
-                    <a href="{{ route('admin.assessment.asts.homeroom.export', ['assessmentPeriod' => $periodId, 'homeroom' => $homeroomId]) }}" data-navigate="false" class="fi-btn fi-btn-size-sm fi-btn-color-gray">Download Excel</a>
+                <div class="flex flex-wrap justify-end gap-2">
+                    <a href="{{ route('admin.assessment.asts.homeroom.export', ['assessmentPeriod' => $periodId, 'homeroom' => $homeroomId]) }}" data-navigate="false" class="fi-btn fi-btn-size-sm fi-btn-color-gray">Download Rekap Excel</a>
+                    @if ($homeroomMeta['editable'])
+                        <a href="{{ route('admin.assessment.asts.homeroom.extracurricular-template', ['assessmentPeriod' => $periodId, 'homeroom' => $homeroomId]) }}" data-navigate="false" class="fi-btn fi-btn-size-sm fi-btn-color-gray">Unduh Template Ekskul</a>
+                    @endif
                 </div>
             @endif
+            @if ($this->isAstsHomeroomRecap() && $homeroomMeta['editable'])
+                <section class="assessment-homeroom-bulk-card">
+                    <div class="assessment-homeroom-bulk-card__head">
+                        <div><h2>Import Ekstrakurikuler</h2><p>Gunakan template kelas ini. Satu siswa dapat memiliki beberapa baris ekskul; hanya daftar ekskul siswa pada file yang diganti.</p></div>
+                    </div>
+                    <form wire:submit="importExtracurricular" class="flex flex-wrap items-end gap-3">
+                        <label><span class="sr-only">File Excel ekstrakurikuler</span><input wire:model="extracurricularImportFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+                        <x-filament::button type="submit" size="sm" wire:loading.attr="disabled" wire:target="extracurricularImportFile,importExtracurricular">Import Excel</x-filament::button>
+                    </form>
+                    @error('extracurricularImportFile')<p class="text-sm text-danger-600">{{ $message }}</p>@enderror
+                </section>
+            @endif
+
             <section class="assessment-homeroom-summary-card">
                 <span>
                     <x-filament::icon icon="heroicon-o-user-group" />

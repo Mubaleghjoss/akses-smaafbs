@@ -57,6 +57,7 @@ final class BuildAssessmentReportPreviewSnapshot
         // The class assignment list is the report syllabus. Results are optional
         // so an unfinished subject remains visible without being treated as zero.
         $assignments = $period->assignments()
+            ->with('subject:id,name')
             ->where('assessment_period_rombel_id', $student->assessment_period_rombel_id)
             ->orderBy('subject_group_sort_order_snapshot')
             ->orderBy('subject_sort_order_snapshot')
@@ -75,7 +76,10 @@ final class BuildAssessmentReportPreviewSnapshot
 
                 return [
                     'subject_id' => $assignment->assessment_subject_id,
-                    'name' => $assignment->subject_name_snapshot,
+                    // Live reports follow the current mapel master; published snapshots stay frozen.
+                    'name' => filled($assignment->subject?->name)
+                        ? trim((string) $assignment->subject->name)
+                        : $assignment->subject_name_snapshot,
                     'teacher_name' => $assignment->teacher_name_snapshot,
                     'group_code' => $assignment->subject_group_code_snapshot ?: 'BELUM',
                     'group_name' => $assignment->subject_group_name_snapshot ?: 'Belum Dikelompokkan',
@@ -120,8 +124,8 @@ final class BuildAssessmentReportPreviewSnapshot
                 'student' => [
                     'id' => $student->student_id,
                     'name' => $student->student_name_snapshot,
-                    'nis' => $this->currentNipd($student),
-                    'nisn' => $student->nisn_snapshot,
+                    'nis' => $this->currentStudentIdentity($student, 'nipd', 'nis_snapshot'),
+                    'nisn' => $this->currentStudentIdentity($student, 'nisn', 'nisn_snapshot'),
                     'gender' => $student->gender_snapshot,
                     'class_name' => $student->rombel_name_snapshot,
                 ],
@@ -159,16 +163,16 @@ final class BuildAssessmentReportPreviewSnapshot
         ]);
     }
 
-    /** Resolve NIS from the master NIPD for live previews, never a legacy source field. */
-    private function currentNipd(AssessmentPeriodStudent $student): ?string
+    /** Resolve live identity from Data Siswa, retaining the period value only if no master record exists. */
+    private function currentStudentIdentity(AssessmentPeriodStudent $student, string $column, string $fallback): ?string
     {
         if (! Schema::hasTable('data_siswa')) {
-            return $student->nis_snapshot;
+            return $student->{$fallback};
         }
 
-        $nipd = DataSiswa::query()->whereKey($student->student_id)->value('nipd');
+        $value = DataSiswa::query()->whereKey($student->student_id)->value($column);
 
-        return filled($nipd) ? trim((string) $nipd) : null;
+        return filled($value) ? trim((string) $value) : $student->{$fallback};
     }
 
     /** @return array<int, mixed> */
