@@ -113,7 +113,7 @@ class AssessmentReportTemplateResource extends Resource
         }
 
         $settings = is_array($data['settings'] ?? null) ? $data['settings'] : [];
-        $settings = static::normalizeReportHeaderSettings($settings);
+        $settings = static::normalizeReportHeaderSettings($settings, $type);
         $settings = app(AssessmentReportLayout::class)->validateAndNormalize($settings);
         $data['settings'] = app(AssessmentReportWatermark::class)->optimizeSettings($settings);
 
@@ -126,7 +126,7 @@ class AssessmentReportTemplateResource extends Resource
      * @param  array<string, mixed>  $settings
      * @return array<string, mixed>
      */
-    private static function normalizeReportHeaderSettings(array $settings): array
+    private static function normalizeReportHeaderSettings(array $settings, ?AssessmentType $type = null): array
     {
         $layout = (string) data_get($settings, 'report_layout.identity_style', 'two_column_compact');
         $allowedLayouts = ['two_column_compact', 'one_column_full', 'two_column_wide_left'];
@@ -189,7 +189,18 @@ class AssessmentReportTemplateResource extends Resource
         data_set($settings, 'report_layout.kop_alignment', $kopAlignment);
         data_set($settings, 'report_layout.show_logo', (bool) data_get($settings, 'report_layout.show_logo', true));
 
-        foreach (['student_name' => 'Nama Siswa', 'student_number' => 'NIS/NISN', 'class' => 'Kelas', 'semester' => 'Semester', 'report_type' => 'Jenis Laporan'] as $field => $default) {
+        $labelFields = [
+            'student_name' => 'Nama Siswa',
+            'student_number' => 'NIS/NISN',
+            'class' => 'Kelas',
+            'semester' => 'Semester',
+        ];
+
+        if ($type !== AssessmentType::ASTS) {
+            $labelFields['report_type'] = 'Jenis Laporan';
+        }
+
+        foreach ($labelFields as $field => $default) {
             $label = trim((string) data_get($settings, "report_layout.labels.{$field}", $default));
             if ($label === '' || mb_strlen($label) > 60) {
                 throw ValidationException::withMessages([
@@ -198,6 +209,11 @@ class AssessmentReportTemplateResource extends Resource
             }
 
             data_set($settings, "report_layout.labels.{$field}", $label);
+        }
+
+        if ($type === AssessmentType::ASTS) {
+            $semesterLabel = (string) data_get($settings, 'report_layout.labels.semester', 'Semester');
+            data_set($settings, 'report_layout.labels.report_type', $semesterLabel);
         }
 
         return $settings;
@@ -217,6 +233,14 @@ class AssessmentReportTemplateResource extends Resource
         return $template->snapshots()->exists() || $template->classArtifacts()->exists();
     }
 
+    public static function isAstsType(Get $get, ?ReportTemplate $record = null): bool
+    {
+        $type = $get('type') ?? $record?->type;
+        $value = $type instanceof AssessmentType ? $type->value : (string) $type;
+
+        return $value === AssessmentType::ASTS->value;
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->schema([
@@ -234,6 +258,7 @@ class AssessmentReportTemplateResource extends Resource
                         ->options(AssessmentType::options())
                         ->required()
                         ->native(false)
+                        ->live()
                         ->helperText('Pilih ASTS, ASAS, atau ASAT. Jenis ini menentukan judul, isi, dan format rapor.'),
                     Forms\Components\TextInput::make('name')
                         ->label('Nama Template')
@@ -348,7 +373,11 @@ class AssessmentReportTemplateResource extends Resource
                         ->inline(false),
                 ]),
             Section::make('Judul & Identitas Siswa')
-                ->description('Atur jarak judul dan label Nama, NIS/NISN, Kelas, Semester, serta Jenis Laporan. Nilai identitas siswa pada rapor asli selalu diambil dari data siswa/snapshot.')
+                ->description(fn (Get $get, ?ReportTemplate $record = null): string =>
+                    static::isAstsType($get, $record)
+                        ? 'Atur jarak judul dan label identitas (Nama, NIS/NISN, Kelas, Semester). Pada rapor ASTS, identitas laporan menggunakan Label Semester (contoh: "Semester : Ganjil") dan tidak memerlukan field tambahan.'
+                        : 'Atur jarak judul dan label Nama, NIS/NISN, Kelas, Semester, serta label dokumen. Nilai identitas siswa pada rapor asli selalu diambil dari data siswa/snapshot.'
+                )
                 ->columns(['default' => 1, 'md' => 2])
                 ->schema([
                     Forms\Components\TextInput::make('settings.report_layout.kop_title_spacing')
@@ -431,12 +460,19 @@ class AssessmentReportTemplateResource extends Resource
                         ->label('Label Semester')
                         ->default('Semester')
                         ->required()
-                        ->maxLength(60),
+                        ->maxLength(60)
+                        ->helperText(fn (Get $get, ?ReportTemplate $record = null): string =>
+                            static::isAstsType($get, $record)
+                                ? 'Pada rapor ASTS, identitas laporan menggunakan label ini beserta nilainya (contoh: "Semester : Ganjil"), bukan Jenis Laporan.'
+                                : 'Label semester untuk identitas rapor.'
+                        ),
                     Forms\Components\TextInput::make('settings.report_layout.labels.report_type')
-                        ->label('Label Jenis Laporan')
+                        ->label('Label Dokumen (Khusus ASAS/ASAT)')
                         ->default('Jenis Laporan')
-                        ->required()
-                        ->maxLength(60),
+                        ->required(fn (Get $get, ?ReportTemplate $record = null): bool => ! static::isAstsType($get, $record))
+                        ->maxLength(60)
+                        ->helperText('Hanya digunakan pada rapor ASAS/ASAT. Rapor ASTS otomatis menggunakan Label Semester dan nilai Ganjil/Genap.')
+                        ->visible(fn (Get $get, ?ReportTemplate $record = null): bool => ! static::isAstsType($get, $record)),
                 ]),
             Section::make('Jarak & Kerapian Tabel Rapor')
                 ->description('Khusus ASTS. Sesuaikan bertahap agar tabel lebih lega tanpa membuat rapor melampaui dua halaman. Simpan lalu Pratinjau Template untuk memeriksa hasil karena pratinjau belum mengikuti perubahan yang belum disimpan.')

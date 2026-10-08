@@ -767,6 +767,8 @@ class AssessmentReportingTest extends TestCase
         $this->assertSame(2, substr_count($html, '<p class="report-subtitle">Tahun Pelajaran 2026/2027</p>'));
         $this->assertSame(2, substr_count($html, 'Ahmad Azka Maximilian'));
         $this->assertStringContainsString('>Ganjil<', $html);
+        $this->assertStringContainsString('>Semester<', $html);
+        $this->assertStringNotContainsString('>Jenis Laporan<', $html);
         $this->assertStringNotContainsString('>Semester Ganjil<', $html);
 
         $document = app(AssessmentReportDocxRenderer::class)->render(new ReportSnapshot(['snapshot_data' => $snapshotData]));
@@ -837,6 +839,9 @@ class AssessmentReportingTest extends TestCase
             ->assertSee('Pratinjau Template')
             ->assertSee('Jarak & Kerapian Tabel Rapor')
             ->assertSee('Simpan lalu Pratinjau Template')
+            ->assertSee('identitas laporan menggunakan Label Semester')
+            ->assertSee('Semester : Ganjil')
+            ->assertSee('Pada rapor ASTS')
             ->assertSee('Jarak antar kelompok mapel')
             ->assertSee('Padding/tinggi baris tabel nilai')
             ->assertSee(url('/admin/penilaian/pengaturan/template-rapor/'.$template->getRouteKey().'/preview'));
