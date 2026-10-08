@@ -4,6 +4,7 @@ namespace App\Support\Assessment\Reporting;
 
 use App\Contracts\SiteSettingsAccessor;
 use App\Models\Assessment\AssessmentPeriod;
+use App\Models\DataSiswa;
 use App\Models\Assessment\AssessmentPeriodStudent;
 use App\Models\Assessment\ReportSnapshot;
 use App\Models\Assessment\ReportTemplate;
@@ -11,6 +12,7 @@ use App\Support\Assessment\AssessmentExtracurricularReportResolver;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 final class BuildAssessmentReportPreviewSnapshot
@@ -118,7 +120,7 @@ final class BuildAssessmentReportPreviewSnapshot
                 'student' => [
                     'id' => $student->student_id,
                     'name' => $student->student_name_snapshot,
-                    'nis' => $student->nis_snapshot,
+                    'nis' => $this->currentNipd($student),
                     'nisn' => $student->nisn_snapshot,
                     'gender' => $student->gender_snapshot,
                     'class_name' => $student->rombel_name_snapshot,
@@ -155,6 +157,18 @@ final class BuildAssessmentReportPreviewSnapshot
                 ],
             ],
         ]);
+    }
+
+    /** Resolve NIS from the master NIPD for live previews, never a legacy source field. */
+    private function currentNipd(AssessmentPeriodStudent $student): ?string
+    {
+        if (! Schema::hasTable('data_siswa')) {
+            return $student->nis_snapshot;
+        }
+
+        $nipd = DataSiswa::query()->whereKey($student->student_id)->value('nipd');
+
+        return filled($nipd) ? trim((string) $nipd) : null;
     }
 
     /** @return array<int, mixed> */

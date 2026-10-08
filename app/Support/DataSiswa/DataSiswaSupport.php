@@ -45,7 +45,7 @@ class DataSiswaSupport
     {
         return array_values(array_filter(
             self::exportableColumns(),
-            fn (string $column): bool => ! in_array($column, ['id', 'created_at', 'updated_at'], true),
+            fn (string $column): bool => ! in_array($column, ['created_at', 'updated_at'], true),
         ));
     }
 
@@ -213,18 +213,18 @@ class DataSiswaSupport
             ['PETUNJUK IMPORT DATA SISWA'],
             ['1', 'Gunakan nama kolom persis seperti sheet template.'],
             ['2', 'Kolom minimal yang dianjurkan: nama, jk, rombel_saat_ini, status, nipd atau nisn.'],
-            ['3', 'Jika nipd cocok dengan data lama, baris akan diperbarui. Jika tidak ada nipd tetapi nisn cocok, data juga diperbarui.'],
-            ['4', 'Kolom kosong pada file import tidak akan menimpa isi lama saat update.'],
+            ['3', 'Prioritas pencocokan: id, lalu nisn, nipd, kemudian nama + rombel yang unik.'],
+            ['4', 'Kolom opsional kosong akan mengosongkan data lama; nama wajib tidak dapat dikosongkan.'],
             ['5', 'Format tanggal_lahir yang aman: YYYY-MM-DD.'],
             ['6', 'Nilai status yang didukung: aktif, alumni, pindah, keluar.'],
             ['7', 'Jika status selain aktif, isi kategori_non_aktif, alasan_non_aktif, dan tanggal_non_aktif (YYYY-MM-DD).'],
             ['8', 'Nilai kategori_non_aktif yang didukung: lulus, mutasi, mengundurkan_diri, wafat, lainnya.'],
-            ['9', 'Isi minimal salah satu identitas unik (nipd atau nisn). Disarankan isi keduanya agar update data lebih aman.'],
+            ['9', 'Sertakan id dari template untuk update paling aman; siswa yang tidak ada di file tidak akan dihapus.'],
             ['10', 'Kolom bantuan/program (misalnya no_kip/no_kks/no_pkh) dan kolom fisik (tinggi/berat/lingkar_kepala) boleh diisi jika kolom tersedia.'],
             ['11', 'Anda juga bisa pakai format sederhana seperti sheet template_data_tes_siswa: NO, NAMA, KEPRIBADIAN, GAYA BELAJAR, PROFILING, MBTI.'],
             ['12', 'Kolom No pada format sederhana akan diabaikan saat import.'],
             ['13', 'Template ini otomatis mengikuti kolom yang tersedia pada tabel data_siswa saat ini.'],
-            ['14', 'PENTING: Saat update, kolom yang dibiarkan kosong pada file import tidak akan menghapus nilai lama di database.'],
+            ['14', 'PENTING: Jika pencocokan ambigu atau data wajib siswa baru tidak lengkap, import dibatalkan tanpa perubahan parsial.'],
         ];
     }
 

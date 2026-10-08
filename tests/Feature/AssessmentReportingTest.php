@@ -25,6 +25,7 @@ use App\Models\Assessment\AssessmentPeriodStudent;
 use App\Models\Assessment\ClassReportArtifact;
 use App\Models\Assessment\HomeroomReport;
 use App\Models\Assessment\ReportGenerationRun;
+use App\Models\Assessment\ReportShareLink;
 use App\Models\Assessment\ReportSnapshot;
 use App\Models\Assessment\ReportTemplate;
 use App\Models\Assessment\Semester;
@@ -392,7 +393,7 @@ class AssessmentReportingTest extends TestCase
         $shares->resolve($issued['token']);
     }
 
-    public function test_share_link_rejects_an_old_or_non_published_revision(): void
+    public function test_parent_share_link_allows_an_available_unpublished_revision(): void
     {
         Storage::fake('local');
         [$period, , $students, $template] = $this->reportingFoundation(
@@ -406,14 +407,15 @@ class AssessmentReportingTest extends TestCase
             ->handle(app(AssessmentReportRenderer::class), app(AssessmentReportStorage::class));
         $this->markPublishedSet($period, $template, 2);
 
-        $this->expectException(GoneHttpException::class);
-        $this->expectExceptionMessage('revisi aktif');
-
-        app(AssessmentReportShareService::class)->issue(
+        $issued = app(AssessmentReportShareService::class)->issue(
             $oldSnapshot->fresh(),
             createdBy: 99,
             expiryDays: 1,
         );
+
+        $this->assertInstanceOf(ReportShareLink::class, $issued['link']);
+        $this->assertSame($oldSnapshot->getKey(), $issued['link']->assessment_report_snapshot_id);
+        $this->assertSame($issued['link']->getKey(), app(AssessmentReportShareService::class)->resolve($issued['token'])->getKey());
     }
 
     public function test_retry_is_transactional_failed_only_latest_and_audited(): void

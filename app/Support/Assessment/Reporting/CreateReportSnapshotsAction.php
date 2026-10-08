@@ -4,6 +4,7 @@ namespace App\Support\Assessment\Reporting;
 
 use App\Contracts\SiteSettingsAccessor;
 use App\Models\Assessment\AssessmentPeriod;
+use App\Models\DataSiswa;
 use App\Models\Assessment\AssessmentPeriodStudent;
 use App\Models\Assessment\AuditLog;
 use App\Models\Assessment\ClassReportArtifact;
@@ -18,6 +19,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -208,6 +210,10 @@ class CreateReportSnapshotsAction
             if (filled(data_get($templateSettings, 'school_contact'))) {
                 $school['contact'] = trim((string) data_get($templateSettings, 'school_contact'));
             }
+            // NIS in reports is the current Data Siswa NIPD, not a legacy field.
+            $nipdByStudentId = Schema::hasTable('data_siswa')
+                ? DataSiswa::query()->whereIn('id', $students->pluck('student_id')->filter()->unique())->pluck('nipd', 'id')
+                : $students->pluck('nis_snapshot', 'student_id');
             $snapshots = new EloquentCollection;
 
             foreach ($students as $student) {
@@ -242,7 +248,7 @@ class CreateReportSnapshotsAction
                         'student' => [
                             'id' => $student->student_id,
                             'name' => $student->student_name_snapshot,
-                            'nis' => $student->nis_snapshot,
+                            'nis' => $nipdByStudentId->get($student->student_id),
                             'nisn' => $student->nisn_snapshot,
                             'gender' => $student->gender_snapshot,
                             'class_name' => $student->rombel_name_snapshot,

@@ -144,7 +144,7 @@ Route::middleware('auth')->get(
     ProkerExportController::class
 )->whereNumber('periode_tahun')->name('admin.prokers.export');
 
-Route::get(
+Route::middleware('auth')->get(
     '/admin/data-siswa-tools/import-template',
     DataSiswaImportTemplateController::class
 )->name('admin.data-siswa.import-template');

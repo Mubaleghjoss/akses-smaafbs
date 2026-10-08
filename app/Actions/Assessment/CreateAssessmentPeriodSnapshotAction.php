@@ -214,7 +214,7 @@ final class CreateAssessmentPeriodSnapshotAction
                         ],
                         [
                             'assessment_period_rombel_id' => $periodRombel->getKey(),
-                            'nis_snapshot' => $student->nis,
+                            'nis_snapshot' => $student->nipd,
                             'nisn_snapshot' => $student->nisn,
                             'student_name_snapshot' => $student->nama,
                             'gender_snapshot' => $student->jk,

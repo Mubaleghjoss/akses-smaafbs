@@ -74,7 +74,7 @@ class ManageDataSiswas extends ManageRecords
                 ->url(DataSiswaResource::getUrl('spmb-sync'))
                 ->visible(fn (): bool => DataSiswaResource::canCreate()),
             Actions\Action::make('downloadTemplateDataSiswa')
-                ->label('Download Template Data')
+                ->label('Download Template / Data Saat Ini')
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('gray')
                 ->url(route('admin.data-siswa.import-template', absolute: false))
@@ -281,7 +281,7 @@ class ManageDataSiswas extends ManageRecords
             ->form([
                 Forms\Components\Placeholder::make('download_format')
                     ->label('Template Import')
-                    ->content(new HtmlString('<div class="space-y-2"><a href="'.route('admin.data-siswa.import-template', absolute: false).'" target="_blank" rel="noopener noreferrer" data-navigate="false" class="inline-flex items-center gap-1 text-primary-600 font-semibold underline">Download template data siswa</a><div class="text-sm text-gray-600">File berisi sheet data lengkap, sheet data tes siswa, dan panduan pengisian.</div></div>')),
+                    ->content(new HtmlString('<div class="space-y-2"><a href="'.route('admin.data-siswa.import-template', absolute: false).'" target="_blank" rel="noopener noreferrer" data-navigate="false" class="inline-flex items-center gap-1 text-primary-600 font-semibold underline">Download data siswa saat ini</a><div class="text-sm text-gray-600">File berisi data saat ini untuk diubah dan diupload kembali. Kolom opsional kosong akan dikosongkan; siswa yang tidak tercantum tidak dihapus.</div></div>')),
                 Forms\Components\FileUpload::make('berkas')
                     ->label('Upload File Excel')
                     ->disk('public')

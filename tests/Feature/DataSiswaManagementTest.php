@@ -619,6 +619,28 @@ class DataSiswaManagementTest extends TestCase
         $this->assertSame($tanggalMutasi, $mutasiStudent->tanggal_non_aktif?->format('Y-m-d'));
     }
 
+    public function test_data_siswa_importer_upserts_by_id_or_nisn_clears_optional_fields_and_keeps_omitted_students(): void
+    {
+        $existing = DataSiswa::query()->create(['nama' => 'Siswa Lama', 'nipd' => 'NIPD-1', 'nisn' => 'NISN-1', 'tempat_lahir' => 'Bogor', 'status' => 'aktif']);
+        $omitted = DataSiswa::query()->create(['nama' => 'Tidak Diunggah', 'nipd' => 'NIPD-2', 'status' => 'aktif']);
+        $path = $this->createDataSiswaWorkbook([
+            ['id', 'nama', 'nipd', 'nisn', 'tempat_lahir', 'status'],
+            [$existing->id, '', 'NIPD-1-BARU', 'NISN-1', '', 'pindah'],
+            ['', 'Siswa Baru', 'NIPD-3', 'NISN-3', 'Bandung', 'aktif'],
+        ]);
+
+        try { $result = app(DataSiswaWorkbookImporter::class)->import($path); } finally { @unlink($path); }
+
+        $this->assertSame(['created' => 1, 'updated' => 1, 'skipped' => 0], $result);
+        $existing->refresh();
+        $this->assertSame('Siswa Lama', $existing->nama);
+        $this->assertSame('NIPD-1-BARU', $existing->nipd);
+        $this->assertNull($existing->tempat_lahir);
+        $this->assertSame('pindah', $existing->status);
+        $this->assertDatabaseHas('data_siswa', ['nama' => 'Siswa Baru', 'nipd' => 'NIPD-3']);
+        $this->assertDatabaseHas('data_siswa', ['id' => $omitted->id, 'nama' => 'Tidak Diunggah']);
+    }
+
     public function test_template_export_and_data_export_follow_available_columns(): void
     {
         DataSiswa::query()->create([
@@ -634,8 +656,9 @@ class DataSiswaManagementTest extends TestCase
         $templateRows = $sheets[0]->array();
         $guideRows = $sheets[count($sheets) - 1]->array();
         $exportRows = (new DataSiswaExport)->sheets()[0]->array();
-        $exampleByColumn = array_combine($templateRows[0], $templateRows[1]) ?: [];
+        $templateByColumn = array_combine($templateRows[0], $templateRows[1]) ?: [];
 
+        $this->assertContains('id', $templateRows[0]);
         $this->assertContains('nama', $templateRows[0]);
         $this->assertContains('rombel_saat_ini', $templateRows[0]);
         $this->assertContains('status', $templateRows[0]);
@@ -643,29 +666,19 @@ class DataSiswaManagementTest extends TestCase
         $this->assertContains('alasan_non_aktif', $templateRows[0]);
         $this->assertContains('tanggal_non_aktif', $templateRows[0]);
 
-        foreach ([
-            'alamat' => 'Jl. Contoh No. 1',
-            'nama_ayah' => 'Bapak Contoh',
-            'nama_ibu' => 'Ibu Contoh',
-            'tinggi_badan' => '150',
-            'berat_badan' => '42',
-            'kategori_non_aktif' => 'mutasi',
-            'tanggal_non_aktif' => '2025-07-15',
-        ] as $column => $expectedValue) {
-            if (array_key_exists($column, $exampleByColumn)) {
-                $this->assertSame($expectedValue, $exampleByColumn[$column]);
-            }
-        }
+        $this->assertSame('Rian Akbar', $templateByColumn['nama']);
+        $this->assertSame('2025002', (string) $templateByColumn['nipd']);
+        $this->assertSame('aktif', $templateByColumn['status']);
 
         $guideText = collect($guideRows)
             ->flatten()
             ->filter(fn ($value): bool => filled($value))
             ->implode("\n");
 
-        $this->assertStringContainsString('Kolom kosong pada file import tidak akan menimpa isi lama saat update.', $guideText);
+        $this->assertStringContainsString('Kolom opsional kosong akan mengosongkan data lama; nama wajib tidak dapat dikosongkan.', $guideText);
         $this->assertStringContainsString('Format tanggal_lahir yang aman: YYYY-MM-DD.', $guideText);
         $this->assertStringContainsString('tanggal_non_aktif (YYYY-MM-DD)', $guideText);
-        $this->assertStringContainsString('Isi minimal salah satu identitas unik (nipd atau nisn).', $guideText);
+        $this->assertStringContainsString('Sertakan id dari template untuk update paling aman;', $guideText);
 
         $this->assertSame('2025-2026', DataSiswaSupport::extractAngkatan('X.I / 2025-2026'));
         $this->assertSame('nama', $exportRows[0][1]);
@@ -690,7 +703,7 @@ class DataSiswaManagementTest extends TestCase
             (string) $response->headers->get('content-type')
         );
         $this->assertStringContainsString('attachment;', (string) $response->headers->get('content-disposition'));
-        $this->assertStringContainsString('template-data-siswa-dan-data-tes.xlsx', (string) $response->headers->get('content-disposition'));
+        $this->assertStringContainsString('template-data-siswa-saat-ini.xlsx', (string) $response->headers->get('content-disposition'));
     }
 
     public function test_widgets_summarize_student_status_gender_and_non_active_reasons(): void
