@@ -38,6 +38,9 @@ class DataSiswaWorkbookImporter
                 }
 
                 $existing = $this->findExisting($payload, $row);
+                if ($existing && $this->hasExistingId($payload, $existing)) {
+                    $this->releaseConflictingIdentityValues($payload, $existing, $row);
+                }
                 if (! $existing && blank($payload['nama'] ?? null)) {
                     throw ValidationException::withMessages(['import' => "Baris {$row}: nama wajib diisi untuk siswa baru."]);
                 }
@@ -74,6 +77,15 @@ class DataSiswaWorkbookImporter
     /** @param array<string, mixed> $payload */
     protected function findExisting(array $payload, int $row): ?DataSiswa
     {
+        // An existing Excel ID is authoritative; other identity fields must not
+        // redirect the row to a different student.
+        if (! blank($payload['id'] ?? null)) {
+            $student = DataSiswa::query()->find($payload['id']);
+            if ($student) {
+                return $student;
+            }
+        }
+
         $matchesByIdentity = [];
 
         foreach (['id', 'nisn', 'nipd'] as $field) {
@@ -124,6 +136,29 @@ class DataSiswaWorkbookImporter
         }
 
         return $matches->first();
+    }
+
+    protected function hasExistingId(array $payload, DataSiswa $existing): bool
+    {
+        return ! blank($payload['id'] ?? null) && (string) $payload['id'] === (string) $existing->getKey();
+    }
+
+    /** @param array<string, mixed> $payload */
+    protected function releaseConflictingIdentityValues(array $payload, DataSiswa $target, int $row): void
+    {
+        foreach (['nisn', 'nipd'] as $field) {
+            if (! array_key_exists($field, $payload) || blank($payload[$field])) {
+                continue;
+            }
+
+            $conflict = DataSiswa::query()
+                ->where($field, $payload[$field])
+                ->where($target->getKeyName(), '<>', $target->getKey())
+                ->first();
+            if ($conflict) {
+                DataSiswa::query()->whereKey($conflict->getKey())->update([$field => null]);
+            }
+        }
     }
 
     protected function normalizeName(mixed $name): string
