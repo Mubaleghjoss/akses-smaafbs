@@ -49,6 +49,12 @@
                             <x-filament::button tag="a" href="{{ $this->classZipUrl() }}" color="primary" icon="heroicon-o-archive-box-arrow-down">Download ZIP Kelas</x-filament::button>
                         @endif
                     </div>
+                    @if ($latestShareUrl)
+                        <div class="assessment-report-inline-note" role="status">
+                            Tautan orang tua (salin dan kirim via WhatsApp):
+                            <a href="{{ $latestShareUrl }}" target="_blank" rel="noopener" class="font-semibold underline">{{ $latestShareUrl }}</a>
+                        </div>
+                    @endif
                     <div class="assessment-report-student-list">
                         @forelse ($this->getSimpleClassStudentRows() as $row)
                             <article>
@@ -56,6 +62,9 @@
                                 <div class="assessment-report-student-actions">
                                     <x-filament::button tag="a" href="{{ $row['preview_url'] }}" target="_blank" size="sm" color="gray" icon="heroicon-o-eye">Preview</x-filament::button>
                                     <x-filament::button tag="a" href="{{ $row['download_url'] }}" size="sm" color="primary" icon="heroicon-o-arrow-down-tray">Download</x-filament::button>
+                                    @if ($this->canPublishReports())
+                                        <x-filament::button wire:click="issueParentShareLink({{ $row['id'] }})" wire:loading.attr="disabled" size="sm" color="success" icon="heroicon-o-share">Share Orang Tua</x-filament::button>
+                                    @endif
                                 </div>
                             </article>
                         @empty

@@ -144,7 +144,7 @@ final class BuildAssessmentReportPreviewSnapshot
                 'signatures' => $this->signatureSnapshot(
                     $settings,
                     $homeroomAssignment?->teacher_name_snapshot,
-                    $period->report_date,
+                    $period->report_date ?? now(),
                 ),
                 'template' => [
                     'id' => $template->getKey(),

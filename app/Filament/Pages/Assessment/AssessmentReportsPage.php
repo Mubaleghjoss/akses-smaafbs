@@ -343,7 +343,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
     }
 
     /**
-     * @return array<int, array{student:string,preview_url:string,download_url:string}>
+     * @return array<int, array{id:int,student:string,preview_url:string,download_url:string}>
      */
     public function getSimpleClassStudentRows(): array
     {
@@ -358,6 +358,7 @@ abstract class AssessmentReportsPage extends AssessmentPage
             ->orderBy('student_name_snapshot')
             ->get()
             ->map(fn ($student): array => [
+                'id' => (int) $student->getKey(),
                 'student' => (string) $student->student_name_snapshot,
                 'preview_url' => route('assessment.reports.live-preview', [
                     'assessmentPeriod' => $this->periodId,
@@ -728,6 +729,48 @@ abstract class AssessmentReportsPage extends AssessmentPage
         $artifact = $this->artifactQuery()->findOrFail($artifactId);
         app(RetryReportGenerationAction::class)->retryClass(auth()->user(), $artifact);
         Notification::make()->title('PDF kelas dijadwalkan ulang')->success()->send();
+    }
+
+    public function issueParentShareLink(int $studentId): void
+    {
+        $this->authorizeAssessment('penilaian.publish');
+        $student = $this->selectedPeriod()?->students()
+            ->eligibleForAssessment()
+            ->when($this->visiblePeriodRombelIds() !== null, fn ($query) => $query->whereIn('assessment_period_rombel_id', $this->visiblePeriodRombelIds()))
+            ->findOrFail($studentId);
+        $snapshot = $this->snapshotQuery()
+            ->where('assessment_period_student_id', $student->getKey())
+            ->latest('revision')
+            ->latest('id')
+            ->first();
+
+        if (! $snapshot) {
+            Notification::make()
+                ->title('Rapor belum siap dibagikan')
+                ->body('Bagikan rapor setelah revisi dipublikasikan agar orang tua hanya menerima rapor resmi.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        try {
+            $issued = app(AssessmentReportShareService::class)->issue(
+                $snapshot,
+                (int) auth()->id(),
+                $this->shareExpiryDays,
+            );
+            $this->latestShareUrl = route('assessment.reports.shared.landing', ['token' => $issued['token']]);
+            Notification::make()
+                ->title('Tautan orang tua dibuat')
+                ->body('Salin tautan pratinjau yang muncul di halaman. Tautan berlaku sementara dan dapat dicabut dari revisi rapor.')
+                ->success()
+                ->duration(12000)
+                ->send();
+        } catch (Throwable $exception) {
+            report($exception);
+            AssessmentActionFailureNotification::send($exception, 'Bagikan ke Orang Tua', $this->selectedPeriod());
+        }
     }
 
     public function issueShareLink(int $snapshotId): void

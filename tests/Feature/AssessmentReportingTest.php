@@ -55,6 +55,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
@@ -1288,6 +1289,8 @@ class AssessmentReportingTest extends TestCase
             ->assertSee($students[0]->student_name_snapshot)
             ->assertSee('Preview')
             ->assertSee('Download')
+            ->assertSee('Share Orang Tua')
+            ->assertSeeHtml('wire:click="issueParentShareLink('.$students[0]->getKey().')"')
             ->assertSeeHtml('href="'.$previewUrl.'"')
             ->assertSeeHtml('href="'.$previewUrl.'" target="_blank"')
             ->assertSeeHtml('href="'.$downloadUrl.'"')
@@ -1308,6 +1311,53 @@ class AssessmentReportingTest extends TestCase
         $downloadDisposition = (string) $downloadResponse->headers->get('Content-Disposition');
         $this->assertStringContainsString('attachment', $downloadDisposition);
         $this->assertStringContainsString('Siswa 1 - XI 1 - Rapor ASTS.pdf', $downloadDisposition);
+    }
+
+    public function test_parent_share_landing_hides_scores_and_serves_pdf_with_a_valid_token(): void
+    {
+        Storage::fake('local');
+        [$period, , $students, $template] = $this->reportingFoundation(status: AssessmentPeriodStatus::PUBLISHED);
+        $snapshot = $this->snapshot($period, $students[0], $template, 1);
+        (new GenerateStudentReportJob($snapshot->getKey()))
+            ->handle(app(AssessmentReportRenderer::class), app(AssessmentReportStorage::class));
+        $snapshot->refresh();
+        $this->markPublishedSet($period, $template, 1);
+        $issued = app(AssessmentReportShareService::class)->issue($snapshot, createdBy: 99, expiryDays: 1);
+
+        $this->get(route('assessment.reports.shared.landing', ['token' => $issued['token']]))
+            ->assertOk()
+            ->assertSee('og:title', false)
+            ->assertSee('Preview Rapor ASTS - Siswa 1 - XI 1')
+            ->assertDontSee('88.50')
+            ->assertSee(route('assessment.reports.shared.preview', ['token' => $issued['token']]), false)
+            ->assertSee(route('assessment.reports.shared.download', ['token' => $issued['token']]), false);
+
+        $this->get(route('assessment.reports.shared.preview', ['token' => $issued['token']]))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
+        $this->get(route('assessment.reports.shared.download', ['token' => $issued['token']]))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
+
+        $issued['link']->forceFill(['expires_at' => now()->subMinute()])->save();
+        $this->get(route('assessment.reports.shared.landing', ['token' => $issued['token']]))->assertGone();
+        $this->get(route('assessment.reports.shared.landing', ['token' => str_repeat('a', 43)]))->assertNotFound();
+    }
+
+    public function test_live_report_signature_date_defaults_to_today_without_mutating_the_period(): void
+    {
+        Carbon::setTestNow('2026-08-17 09:00:00');
+        try {
+            [$period, , $students, $template] = $this->reportingFoundation();
+            $period->forceFill(['report_date' => null])->save();
+
+            $preview = app(BuildAssessmentReportPreviewSnapshot::class)->build($period->fresh(), $template, $students[0]);
+
+            $this->assertSame('Bogor, '.now()->translatedFormat('d F Y'), data_get($preview->snapshot_data, 'signatures.1.place_date'));
+            $this->assertNull($period->fresh()->report_date);
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_asts_identity_fixed_columns_reserve_class_and_semester_fields(): void

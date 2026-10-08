@@ -274,6 +274,44 @@ class AssessmentReportController extends Controller
         ])->deleteFileAfterSend(true);
     }
 
+    public function sharedLanding(
+        string $token,
+        AssessmentReportShareService $shares,
+    ): Response {
+        $this->abortUnlessEnabled();
+        $link = $shares->resolve($token);
+        $snapshot = $link->getRelation('snapshot');
+        $data = is_array($snapshot->snapshot_data) ? $snapshot->snapshot_data : [];
+        $student = trim((string) data_get($data, 'student.name', 'Siswa'));
+        $class = trim((string) data_get($data, 'student.class_name', 'Kelas'));
+        $type = strtoupper(trim((string) data_get($data, 'period.type', 'ASTS')));
+
+        return response()->view('assessment.reports.shared-landing', [
+            'title' => "Preview Rapor {$type} - {$student} - {$class}",
+            'description' => 'SMA Al Furqon Boarding School'.(filled(data_get($data, 'period.name')) ? ' - '.data_get($data, 'period.name') : ''),
+            'student' => $student,
+            'class' => $class,
+            'type' => $type,
+            'period' => data_get($data, 'period.name'),
+            'previewUrl' => route('assessment.reports.shared.preview', ['token' => $token]),
+            'downloadUrl' => route('assessment.reports.shared.download', ['token' => $token]),
+        ], 200, [
+            'Cache-Control' => 'private, no-store, max-age=0, must-revalidate',
+            'X-Robots-Tag' => 'noindex, nofollow, noarchive',
+        ]);
+    }
+
+    public function previewShared(
+        Request $request,
+        string $token,
+        AssessmentReportShareService $shares,
+        AssessmentReportStorage $storage,
+        AssessmentReportRenderer $renderer,
+        AssessmentReportRenderGate $renderGate,
+    ): Response|StreamedResponse {
+        return $this->sharedPdf($request, $token, $shares, $storage, $renderer, $renderGate, false);
+    }
+
     public function downloadShared(
         Request $request,
         string $token,
@@ -281,6 +319,18 @@ class AssessmentReportController extends Controller
         AssessmentReportStorage $storage,
         AssessmentReportRenderer $renderer,
         AssessmentReportRenderGate $renderGate,
+    ): Response|StreamedResponse {
+        return $this->sharedPdf($request, $token, $shares, $storage, $renderer, $renderGate, true);
+    }
+
+    private function sharedPdf(
+        Request $request,
+        string $token,
+        AssessmentReportShareService $shares,
+        AssessmentReportStorage $storage,
+        AssessmentReportRenderer $renderer,
+        AssessmentReportRenderGate $renderGate,
+        bool $download,
     ): Response|StreamedResponse {
         $this->abortUnlessEnabled();
         $link = $shares->resolve($token);
@@ -297,17 +347,26 @@ class AssessmentReportController extends Controller
 
             return response($contents, 200, $this->downloadHeaders() + [
                 'Content-Type' => 'application/pdf',
-                'Content-Disposition' => 'attachment; filename="'.basename($storage->individualPath($snapshot)).'"',
+                'Content-Disposition' => ($download ? 'attachment' : 'inline').'; filename="'.basename($storage->individualPath($snapshot)).'"',
             ]);
         }
 
         $link = $shares->recordDownload($link, $request->ip(), $request->userAgent());
         $snapshot = $link->getRelation('snapshot');
 
-        return $storage->disk()->download(
+        if ($download) {
+            return $storage->disk()->download(
+                $snapshot->pdf_path,
+                $storage->downloadName($snapshot),
+                $this->downloadHeaders(),
+            );
+        }
+
+        return $storage->disk()->response(
             $snapshot->pdf_path,
             $storage->downloadName($snapshot),
-            $this->downloadHeaders(),
+            $this->downloadHeaders() + ['Content-Type' => 'application/pdf'],
+            'inline',
         );
     }
 

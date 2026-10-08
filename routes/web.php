@@ -110,6 +110,20 @@ Route::middleware('auth')->group(function (): void {
 });
 
 Route::get(
+    '/rapor/preview/{token}',
+    [AssessmentReportController::class, 'sharedLanding'],
+)
+    ->middleware('throttle:'.max(1, (int) config('assessment.share_links.rate_limit_per_minute', 30)).',1')
+    ->name('assessment.reports.shared.landing');
+
+Route::get(
+    '/rapor/preview/{token}/pdf',
+    [AssessmentReportController::class, 'previewShared'],
+)
+    ->middleware('throttle:'.max(1, (int) config('assessment.share_links.rate_limit_per_minute', 30)).',1')
+    ->name('assessment.reports.shared.preview');
+
+Route::get(
     '/rapor/penilaian/{token}',
     [AssessmentReportController::class, 'downloadShared'],
 )
