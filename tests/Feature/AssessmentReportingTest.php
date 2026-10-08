@@ -744,7 +744,7 @@ class AssessmentReportingTest extends TestCase
         $this->assertStringNotContainsString('wire:poll.5s.visible', $component->html());
     }
 
-    public function test_attendance_values_render_as_non_breaking_text_in_legacy_and_flexible_reports(): void
+    public function test_attendance_values_render_zero_as_dash_and_nonzero_as_days_in_legacy_and_flexible_reports(): void
     {
         $snapshot = [
             'school' => ['name' => 'SMA AFBS'],
@@ -777,7 +777,9 @@ class AssessmentReportingTest extends TestCase
         foreach ([$legacy, $flexible] as $html) {
             $this->assertStringContainsString('summary-table summary-table--attendance', $html);
             $this->assertStringContainsString('attendance-value', $html);
-            $this->assertStringContainsString('0&nbsp;hari', $html);
+            $this->assertStringContainsString('>-<', $html);
+            $this->assertStringNotContainsString('0&nbsp;hari', $html);
+            $this->assertStringContainsString('2&nbsp;hari', $html);
         }
     }
 

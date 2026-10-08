@@ -104,7 +104,7 @@
     <p class="section-title">E. Prestasi</p>
     <table class="summary-table"><tr><th>Prestasi</th><td>{{ $compactList($achievements) }}</td></tr></table>
     <p class="section-title">F. Ketidakhadiran</p>
-    <table class="summary-table summary-table--attendance"><tr><th>Sakit</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'sick_days', 0) }}&nbsp;hari</span></td></tr><tr><th>Izin</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'permission_days', 0) }}&nbsp;hari</span></td></tr><tr><th>Tanpa Keterangan</th><td><span class="attendance-value">{{ (int) data_get($homeroom, 'absent_days', 0) }}&nbsp;hari</span></td></tr></table>
+    <table class="summary-table summary-table--attendance"><tr><th>Sakit</th><td><span class="attendance-value">{!! ($days = (int) data_get($homeroom, 'sick_days', 0)) === 0 ? '-' : $days.'&nbsp;hari' !!}</span></td></tr><tr><th>Izin</th><td><span class="attendance-value">{!! ($days = (int) data_get($homeroom, 'permission_days', 0)) === 0 ? '-' : $days.'&nbsp;hari' !!}</span></td></tr><tr><th>Tanpa Keterangan</th><td><span class="attendance-value">{!! ($days = (int) data_get($homeroom, 'absent_days', 0)) === 0 ? '-' : $days.'&nbsp;hari' !!}</span></td></tr></table>
     <p class="section-title">G. Catatan Wali Kelas</p>
     <table class="summary-table"><tr><td class="report-writing-space">{{ $note }}</td></tr></table>
     @if ($showPromotionStatus)<p class="section-title">Keterangan Naik Kelas</p><table class="summary-table"><tr><td>{{ data_get($homeroom, 'promotion_status') }}</td></tr></table>@endif
