@@ -36,6 +36,19 @@ class AssessmentReportRenderer
             ->output();
     }
 
+    /** Render an in-browser template preview without generating a PDF or file. */
+    public function renderTemplatePreview(ReportSnapshot $snapshot): string
+    {
+        $template = $this->templateFor($snapshot);
+        $view = $this->allowedView($template, $snapshot->snapshot_data ?? []);
+
+        return view($view, [
+            'snapshot' => $snapshot->snapshot_data ?? [],
+            'templateSettings' => $this->templateSettings($snapshot, $template),
+            'pdfMode' => false,
+        ])->render();
+    }
+
     /**
      * @param  Collection<int, ReportSnapshot>  $snapshots
      */

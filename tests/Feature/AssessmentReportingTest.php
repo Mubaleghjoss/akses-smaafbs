@@ -11,6 +11,7 @@ use App\Enums\Assessment\AssessmentType;
 use App\Enums\Assessment\ReportGenerationStatus;
 use App\Filament\Pages\Assessment\AstsReports;
 use App\Filament\Resources\AssessmentReportTemplateResource;
+use App\Filament\Resources\AssessmentReportTemplateResource\Pages\EditAssessmentReportTemplate;
 use App\Jobs\Assessment\GenerateClassReportPipeline;
 use App\Jobs\Assessment\GenerateClassReports;
 use App\Jobs\Assessment\GenerateClassReportsJob;
@@ -777,6 +778,77 @@ class AssessmentReportingTest extends TestCase
             $this->assertStringContainsString('attendance-value', $html);
             $this->assertStringContainsString('0&nbsp;hari', $html);
         }
+    }
+
+    public function test_template_edit_page_exposes_the_saved_template_preview_action(): void
+    {
+        $template = ReportTemplate::query()->create([
+            'code' => 'PREVIEW-ACTION',
+            'type' => AssessmentType::ASTS,
+            'name' => 'Template Pratinjau',
+            'version' => 1,
+            'view_path' => 'assessment.reports.asts',
+            'settings' => [],
+        ]);
+
+        Livewire::actingAs(User::query()->findOrFail(99))
+            ->test(EditAssessmentReportTemplate::class, ['record' => $template->getKey()])
+            ->assertSee('Pratinjau Template')
+            ->assertSee(route('assessment.reports.template-preview', $template));
+    }
+
+    public function test_saved_template_preview_renders_custom_settings_with_sample_data_without_persisting_artifacts(): void
+    {
+        Storage::fake('local');
+        $template = ReportTemplate::query()->create([
+            'code' => 'PREVIEW-ASTS',
+            'type' => AssessmentType::ASTS,
+            'name' => 'Template Pratinjau',
+            'version' => 1,
+            'view_path' => 'assessment.reports.asts',
+            'settings' => [
+                'school_name' => 'SMA Pratinjau Aktif',
+                'report_title' => 'RAPOR KHUSUS PRATINJAU',
+                'report_layout' => [
+                    'labels' => ['student_name' => 'Peserta Contoh'],
+                ],
+            ],
+        ]);
+
+        $response = $this->actingAs(User::query()->findOrFail(99))
+            ->get(route('assessment.reports.template-preview', $template));
+
+        $response->assertOk()
+            ->assertHeader('Content-Type', 'text/html; charset=UTF-8')
+            ->assertSee('SMA Pratinjau Aktif')
+            ->assertSee('RAPOR KHUSUS PRATINJAU')
+            ->assertSee('Peserta Contoh')
+            ->assertSee('Siswa Contoh');
+        $this->assertSame([], Storage::disk('local')->allFiles());
+        $this->assertDatabaseCount('assessment_report_snapshots', 0);
+        $this->assertDatabaseCount('jobs', 0);
+    }
+
+    public function test_saved_template_preview_rejects_unauthorized_users(): void
+    {
+        $template = ReportTemplate::query()->create([
+            'code' => 'PREVIEW-DENIED',
+            'type' => AssessmentType::ASTS,
+            'name' => 'Template Pratinjau',
+            'version' => 1,
+            'view_path' => 'assessment.reports.asts',
+            'settings' => [],
+        ]);
+        $user = User::query()->create([
+            'name' => 'Unauthorized',
+            'username' => 'unauthorized-preview',
+            'email' => 'unauthorized-preview@example.test',
+            'password' => bcrypt('secret-test-password'),
+        ]);
+
+        $this->actingAs($user)
+            ->getJson(route('assessment.reports.template-preview', $template))
+            ->assertForbidden();
     }
 
     public function test_asts_report_header_layout_defaults_preserve_the_compact_two_column_layout(): void

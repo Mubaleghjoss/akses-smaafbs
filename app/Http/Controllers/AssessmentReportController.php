@@ -17,6 +17,7 @@ use App\Support\Assessment\Reporting\AssessmentReportStorage;
 use App\Support\Assessment\Reporting\AssessmentReportWatermark;
 use App\Support\Assessment\Reporting\AssessmentSnapshotIntegrity;
 use App\Support\Assessment\Reporting\BuildAssessmentReportPreviewSnapshot;
+use App\Support\Assessment\Reporting\BuildAssessmentReportTemplatePreviewSnapshot;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
@@ -28,6 +29,27 @@ use ZipArchive;
 
 class AssessmentReportController extends Controller
 {
+    /**
+     * Preview saved template settings with fictional data, independent of a period.
+     * This deliberately renders HTML so it can be embedded or opened while editing.
+     */
+    public function templatePreview(
+        ReportTemplate $reportTemplate,
+        AssessmentReportRenderer $renderer,
+        BuildAssessmentReportTemplatePreviewSnapshot $builder,
+    ): Response {
+        $this->abortUnlessEnabled();
+        Gate::authorize('view', $reportTemplate);
+
+        return response($renderer->renderTemplatePreview($builder->build($reportTemplate)), 200, [
+            'Content-Type' => 'text/html; charset=UTF-8',
+            'Cache-Control' => 'private, no-store, max-age=0, must-revalidate',
+            'Pragma' => 'no-cache',
+            'X-Content-Type-Options' => 'nosniff',
+            'X-Robots-Tag' => 'noindex, nofollow, noarchive',
+        ]);
+    }
+
     public function livePreview(
         AssessmentPeriod $assessmentPeriod,
         ReportTemplate $reportTemplate,

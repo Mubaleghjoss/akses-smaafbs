@@ -83,6 +83,13 @@ Route::middleware('auth')->group(function (): void {
         ->name('assessment.reports.preview');
 
     Route::get(
+        '/admin/penilaian/pengaturan/template-rapor/{reportTemplate}/preview',
+        [AssessmentReportController::class, 'templatePreview'],
+    )
+        ->middleware('throttle:10,1')
+        ->name('assessment.reports.template-preview');
+
+    Route::get(
         '/admin/penilaian/rapor/pratinjau/{assessmentPeriod}/{reportTemplate}/{periodStudent}',
         [AssessmentReportController::class, 'livePreview'],
     )

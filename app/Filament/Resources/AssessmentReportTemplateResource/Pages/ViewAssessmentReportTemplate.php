@@ -3,8 +3,6 @@
 namespace App\Filament\Resources\AssessmentReportTemplateResource\Pages;
 
 use App\Actions\Assessment\SetPrimaryReportTemplateAction;
-use App\Filament\Pages\Assessment\AsasReports;
-use App\Filament\Pages\Assessment\AstsReports;
 use App\Filament\Resources\AssessmentReportTemplateResource;
 use App\Models\Assessment\ReportTemplate;
 use Filament\Actions\Action;
@@ -21,12 +19,12 @@ class ViewAssessmentReportTemplate extends ViewRecord
     {
         return [
             Action::make('preview')
-                ->label('Pratinjau dengan Data Periode')
+                ->label('Pratinjau Template')
                 ->icon('heroicon-o-eye')
-                ->color('gray')
-                ->url(fn (): string => ($this->record->type->value === 'asas'
-                    ? AsasReports::getUrl(['template' => $this->record->getKey()])
-                    : AstsReports::getUrl(['template' => $this->record->getKey()]))),
+                ->color('info')
+                ->url(fn (): string => route('assessment.reports.template-preview', $this->record))
+                ->openUrlInNewTab()
+                ->tooltip('Membuka data contoh tanpa memerlukan periode yang diterbitkan.'),
             EditAction::make()
                 ->visible(fn (): bool => AssessmentReportTemplateResource::canEdit($this->record)),
             Action::make('set_primary')

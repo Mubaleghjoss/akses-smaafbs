@@ -192,7 +192,7 @@ class AssessmentReportTemplateResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->schema([
-            Section::make('Versi Template Standar')
+            Section::make('Identitas Template & Versi')
                 ->description('Template hanya memakai layout standar aplikasi. HTML atau Blade bebas tidak dapat dimasukkan dari admin.')
                 ->columns(['default' => 1, 'md' => 2])
                 ->schema([
@@ -233,9 +233,20 @@ class AssessmentReportTemplateResource extends Resource
                         ->content(fn (?ReportTemplate $record): string => $record?->is_active
                             ? 'Template utama. Mengaktifkan template lain akan mengarsipkan template ini.'
                             : 'Draf/arsip. Simpan dan pratinjau dahulu, lalu gunakan aksi Jadikan Template Utama.'),
+                    Forms\Components\Placeholder::make('version_help')
+                        ->label('Jika Template Terkunci')
+                        ->visible(fn (?ReportTemplate $record): bool => $record instanceof ReportTemplate && static::isLocked($record))
+                        ->content('Template ini sudah dipakai oleh snapshot atau PDF kelas. Gunakan tombol Buat Versi Baru dari daftar/detail template agar rapor lama tidak berubah.')
+                        ->columnSpanFull(),
+                    Forms\Components\Placeholder::make('preview_help')
+                        ->label('Pratinjau Aktif')
+                        ->content(fn (?ReportTemplate $record): string => $record instanceof ReportTemplate
+                            ? 'Klik Pratinjau Template di kanan atas setelah Simpan. Tampilan memakai data siswa contoh, tidak memerlukan periode terbit dan tidak menyimpan PDF.'
+                            : 'Simpan template terlebih dahulu. Setelah tersimpan, tombol Pratinjau Template akan menampilkan data contoh tanpa memerlukan periode terbit.')
+                        ->columnSpanFull(),
                 ]),
-            Section::make('Pengaturan Kop & Layout Rapor')
-                ->description('Edit isi kop, judul, label tabel, dan tampilan aman rapor di sini. HTML atau Blade bebas tetap tidak dapat dimasukkan.')
+            Section::make('Kop & Judul Rapor')
+                ->description('Atur isi kop dan judul dokumen. Gunakan Pratinjau Template setelah menyimpan untuk melihat hasil dengan data contoh yang aman.')
                 ->columns(['default' => 1, 'md' => 2])
                 ->schema([
                     Forms\Components\TextInput::make('settings.foundation_name')
@@ -303,8 +314,8 @@ class AssessmentReportTemplateResource extends Resource
                         ->default(true)
                         ->inline(false),
                 ]),
-            Section::make('Jarak Kop, Judul, dan Identitas')
-                ->description('Atur ruang vertikal dengan batas aman. Judul, identitas, dan layout dapat disesuaikan di Template Rapor; NIS berasal dari Data Siswa NIPD.')
+            Section::make('Identitas & Tabel Nilai')
+                ->description('Atur label, susunan identitas, dan jarak menuju tabel nilai dengan batas aman. NIS pada rapor asli berasal dari Data Siswa NIPD.')
                 ->columns(['default' => 1, 'md' => 2])
                 ->schema([
                     Forms\Components\TextInput::make('settings.report_layout.kop_title_spacing')
@@ -428,8 +439,8 @@ class AssessmentReportTemplateResource extends Resource
                         ->maxLength(100)
                         ->visible(fn (Get $get): bool => (string) $get('type') === AssessmentType::ASAS->value),
                 ]),
-            Section::make('Susunan Halaman Rapor')
-                ->description('Pilih bagian yang ditampilkan, halaman 1–3, dan urutannya. Identitas, minimal satu bagian akademik, serta tanda tangan wajib tersedia.')
+            Section::make('Tabel Nilai & Susunan Halaman')
+                ->description('Pilih bagian tabel nilai yang ditampilkan, halaman 1–3, dan urutannya. Identitas, minimal satu bagian akademik, serta tanda tangan wajib tersedia.')
                 ->schema([
                     Forms\Components\Repeater::make('settings.layout.sections')
                         ->label('Bagian Rapor')
@@ -470,8 +481,8 @@ class AssessmentReportTemplateResource extends Resource
                         ])
                         ->columnSpanFull(),
                 ]),
-            Section::make('Watermark Opsional')
-                ->description('Gambar disimpan privat dan dibekukan ke snapshot. Untuk template yang sudah dipakai, buat versi baru.')
+            Section::make('Footer & Watermark')
+                ->description('Footer diatur pada bagian Kop & Judul. Gambar watermark disimpan privat dan dibekukan ke snapshot. Untuk template yang sudah dipakai, buat versi baru.')
                 ->columns(['default' => 1, 'md' => 2])
                 ->schema([
                     Forms\Components\Toggle::make('settings.watermark_enabled')

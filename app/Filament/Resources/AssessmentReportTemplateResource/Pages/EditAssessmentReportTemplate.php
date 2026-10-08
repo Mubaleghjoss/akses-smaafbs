@@ -32,6 +32,13 @@ class EditAssessmentReportTemplate extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            Actions\Action::make('preview_template')
+                ->label('Pratinjau Template')
+                ->icon('heroicon-o-eye')
+                ->color('info')
+                ->url(fn (): string => route('assessment.reports.template-preview', $this->record))
+                ->openUrlInNewTab()
+                ->tooltip('Menampilkan pengaturan yang sudah disimpan dengan data contoh; simpan perubahan terlebih dahulu.'),
             Actions\DeleteAction::make()
                 ->visible(fn (): bool => AssessmentReportTemplateResource::canDelete($this->record))
                 ->databaseTransaction()
