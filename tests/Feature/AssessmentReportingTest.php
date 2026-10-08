@@ -779,6 +779,73 @@ class AssessmentReportingTest extends TestCase
         }
     }
 
+    public function test_asts_report_header_layout_defaults_preserve_the_compact_two_column_layout(): void
+    {
+        $data = AssessmentReportTemplateResource::validateTemplateData([
+            'type' => AssessmentType::ASTS->value,
+            'view_path' => 'assessment.reports.asts',
+            'version' => 1,
+            'settings' => [],
+        ]);
+
+        $this->assertSame('two_column_compact', data_get($data, 'settings.report_layout.identity_style'));
+        $this->assertSame(9.0, data_get($data, 'settings.report_layout.identity_font_size'));
+        $this->assertSame(3.0, data_get($data, 'settings.report_layout.identity_table_spacing'));
+        $this->assertSame('center', data_get($data, 'settings.report_layout.kop_alignment'));
+        $this->assertTrue(data_get($data, 'settings.report_layout.show_logo'));
+        $this->assertSame(48.0, data_get($data, 'settings.report_layout.logo_size'));
+        $this->assertSame(7.0, data_get($data, 'settings.report_layout.kop_title_spacing'));
+        $this->assertSame('Nama Siswa', data_get($data, 'settings.report_layout.labels.student_name'));
+    }
+
+    public function test_asts_report_header_layout_renders_custom_labels_spacing_font_and_one_column_style(): void
+    {
+        $html = view('assessment.reports.asts', [
+            'snapshot' => [
+                'period' => ['academic_year' => '2025/2026', 'semester' => 'GANJIL'],
+                'student' => ['name' => 'Siswa Uji', 'nis' => '123', 'nisn' => '456', 'class_name' => 'XI IPA 1'],
+                'subjects' => [['name' => 'Matematika', 'final_score' => 90]],
+                'homeroom' => [],
+                'signatures' => [],
+            ],
+            'templateSettings' => [
+                'foundation_name' => 'Yayasan Uji',
+                'school_name' => 'SMA Konfigurasi',
+                'school_address' => 'Jalan Pengujian 1',
+                'school_contact' => 'WA 0812 | uji@example.test | sekolah.test',
+                'report_layout' => [
+                    'kop_alignment' => 'left',
+                    'show_logo' => false,
+                    'logo_size' => 40,
+                    'kop_title_spacing' => 10,
+                    'title_identity_spacing' => 8,
+                    'identity_style' => 'one_column_full',
+                    'identity_font_size' => 11,
+                    'identity_table_spacing' => 12,
+                    'labels' => [
+                        'student_name' => 'Peserta Didik',
+                        'student_number' => 'Nomor Induk',
+                        'class' => 'Rombel',
+                        'semester' => 'Periode Belajar',
+                    ],
+                ],
+            ],
+            'pdfMode' => false,
+        ])->render();
+
+        $this->assertStringContainsString('identity--asts-one_column_full', $html);
+        $this->assertStringContainsString('letterhead--left', $html);
+        $this->assertStringContainsString('--letterhead-logo-size: 40px;', $html);
+        $this->assertStringContainsString('--kop-title-spacing: 10pt; --title-identity-spacing: 8pt;', $html);
+        $this->assertStringContainsString('--identity-font-size: 11pt; --identity-table-spacing: 12pt;', $html);
+        foreach (['Yayasan Uji', 'SMA Konfigurasi', 'Jalan Pengujian 1', 'WA 0812 | uji@example.test | sekolah.test'] as $value) {
+            $this->assertStringContainsString($value, $html);
+        }
+        foreach (['Peserta Didik', 'Nomor Induk', 'Rombel', 'Periode Belajar'] as $label) {
+            $this->assertStringContainsString($label, $html);
+        }
+    }
+
     public function test_all_report_views_use_sumative_titles_two_page_structure_and_school_footer(): void
     {
         $snapshot = [
@@ -811,7 +878,6 @@ class AssessmentReportingTest extends TestCase
             $this->assertStringContainsString('font-size: 13pt', $html);
             $this->assertStringContainsString('font-size: 14pt', $html);
             $this->assertStringContainsString('font-size: 10pt', $html);
-            $this->assertStringNotContainsString('font-size: 9', $html);
             $this->assertStringNotContainsString('font-size: 9.4px', $html);
             $this->assertStringNotContainsString('font-size: 9.5px', $html);
             $this->assertStringNotContainsString('Dokumen snapshot', $html);
@@ -1429,7 +1495,8 @@ class AssessmentReportingTest extends TestCase
         $this->assertStringContainsString('.identity--asts .identity__value--asts-primary { width: 47%; }', $html);
         $this->assertStringContainsString('.identity--asts .identity__value--asts-secondary { width: 24%; }', $html);
         $this->assertStringContainsString('.identity--asts .identity__label, .identity--asts .identity__separator--asts, .identity--asts .identity__value--asts-nowrap { line-height: 1.2; vertical-align: middle; }', $html);
-        $this->assertStringContainsString('.identity--asts .identity__value--asts-nowrap { overflow: hidden; font-size: 9pt; text-overflow: ellipsis; white-space: nowrap; }', $html);
+        $this->assertStringContainsString('.identity--asts td { font-size: var(--identity-font-size, 9pt); }', $html);
+        $this->assertStringContainsString('.identity--asts .identity__value--asts-nowrap { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }', $html);
         $this->assertStringContainsString('SMA Template Test', $html);
     }
 

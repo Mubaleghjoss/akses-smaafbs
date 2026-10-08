@@ -164,6 +164,22 @@ class InstallAssessmentDefaults extends Command
             'principal_signature_label' => 'Kepala Sekolah',
             'show_predicate' => true,
             'show_description' => true,
+            'report_layout' => [
+                'kop_alignment' => 'center',
+                'show_logo' => true,
+                'logo_size' => 48,
+                'kop_title_spacing' => 7,
+                'title_identity_spacing' => 4,
+                'identity_style' => 'two_column_compact',
+                'identity_font_size' => 9,
+                'identity_table_spacing' => 3,
+                'labels' => [
+                    'student_name' => 'Nama Siswa',
+                    'student_number' => 'NIS/NISN',
+                    'class' => 'Kelas',
+                    'semester' => 'Semester',
+                ],
+            ],
         ];
 
         return [

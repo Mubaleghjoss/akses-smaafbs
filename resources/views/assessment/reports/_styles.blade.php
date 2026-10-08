@@ -8,9 +8,10 @@
     .report-footer { position: fixed; bottom: -8mm; left: 0; right: 0; color: #4b5563; font-size: 10pt; text-align: center; }
     .letterhead { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
     .letterhead td { vertical-align: middle; border: 0; }
-    .letterhead__logo { width: 62px; text-align: center; }
-    .letterhead__logo img { max-width: 52px; max-height: 52px; }
+    .letterhead__logo { width: calc(var(--letterhead-logo-size, 52px) + 10px); text-align: center; }
+    .letterhead__logo img { max-width: var(--letterhead-logo-size, 52px); max-height: var(--letterhead-logo-size, 52px); }
     .letterhead__school { text-align: center; }
+    .letterhead--left .letterhead__school { text-align: left; }
     .letterhead__school-name { margin: 0 0 1px; font-size: 14pt; font-weight: 700; }
     .letterhead__school-info { margin: 0; font-size: 12pt; }
     .letterhead-rule { margin: 0 0 7px; border: 0; border-top: 1.5px solid #111827; }
@@ -39,7 +40,15 @@
     .identity--asts .identity__label, .identity--asts .identity__separator--asts, .identity--asts .identity__value--asts-nowrap { line-height: 1.2; vertical-align: middle; }
     .identity--asts .identity__separator--asts { padding-left: 0; padding-right: 0; text-align: center; }
     .identity--asts .identity__spacer { width: 1%; padding: 0; }
-    .identity--asts .identity__value--asts-nowrap { overflow: hidden; font-size: 9pt; text-overflow: ellipsis; white-space: nowrap; }
+    .identity--asts { margin-bottom: var(--identity-table-spacing, 3pt); }
+    .identity--asts td { font-size: var(--identity-font-size, 9pt); }
+    .identity--asts .identity__value--asts-nowrap { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .identity--asts-one_column_full .identity__label { width: 150px; white-space: nowrap; }
+    .identity--asts-one_column_full .identity__separator { width: 12px; text-align: center; }
+    .identity--asts-two_column_wide_left .identity__col--asts-left-label { width: 18%; }
+    .identity--asts-two_column_wide_left .identity__col--asts-primary-value { width: 52%; }
+    .identity--asts-two_column_wide_left .identity__col--asts-right-label { width: 8%; }
+    .identity--asts-two_column_wide_left .identity__col--asts-secondary-value { width: 18%; }
     .scores, .summary-table { width: 100%; border-collapse: collapse; }
     .scores th, .scores td, .summary-table th, .summary-table td { padding: 3.5px 4.5px; border: 1px solid #4b5563; vertical-align: top; }
     .scores th { background: #e5e7eb; text-align: center; font-weight: 700; }
@@ -75,15 +84,17 @@
     .signature-identifier { min-height: 12px; }
 
     .letterhead--asts { margin-bottom: 2px; }
-    .letterhead--asts .letterhead__logo { width: 58px; }
-    .letterhead--asts .letterhead__logo img { max-width: 48px; max-height: 48px; }
+    .letterhead--asts .letterhead__logo { width: calc(var(--letterhead-logo-size, 48px) + 10px); }
+    .letterhead--asts .letterhead__logo img { max-width: var(--letterhead-logo-size, 48px); max-height: var(--letterhead-logo-size, 48px); }
+    .letterhead--asts-left .letterhead__school { text-align: left; }
+    .letterhead-rule--asts { margin-bottom: var(--kop-title-spacing, 7pt); }
     .letterhead__foundation { margin: 0; font-size: 14pt; font-weight: 700; }
     .letterhead--asts .letterhead__school-name { font-size: 14pt; }
-    .letterhead-rule--asts { border-top-width: 2.5px; margin-bottom: 7px; }
+    .letterhead-rule--asts { border-top-width: 2.5px; }
     /* Keep ASTS dense enough for its fixed two-page paper layout without changing other reports. */
     .report-page--asts-scores .report-title { font-size: 13pt; }
-    .report-page--asts-scores .report-subtitle { margin: 1px 0 4px; font-size: 12pt; }
-    .report-page--asts-scores .identity { margin-bottom: 4px; }
+    .report-page--asts-scores .report-subtitle { margin: 1px 0 var(--title-identity-spacing, 4pt); font-size: 12pt; }
+    .report-page--asts-scores .identity { margin-bottom: var(--identity-table-spacing, 3pt); }
     .report-page--asts-scores .identity td { padding-top: 1px; padding-bottom: 1px; }
     .report-page--asts-scores .scores th, .report-page--asts-scores .scores td { padding: 2.5px 4px; line-height: 1.18; }
     .asts-kktp-title { margin: 3px 0 2px; font-size: 12pt; font-weight: 700; }

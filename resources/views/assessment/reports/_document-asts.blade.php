@@ -12,6 +12,8 @@
     $className = (string) data_get($student, 'class_name', '');
     $studentNis = trim((string) data_get($student, 'nis', '')) ?: '-';
     $studentNisn = trim((string) data_get($student, 'nisn', '')) ?: '-';
+    $kopTitleSpacing = min(16, max(0, (float) data_get($templateSettings, 'report_layout.kop_title_spacing', 7)));
+    $titleIdentitySpacing = min(16, max(0, (float) data_get($templateSettings, 'report_layout.title_identity_spacing', 4)));
     $usesChoiceGroups = preg_match('/(?:^|\s)(?:XI|XII|11|12)(?:\s|$)/i', $className) === 1;
     $isChoiceSubject = static function (mixed $subject): bool {
         $group = strtolower(trim((string) data_get($subject, 'group_code', '').' '.data_get($subject, 'group_name', '')));
@@ -45,7 +47,7 @@
 <div class="report-footer">Dengan Teladan Menjadi Mulia &middot; Rapor ASTS SMA Al Furqon Boarding School&middot; Tahun Pelajaran {{ $academicYear }}</div>
 
 @php($letterhead = 'assessment.reports._asts-letterhead')
-<section class="report-page report-page--asts-scores">
+<section class="report-page report-page--asts-scores" style="--kop-title-spacing: {{ $kopTitleSpacing }}pt; --title-identity-spacing: {{ $titleIdentitySpacing }}pt;">
     @include($letterhead)
     <h1 class="report-title">LAPORAN HASIL ASESMEN SUMATIF TENGAH SEMESTER (ASTS)</h1>
     <p class="report-subtitle">Tahun Pelajaran {{ $academicYear }} &middot; Semester {{ data_get($period, 'semester', '-') }}</p>
@@ -65,7 +67,7 @@
 
 <div class="report-page-break"></div>
 
-<section class="report-page report-page--asts-summary">
+<section class="report-page report-page--asts-summary" style="--kop-title-spacing: {{ $kopTitleSpacing }}pt; --title-identity-spacing: {{ $titleIdentitySpacing }}pt;">
     @include($letterhead)
     <h1 class="report-title">LAPORAN HASIL ASESMEN SUMATIF TENGAH SEMESTER (ASTS)</h1>
     @include('assessment.reports._asts-identity', ['summary' => true])

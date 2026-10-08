@@ -95,10 +95,75 @@ class AssessmentReportTemplateResource extends Resource
         }
 
         $settings = is_array($data['settings'] ?? null) ? $data['settings'] : [];
+        $settings = static::normalizeReportHeaderSettings($settings);
         $settings = app(AssessmentReportLayout::class)->validateAndNormalize($settings);
         $data['settings'] = app(AssessmentReportWatermark::class)->optimizeSettings($settings);
 
         return $data;
+    }
+
+    /**
+     * Keep report-header changes within the approved printable range.
+     *
+     * @param  array<string, mixed>  $settings
+     * @return array<string, mixed>
+     */
+    private static function normalizeReportHeaderSettings(array $settings): array
+    {
+        $layout = (string) data_get($settings, 'report_layout.identity_style', 'two_column_compact');
+        $allowedLayouts = ['two_column_compact', 'one_column_full', 'two_column_wide_left'];
+        if (! in_array($layout, $allowedLayouts, true)) {
+            throw ValidationException::withMessages([
+                'data.settings.report_layout.identity_style' => 'Gaya identitas rapor tidak dikenal.',
+            ]);
+        }
+
+        foreach ([
+            'identity_font_size' => [9, 12],
+            'identity_table_spacing' => [0, 24],
+            'kop_title_spacing' => [0, 16],
+            'title_identity_spacing' => [0, 16],
+            'logo_size' => [32, 60],
+        ] as $field => [$min, $max]) {
+            $defaults = [
+                'identity_font_size' => 9,
+                'identity_table_spacing' => 3,
+                'kop_title_spacing' => 7,
+                'title_identity_spacing' => 4,
+                'logo_size' => 48,
+            ];
+            $value = data_get($settings, "report_layout.{$field}", $defaults[$field]);
+            if (! is_numeric($value) || (float) $value < $min || (float) $value > $max) {
+                throw ValidationException::withMessages([
+                    "data.settings.report_layout.{$field}" => "Nilai harus antara {$min} dan {$max}.",
+                ]);
+            }
+
+            data_set($settings, "report_layout.{$field}", (float) $value);
+        }
+
+        data_set($settings, 'report_layout.identity_style', $layout);
+        $kopAlignment = (string) data_get($settings, 'report_layout.kop_alignment', 'center');
+        if (! in_array($kopAlignment, ['center', 'left'], true)) {
+            throw ValidationException::withMessages([
+                'data.settings.report_layout.kop_alignment' => 'Perataan kop rapor tidak dikenal.',
+            ]);
+        }
+        data_set($settings, 'report_layout.kop_alignment', $kopAlignment);
+        data_set($settings, 'report_layout.show_logo', (bool) data_get($settings, 'report_layout.show_logo', true));
+
+        foreach (['student_name' => 'Nama Siswa', 'student_number' => 'NIS/NISN', 'class' => 'Kelas', 'semester' => 'Semester'] as $field => $default) {
+            $label = trim((string) data_get($settings, "report_layout.labels.{$field}", $default));
+            if ($label === '' || mb_strlen($label) > 60) {
+                throw ValidationException::withMessages([
+                    "data.settings.report_layout.labels.{$field}" => 'Label wajib diisi dan maksimal 60 karakter.',
+                ]);
+            }
+
+            data_set($settings, "report_layout.labels.{$field}", $label);
+        }
+
+        return $settings;
     }
 
     public static function identityIsComplete(ReportTemplate $template): bool
@@ -160,7 +225,8 @@ class AssessmentReportTemplateResource extends Resource
                             ? 'Template utama. Mengaktifkan template lain akan mengarsipkan template ini.'
                             : 'Draf/arsip. Simpan dan pratinjau dahulu, lalu gunakan aksi Jadikan Template Utama.'),
                 ]),
-            Section::make('Kop dan Judul')
+            Section::make('Pengaturan Kop & Layout Rapor')
+                ->description('Edit kop, judul, identitas, dan jarak layout di sini. NIS rapor diambil dari Data Siswa (NIPD); struktur tabel dan target dua halaman ASTS tetap dijaga.')
                 ->columns(['default' => 1, 'md' => 2])
                 ->schema([
                     Forms\Components\TextInput::make('settings.foundation_name')
@@ -181,9 +247,26 @@ class AssessmentReportTemplateResource extends Resource
                         ->maxLength(500)
                         ->columnSpanFull(),
                     Forms\Components\TextInput::make('settings.school_contact')
-                        ->label('Telepon Sekolah')
-                        ->tel()
-                        ->maxLength(50),
+                        ->label('Kontak/WA/Email/Web')
+                        ->maxLength(200)
+                        ->helperText('Tulis dalam satu baris, misalnya WA | email | website.'),
+                    Forms\Components\Select::make('settings.report_layout.kop_alignment')
+                        ->label('Perataan Kop')
+                        ->options(['center' => 'Tengah (standar)', 'left' => 'Kiri'])
+                        ->default('center')
+                        ->native(false),
+                    Forms\Components\Toggle::make('settings.report_layout.show_logo')
+                        ->label('Tampilkan Logo Sekolah')
+                        ->default(true)
+                        ->inline(false)
+                        ->helperText('Menggunakan logo sekolah yang sudah tersedia; unggah logo diatur dari profil sekolah.'),
+                    Forms\Components\TextInput::make('settings.report_layout.logo_size')
+                        ->label('Ukuran Logo Kop')
+                        ->numeric()
+                        ->minValue(32)
+                        ->maxValue(60)
+                        ->default(48)
+                        ->suffix('px'),
                     Forms\Components\TextInput::make('settings.score_label')
                         ->label('Istilah Nilai')
                         ->default('Nilai Akhir')
@@ -200,6 +283,78 @@ class AssessmentReportTemplateResource extends Resource
                         ->label('Tampilkan Kolom Capaian')
                         ->default(true)
                         ->inline(false),
+                ]),
+            Section::make('Jarak Kop, Judul, dan Identitas')
+                ->description('Atur ruang vertikal dengan batas aman. Judul, identitas, dan layout dapat disesuaikan di Template Rapor; NIS berasal dari Data Siswa NIPD.')
+                ->columns(['default' => 1, 'md' => 2])
+                ->schema([
+                    Forms\Components\TextInput::make('settings.report_layout.kop_title_spacing')
+                        ->label('Jarak kop ke judul')
+                        ->numeric()
+                        ->minValue(0)
+                        ->maxValue(16)
+                        ->step(0.5)
+                        ->default(7)
+                        ->suffix('pt'),
+                    Forms\Components\TextInput::make('settings.report_layout.title_identity_spacing')
+                        ->label('Jarak judul ke identitas')
+                        ->numeric()
+                        ->minValue(0)
+                        ->maxValue(16)
+                        ->step(0.5)
+                        ->default(4)
+                        ->suffix('pt'),
+                    Forms\Components\Select::make('settings.report_layout.identity_style')
+                        ->label('Susunan Identitas')
+                        ->options([
+                            'two_column_compact' => '2 kolom ringkas (standar)',
+                            'one_column_full' => '1 kolom penuh',
+                            'two_column_wide_left' => '2 kolom, sisi kiri lebih lebar',
+                        ])
+                        ->default('two_column_compact')
+                        ->native(false)
+                        ->helperText('Mengatur posisi blok identitas siswa sebelum tabel nilai.'),
+                    Forms\Components\TextInput::make('settings.report_layout.identity_font_size')
+                        ->label('Ukuran teks identitas (pt)')
+                        ->numeric()
+                        ->minValue(9)
+                        ->maxValue(12)
+                        ->step(0.5)
+                        ->default(9)
+                        ->suffix('pt')
+                        ->helperText('Standar saat ini: 9 pt.'),
+                    Forms\Components\TextInput::make('settings.report_layout.identity_table_spacing')
+                        ->label('Jarak identitas ke tabel nilai')
+                        ->numeric()
+                        ->minValue(0)
+                        ->maxValue(24)
+                        ->step(0.5)
+                        ->default(3)
+                        ->suffix('pt')
+                        ->helperText('Standar saat ini setara 3 pt; batasi agar rapor ASTS tetap dua halaman.'),
+                    Forms\Components\Placeholder::make('layout_scope')
+                        ->label('Cakupan')
+                        ->content('Berlaku pada area sebelum tabel nilai. Struktur tabel, kop, dan halaman tetap memakai layout resmi.'),
+                    Forms\Components\TextInput::make('settings.report_layout.labels.student_name')
+                        ->label('Label Nama Siswa')
+                        ->default('Nama Siswa')
+                        ->required()
+                        ->maxLength(60),
+                    Forms\Components\TextInput::make('settings.report_layout.labels.student_number')
+                        ->label('Label NIS/NISN')
+                        ->default('NIS/NISN')
+                        ->required()
+                        ->maxLength(60),
+                    Forms\Components\TextInput::make('settings.report_layout.labels.class')
+                        ->label('Label Kelas')
+                        ->default('Kelas')
+                        ->required()
+                        ->maxLength(60),
+                    Forms\Components\TextInput::make('settings.report_layout.labels.semester')
+                        ->label('Label Semester')
+                        ->default('Semester')
+                        ->required()
+                        ->maxLength(60),
                 ]),
             Section::make('Tanda Tangan')
                 ->columns(['default' => 1, 'md' => 2])
