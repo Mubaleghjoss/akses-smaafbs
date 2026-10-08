@@ -177,7 +177,7 @@ class AssessmentReportTemplateResource extends Resource
 
     public static function identityIsComplete(ReportTemplate $template): bool
     {
-        $settings = is_array($template->settings) ? $template->settings : [];
+        $settings = static::displaySettings($template);
 
         return filled(data_get($settings, 'school_name'))
             && filled(data_get($settings, 'principal_name'))
@@ -749,7 +749,7 @@ class AssessmentReportTemplateResource extends Resource
                         TextEntry::make('name')->label('Nama Template'),
                         TextEntry::make('code')->label('Kode'),
                         TextEntry::make('type')->label('Jenis')->badge()
-                            ->formatStateUsing(fn (mixed $state): string => $state instanceof AssessmentType ? $state->label() : strtoupper((string) $state)),
+                            ->formatStateUsing(fn (mixed $state): string => static::typeLabel($state)),
                         TextEntry::make('version')->label('Versi'),
                         IconEntry::make('is_active')->label('Template Utama')->boolean(),
                         TextEntry::make('change_status')->label('Status Perubahan')
@@ -786,19 +786,19 @@ class AssessmentReportTemplateResource extends Resource
                 Section::make('Identitas dan Tanda Tangan')
                     ->columns(['default' => 1, 'md' => 2])
                     ->schema([
-                        TextEntry::make('settings.school_name')->label('Nama Sekolah')->placeholder('-'),
-                        TextEntry::make('settings.school_address')->label('Alamat Sekolah')->placeholder('-'),
-                        TextEntry::make('settings.principal_name')->label('Kepala Sekolah')->placeholder('-'),
-                        TextEntry::make('settings.principal_identifier')->label('NIP/NIY')->placeholder('-'),
-                        TextEntry::make('settings.place')->label('Tempat Terbit')->placeholder('-'),
-                        TextEntry::make('settings.homeroom_title')->label('Sebutan Wali Kelas')->placeholder('-'),
+                        TextEntry::make('school_name')->label('Nama Sekolah')->state(fn (ReportTemplate $record): mixed => data_get(static::displaySettings($record), 'school_name'))->placeholder('-'),
+                        TextEntry::make('school_address')->label('Alamat Sekolah')->state(fn (ReportTemplate $record): mixed => data_get(static::displaySettings($record), 'school_address'))->placeholder('-'),
+                        TextEntry::make('principal_name')->label('Kepala Sekolah')->state(fn (ReportTemplate $record): mixed => data_get(static::displaySettings($record), 'principal_name'))->placeholder('-'),
+                        TextEntry::make('principal_identifier')->label('NIP/NIY')->state(fn (ReportTemplate $record): mixed => data_get(static::displaySettings($record), 'principal_identifier'))->placeholder('-'),
+                        TextEntry::make('place')->label('Tempat Terbit')->state(fn (ReportTemplate $record): mixed => data_get(static::displaySettings($record), 'place'))->placeholder('-'),
+                        TextEntry::make('homeroom_title')->label('Sebutan Wali Kelas')->state(fn (ReportTemplate $record): mixed => data_get(static::displaySettings($record), 'homeroom_title'))->placeholder('-'),
                     ]),
                 Section::make('Susunan dan Watermark')
                     ->columns(['default' => 1, 'md' => 2])
                     ->schema([
                         TextEntry::make('layout_summary')
                             ->label('Susunan Halaman')
-                            ->state(fn (ReportTemplate $record): string => collect(data_get($record->settings, 'layout.sections', []))
+                            ->state(fn (ReportTemplate $record): string => collect(static::layoutSections($record))
                                 ->filter(fn (mixed $section): bool => is_array($section) && (bool) ($section['enabled'] ?? true))
                                 ->sortBy([['page', 'asc'], ['sort_order', 'asc']])
                                 ->map(fn (array $section): string => 'Halaman '.($section['page'] ?? 1).' · '.(AssessmentReportLayout::sectionOptions()[$section['type'] ?? ''] ?? 'Bagian'))
@@ -806,10 +806,41 @@ class AssessmentReportTemplateResource extends Resource
                             ->listWithLineBreaks(),
                         TextEntry::make('watermark_summary')
                             ->label('Watermark')
-                            ->state(fn (ReportTemplate $record): string => data_get($record->settings, 'watermark_enabled')
-                                ? 'Aktif · '.data_get($record->settings, 'watermark_opacity', 10).'% · '.data_get($record->settings, 'watermark_position', 'center')
+                            ->state(fn (ReportTemplate $record): string => static::watermarkIsEnabled($record)
+                                ? 'Aktif · '.data_get(static::displaySettings($record), 'watermark_opacity', 10).'% · '.data_get(static::displaySettings($record), 'watermark_position', 'center')
                                 : 'Tidak aktif'),
                     ]),
             ]);
+    }
+
+    /** @return array<string, mixed> */
+    private static function displaySettings(ReportTemplate $template): array
+    {
+        return is_array($template->settings) ? $template->settings : [];
+    }
+
+    /** @return array<int, mixed> */
+    private static function layoutSections(ReportTemplate $template): array
+    {
+        $sections = data_get(static::displaySettings($template), 'layout.sections', []);
+
+        return is_array($sections) ? $sections : [];
+    }
+
+    private static function watermarkIsEnabled(ReportTemplate $template): bool
+    {
+        return filter_var(
+            data_get(static::displaySettings($template), 'watermark_enabled', false),
+            FILTER_VALIDATE_BOOLEAN,
+        );
+    }
+
+    private static function typeLabel(mixed $type): string
+    {
+        if ($type instanceof AssessmentType) {
+            return $type->label();
+        }
+
+        return is_scalar($type) ? strtoupper((string) $type) : '-';
     }
 }

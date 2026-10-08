@@ -27,12 +27,33 @@ class ReportTemplate extends Model
     protected function casts(): array
     {
         return [
-            'type' => AssessmentType::class,
             'version' => 'integer',
             'settings' => 'array',
             'is_active' => 'boolean',
             'effective_from' => 'date',
         ];
+    }
+
+    /**
+     * Legacy rows may contain a type outside the current enum. Keep those
+     * records readable in the admin so they can be corrected instead of 500ing.
+     */
+    public function getTypeAttribute(mixed $value): AssessmentType|string|null
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $type = strtolower(trim((string) $value));
+
+        return AssessmentType::tryFrom($type) ?? $type;
+    }
+
+    public function setTypeAttribute(mixed $value): void
+    {
+        $this->attributes['type'] = $value instanceof AssessmentType
+            ? $value->value
+            : strtolower(trim((string) $value));
     }
 
     public function snapshots(): HasMany

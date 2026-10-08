@@ -815,6 +815,41 @@ class AssessmentReportingTest extends TestCase
             ->assertSee(url('/admin/penilaian/pengaturan/template-rapor/'.$template->getRouteKey().'/preview'));
     }
 
+    public function test_template_view_page_tolerates_legacy_malformed_settings(): void
+    {
+        $template = ReportTemplate::query()->create([
+            'code' => 'LEGACY-MALFORMED',
+            'type' => AssessmentType::ASTS,
+            'name' => 'Template Legacy',
+            'version' => 0,
+            'view_path' => 'assessment.reports.asts',
+            'settings' => [
+                'layout' => ['sections' => 'legacy-section-list'],
+                'watermark_enabled' => 'false',
+                'watermark_opacity' => ['unexpected'],
+                'watermark_position' => null,
+                'school_name' => null,
+                'report_layout' => 'legacy-layout',
+            ],
+        ]);
+
+        // Bypass model casts to mirror legacy data that predates enum validation.
+        DB::table('assessment_report_templates')
+            ->whereKey($template->getKey())
+            ->update(['type' => 'historical']);
+
+        $this->actingAs(User::query()->findOrFail(99))
+            ->get(AssessmentReportTemplateResource::getUrl('view', ['record' => $template]))
+            ->assertOk()
+            ->assertSee('Layout standar satu halaman.')
+            ->assertSee('Tidak aktif');
+
+        Livewire::actingAs(User::query()->findOrFail(99))
+            ->test(ViewAssessmentReportTemplate::class, ['record' => $template->getKey()])
+            ->assertOk()
+            ->assertSee('Template Legacy');
+    }
+
     public function test_saved_template_preview_renders_custom_settings_with_sample_data_without_persisting_artifacts(): void
     {
         Storage::fake('local');
