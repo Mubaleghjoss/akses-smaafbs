@@ -54,24 +54,30 @@ class AssessmentReportController extends Controller
         AssessmentPeriod $assessmentPeriod,
         ReportTemplate $reportTemplate,
         AssessmentPeriodStudent $periodStudent,
+    ): Response {
+        $this->authorizeLivePreview($assessmentPeriod, $reportTemplate, $periodStudent);
+
+        return response()->view('assessment.reports.preview', [
+            'streamUrl' => route('assessment.reports.live-preview-stream', [$assessmentPeriod, $reportTemplate, $periodStudent]),
+            'downloadUrl' => route('assessment.reports.live-download', [$assessmentPeriod, $reportTemplate, $periodStudent]),
+            'filename' => $this->livePreviewFilename($assessmentPeriod, $periodStudent),
+        ], 200, [
+            'Content-Type' => 'text/html; charset=UTF-8',
+            'Cache-Control' => 'private, no-store, max-age=0, must-revalidate',
+            'X-Content-Type-Options' => 'nosniff',
+            'X-Robots-Tag' => 'noindex, nofollow, noarchive',
+        ]);
+    }
+
+    public function livePreviewStream(
+        AssessmentPeriod $assessmentPeriod,
+        ReportTemplate $reportTemplate,
+        AssessmentPeriodStudent $periodStudent,
         AssessmentReportRenderer $renderer,
         AssessmentReportRenderGate $renderGate,
         BuildAssessmentReportPreviewSnapshot $builder,
     ): Response {
-        $this->abortUnlessEnabled();
-        Gate::authorize('view', $assessmentPeriod);
-        Gate::authorize('view', $reportTemplate);
-        Gate::authorize('view', $periodStudent);
-        abort_unless((int) $periodStudent->assessment_period_id === (int) $assessmentPeriod->getKey(), 404);
-
-        $periodType = $assessmentPeriod->type instanceof \BackedEnum
-            ? $assessmentPeriod->type->value
-            : (string) $assessmentPeriod->type;
-        $templateType = $reportTemplate->type instanceof \BackedEnum
-            ? $reportTemplate->type->value
-            : (string) $reportTemplate->type;
-        abort_unless($periodType === $templateType, 422);
-
+        $this->authorizeLivePreview($assessmentPeriod, $reportTemplate, $periodStudent);
         $preview = $builder->build($assessmentPeriod, $reportTemplate, $periodStudent);
 
         try {
@@ -88,6 +94,19 @@ class AssessmentReportController extends Controller
             'X-Content-Type-Options' => 'nosniff',
             'X-Robots-Tag' => 'noindex, nofollow, noarchive',
         ]);
+    }
+
+    private function authorizeLivePreview(
+        AssessmentPeriod $assessmentPeriod,
+        ReportTemplate $reportTemplate,
+        AssessmentPeriodStudent $periodStudent,
+    ): void {
+        $this->abortUnlessEnabled();
+        Gate::authorize('view', $assessmentPeriod);
+        Gate::authorize('view', $reportTemplate);
+        Gate::authorize('view', $periodStudent);
+        abort_unless((int) $periodStudent->assessment_period_id === (int) $assessmentPeriod->getKey(), 404);
+        $this->abortUnlessMatchingTemplate($assessmentPeriod, $reportTemplate);
     }
 
     public function liveDownload(

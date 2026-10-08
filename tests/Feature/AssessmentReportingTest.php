@@ -1579,12 +1579,18 @@ class AssessmentReportingTest extends TestCase
             ->assertSeeHtml('assessment-report-card');
 
         $previewResponse = $this->get($previewUrl);
-        $previewResponse->assertOk()->assertHeader('Content-Type', 'application/pdf');
-        $previewDisposition = (string) $previewResponse->headers->get('Content-Disposition');
-        $this->assertStringContainsString('inline', $previewDisposition);
-        $this->assertStringNotContainsString('attachment', $previewDisposition);
-        $this->assertStringContainsString('Preview - Siswa 1 - XI 1 - Rapor ASTS.pdf', $previewDisposition);
-        $this->assertStringContainsString('no-store', (string) $previewResponse->headers->get('Cache-Control'));
+        $previewResponse->assertOk()->assertHeader('Content-Type', 'text/html; charset=UTF-8');
+        $previewResponse->assertSee(route('assessment.reports.live-preview-stream', [$period, $template, $students[0]]), false)
+            ->assertSee('Download PDF')
+            ->assertSee('<iframe', false);
+
+        $streamResponse = $this->get(route('assessment.reports.live-preview-stream', [$period, $template, $students[0]]));
+        $streamResponse->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $streamDisposition = (string) $streamResponse->headers->get('Content-Disposition');
+        $this->assertStringContainsString('inline', $streamDisposition);
+        $this->assertStringNotContainsString('attachment', $streamDisposition);
+        $this->assertStringContainsString('Preview - Siswa 1 - XI 1 - Rapor ASTS.pdf', $streamDisposition);
+        $this->assertStringContainsString('no-store', (string) $streamResponse->headers->get('Cache-Control'));
 
         $downloadResponse = $this->get($downloadUrl);
         $downloadResponse->assertOk()->assertHeader('Content-Type', 'application/pdf');
@@ -1958,8 +1964,16 @@ class AssessmentReportingTest extends TestCase
             'periodStudent' => $students[0],
         ]));
 
-        $response->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $response->assertOk()->assertHeader('Content-Type', 'text/html; charset=UTF-8');
         $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
+
+        $streamResponse = $this->get(route('assessment.reports.live-preview-stream', [
+            'assessmentPeriod' => $period,
+            'reportTemplate' => $template,
+            'periodStudent' => $students[0],
+        ]));
+        $streamResponse->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringContainsString('no-store', (string) $streamResponse->headers->get('Cache-Control'));
         $this->assertDatabaseCount('assessment_report_snapshots', 0);
         $this->assertDatabaseCount('jobs', 0);
     }
@@ -2040,9 +2054,13 @@ class AssessmentReportingTest extends TestCase
         $this->assertStringContainsString('<td class="scores__score"></td><td class="scores__predicate"></td>', $rendered);
 
         $this->actingAs(User::query()->findOrFail(99));
-        $this->get(route('assessment.reports.live-preview', [$period, $template, $students[0]]))
-            ->assertOk()
-            ->assertHeader('Content-Type', 'application/pdf');
+        $previewResponse = $this->get(route('assessment.reports.live-preview', [$period, $template, $students[0]]));
+        $previewResponse->assertOk()->assertHeader('Content-Type', 'text/html; charset=UTF-8');
+        $this->assertStringContainsString('no-store', (string) $previewResponse->headers->get('Cache-Control'));
+
+        $streamResponse = $this->get(route('assessment.reports.live-preview-stream', [$period, $template, $students[0]]));
+        $streamResponse->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringContainsString('no-store', (string) $streamResponse->headers->get('Cache-Control'));
         Queue::assertNothingPushed();
         $this->assertDatabaseCount('assessment_report_snapshots', 1);
     }
