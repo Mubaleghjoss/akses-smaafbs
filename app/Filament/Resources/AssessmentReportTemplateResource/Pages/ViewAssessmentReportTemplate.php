@@ -15,6 +15,25 @@ class ViewAssessmentReportTemplate extends ViewRecord
 {
     protected static string $resource = AssessmentReportTemplateResource::class;
 
+    protected function templatePreviewUrl(): ?string
+    {
+        try {
+            if (! isset($this->record)) {
+                return null;
+            }
+
+            $routeKey = $this->record->getRouteKey();
+
+            if ($routeKey === null || $routeKey === '') {
+                return null;
+            }
+
+            return url('/admin/penilaian/pengaturan/template-rapor/'.rawurlencode((string) $routeKey).'/preview');
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     protected function getHeaderActions(): array
     {
         return [
@@ -22,7 +41,8 @@ class ViewAssessmentReportTemplate extends ViewRecord
                 ->label('Pratinjau Template')
                 ->icon('heroicon-o-eye')
                 ->color('info')
-                ->url(fn (): string => route('assessment.reports.template-preview', $this->record))
+                ->url(fn (): ?string => $this->templatePreviewUrl())
+                ->visible(fn (): bool => $this->templatePreviewUrl() !== null)
                 ->openUrlInNewTab()
                 ->tooltip('Membuka data contoh tanpa memerlukan periode yang diterbitkan.'),
             EditAction::make()

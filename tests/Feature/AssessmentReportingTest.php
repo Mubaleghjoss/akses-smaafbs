@@ -12,6 +12,7 @@ use App\Enums\Assessment\ReportGenerationStatus;
 use App\Filament\Pages\Assessment\AstsReports;
 use App\Filament\Resources\AssessmentReportTemplateResource;
 use App\Filament\Resources\AssessmentReportTemplateResource\Pages\EditAssessmentReportTemplate;
+use App\Filament\Resources\AssessmentReportTemplateResource\Pages\ViewAssessmentReportTemplate;
 use App\Jobs\Assessment\GenerateClassReportPipeline;
 use App\Jobs\Assessment\GenerateClassReports;
 use App\Jobs\Assessment\GenerateClassReportsJob;
@@ -794,7 +795,24 @@ class AssessmentReportingTest extends TestCase
         Livewire::actingAs(User::query()->findOrFail(99))
             ->test(EditAssessmentReportTemplate::class, ['record' => $template->getKey()])
             ->assertSee('Pratinjau Template')
-            ->assertSee(route('assessment.reports.template-preview', $template));
+            ->assertSee(url('/admin/penilaian/pengaturan/template-rapor/'.$template->getRouteKey().'/preview'));
+    }
+
+    public function test_template_view_page_exposes_the_saved_template_preview_action_with_literal_url(): void
+    {
+        $template = ReportTemplate::query()->create([
+            'code' => 'PREVIEW-VIEW-ACTION',
+            'type' => AssessmentType::ASTS,
+            'name' => 'Template Pratinjau Tampilan',
+            'version' => 1,
+            'view_path' => 'assessment.reports.asts',
+            'settings' => [],
+        ]);
+
+        Livewire::actingAs(User::query()->findOrFail(99))
+            ->test(ViewAssessmentReportTemplate::class, ['record' => $template->getKey()])
+            ->assertSee('Pratinjau Template')
+            ->assertSee(url('/admin/penilaian/pengaturan/template-rapor/'.$template->getRouteKey().'/preview'));
     }
 
     public function test_saved_template_preview_renders_custom_settings_with_sample_data_without_persisting_artifacts(): void

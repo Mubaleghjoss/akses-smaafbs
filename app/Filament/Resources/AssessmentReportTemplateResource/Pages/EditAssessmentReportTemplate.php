@@ -36,7 +36,8 @@ class EditAssessmentReportTemplate extends EditRecord
                 ->label('Pratinjau Template')
                 ->icon('heroicon-o-eye')
                 ->color('info')
-                ->url(fn (): string => route('assessment.reports.template-preview', $this->record))
+                ->url(fn (): ?string => $this->templatePreviewUrl())
+                ->visible(fn (): bool => $this->templatePreviewUrl() !== null)
                 ->openUrlInNewTab()
                 ->tooltip('Menampilkan pengaturan yang sudah disimpan dengan data contoh; simpan perubahan terlebih dahulu.'),
             Actions\DeleteAction::make()
@@ -51,6 +52,25 @@ class EditAssessmentReportTemplate extends EditRecord
                     abort_unless(AssessmentReportTemplateResource::canDelete($template), 403);
                 }),
         ];
+    }
+
+    protected function templatePreviewUrl(): ?string
+    {
+        try {
+            if (! isset($this->record)) {
+                return null;
+            }
+
+            $routeKey = $this->record->getRouteKey();
+
+            if ($routeKey === null || $routeKey === '') {
+                return null;
+            }
+
+            return url('/admin/penilaian/pengaturan/template-rapor/'.rawurlencode((string) $routeKey).'/preview');
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     protected function handleRecordUpdate(Model $record, array $data): Model
