@@ -47,12 +47,14 @@
                         </label>
                         @if ($this->classZipUrl())
                             <x-filament::button tag="a" href="{{ $this->classZipUrl() }}" color="primary" icon="heroicon-o-archive-box-arrow-down">Download ZIP Kelas</x-filament::button>
+                            <x-filament::button tag="a" href="{{ $this->classDocxZipUrl() }}" color="gray" icon="heroicon-o-document-arrow-down">Download MS Word Kelas (ZIP)</x-filament::button>
                         @endif
                     </div>
                     @if ($latestShareUrl)
-                        <div class="assessment-report-inline-note" role="status">
-                            Tautan orang tua (salin dan kirim via WhatsApp):
+                        <div x-data="{ copied:false }" class="assessment-report-inline-note" role="status" data-share-copy-result>
+                            Tautan orang tua:
                             <a href="{{ $latestShareUrl }}" target="_blank" rel="noopener" class="font-semibold underline">{{ $latestShareUrl }}</a>
+                            <x-filament::button size="xs" color="success" x-on:click="navigator.clipboard.writeText(@js($latestShareUrl)); copied=true" x-text="copied ? 'Tersalin' : 'Salin untuk WhatsApp'">Salin untuk WhatsApp</x-filament::button>
                         </div>
                     @endif
                     <div class="assessment-report-student-list">
@@ -62,6 +64,7 @@
                                 <div class="assessment-report-student-actions">
                                     <x-filament::button tag="a" href="{{ $row['preview_url'] }}" target="_blank" size="sm" color="gray" icon="heroicon-o-eye">Preview</x-filament::button>
                                     <x-filament::button tag="a" href="{{ $row['download_url'] }}" size="sm" color="primary" icon="heroicon-o-arrow-down-tray">Download</x-filament::button>
+                                    <x-filament::button tag="a" href="{{ $row['docx_url'] }}" size="sm" color="gray" icon="heroicon-o-document-arrow-down">Download MS Word</x-filament::button>
                                     @if ($this->canShareReports())
                                         <x-filament::button wire:click="issueParentShareLink({{ $row['id'] }})" wire:loading.attr="disabled" size="sm" color="success" icon="heroicon-o-share">Share Orang Tua</x-filament::button>
                                     @endif
@@ -91,7 +94,7 @@
                         @if ($previewClassId)
                             <x-filament::button color="gray" x-on:click="$dispatch('open-modal', { id: 'assessment-class-preview-modal' })" icon="heroicon-o-rectangle-stack">Preview Rapor Kelas Saya</x-filament::button>
                             @if ($this->classZipUrl())
-                                <x-filament::button tag="a" href="{{ $this->classZipUrl() }}" color="primary" icon="heroicon-o-archive-box-arrow-down">Download ZIP Rapor Kelas Saya</x-filament::button>
+                                <x-filament::button tag="a" href="{{ $this->classZipUrl() }}" color="primary" icon="heroicon-o-archive-box-arrow-down">Download ZIP Kelas Saya</x-filament::button>
                             @endif
                         @else
                             <span class="assessment-report-inline-note">Belum ada kelas wali yang dapat dipilih pada periode ini.</span>
@@ -224,7 +227,7 @@
                     @if ($previewClassId)
                         <x-filament::button color="gray" x-on:click="$dispatch('open-modal', { id: 'assessment-class-preview-modal' })" icon="heroicon-o-rectangle-stack">Preview Semua Rapor Kelas Ini</x-filament::button>
                         @if ($this->classZipUrl())
-                            <x-filament::button tag="a" href="{{ $this->classZipUrl() }}" color="primary" icon="heroicon-o-archive-box-arrow-down">Download ZIP Rapor Kelas Ini</x-filament::button>
+                            <x-filament::button tag="a" href="{{ $this->classZipUrl() }}" color="primary" icon="heroicon-o-archive-box-arrow-down">Download ZIP Kelas Ini</x-filament::button>
                         @endif
                     @endif
                     <label><span>Siswa</span>

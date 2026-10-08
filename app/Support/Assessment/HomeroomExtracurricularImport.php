@@ -18,7 +18,7 @@ final class HomeroomExtracurricularImport
         }
 
         $headers = array_map(fn ($value): string => strtolower(trim((string) $value)), array_shift($rows));
-        $required = ['id_siswa_periode', 'nisn', 'nama_siswa', 'kelas', 'nama_ekskul', 'predikat', 'catatan'];
+        $required = ['id_siswa_periode', 'nisn', 'nama_siswa', 'kelas', 'sakit', 'izin', 'alpa', 'nama_ekskul', 'predikat', 'catatan'];
         if ($headers !== $required) {
             throw new HomeroomExtracurricularImportException(['Header template tidak sesuai. Unduh template kelas ini kembali lalu isi tanpa mengubah header.']);
         }
@@ -29,21 +29,12 @@ final class HomeroomExtracurricularImport
         $byId = $students->keyBy('id');
         $byNisn = $students->filter(fn ($student) => filled($student->nisn_snapshot))->keyBy('nisn_snapshot');
         $byNameAndClass = $students->groupBy(fn ($student): string => mb_strtolower(trim((string) $student->student_name_snapshot)).'|'.mb_strtolower(trim((string) $student->rombel_name_snapshot)));
-        $itemsByStudent = [];
+        $updatesByStudent = [];
         $errors = [];
 
         foreach ($rows as $offset => $values) {
             $rowNumber = $offset + 2;
-            $row = array_combine($required, array_pad(array_slice(array_values($values), 0, 7), 7, ''));
-            $name = trim((string) $row['nama_ekskul']);
-            $predicate = strtoupper(trim((string) $row['predikat']));
-            $note = trim((string) $row['catatan']);
-            if ($name === '' && $predicate === '' && $note === '') continue;
-            if ($name === '' || ! in_array($predicate, ['A', 'B', 'C', 'D'], true)) {
-                $errors[] = "Baris {$rowNumber}: nama ekstrakurikuler wajib diisi dan predikat harus A, B, C, atau D.";
-                continue;
-            }
-
+            $row = array_combine($required, array_pad(array_slice(array_values($values), 0, 10), 10, ''));
             $student = filled($row['id_siswa_periode']) ? $byId->get((int) $row['id_siswa_periode']) : null;
             if (! $student && filled($row['nisn'])) $student = $byNisn->get(trim((string) $row['nisn']));
             if (! $student && filled($row['nama_siswa']) && filled($row['kelas'])) {
@@ -58,22 +49,54 @@ final class HomeroomExtracurricularImport
                 $errors[] = "Baris {$rowNumber}: nama siswa tidak cocok dengan data kelas.";
                 continue;
             }
-            $itemsByStudent[$student->getKey()][] = array_filter([
+
+            $attendance = [];
+            foreach (['sakit' => 'sick_days', 'izin' => 'permission_days', 'alpa' => 'absent_days'] as $column => $field) {
+                $rawValue = $row[$column];
+                $value = trim((string) $rawValue);
+                $isWholeNumber = $value !== '' && is_numeric($value)
+                    && is_finite((float) $value)
+                    && (float) $value === (float) (int) $value;
+                if ($value !== '' && (! $isWholeNumber || (int) $value < 0 || (int) $value > 366)) {
+                    $errors[] = "Baris {$rowNumber}: {$column} harus berupa angka bulat antara 0 sampai 366.";
+                    continue 2;
+                }
+                $attendance[$field] = $value === '' ? 0 : (int) $value;
+            }
+            $updatesByStudent[$student->getKey()] ??= ['attendance' => $attendance, 'items' => []];
+            if ($updatesByStudent[$student->getKey()]['attendance'] !== $attendance) {
+                $errors[] = "Baris {$rowNumber}: data kehadiran siswa yang sama harus konsisten.";
+                continue;
+            }
+
+            $name = trim((string) $row['nama_ekskul']);
+            $predicate = strtoupper(trim((string) $row['predikat']));
+            $note = trim((string) $row['catatan']);
+            if ($name === '' && $predicate === '' && $note === '') continue;
+            if ($name === '' || ! in_array($predicate, ['A', 'B', 'C', 'D'], true)) {
+                $errors[] = "Baris {$rowNumber}: nama ekstrakurikuler wajib diisi dan predikat harus A, B, C, atau D.";
+                continue;
+            }
+            $updatesByStudent[$student->getKey()]['items'][] = array_filter([
                 'name' => $name, 'description' => $predicate, 'note' => $note !== '' ? $note : null,
             ], fn ($value) => $value !== null);
         }
         if ($errors) throw new HomeroomExtracurricularImportException($errors);
 
-        DB::transaction(function () use ($homeroom, $itemsByStudent, $actorId): void {
-            foreach ($itemsByStudent as $studentId => $items) {
+        DB::transaction(function () use ($homeroom, $updatesByStudent, $actorId): void {
+            foreach ($updatesByStudent as $studentId => $update) {
                 HomeroomReport::query()->updateOrCreate([
                     'assessment_period_id' => $homeroom->assessment_period_id,
                     'assessment_period_student_id' => $studentId,
-                ], ['extracurricular_data' => $items, 'updated_by' => $actorId]);
+                ], [
+                    ...$update['attendance'],
+                    'extracurricular_data' => $update['items'],
+                    'updated_by' => $actorId,
+                ]);
             }
         });
 
-        return ['students_updated' => count($itemsByStudent), 'items_imported' => array_sum(array_map('count', $itemsByStudent))];
+        return ['students_updated' => count($updatesByStudent), 'items_imported' => array_sum(array_map(fn (array $update): int => count($update['items']), $updatesByStudent))];
     }
 }
 

@@ -10,6 +10,7 @@ use App\Models\Assessment\AssessmentPeriodStudent;
 use App\Models\Assessment\ReportSnapshot;
 use App\Models\Assessment\ReportTemplate;
 use App\Exceptions\AssessmentReportRenderBusy;
+use App\Support\Assessment\Reporting\AssessmentReportDocxRenderer;
 use App\Support\Assessment\Reporting\AssessmentReportRenderer;
 use App\Support\Assessment\Reporting\AssessmentReportRenderGate;
 use App\Support\Assessment\Reporting\AssessmentReportShareService;
@@ -139,6 +140,22 @@ class AssessmentReportController extends Controller
         return response($contents, 200, $this->downloadHeaders() + [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="'.$this->liveReportFilename($assessmentPeriod, $periodStudent).'"',
+        ]);
+    }
+
+    public function liveDownloadDocx(
+        AssessmentPeriod $assessmentPeriod,
+        ReportTemplate $reportTemplate,
+        AssessmentPeriodStudent $periodStudent,
+        AssessmentReportDocxRenderer $renderer,
+        BuildAssessmentReportPreviewSnapshot $builder,
+    ): Response {
+        $this->authorizeLivePreview($assessmentPeriod, $reportTemplate, $periodStudent);
+        $contents = $renderer->render($builder->build($assessmentPeriod, $reportTemplate, $periodStudent));
+
+        return response($contents, 200, $this->downloadHeaders() + [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'Content-Disposition' => 'attachment; filename="'.$this->liveReportDocxFilename($assessmentPeriod, $periodStudent).'"',
         ]);
     }
 
@@ -319,6 +336,45 @@ class AssessmentReportController extends Controller
         ])->deleteFileAfterSend(true);
     }
 
+    public function downloadClassDocxZip(
+        AssessmentPeriod $assessmentPeriod,
+        ReportTemplate $reportTemplate,
+        AssessmentPeriodRombel $periodRombel,
+        AssessmentReportDocxRenderer $renderer,
+        BuildAssessmentReportPreviewSnapshot $builder,
+    ): BinaryFileResponse|Response {
+        $this->abortUnlessEnabled();
+        Gate::authorize('view', $assessmentPeriod);
+        Gate::authorize('view', $reportTemplate);
+        Gate::authorize('view', $periodRombel);
+        abort_unless((int) $periodRombel->assessment_period_id === (int) $assessmentPeriod->getKey(), 404);
+        $this->abortUnlessMatchingTemplate($assessmentPeriod, $reportTemplate);
+        abort_unless(class_exists(ZipArchive::class), Response::HTTP_INTERNAL_SERVER_ERROR, 'Ekstensi ZIP PHP belum aktif.');
+
+        $students = AssessmentPeriodStudent::query()->where('assessment_period_id', $assessmentPeriod->getKey())
+            ->where('assessment_period_rombel_id', $periodRombel->getKey())->eligibleForAssessment()
+            ->orderBy('student_name_snapshot')->get();
+        abort_if($students->isEmpty(), 404, 'Tidak ada siswa aktif pada kelas ini.');
+        foreach ($students as $student) Gate::authorize('view', $student);
+
+        $zipPath = tempnam(storage_path('app'), 'rapor-word-kelas-');
+        abort_if($zipPath === false, Response::HTTP_INTERNAL_SERVER_ERROR, 'Tidak bisa membuat file ZIP sementara.');
+        try {
+            $zip = new ZipArchive();
+            abort_if($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true, Response::HTTP_INTERNAL_SERVER_ERROR, 'Tidak bisa membuat file ZIP rapor Word.');
+            $usedNames = [];
+            foreach ($students as $student) {
+                $zip->addFromString($this->uniqueZipEntryName((string) $student->student_name_snapshot, $usedNames, 'docx'), $renderer->render($builder->build($assessmentPeriod, $reportTemplate, $student)));
+            }
+            $zip->close();
+        } catch (\Throwable $exception) {
+            @unlink($zipPath);
+            throw $exception;
+        }
+
+        return response()->download($zipPath, $this->classDocxZipFilename($assessmentPeriod, $periodRombel), ['Content-Type' => 'application/zip', ...$this->downloadHeaders()])->deleteFileAfterSend(true);
+    }
+
     public function sharedLanding(
         string $token,
         AssessmentReportShareService $shares,
@@ -429,14 +485,14 @@ class AssessmentReportController extends Controller
     }
 
     /** @param array<string, true> $usedNames */
-    private function uniqueZipEntryName(string $studentName, array &$usedNames): string
+    private function uniqueZipEntryName(string $studentName, array &$usedNames, string $extension = 'pdf'): string
     {
         $base = Str::slug($studentName) ?: 'siswa';
-        $filename = $base.'.pdf';
+        $filename = $base.'.'.$extension;
         $suffix = 2;
 
         while (isset($usedNames[$filename])) {
-            $filename = $base.'-'.$suffix.'.pdf';
+            $filename = $base.'-'.$suffix.'.'.$extension;
             $suffix++;
         }
 
@@ -448,6 +504,18 @@ class AssessmentReportController extends Controller
     private function livePreviewFilename(AssessmentPeriod $period, AssessmentPeriodStudent $student): string
     {
         return 'Preview - '.$this->liveReportFilename($period, $student);
+    }
+
+    private function liveReportDocxFilename(AssessmentPeriod $period, AssessmentPeriodStudent $student): string
+    {
+        return str_replace('.pdf', '.docx', $this->liveReportFilename($period, $student));
+    }
+
+    private function classDocxZipFilename(AssessmentPeriod $period, AssessmentPeriodRombel $rombel): string
+    {
+        $type = $period->type instanceof \BackedEnum ? $period->type->value : (string) $period->type;
+
+        return 'Rapor Word - '.$this->safeFilenamePart((string) $rombel->rombel_name_snapshot, 'Kelas').' - '.strtoupper($type).'.zip';
     }
 
     private function liveReportFilename(AssessmentPeriod $period, AssessmentPeriodStudent $student): string

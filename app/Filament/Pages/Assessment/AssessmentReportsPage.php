@@ -327,9 +327,19 @@ abstract class AssessmentReportsPage extends AssessmentPage
 
     public function classZipUrl(): ?string
     {
+        return $this->classExportUrl('assessment.reports.class.zip');
+    }
+
+    public function classDocxZipUrl(): ?string
+    {
+        return $this->classExportUrl('assessment.reports.class.docx-zip');
+    }
+
+    private function classExportUrl(string $route): ?string
+    {
         return $this->periodId && $this->templateId && $this->previewClassId
             && array_key_exists($this->previewClassId, $this->getClassOptions())
-            ? route('assessment.reports.class.zip', [
+            ? route($route, [
                 'assessmentPeriod' => $this->periodId,
                 'reportTemplate' => $this->templateId,
                 'periodRombel' => $this->previewClassId,
@@ -371,6 +381,11 @@ abstract class AssessmentReportsPage extends AssessmentPage
                     'periodStudent' => $student->getKey(),
                 ]),
                 'download_url' => route('assessment.reports.live-download', [
+                    'assessmentPeriod' => $this->periodId,
+                    'reportTemplate' => $this->templateId,
+                    'periodStudent' => $student->getKey(),
+                ]),
+                'docx_url' => route('assessment.reports.live-download-docx', [
                     'assessmentPeriod' => $this->periodId,
                     'reportTemplate' => $this->templateId,
                     'periodStudent' => $student->getKey(),

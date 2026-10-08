@@ -130,7 +130,7 @@ class AssessmentExtracurricularWorkflowTest extends TestCase
         unlink($path);
     }
 
-    public function test_homeroom_import_supports_multiple_extracurriculars_without_changing_attendance(): void
+    public function test_homeroom_import_overwrites_attendance_and_extracurriculars_only_for_represented_students(): void
     {
         $homeroom = AssessmentPeriodHomeroom::query()->create([
             'assessment_period_id' => $this->period->id,
@@ -142,7 +142,7 @@ class AssessmentExtracurricularWorkflowTest extends TestCase
             'sick_days' => 2, 'permission_days' => 1, 'absent_days' => 3,
         ]);
         $template = (new HomeroomExtracurricularTemplateExport($homeroom->load('period')))->sheets()[0]->array();
-        $this->assertSame(['id_siswa_periode', 'nisn', 'nama_siswa', 'kelas', 'nama_ekskul', 'predikat', 'catatan'], $template[0]);
+        $this->assertSame(['id_siswa_periode', 'nisn', 'nama_siswa', 'kelas', 'sakit', 'izin', 'alpa', 'nama_ekskul', 'predikat', 'catatan'], $template[0]);
         $this->assertSame($this->student->id, $template[1][0]);
         $this->actingAs($this->admin)
             ->get(route('admin.assessment.asts.homeroom.extracurricular-template', ['assessmentPeriod' => $this->period, 'homeroom' => $homeroom]))
@@ -150,14 +150,16 @@ class AssessmentExtracurricularWorkflowTest extends TestCase
             ->assertHeader('content-disposition', "attachment; filename=asts-template-ekskul-{$this->period->id}-{$homeroom->id}.xlsx");
 
         $path = $this->homeroomImportWorkbook([
-            [$this->student->id, '0012345678', 'Siswa Ekskul', 'X 1', 'Pramuka', 'A', 'Aktif'],
-            [$this->student->id, '0012345678', 'Siswa Ekskul', 'X 1', 'Futsal', 'B', ''],
+            [$this->student->id, '0012345678', 'Siswa Ekskul', 'X 1', 0, 4, 1, 'Pramuka', 'A', 'Aktif'],
+            [$this->student->id, '0012345678', 'Siswa Ekskul', 'X 1', 0, 4, 1, 'Futsal', 'B', ''],
         ]);
 
         $result = app(HomeroomExtracurricularImport::class)->import($homeroom, $path, $this->admin->id);
         $report = HomeroomReport::query()->firstOrFail();
         $this->assertSame(['students_updated' => 1, 'items_imported' => 2], $result);
-        $this->assertSame(2, $report->sick_days);
+        $this->assertSame(0, $report->sick_days);
+        $this->assertSame(4, $report->permission_days);
+        $this->assertSame(1, $report->absent_days);
         $this->assertSame(['Pramuka', 'Futsal'], collect($report->extracurricular_data)->pluck('name')->all());
         unlink($path);
     }
@@ -170,7 +172,7 @@ class AssessmentExtracurricularWorkflowTest extends TestCase
             'teacher_id' => 1, 'teacher_name_snapshot' => 'Wali', 'rombel_name_snapshot' => 'X 1',
         ]);
         $path = $this->homeroomImportWorkbook([
-            [$this->student->id, '0012345678', 'Siswa Ekskul', 'X 1', 'Pramuka', 'E', ''],
+            [$this->student->id, '0012345678', 'Siswa Ekskul', 'X 1', 0, 0, 0, 'Pramuka', 'E', ''],
         ]);
 
         try {
@@ -188,7 +190,7 @@ class AssessmentExtracurricularWorkflowTest extends TestCase
         $path = tempnam(sys_get_temp_dir(), 'wali-ekskul-import-').'.xlsx';
         file_put_contents($path, Excel::raw(new class($rows) implements \Maatwebsite\Excel\Concerns\FromArray {
             public function __construct(private array $rows) {}
-            public function array(): array { return [['id_siswa_periode', 'nisn', 'nama_siswa', 'kelas', 'nama_ekskul', 'predikat', 'catatan'], ...$this->rows]; }
+            public function array(): array { return [['id_siswa_periode', 'nisn', 'nama_siswa', 'kelas', 'sakit', 'izin', 'alpa', 'nama_ekskul', 'predikat', 'catatan'], ...$this->rows]; }
         }, \Maatwebsite\Excel\Excel::XLSX));
 
         return $path;

@@ -113,11 +113,25 @@ Route::middleware('auth')->group(function (): void {
         ->name('assessment.reports.live-download');
 
     Route::get(
+        '/admin/penilaian/rapor/unduh-word/{assessmentPeriod}/{reportTemplate}/{periodStudent}',
+        [AssessmentReportController::class, 'liveDownloadDocx'],
+    )
+        ->middleware('throttle:10,1')
+        ->name('assessment.reports.live-download-docx');
+
+    Route::get(
         '/admin/penilaian/rapor/kelas/{assessmentPeriod}/{reportTemplate}/{periodRombel}/zip',
         [AssessmentReportController::class, 'downloadClassZip'],
     )
         ->middleware('throttle:2,1')
         ->name('assessment.reports.class.zip');
+
+    Route::get(
+        '/admin/penilaian/rapor/kelas/{assessmentPeriod}/{reportTemplate}/{periodRombel}/word-zip',
+        [AssessmentReportController::class, 'downloadClassDocxZip'],
+    )
+        ->middleware('throttle:2,1')
+        ->name('assessment.reports.class.docx-zip');
 
     Route::get(
         '/admin/penilaian/rapor/kelas/{classReportArtifact}/download',

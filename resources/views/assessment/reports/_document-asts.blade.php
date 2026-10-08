@@ -9,6 +9,7 @@
     $logo = trim((string) data_get($school, 'logo_data_uri'));
     $logoIsSafe = preg_match('#^data:image/(?:png|jpeg|webp);base64,#i', $logo) === 1;
     $academicYear = preg_replace('/^\s*Tahun\s+Pelajaran\s+/iu', '', (string) data_get($period, 'academic_year', 'Demo 2025/2026')) ?: 'Demo 2025/2026';
+    $semesterLabel = preg_replace('/^\s*Semester\s+/iu', '', (string) data_get($period, 'semester', '-')) ?: '-';
     $className = (string) data_get($student, 'class_name', '');
     $studentNis = trim((string) data_get($student, 'nis', '')) ?: '-';
     $studentNisn = trim((string) data_get($student, 'nisn', '')) ?: '-';
@@ -76,7 +77,8 @@
 <section class="report-page report-page--asts-summary" style="--kop-title-spacing: {{ $kopTitleSpacing }}pt; --title-identity-spacing: {{ $titleIdentitySpacing }}pt;">
     @include($letterhead)
     <h1 class="report-title">{{ $reportTitle }}</h1>
-    @include('assessment.reports._asts-identity', ['summary' => true])
+    <p class="report-subtitle">Tahun Pelajaran {{ $academicYear }}</p>
+    @include('assessment.reports._asts-identity')
     <table class="asts-summary-grid{{ empty($extracurricular) ? ' asts-summary-grid--attendance-only' : '' }}"><tr><td>
         <p class="section-title">Ketidakhadiran</p>
         <table class="summary-table summary-table--attendance"><tr><th>Sakit</th><td><span class="attendance-value">{!! ($days = (int) data_get($homeroom, 'sick_days', 0)) === 0 ? '-' : $days.'&nbsp;hari' !!}</span></td></tr><tr><th>Izin</th><td><span class="attendance-value">{!! ($days = (int) data_get($homeroom, 'permission_days', 0)) === 0 ? '-' : $days.'&nbsp;hari' !!}</span></td></tr><tr><th>Tanpa Keterangan</th><td><span class="attendance-value">{!! ($days = (int) data_get($homeroom, 'absent_days', 0)) === 0 ? '-' : $days.'&nbsp;hari' !!}</span></td></tr></table>

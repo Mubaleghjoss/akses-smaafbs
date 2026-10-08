@@ -15,7 +15,7 @@
         <tr><td class="identity__label">{{ $identityLabels['student_name'] }}</td><td class="identity__separator">:</td><td>{{ data_get($student, 'name', '-') }}</td></tr>
         <tr><td class="identity__label">{{ $identityLabels['student_number'] }}</td><td class="identity__separator">:</td><td>{{ $studentNis }} / {{ $studentNisn }}</td></tr>
         <tr><td class="identity__label">{{ $identityLabels['class'] }}</td><td class="identity__separator">:</td><td>{{ $className ?: '-' }}</td></tr>
-        <tr><td class="identity__label">{{ $identityLabels['semester'] }}</td><td class="identity__separator">:</td><td>{{ data_get($period, 'semester', '-') }}</td></tr>
+        <tr><td class="identity__label">{{ $identityLabels['semester'] }}</td><td class="identity__separator">:</td><td>{{ $semesterLabel ?? (preg_replace('/^\s*Semester\s+/iu', '', (string) data_get($period, 'semester', '-')) ?: '-') }}</td></tr>
     @else
         <colgroup>
             <col class="identity__col--asts-left-label">
@@ -42,7 +42,7 @@
             <td class="identity__spacer" aria-hidden="true"></td>
             <td class="identity__label identity__label--asts-secondary">{{ $identityLabels['semester'] }}</td>
             <td class="identity__separator identity__separator--asts identity__separator--asts-right">:</td>
-            <td class="identity__value--asts identity__value--asts-secondary identity__value--asts-nowrap">{{ data_get($period, 'semester', '-') }}</td>
+            <td class="identity__value--asts identity__value--asts-secondary identity__value--asts-nowrap">{{ $semesterLabel ?? (preg_replace('/^\s*Semester\s+/iu', '', (string) data_get($period, 'semester', '-')) ?: '-') }}</td>
         </tr>
     @endif
 </table>

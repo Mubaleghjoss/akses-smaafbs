@@ -44,6 +44,7 @@ use App\Support\Assessment\Reporting\AssessmentReportStorage;
 use App\Support\Assessment\Reporting\AssessmentReportWatermark;
 use App\Support\Assessment\Reporting\BuildAssessmentReportPreviewSnapshot;
 use App\Support\Assessment\Reporting\AssessmentReportCacheCleaner;
+use App\Support\Assessment\Reporting\AssessmentReportDocxRenderer;
 use App\Support\Assessment\Reporting\CreateReportSnapshotsAction;
 use App\Support\Assessment\Reporting\RetryReportGenerationAction;
 use App\Support\Assessment\Reporting\ScheduleReportClassesAction;
@@ -63,12 +64,12 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use LogicException;
+use ZipArchive;
 use RuntimeException;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Symfony\Component\HttpKernel\Exception\GoneHttpException;
 use Tests\TestCase;
-use ZipArchive;
 
 class AssessmentReportingTest extends TestCase
 {
@@ -722,7 +723,7 @@ class AssessmentReportingTest extends TestCase
 
     public function test_simplified_asts_page_omits_advanced_pipeline_polling(): void
     {
-        [$period, , , $template] = $this->reportingFoundation();
+        [$period, $rombel, , $template] = $this->reportingFoundation();
         ReportGenerationRun::query()->create([
             'assessment_period_id' => $period->getKey(),
             'assessment_report_template_id' => $template->getKey(),
@@ -739,9 +740,46 @@ class AssessmentReportingTest extends TestCase
         $component = Livewire::actingAs(User::query()->findOrFail(99))
             ->test(AstsReports::class)
             ->set('periodId', $period->getKey())
-            ->set('templateId', $template->getKey());
+            ->set('templateId', $template->getKey())
+            ->set('previewClassId', $rombel->getKey());
 
-        $this->assertStringNotContainsString('wire:poll.5s.visible', $component->html());
+        $html = $component->html();
+        $this->assertStringNotContainsString('wire:poll.5s.visible', $html);
+        $reportView = (string) file_get_contents(resource_path('views/filament/pages/assessment/reports.blade.php'));
+        $this->assertStringContainsString('Download PDF', $reportView);
+        $this->assertStringContainsString('Download MS Word', $reportView);
+        $this->assertStringContainsString('Share Link', $reportView);
+        $this->assertStringContainsString('data-share-copy-result', $reportView);
+    }
+
+    public function test_asts_pages_share_title_and_identity_and_word_export_keeps_report_data(): void
+    {
+        $snapshotData = [
+            'period' => ['type' => 'ASTS', 'academic_year' => '2026/2027', 'semester' => 'Semester Ganjil'],
+            'student' => ['name' => 'Ahmad Azka Maximilian', 'nis' => '262710002', 'nisn' => '0114431247', 'class_name' => 'X 1'],
+            'subjects' => [['name' => 'Matematika', 'final_score' => '88', 'predicate' => 'B']],
+            'homeroom' => ['sick_days' => 0, 'permission_days' => 2, 'absent_days' => 0, 'extracurricular_data' => [['name' => 'Pramuka', 'description' => 'A']]],
+            'signatures' => [['label' => 'Wali Kelas', 'name' => 'Ibu Wali']],
+            'template' => ['settings' => []],
+        ];
+        $html = view('assessment.reports.asts', ['snapshot' => $snapshotData, 'templateSettings' => [], 'pdfMode' => false])->render();
+        $this->assertSame(2, substr_count($html, 'LAPORAN HASIL ASESMEN SUMATIF TENGAH SEMESTER (ASTS)'));
+        $this->assertSame(2, substr_count($html, '<p class="report-subtitle">Tahun Pelajaran 2026/2027</p>'));
+        $this->assertSame(2, substr_count($html, 'Ahmad Azka Maximilian'));
+        $this->assertStringContainsString('>Ganjil<', $html);
+        $this->assertStringNotContainsString('>Semester Ganjil<', $html);
+
+        $document = app(AssessmentReportDocxRenderer::class)->render(new ReportSnapshot(['snapshot_data' => $snapshotData]));
+        $path = tempnam(sys_get_temp_dir(), 'asts-docx-');
+        file_put_contents($path, $document);
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($path) === true);
+        $xml = (string) $zip->getFromName('word/document.xml');
+        $zip->close();
+        @unlink($path);
+        $this->assertStringContainsString('Ahmad Azka Maximilian', $xml);
+        $this->assertStringContainsString('Matematika', $xml);
+        $this->assertStringContainsString('Pramuka', $xml);
     }
 
     public function test_attendance_values_render_zero_as_dash_and_nonzero_as_days_in_legacy_and_flexible_reports(): void

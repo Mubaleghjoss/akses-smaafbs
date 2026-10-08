@@ -669,14 +669,14 @@ abstract class AssessmentHomeroomRecapPage extends AssessmentPage
             $this->reset('extracurricularImportFile');
             $this->loadReports();
             Notification::make()
-                ->title('Ekstrakurikuler berhasil diimpor')
-                ->body("{$result['items_imported']} ekskul untuk {$result['students_updated']} siswa diperbarui. Data kehadiran tidak diubah.")
+                ->title('Rekap wali kelas berhasil diimpor')
+                ->body("Kehadiran dan {$result['items_imported']} ekskul untuk {$result['students_updated']} siswa diperbarui.")
                 ->success()->send();
         } catch (HomeroomExtracurricularImportException $exception) {
             $this->addError('extracurricularImportFile', implode(' ', array_slice($exception->errors, 0, 5)));
         } catch (Throwable $exception) {
             report($exception);
-            Notification::make()->title('Import ekstrakurikuler gagal')->body('Periksa template Excel lalu coba kembali.')->danger()->send();
+            Notification::make()->title('Import rekap wali kelas gagal')->body('Periksa template Excel lalu coba kembali.')->danger()->send();
         }
     }
 
