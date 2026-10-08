@@ -6,6 +6,7 @@ use App\Actions\Assessment\SetPrimaryReportTemplateAction;
 use App\Filament\Resources\AssessmentReportTemplateResource;
 use App\Models\Assessment\ReportTemplate;
 use Filament\Actions\Action;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
@@ -46,7 +47,31 @@ class ViewAssessmentReportTemplate extends ViewRecord
                 ->openUrlInNewTab()
                 ->tooltip('Membuka data contoh tanpa memerlukan periode yang diterbitkan.'),
             EditAction::make()
+                ->label('Edit')
                 ->visible(fn (): bool => AssessmentReportTemplateResource::canEdit($this->record)),
+            DeleteAction::make()
+                ->label('Hapus')
+                ->visible(fn (): bool => AssessmentReportTemplateResource::canDelete($this->record))
+                ->databaseTransaction()
+                ->before(function (DeleteAction $action): void {
+                    $template = ReportTemplate::query()
+                        ->whereKey($this->record->getKey())
+                        ->lockForUpdate()
+                        ->firstOrFail();
+
+                    abort_unless(AssessmentReportTemplateResource::canDelete($template), 403);
+
+                    if ($message = AssessmentReportTemplateResource::deletionBlockedMessage($template)) {
+                        Notification::make()
+                            ->title('Template tidak dapat dihapus')
+                            ->body($message)
+                            ->warning()
+                            ->persistent()
+                            ->send();
+
+                        $action->halt();
+                    }
+                }),
             Action::make('set_primary')
                 ->label('Jadikan Template Utama')
                 ->icon('heroicon-o-check-badge')

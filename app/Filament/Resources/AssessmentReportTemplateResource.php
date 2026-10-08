@@ -62,14 +62,32 @@ class AssessmentReportTemplateResource extends Resource
     {
         return static::canAccess()
             && parent::canEdit($record)
-            && $record instanceof ReportTemplate
-            && ! $record->snapshots()->exists()
-            && ! $record->classArtifacts()->exists();
+            && $record instanceof ReportTemplate;
     }
 
     public static function canDelete(Model $record): bool
     {
-        return static::canEdit($record);
+        return static::canAccess()
+            && parent::canDelete($record)
+            && $record instanceof ReportTemplate;
+    }
+
+    public static function deletionBlockedMessage(ReportTemplate $template): ?string
+    {
+        $dependencies = [
+            'snapshot rapor' => $template->snapshots()->exists(),
+            'PDF rapor kelas' => $template->classArtifacts()->exists(),
+            'riwayat revisi rapor' => $template->generationRuns()->exists(),
+        ];
+        $usedBy = array_keys(array_filter($dependencies));
+
+        if ($usedBy === []) {
+            return null;
+        }
+
+        return 'Template tidak dapat dihapus karena sudah terhubung dengan '
+            .implode(', ', $usedBy)
+            .'. Riwayat rapor harus tetap tersimpan. Anda masih dapat mengedit template ini atau menonaktifkannya dengan memilih template utama lain.';
     }
 
     public static function validateTemplateData(array $data): array
@@ -202,13 +220,14 @@ class AssessmentReportTemplateResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->schema([
-            Section::make('Identitas Template & Versi')
-                ->description('Template hanya memakai layout standar aplikasi. HTML atau Blade bebas tidak dapat dimasukkan dari admin.')
+            Section::make('Identitas Template')
+                ->description('Tentukan jenis, nama, kode, dan versi template. Kode memudahkan pencarian; versi membantu membedakan perubahan. Template baru disimpan sebagai draf, lalu pilih Jadikan Template Utama saat siap dipakai.')
                 ->columns(['default' => 1, 'md' => 2])
                 ->schema([
                     Forms\Components\TextInput::make('code')
                         ->label('Kode Template')
                         ->required()
+                        ->helperText('Kode singkat dan unik, misalnya ASTS-2026.')
                         ->maxLength(50),
                     Forms\Components\Select::make('type')
                         ->label('Jenis Rapor')
@@ -219,13 +238,15 @@ class AssessmentReportTemplateResource extends Resource
                     Forms\Components\TextInput::make('name')
                         ->label('Nama Template')
                         ->required()
+                        ->helperText('Nama ini tampil pada daftar template dan pilihan rapor.')
                         ->maxLength(150),
                     Forms\Components\TextInput::make('version')
                         ->label('Versi')
                         ->numeric()
                         ->minValue(1)
                         ->default(1)
-                        ->required(),
+                        ->required()
+                        ->helperText('Naikkan saat membuat revisi yang mudah dikenali.'),
                     Forms\Components\Select::make('view_path')
                         ->label('Layout Dokumen')
                         ->options([
@@ -245,20 +266,20 @@ class AssessmentReportTemplateResource extends Resource
                         ->content(fn (?ReportTemplate $record): string => $record?->is_active
                             ? 'Template utama. Mengaktifkan template lain akan mengarsipkan template ini.'
                             : 'Draf/arsip. Simpan dan pratinjau dahulu, lalu gunakan aksi Jadikan Template Utama.'),
-                    Forms\Components\Placeholder::make('version_help')
-                        ->label('Jika Template Terkunci')
+                    Forms\Components\Placeholder::make('usage_help')
+                        ->label('Template yang Sudah Dipakai')
                         ->visible(fn (?ReportTemplate $record): bool => $record instanceof ReportTemplate && static::isLocked($record))
-                        ->content('Template ini sudah dipakai oleh snapshot atau PDF kelas. Gunakan tombol Buat Versi Baru dari daftar/detail template agar rapor lama tidak berubah.')
+                        ->content('Template ini tetap dapat diedit. Snapshot dan PDF lama tetap memakai data yang telah dibekukan; perubahan berlaku untuk rapor/snapshot baru.')
                         ->columnSpanFull(),
                     Forms\Components\Placeholder::make('preview_help')
                         ->label('Pratinjau Aktif')
                         ->content(fn (?ReportTemplate $record): string => $record instanceof ReportTemplate
-                            ? 'Klik Pratinjau Template di kanan atas setelah Simpan. Tampilan memakai data siswa contoh, tidak memerlukan periode terbit dan tidak menyimpan PDF.'
+                            ? 'Simpan perubahan lalu klik Pratinjau Template di kanan atas. Tampilan memakai data siswa contoh, tidak memerlukan periode terbit dan tidak menyimpan PDF.'
                             : 'Simpan template terlebih dahulu. Setelah tersimpan, tombol Pratinjau Template akan menampilkan data contoh tanpa memerlukan periode terbit.')
                         ->columnSpanFull(),
                 ]),
-            Section::make('Kop & Judul Rapor')
-                ->description('Atur isi kop dan judul dokumen. Gunakan Pratinjau Template setelah menyimpan untuk melihat hasil dengan data contoh yang aman.')
+            Section::make('Kop & Identitas Sekolah')
+                ->description('Informasi ini tampil di bagian paling atas rapor. Isi nama sekolah, alamat, kontak, logo, dan istilah kolom yang ingin ditampilkan.')
                 ->columns(['default' => 1, 'md' => 2])
                 ->schema([
                     Forms\Components\TextInput::make('settings.foundation_name')
@@ -326,8 +347,8 @@ class AssessmentReportTemplateResource extends Resource
                         ->default(true)
                         ->inline(false),
                 ]),
-            Section::make('Identitas & Tabel Nilai')
-                ->description('Atur label, susunan identitas, dan jarak menuju tabel nilai dengan batas aman. NIS pada rapor asli berasal dari Data Siswa NIPD.')
+            Section::make('Judul & Identitas Siswa')
+                ->description('Atur jarak judul dan label Nama, NIS/NISN, Kelas, Semester, serta Jenis Laporan. Nilai identitas siswa pada rapor asli selalu diambil dari data siswa/snapshot.')
                 ->columns(['default' => 1, 'md' => 2])
                 ->schema([
                     Forms\Components\TextInput::make('settings.report_layout.kop_title_spacing')
@@ -445,8 +466,8 @@ class AssessmentReportTemplateResource extends Resource
                         ->helperText('Menyisakan ruang setelah KKTP sebelum pemisah halaman agar halaman pertama tidak terasa sesak.')
                         ->columnSpanFull(),
                 ]),
-            Section::make('Tanda Tangan')
-                ->description('Nama wali kelas dan tanggal rapor tetap berasal dari snapshot. Perubahan template hanya berlaku pada snapshot/rapor baru.')
+            Section::make('Tanda Tangan & Footer')
+                ->description('Atur label penandatangan, kepala sekolah, tempat terbit, dan footer. Nama wali kelas serta tanggal rapor tetap berasal dari snapshot; perubahan berlaku pada rapor/snapshot baru.')
                 ->columns(['default' => 1, 'md' => 2])
                 ->schema([
                     Forms\Components\TextInput::make('settings.parent_signature_label')
@@ -621,7 +642,7 @@ class AssessmentReportTemplateResource extends Resource
                             ->color(fn (ReportTemplate $record): string => static::identityIsComplete($record) ? 'success' : 'danger'),
                         Tables\Columns\TextColumn::make('lock_label')
                             ->label('Perubahan')
-                            ->state(fn (ReportTemplate $record): string => ($record->snapshots_count + $record->class_artifacts_count) > 0 ? 'Terkunci' : 'Dapat Diubah')
+                            ->state(fn (ReportTemplate $record): string => ($record->snapshots_count + $record->class_artifacts_count) > 0 ? 'Riwayat Tersimpan' : 'Dapat Dihapus')
                             ->badge()
                             ->color(fn (ReportTemplate $record): string => ($record->snapshots_count + $record->class_artifacts_count) > 0 ? 'warning' : 'info'),
                     ])->from('sm'),
@@ -660,9 +681,11 @@ class AssessmentReportTemplateResource extends Resource
                     ->label('Lihat Detail')
                     ->button()
                     ->color('gray'),
-                EditAction::make()->visible(fn (ReportTemplate $record): bool => static::canEdit($record)),
+                EditAction::make()
+                    ->label('Edit')
+                    ->visible(fn (ReportTemplate $record): bool => static::canEdit($record)),
                 Action::make('preview')
-                    ->label('Pratinjau')
+                    ->label('Pratinjau Template')
                     ->icon('heroicon-o-eye')
                     ->color('gray')
                     ->button()
@@ -743,15 +766,27 @@ class AssessmentReportTemplateResource extends Resource
                         );
                     }),
                 DeleteAction::make()
+                    ->label('Hapus')
                     ->visible(fn (ReportTemplate $record): bool => static::canDelete($record))
                     ->databaseTransaction()
-                    ->before(function (ReportTemplate $record): void {
+                    ->before(function (DeleteAction $action, ReportTemplate $record): void {
                         $template = ReportTemplate::query()
                             ->whereKey($record->getKey())
                             ->lockForUpdate()
                             ->firstOrFail();
 
                         abort_unless(static::canDelete($template), 403);
+
+                        if ($message = static::deletionBlockedMessage($template)) {
+                            Notification::make()
+                                ->title('Template tidak dapat dihapus')
+                                ->body($message)
+                                ->warning()
+                                ->persistent()
+                                ->send();
+
+                            $action->halt();
+                        }
                     }),
             ])
             ->bulkActions([]);
@@ -787,7 +822,7 @@ class AssessmentReportTemplateResource extends Resource
             ->columns(['default' => 1, 'md' => 2])
             ->schema([
                 Section::make('Status dan Versi')
-                    ->description('Template yang sudah dipakai dikunci agar snapshot dan PDF lama tidak berubah.')
+                    ->description('Template yang sudah dipakai tetap dapat diedit. Snapshot dan PDF lama tetap menggunakan data yang telah dibekukan.')
                     ->columns(['default' => 1, 'md' => 2])
                     ->schema([
                         TextEntry::make('name')->label('Nama Template'),
@@ -797,7 +832,7 @@ class AssessmentReportTemplateResource extends Resource
                         TextEntry::make('version')->label('Versi'),
                         IconEntry::make('is_active')->label('Template Utama')->boolean(),
                         TextEntry::make('change_status')->label('Status Perubahan')
-                            ->state(fn (ReportTemplate $record): string => static::isLocked($record) ? 'Terkunci karena sudah memiliki snapshot/PDF.' : 'Masih dapat diubah.'),
+                            ->state(fn (ReportTemplate $record): string => static::isLocked($record) ? 'Dapat diedit; riwayat snapshot/PDF tetap aman.' : 'Dapat diedit dan dihapus bila belum memiliki riwayat rapor.'),
                         TextEntry::make('usage')->label('Riwayat Penggunaan')
                             ->state(fn (ReportTemplate $record): string => $record->snapshots()->count()
                                 .' snapshot · '

@@ -96,15 +96,27 @@ class EditAssessmentReportTemplate extends EditRecord
                 ->openUrlInNewTab()
                 ->tooltip('Menampilkan pengaturan yang sudah disimpan dengan data contoh; simpan perubahan terlebih dahulu.'),
             Actions\DeleteAction::make()
+                ->label('Hapus')
                 ->visible(fn (): bool => AssessmentReportTemplateResource::canDelete($this->record))
                 ->databaseTransaction()
-                ->before(function (): void {
+                ->before(function (Actions\DeleteAction $action): void {
                     $template = ReportTemplate::query()
                         ->whereKey($this->record->getKey())
                         ->lockForUpdate()
                         ->firstOrFail();
 
                     abort_unless(AssessmentReportTemplateResource::canDelete($template), 403);
+
+                    if ($message = AssessmentReportTemplateResource::deletionBlockedMessage($template)) {
+                        \Filament\Notifications\Notification::make()
+                            ->title('Template tidak dapat dihapus')
+                            ->body($message)
+                            ->warning()
+                            ->persistent()
+                            ->send();
+
+                        $action->halt();
+                    }
                 }),
         ];
     }

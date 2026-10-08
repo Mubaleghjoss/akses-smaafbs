@@ -2484,7 +2484,7 @@ class AssessmentReportingTest extends TestCase
         Queue::assertNothingPushed();
     }
 
-    public function test_template_resource_renders_responsive_cards_and_read_only_detail(): void
+    public function test_template_resource_renders_editable_template_ui_and_detail_actions(): void
     {
         [, , , $template] = $this->reportingFoundation();
         $template->forceFill([
@@ -2506,7 +2506,43 @@ class AssessmentReportingTest extends TestCase
             ->assertOk()
             ->assertSee('Sumber Data Rapor')
             ->assertSee('Riwayat Penggunaan')
-            ->assertSee('Pratinjau');
+            ->assertSee('Pratinjau Template')
+            ->assertSee('Edit')
+            ->assertSee('Hapus');
+
+        $this->get(AssessmentReportTemplateResource::getUrl('create'))
+            ->assertOk()
+            ->assertSee('Identitas Template')
+            ->assertSee('Kop & Identitas Sekolah')
+            ->assertSee('Watermark');
+
+        $this->get(AssessmentReportTemplateResource::getUrl('edit', ['record' => $template]))
+            ->assertOk()
+            ->assertSee('Identitas Template')
+            ->assertSee('Kop & Identitas Sekolah')
+            ->assertSee('Judul & Identitas Siswa')
+            ->assertSee('Jarak & Kerapian Tabel Rapor')
+            ->assertSee('Tanda Tangan & Footer')
+            ->assertSee('Simpan perubahan lalu klik Pratinjau Template');
+    }
+
+    public function test_used_template_remains_editable_and_shows_delete_action_with_integrity_warning(): void
+    {
+        [$period, , $students, $template] = $this->reportingFoundation();
+        $this->snapshot($period, $students[0], $template, 1);
+        $this->actingAs(User::query()->findOrFail(99));
+
+        $usedTemplate = $template->fresh();
+
+        $this->assertTrue(AssessmentReportTemplateResource::canEdit($usedTemplate));
+        $this->assertTrue(AssessmentReportTemplateResource::canDelete($usedTemplate));
+        $this->assertStringContainsString('snapshot rapor', AssessmentReportTemplateResource::deletionBlockedMessage($usedTemplate));
+
+        $this->get(AssessmentReportTemplateResource::getUrl('edit', ['record' => $usedTemplate]))
+            ->assertOk()
+            ->assertSee('Template yang Sudah Dipakai')
+            ->assertSee('Hapus')
+            ->assertSee('Pratinjau Template');
     }
 
     /**
