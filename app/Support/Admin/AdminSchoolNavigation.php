@@ -203,6 +203,9 @@ class AdminSchoolNavigation
         }
 
         return match ($class) {
+            AssessmentDashboard::class => $visibility->hasRelevantOperationalWork($user, AssessmentType::ASTS)
+                || $visibility->hasRelevantOperationalWork($user, AssessmentType::ASAS)
+                || $visibility->hasRelevantOperationalWork($user, AssessmentType::ASAT),
             AstsHub::class => $visibility->hasRelevantOperationalWork($user, AssessmentType::ASTS),
             AsasHub::class => $visibility->hasRelevantOperationalWork($user, AssessmentType::ASAS),
             AsatHub::class => $visibility->hasRelevantOperationalWork($user, AssessmentType::ASAT),

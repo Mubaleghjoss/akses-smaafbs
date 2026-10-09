@@ -48,6 +48,26 @@
             </div>
         </section>
 
+        <section aria-labelledby="asmt-settings-hub-title">
+            <div class="mb-4">
+                <h2 id="asmt-settings-hub-title" class="text-lg font-bold">Pengaturan Nilai Ujian</h2>
+                <p class="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">Pilih data yang ingin diubah. Setiap kartu menjelaskan dampaknya pada proses nilai dan rapor.</p>
+            </div>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                @foreach ($this->getSettingsHubCards() as $card)
+                    <article class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-gray-900">
+                        <h3 class="text-base font-bold">{{ $card['title'] }}</h3>
+                        <p class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">{{ $card['description'] }}</p>
+                        @if ($card['url'])
+                            <a href="{{ $card['url'] }}" wire:navigate class="mt-4 inline-flex text-sm font-bold text-primary-600 hover:text-primary-500 dark:text-primary-300">Buka {{ $card['title'] }}</a>
+                        @else
+                            <span class="mt-4 inline-flex text-sm font-semibold text-gray-400">Akses tidak tersedia</span>
+                        @endif
+                    </article>
+                @endforeach
+            </div>
+        </section>
+
         {{-- Enam langkah. Langkah terkunci tetap TERLIHAT (bukan disembunyikan)
              supaya admin tahu apa yang menunggu di depan. --}}
         <ol class="asmt-steps">

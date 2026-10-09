@@ -978,6 +978,9 @@ class AssessmentAdminIntegrationTest extends TestCase
             ->assertSeeHtml('assessment-dashboard-activity')
             ->assertDontSee('Alur Menyiapkan ASTS dan ASAS')
             ->assertSee('Dashboard Nilai Ujian')
+            ->assertSee('Pekerjaan Saya')
+            ->assertSee('Siapkan ASTS')
+            ->assertSee('Rapor Siswa')
             ->assertSee('Pusat Penilaian')
             // Ketiga jenis harus dapat ditemukan dari satu tempat.
             ->assertSee('Asesmen Sumatif Tengah Semester')
@@ -997,6 +1000,16 @@ class AssessmentAdminIntegrationTest extends TestCase
             ->assertSee('Kesiapan Fondasi')
             ->assertSee('Aktivitas Terbaru')
             ->assertSee('Belum ada aktivitas pada periode ini.');
+
+        Livewire::actingAs($admin)
+            ->test(AssessmentSetupWizard::class)
+            ->assertSee('Pengaturan Nilai Ujian')
+            ->assertSee('Tahun Ajaran & Periode')
+            ->assertSee('Penugasan Guru & Mapel')
+            ->assertSee('Skema Nilai')
+            ->assertSee('Tampilan Rapor')
+            ->assertSee('Ekstrakurikuler')
+            ->assertSee('Lanjutan');
 
         $responsiveCss = file_get_contents(public_path('css/filament-admin-responsive.css'));
 

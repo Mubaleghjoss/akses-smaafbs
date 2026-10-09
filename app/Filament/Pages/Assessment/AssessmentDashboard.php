@@ -13,6 +13,10 @@ use App\Filament\Resources\AssessmentSchemeResource;
 use App\Filament\Resources\AssessmentSubjectResource;
 use App\Filament\Resources\DataSiswaResource;
 use App\Filament\Resources\GuruTendikResource;
+use App\Filament\Pages\Assessment\AstsHomeroomRecap;
+use App\Filament\Pages\Assessment\AstsInputScores;
+use App\Filament\Pages\Assessment\AstsReports;
+use App\Filament\Pages\Assessment\AstsSubmissionStatus;
 use App\Models\Assessment\AcademicYear;
 use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentScheme;
@@ -26,6 +30,7 @@ use App\Models\DataSiswa;
 use App\Models\GuruTendik;
 use App\Models\Rombel;
 use App\Models\User;
+use App\Support\Assessment\AssessmentNavigationVisibility;
 use App\Support\Assessment\AssessmentPageMap;
 use App\Support\Assessment\AssessmentStatusScope;
 use App\Support\Storage\HostingStorageAudit;
@@ -62,19 +67,32 @@ class AssessmentDashboard extends AssessmentPage
 
         $user = auth()->user();
 
-        return config('assessment.enabled')
-            && Schema::hasTable('assessment_periods')
-            && $user instanceof User
-            && $user->canViewModule('penilaian')
-            && $user->can('penilaian.audit.view');
+        if (! config('assessment.enabled')
+            || ! Schema::hasTable('assessment_periods')
+            || ! $user instanceof User
+            || ! $user->canViewModule('penilaian')) {
+            return false;
+        }
+
+        if ($user->can('penilaian.audit.view')) {
+            return true;
+        }
+
+        $visibility = app(AssessmentNavigationVisibility::class);
+
+        return $visibility->hasRelevantOperationalWork($user, AssessmentType::ASTS)
+            || $visibility->hasRelevantOperationalWork($user, AssessmentType::ASAS)
+            || $visibility->hasRelevantOperationalWork($user, AssessmentType::ASAT);
     }
 
     public function mount(): void
     {
-        // Dashboard spans every assessment type, so reconcile all open periods.
-        app(ReconcileOpenPeriodAssignmentsFromMatrixAction::class)->homeroomsForOpenPeriods(
-            auth()->user() instanceof User ? auth()->user() : null,
-        );
+        // Reconciliation changes assignment snapshots, so only managers trigger it.
+        if ($this->isAssessmentManager()) {
+            app(ReconcileOpenPeriodAssignmentsFromMatrixAction::class)->homeroomsForOpenPeriods(
+                auth()->user() instanceof User ? auth()->user() : null,
+            );
+        }
         $ids = array_map('intval', array_keys($this->getPeriodOptions()));
         if (! $this->periodId || ! in_array($this->periodId, $ids, true)) {
             $this->periodId = $ids[0] ?? null;
@@ -140,6 +158,52 @@ class AssessmentDashboard extends AssessmentPage
                 ];
             })
             ->all();
+    }
+
+    /** @return array<int, array{title:string,description:string,url:?string}> */
+    public function getRoleShortcutCards(): array
+    {
+        $user = auth()->user();
+
+        if (! $user instanceof User) {
+            return [];
+        }
+
+        if ($this->isAssessmentManager()) {
+            return [
+                ['title' => 'Siapkan ASTS', 'description' => 'Buka periode tengah semester, input nilai, dan pantau kelengkapan.', 'url' => AstsHub::canAccess() ? AstsHub::getUrl() : null],
+                ['title' => 'Penugasan Guru & Mapel', 'description' => 'Tentukan guru mapel dan wali kelas untuk semester berjalan.', 'url' => AssessmentTeachingMatrix::canAccess() ? AssessmentTeachingMatrix::getUrl() : null],
+                ['title' => 'Status & Progres', 'description' => 'Pantau pengumpulan nilai dan langkah menuju rapor siap.', 'url' => AssessmentReportProgressPage::canAccess() ? AssessmentReportProgressPage::getUrl() : null],
+                ['title' => 'Rekap Wali', 'description' => 'Periksa kelengkapan catatan wali kelas sebelum rapor dibuat.', 'url' => AstsHomeroomRecap::canAccess() ? AstsHomeroomRecap::getUrl() : null],
+                ['title' => 'Rapor Siswa', 'description' => 'Buat, cetak, atau bagikan rapor dari periode yang dipilih.', 'url' => AstsReports::canAccess() ? AstsReports::getUrl() : null],
+                ['title' => 'Pengaturan', 'description' => 'Atur periode, mapel, skema nilai, tampilan rapor, dan log.', 'url' => AssessmentSetupWizard::canAccess() ? AssessmentSetupWizard::getUrl() : null],
+            ];
+        }
+
+        if ($user->hasRole('wali_kelas')) {
+            return [
+                ['title' => 'Rekap Wali', 'description' => 'Lengkapi catatan, absensi, prestasi, dan ekstrakurikuler kelas Anda.', 'url' => AstsHomeroomRecap::canAccess() ? AstsHomeroomRecap::getUrl() : null],
+                ['title' => 'Ranking Kelas', 'description' => 'Buka rekap wali untuk melihat kesiapan dan ringkasan kelas.', 'url' => AstsHomeroomRecap::canAccess() ? AstsHomeroomRecap::getUrl() : null],
+                ['title' => 'Rapor Kelas Saya', 'description' => 'Buka rapor untuk kelas yang menjadi tanggung jawab Anda.', 'url' => AstsReports::canAccess() ? AstsReports::getUrl() : null],
+            ];
+        }
+
+        return [
+            ['title' => 'Input Nilai Saya', 'description' => 'Isi, simpan draf, lalu kirim nilai mapel yang Anda ampu.', 'url' => AstsInputScores::canAccess() ? AstsInputScores::getUrl() : null],
+            ['title' => 'Status Pengumpulan', 'description' => 'Lihat nilai yang masih draf, sudah dikirim, atau perlu diperbaiki.', 'url' => AstsSubmissionStatus::canAccess() ? AstsSubmissionStatus::getUrl() : null],
+        ];
+    }
+
+    protected function isAssessmentManager(): bool
+    {
+        $user = auth()->user();
+
+        return $user instanceof User
+            && ($user->hasFullAdminAccess()
+                || $user->can('penilaian.manage')
+                || $user->can('penilaian.verify')
+                || $user->hasRole('kurikulum')
+                || $user->hasRole('kepala_sekolah'));
     }
 
     /**

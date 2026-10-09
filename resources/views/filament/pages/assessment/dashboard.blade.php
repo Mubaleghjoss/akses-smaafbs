@@ -24,6 +24,26 @@
             </div>
         </section>
 
+        <section class="assessment-dashboard-group" aria-labelledby="assessment-role-shortcuts-title">
+            <div class="assessment-dashboard-group__head">
+                <h2 id="assessment-role-shortcuts-title">Pekerjaan Saya</h2>
+                <p>Shortcut disesuaikan dengan peran dan hak akses Anda.</p>
+            </div>
+            <div class="assessment-dashboard-card-grid">
+                @foreach ($this->getRoleShortcutCards() as $card)
+                    <article class="assessment-dashboard-card assessment-dashboard-card--menu">
+                        <h3>{{ $card['title'] }}</h3>
+                        <p class="assessment-dashboard-card__caption">{{ $card['description'] }}</p>
+                        @if ($card['url'])
+                            <a href="{{ $card['url'] }}" wire:navigate class="assessment-dashboard-card__action">Buka {{ $card['title'] }}</a>
+                        @else
+                            <span class="assessment-dashboard-card__action is-disabled">Akses tidak tersedia</span>
+                        @endif
+                    </article>
+                @endforeach
+            </div>
+        </section>
+
         {{-- Pusat kerja per jenis penilaian. Ditaruh PALING ATAS karena inilah
              yang dibuka setiap hari; pengaturan hanya disentuh saat awal semester. --}}
         <section class="assessment-dashboard-group" aria-labelledby="assessment-type-title">

@@ -1547,12 +1547,13 @@ class AssessmentTeacherExperienceTest extends TestCase
         $this->assertTrue(AstsHub::shouldRegisterNavigation());
         $this->assertFalse(AsasHub::shouldRegisterNavigation());
         $this->assertTrue(AsatHub::shouldRegisterNavigation());
-        $this->assertFalse(AssessmentDashboard::shouldRegisterNavigation());
+        $this->assertTrue(AssessmentDashboard::shouldRegisterNavigation());
         $this->assertFalse(AssessmentSetupWizard::shouldRegisterNavigation());
         $this->assertFalse(AssessmentTeachingMatrix::shouldRegisterNavigation());
 
         $asatVerification->update(['status' => AssessmentPeriodStatus::DRAFT]);
         $this->assertFalse(AsatHub::shouldRegisterNavigation());
+        $this->assertTrue(AssessmentDashboard::shouldRegisterNavigation());
 
         // Hubs remain accessible when their type is authorized but not in the sidebar.
         $this->assertTrue(AsasHub::canAccess());

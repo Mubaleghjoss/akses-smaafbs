@@ -2,7 +2,9 @@
 
 namespace App\Filament\Pages\Assessment;
 
+use App\Filament\Resources\AssessmentAuditLogResource;
 use App\Filament\Resources\AssessmentPeriodResource;
+use App\Filament\Resources\AssessmentReportTemplateResource;
 use App\Filament\Resources\AssessmentSchemeResource;
 use App\Filament\Resources\AssessmentSubjectCategoryResource;
 use App\Filament\Resources\AssessmentSubjectResource;
@@ -45,7 +47,7 @@ class AssessmentSetupWizard extends AssessmentPage
 
     public function getTitle(): string|Htmlable
     {
-        return 'Setelan Awal Penilaian';
+        return 'Pengaturan Nilai Ujian';
     }
 
     /**
@@ -110,6 +112,20 @@ class AssessmentSetupWizard extends AssessmentPage
                 'label' => 'Buka Periode',
                 'url' => AssessmentPeriodResource::canViewAny() ? AssessmentPeriodResource::getUrl() : null,
             ],
+        ];
+    }
+
+    /** @return array<int, array{title:string,description:string,url:?string}> */
+    public function getSettingsHubCards(): array
+    {
+        return [
+            ['title' => 'Tahun Ajaran & Periode', 'description' => 'Buat semester dan periode ASTS, ASAS, atau ASAT. Pilihan ini menentukan kelas serta jadwal input nilai.', 'url' => AssessmentPeriodResource::canViewAny() ? AssessmentPeriodResource::getUrl() : null],
+            ['title' => 'Mapel', 'description' => 'Ubah kode, kelompok, dan urutan mata pelajaran. Susunannya memengaruhi penugasan dan tampilan rapor.', 'url' => AssessmentSubjectResource::canViewAny() ? AssessmentSubjectResource::getUrl() : null],
+            ['title' => 'Penugasan Guru & Mapel', 'description' => 'Tetapkan guru pengampu dan wali kelas per semester. Penugasan menentukan siapa yang dapat mengisi atau merekap nilai.', 'url' => AssessmentTeachingMatrix::canAccess() ? AssessmentTeachingMatrix::getUrl(['semester' => $this->semesterId]) : null],
+            ['title' => 'Skema Nilai', 'description' => 'Atur komponen, bobot, KKM, dan predikat. Perubahan berlaku untuk perhitungan periode berikutnya sesuai statusnya.', 'url' => AssessmentSchemeResource::canViewAny() ? AssessmentSchemeResource::getUrl() : null],
+            ['title' => 'Tampilan Rapor', 'description' => 'Atur template, identitas, tanda tangan, susunan bagian, dan watermark rapor tanpa mengubah nilai.', 'url' => AssessmentReportTemplateResource::canViewAny() ? AssessmentReportTemplateResource::getUrl() : null],
+            ['title' => 'Ekstrakurikuler', 'description' => 'Kelola nilai kegiatan ekstrakurikuler ASTS yang tampil pada rekap dan rapor siswa.', 'url' => AstsExtracurricularScores::canAccess() ? AstsExtracurricularScores::getUrl() : null],
+            ['title' => 'Lanjutan', 'description' => 'Buka impor master dan log perubahan untuk pembaruan massal, audit, atau pemeriksaan teknis.', 'url' => AssessmentAuditLogResource::canViewAny() ? AssessmentAuditLogResource::getUrl() : null],
         ];
     }
 
