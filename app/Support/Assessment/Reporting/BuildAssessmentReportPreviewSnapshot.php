@@ -63,6 +63,7 @@ final class BuildAssessmentReportPreviewSnapshot
             ->orderBy('subject_sort_order_snapshot')
             ->orderBy('subject_name_snapshot')
             ->get();
+        $assignments = app(ActiveMatrixReportAssignments::class)->filter($period, $assignments);
         $resultsByAssignment = $student->results
             ->filter(fn ($result): bool => (int) $result->assessment_period_id === (int) $period->getKey())
             ->keyBy('assessment_period_assignment_id');

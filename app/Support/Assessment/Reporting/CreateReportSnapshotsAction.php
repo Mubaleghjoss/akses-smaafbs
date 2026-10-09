@@ -164,7 +164,9 @@ class CreateReportSnapshotsAction
                 ->orderBy('subject_group_sort_order_snapshot')
                 ->orderBy('subject_sort_order_snapshot')
                 ->orderBy('subject_name_snapshot')
-                ->get()
+                ->get();
+            $assignmentsByRombel = app(ActiveMatrixReportAssignments::class)
+                ->filter($period, $assignmentsByRombel)
                 ->groupBy('assessment_period_rombel_id');
             $assignmentIds = $assignmentsByRombel->flatten(1)->pluck('id');
             $subjectNamesById = DB::table('assessment_subjects')

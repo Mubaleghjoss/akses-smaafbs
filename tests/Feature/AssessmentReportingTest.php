@@ -33,6 +33,7 @@ use App\Models\Assessment\ReportTemplate;
 use App\Models\Assessment\Semester;
 use App\Models\Assessment\StudentSubjectResult;
 use App\Models\Assessment\Subject;
+use App\Models\Assessment\TeachingAssignment;
 use App\Models\User;
 use App\Support\Assessment\AssessmentActionFailureNotification;
 use App\Support\Assessment\Reporting\AssessmentReportQueueGate;
@@ -2205,6 +2206,59 @@ class AssessmentReportingTest extends TestCase
         $this->assertStringContainsString('no-store', (string) $streamResponse->headers->get('Cache-Control'));
         Queue::assertNothingPushed();
         $this->assertDatabaseCount('assessment_report_snapshots', 1);
+    }
+
+    public function test_live_reports_exclude_retained_results_when_the_matrix_cell_is_blank(): void
+    {
+        [$period, $rombel, $students, $template] = $this->reportingFoundation();
+        $subject = Subject::query()->create([
+            'code' => 'FIS-XII-3',
+            'name' => 'Fisika',
+            'is_active' => true,
+        ]);
+        $matrix = TeachingAssignment::query()->create([
+            'assessment_semester_id' => $period->assessment_semester_id,
+            'assessment_subject_id' => $subject->getKey(),
+            'teacher_id' => 41,
+            'rombel_id' => $rombel->source_rombel_id,
+            'teacher_name_snapshot' => 'Guru Lama',
+            'subject_name_snapshot' => 'Fisika',
+            'rombel_name_snapshot' => $rombel->rombel_name_snapshot,
+            'is_active' => false,
+        ]);
+        $assignment = AssessmentPeriodAssignment::query()->create([
+            'assessment_period_id' => $period->getKey(),
+            'source_teaching_assignment_id' => $matrix->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'teacher_id' => 41,
+            'assessment_subject_id' => $subject->getKey(),
+            'teacher_name_snapshot' => 'Guru Lama',
+            'subject_name_snapshot' => 'Fisika',
+            'rombel_name_snapshot' => $rombel->rombel_name_snapshot,
+            'status' => 'locked',
+            'lock_version' => 1,
+        ]);
+        StudentSubjectResult::query()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_student_id' => $students[0]->getKey(),
+            'assessment_period_assignment_id' => $assignment->getKey(),
+            'final_score' => 91,
+            'predicate' => 'A',
+            'description' => 'Nilai lama tetap tersimpan.',
+            'calculation_detail' => [],
+            'formula_version' => 'v1',
+        ]);
+
+        $preview = app(BuildAssessmentReportPreviewSnapshot::class)->build($period, $template, $students[0]);
+        $snapshot = app(CreateReportSnapshotsAction::class)->execute($period, $template, generatedBy: 99)->sole();
+
+        $this->assertSame([], data_get($preview->snapshot_data, 'subjects'));
+        $this->assertSame([], data_get($snapshot->snapshot_data, 'subjects'));
+        $this->assertDatabaseHas('assessment_period_assignments', ['id' => $assignment->getKey()]);
+        $this->assertDatabaseHas('assessment_student_subject_results', [
+            'assessment_period_assignment_id' => $assignment->getKey(),
+            'final_score' => 91,
+        ]);
     }
 
     public function test_watermark_is_frozen_as_private_data_without_leaking_path(): void
