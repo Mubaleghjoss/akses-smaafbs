@@ -9,7 +9,8 @@
     $logo = trim((string) data_get($school, 'logo_data_uri'));
     $logoIsSafe = preg_match('#^data:image/(?:png|jpeg|webp);base64,#i', $logo) === 1;
     $academicYear = preg_replace('/^\s*Tahun\s+Pelajaran\s+/iu', '', (string) data_get($period, 'academic_year', 'Demo 2025/2026')) ?: 'Demo 2025/2026';
-    $semesterLabel = preg_replace('/^\s*Semester\s+/iu', '', (string) data_get($period, 'semester', '-')) ?: '-';
+    $semesterLabel = trim((string) data_get($templateSettings, 'report_layout.semester_value_override', ''))
+        ?: (preg_replace('/^\s*Semester\s+/iu', '', (string) data_get($period, 'semester', '-')) ?: '-');
     $className = (string) data_get($student, 'class_name', '');
     $studentNis = trim((string) data_get($student, 'nis', '')) ?: '-';
     $studentNisn = trim((string) data_get($student, 'nisn', '')) ?: '-';

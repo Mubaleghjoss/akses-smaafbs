@@ -211,6 +211,14 @@ class AssessmentReportTemplateResource extends Resource
             data_set($settings, "report_layout.labels.{$field}", $label);
         }
 
+        $semesterOverride = trim((string) data_get($settings, 'report_layout.semester_value_override', ''));
+        if (mb_strlen($semesterOverride) > 40) {
+            throw ValidationException::withMessages([
+                'data.settings.report_layout.semester_value_override' => 'Nilai semester manual maksimal 40 karakter.',
+            ]);
+        }
+        data_set($settings, 'report_layout.semester_value_override', $semesterOverride !== '' ? $semesterOverride : null);
+
         if ($type === AssessmentType::ASTS) {
             $semesterLabel = (string) data_get($settings, 'report_layout.labels.semester', 'Semester');
             data_set($settings, 'report_layout.labels.report_type', $semesterLabel);
@@ -466,6 +474,10 @@ class AssessmentReportTemplateResource extends Resource
                                 ? 'Pada rapor ASTS, identitas laporan menggunakan label ini beserta nilainya (contoh: "Semester : Ganjil"), bukan Jenis Laporan.'
                                 : 'Label semester untuk identitas rapor.'
                         ),
+                    Forms\Components\TextInput::make('settings.report_layout.semester_value_override')
+                        ->label('Isi Semester di Rapor')
+                        ->maxLength(40)
+                        ->helperText('Kosongkan untuk otomatis mengikuti semester periode (Ganjil/Genap). Isi manual jika ingin memaksa teks yang tampil, misalnya Genap.'),
                     Forms\Components\TextInput::make('settings.report_layout.labels.report_type')
                         ->label('Label Dokumen (Khusus ASAS/ASAT)')
                         ->default('Jenis Laporan')

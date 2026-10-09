@@ -68,6 +68,7 @@ class EditAssessmentReportTemplate extends EditRecord
             'report_layout.labels.student_name',
             'report_layout.labels.student_number', 'report_layout.labels.class',
             'report_layout.labels.semester', 'report_layout.labels.report_type',
+            'report_layout.semester_value_override',
         ] as $path) {
             if (is_array(data_get($settings, $path))) {
                 data_set($settings, $path, null);

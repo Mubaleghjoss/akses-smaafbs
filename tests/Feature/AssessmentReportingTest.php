@@ -762,11 +762,13 @@ class AssessmentReportingTest extends TestCase
             'signatures' => [['label' => 'Wali Kelas', 'name' => 'Ibu Wali']],
             'template' => ['settings' => []],
         ];
-        $html = view('assessment.reports.asts', ['snapshot' => $snapshotData, 'templateSettings' => [], 'pdfMode' => false])->render();
+        $templateSettings = ['report_layout' => ['semester_value_override' => ' Genap ']];
+        $html = view('assessment.reports.asts', ['snapshot' => $snapshotData, 'templateSettings' => $templateSettings, 'pdfMode' => false])->render();
         $this->assertSame(2, substr_count($html, 'LAPORAN HASIL ASESMEN SUMATIF TENGAH SEMESTER (ASTS)'));
         $this->assertSame(2, substr_count($html, '<p class="report-subtitle">Tahun Pelajaran 2026/2027</p>'));
         $this->assertSame(2, substr_count($html, 'Ahmad Azka Maximilian'));
-        $this->assertStringContainsString('>Ganjil<', $html);
+        $this->assertStringContainsString('>Genap<', $html);
+        $this->assertStringNotContainsString('>Ganjil<', $html);
         $this->assertStringContainsString('>Semester<', $html);
         $this->assertStringNotContainsString('>Jenis Laporan<', $html);
         $this->assertStringNotContainsString('>Semester Ganjil<', $html);
