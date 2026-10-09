@@ -31,6 +31,7 @@ use App\Models\Assessment\AssessmentScheme;
 use App\Models\Assessment\AssessmentScore;
 use App\Models\Assessment\HomeroomReport;
 use App\Models\Assessment\StudentSubjectResult;
+use App\Models\Assessment\TeachingAssignment;
 use App\Models\Assessment\Subject;
 use App\Models\DataSiswa;
 use App\Models\User;
@@ -1724,6 +1725,86 @@ class AssessmentTeacherExperienceTest extends TestCase
             ->assertSee('Ringkasan Nilai Akhir dan Peringkat ASTS')
             ->assertSee('belum lengkap')
             ->assertDontSee('Siswa Kelas Lain');
+    }
+
+    public function test_asts_homeroom_ranking_uses_active_matrix_subjects_and_current_master_names(): void
+    {
+        $teacher = $this->teacher(348);
+        $period = AssessmentPeriod::factory()->asts()->create(['status' => AssessmentPeriodStatus::OPEN]);
+        $rombel = AssessmentPeriodRombel::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'source_rombel_id' => 1203,
+            'rombel_name_snapshot' => 'XII 3',
+        ]);
+        $homeroom = AssessmentPeriodHomeroom::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'teacher_id' => 348,
+            'rombel_name_snapshot' => 'XII 3',
+        ]);
+        $students = AssessmentPeriodStudent::factory()->count(2)->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'rombel_name_snapshot' => 'XII 3',
+        ]);
+        $math = Subject::factory()->create(['name' => 'Matematika Terkini']);
+        $physics = Subject::factory()->create(['name' => 'Fisika']);
+        $mathAssignment = AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'assessment_subject_id' => $math->getKey(),
+            'subject_name_snapshot' => 'Matematika Lama',
+        ]);
+        $physicsMatrix = TeachingAssignment::factory()->create([
+            'assessment_semester_id' => $period->assessment_semester_id,
+            'assessment_subject_id' => $physics->getKey(),
+            'teacher_id' => 348,
+            'rombel_id' => $rombel->source_rombel_id,
+            'subject_name_snapshot' => 'Fisika',
+            'rombel_name_snapshot' => 'XII 3',
+            'is_active' => false,
+        ]);
+        $physicsAssignment = AssessmentPeriodAssignment::factory()->create([
+            'assessment_period_id' => $period->getKey(),
+            'source_teaching_assignment_id' => $physicsMatrix->getKey(),
+            'assessment_period_rombel_id' => $rombel->getKey(),
+            'assessment_subject_id' => $physics->getKey(),
+            'subject_name_snapshot' => 'Fisika',
+        ]);
+        foreach ([[80, 100], [90, 10]] as $index => [$mathScore, $physicsScore]) {
+            StudentSubjectResult::factory()->create([
+                'assessment_period_id' => $period->getKey(),
+                'assessment_period_student_id' => $students[$index]->getKey(),
+                'assessment_period_assignment_id' => $mathAssignment->getKey(),
+                'final_score' => $mathScore,
+            ]);
+            StudentSubjectResult::factory()->create([
+                'assessment_period_id' => $period->getKey(),
+                'assessment_period_student_id' => $students[$index]->getKey(),
+                'assessment_period_assignment_id' => $physicsAssignment->getKey(),
+                'final_score' => $physicsScore,
+            ]);
+        }
+
+        Livewire::actingAs($teacher)
+            ->test(AstsHomeroomRecap::class)
+            ->set('periodId', $period->getKey())
+            ->set('homeroomId', $homeroom->getKey())
+            ->call('loadReports')
+            ->assertSet('astsRanking.subjects', [$mathAssignment->getKey() => 'Matematika Terkini'])
+            ->assertSet("astsRanking.rows.{$students[0]->getKey()}.total", 80.0)
+            ->assertSet("astsRanking.rows.{$students[0]->getKey()}.average", 80.0)
+            ->assertSet("astsRanking.rows.{$students[0]->getKey()}.rank", 2)
+            ->assertSet("astsRanking.rows.{$students[1]->getKey()}.total", 90.0)
+            ->assertSet("astsRanking.rows.{$students[1]->getKey()}.rank", 1)
+            ->assertDontSee('Fisika')
+            ->assertSee('Matematika Terkini');
+
+        $this->assertDatabaseHas('assessment_period_assignments', ['id' => $physicsAssignment->getKey()]);
+        $this->assertDatabaseHas('assessment_student_subject_results', [
+            'assessment_period_assignment_id' => $physicsAssignment->getKey(),
+            'final_score' => 100,
+        ]);
     }
 
     public function test_admin_and_curriculum_can_edit_foreign_assignment_with_visible_updater_badge(): void

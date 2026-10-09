@@ -2,9 +2,12 @@
 
 namespace App\Support\Assessment;
 
+use App\Models\Assessment\AssessmentPeriod;
 use App\Models\Assessment\AssessmentPeriodAssignment;
 use App\Models\Assessment\AssessmentPeriodStudent;
 use App\Models\Assessment\StudentSubjectResult;
+use App\Models\Assessment\Subject;
+use App\Support\Assessment\Reporting\ActiveMatrixReportAssignments;
 
 class AssessmentAstsHomeroomRanking
 {
@@ -13,14 +16,22 @@ class AssessmentAstsHomeroomRanking
      */
     public function forClass(int $periodId, int $rombelId): array
     {
-        $subjects = AssessmentPeriodAssignment::query()
+        $period = AssessmentPeriod::query()->findOrFail($periodId);
+        $assignments = AssessmentPeriodAssignment::query()
             ->where('assessment_period_id', $periodId)
             ->where('assessment_period_rombel_id', $rombelId)
             ->orderBy('subject_group_sort_order_snapshot')
             ->orderBy('subject_sort_order_snapshot')
             ->orderBy('subject_name_snapshot')
-            ->pluck('subject_name_snapshot', 'id')
-            ->map(fn (mixed $name): string => (string) $name)
+            ->get(['id', 'assessment_period_rombel_id', 'assessment_subject_id', 'subject_name_snapshot']);
+        $assignments = app(ActiveMatrixReportAssignments::class)->filter($period, $assignments);
+        $currentSubjectNames = Subject::query()
+            ->whereIn('id', $assignments->pluck('assessment_subject_id')->filter()->unique())
+            ->pluck('name', 'id');
+        $subjects = $assignments
+            ->mapWithKeys(fn (AssessmentPeriodAssignment $assignment): array => [
+                $assignment->getKey() => (string) ($currentSubjectNames->get($assignment->assessment_subject_id) ?? $assignment->subject_name_snapshot),
+            ])
             ->all();
 
         $students = AssessmentPeriodStudent::query()
