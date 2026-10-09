@@ -29,9 +29,21 @@ class AssessmentPeriodAssignmentPolicy extends AssessmentPolicy
 
     public function updateScores(User $user, AssessmentPeriodAssignment $assignment): bool
     {
-        return ($this->canManageScoreAssignments($user)
-                || ($user->can('penilaian.input')
-                    && $this->ownsTeacherId($user, (int) $assignment->teacher_id)))
+        if ($this->canManageScoreAssignments($user)) {
+            // Corrections remain available to admin/kurikulum during verification.
+            return in_array($assignment->period->status, [
+                AssessmentPeriodStatus::OPEN,
+                AssessmentPeriodStatus::VERIFICATION,
+            ], true) && in_array($assignment->status, [
+                AssignmentStatus::DRAFT,
+                AssignmentStatus::RETURNED,
+                AssignmentStatus::SUBMITTED,
+                AssignmentStatus::VERIFIED,
+            ], true);
+        }
+
+        return $user->can('penilaian.input')
+            && $this->ownsTeacherId($user, (int) $assignment->teacher_id)
             && $assignment->period->status === AssessmentPeriodStatus::OPEN
             && $assignment->status->isEditable();
     }

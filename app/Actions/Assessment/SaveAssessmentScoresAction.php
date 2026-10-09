@@ -61,9 +61,12 @@ final class SaveAssessmentScoresAction
                 ->findOrFail($assignment->getKey());
             $this->authorize($actor, 'updateScores', $locked);
             $locked->load('period');
+            $isVerifiedCorrection = $this->isVerifiedCorrection($locked);
             $this->guard->periodStatus(
                 $locked->period,
-                [AssessmentPeriodStatus::OPEN],
+                $isVerifiedCorrection
+                    ? [AssessmentPeriodStatus::OPEN, AssessmentPeriodStatus::VERIFICATION]
+                    : [AssessmentPeriodStatus::OPEN],
                 'Nilai hanya dapat disimpan ketika periode berstatus terbuka.',
             );
             if ($locked->status === AssignmentStatus::DRAFT) {
@@ -74,7 +77,9 @@ final class SaveAssessmentScoresAction
             }
             $this->guard->assignmentStatus(
                 $locked,
-                [AssignmentStatus::DRAFT, AssignmentStatus::RETURNED],
+                $isVerifiedCorrection
+                    ? [AssignmentStatus::DRAFT, AssignmentStatus::RETURNED, AssignmentStatus::SUBMITTED, AssignmentStatus::VERIFIED]
+                    : [AssignmentStatus::DRAFT, AssignmentStatus::RETURNED],
                 'Nilai tidak dapat diubah setelah dikirim atau dikunci.',
             );
             $scheme = $this->schemeResolver->forAssignment($locked);
@@ -142,6 +147,7 @@ final class SaveAssessmentScoresAction
                         score: $scoreInput['score'],
                         notes: $scoreInput['notes'],
                         source: ScoreSource::MANUAL,
+                        isVerifiedCorrection: $isVerifiedCorrection,
                     );
                 }
 
@@ -178,15 +184,35 @@ final class SaveAssessmentScoresAction
                         notes: null,
                         source: ScoreSource::ASTS_SNAPSHOT,
                         sourceResult: $sourceResult,
+                        isVerifiedCorrection: $isVerifiedCorrection,
                     );
                 }
 
-                $this->calculateResult->execute(
+                $oldResult = StudentSubjectResult::query()
+                    ->where('assessment_period_assignment_id', $locked->getKey())
+                    ->where('assessment_period_student_id', $student->getKey())
+                    ->first();
+                $oldResultValues = $this->resultAuditValues($oldResult);
+                $result = $this->calculateResult->execute(
                     assignment: $locked,
                     student: $student,
                     descriptionOverride: $row['description'],
                     hasDescriptionOverride: $row['has_description'],
                 );
+                $newResultValues = $this->resultAuditValues($result);
+                if ($isVerifiedCorrection && $oldResultValues !== $newResultValues) {
+                    $this->audit->record(
+                        actor: $actor,
+                        event: 'result.verified_corrected',
+                        subject: $result,
+                        oldValues: $oldResultValues,
+                        newValues: $newResultValues + [
+                            'assignment_id' => (int) $locked->getKey(),
+                            'student_id' => (int) $student->getKey(),
+                            'actor_role_context' => $this->actorRoleContext($actor),
+                        ],
+                    );
+                }
             }
 
             $oldVersion = (int) $locked->lock_version;
@@ -332,6 +358,7 @@ final class SaveAssessmentScoresAction
         ?string $notes,
         ScoreSource $source,
         ?StudentSubjectResult $sourceResult = null,
+        bool $isVerifiedCorrection = false,
     ): int {
         $record = AssessmentScore::query()->firstOrNew([
             'assessment_period_assignment_id' => $assignment->getKey(),
@@ -361,7 +388,7 @@ final class SaveAssessmentScoresAction
             $record->save();
             $this->audit->record(
                 actor: $actor,
-                event: $oldValues === [] ? 'score.created' : 'score.updated',
+                event: $isVerifiedCorrection ? 'score.verified_corrected' : ($oldValues === [] ? 'score.created' : 'score.updated'),
                 subject: $record,
                 oldValues: $oldValues,
                 newValues: Arr::only($record->getAttributes(), [
@@ -370,11 +397,38 @@ final class SaveAssessmentScoresAction
                     'source',
                     'source_result_id',
                     'source_score_snapshot',
-                ]),
+                ]) + ($isVerifiedCorrection ? [
+                    'assignment_id' => (int) $assignment->getKey(),
+                    'student_id' => (int) $student->getKey(),
+                    'component_id' => (int) $component->getKey(),
+                    'component_key' => (string) $component->code,
+                    'actor_role_context' => $this->actorRoleContext($actor),
+                ] : []),
             );
         }
 
         return (int) $record->getKey();
+    }
+
+    /**
+     * Include the calculation state so a cleared required component has an
+     * auditable transition from a complete result to an incomplete one.
+     *
+     * @return array<string, mixed>
+     */
+    private function resultAuditValues(?StudentSubjectResult $result): array
+    {
+        if (! $result) {
+            return [];
+        }
+
+        return [
+            'final_score' => $result->final_score,
+            'predicate' => $result->predicate,
+            'description' => $result->description,
+            'is_complete' => (bool) data_get($result->calculation_detail, 'complete', $result->final_score !== null),
+            'missing_required_component_ids' => array_values((array) data_get($result->calculation_detail, 'missing_required_component_ids', [])),
+        ];
     }
 
     private function scoreSource(AssessmentComponent $component): ScoreSource
@@ -398,5 +452,15 @@ final class SaveAssessmentScoresAction
     private function normalizeNullableText(mixed $value): ?string
     {
         return filled($value) ? trim((string) $value) : null;
+    }
+
+    private function isVerifiedCorrection(AssessmentPeriodAssignment $assignment): bool
+    {
+        return in_array($assignment->status, [AssignmentStatus::SUBMITTED, AssignmentStatus::VERIFIED], true);
+    }
+
+    private function actorRoleContext(User $actor): string
+    {
+        return $actor->hasFullAdminAccess() ? 'admin' : 'kurikulum';
     }
 }

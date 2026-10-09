@@ -458,9 +458,11 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
         $deadlinePassed = $assignment->period->entry_end_at?->isPast() ?? false;
         $canOverrideDeadline = $user instanceof User
             && Gate::forUser($user)->allows('overrideScoreEntryDeadline', $assignment);
+        $isVerifiedCorrection = in_array($status, [AssignmentStatus::SUBMITTED, AssignmentStatus::VERIFIED], true)
+            && $user instanceof User
+            && $this->canManageScoreAssignments($user);
         $editable = ! $this->isReviewMode()
-            && $status->isEditable()
-            && (! $deadlinePassed || $canOverrideDeadline)
+            && ($isVerifiedCorrection || ($status->isEditable() && (! $deadlinePassed || $canOverrideDeadline)))
             && Gate::forUser(auth()->user())->allows('updateScores', $assignment);
 
         $this->lockVersion = (int) $assignment->lock_version;
@@ -473,6 +475,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             'status' => $status->value,
             'status_label' => $status->label(),
             'editable' => $editable,
+            'is_verified_correction' => $isVerifiedCorrection,
             'deadline_at' => $assignment->period->entry_end_at?->format('d/m/Y H:i'),
             'deadline_passed' => $deadlinePassed,
             'can_override_deadline' => $canOverrideDeadline,
@@ -480,7 +483,7 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
                 ? 'Tinjau saja'
                 : ($deadlinePassed
                     ? ($canOverrideDeadline ? 'Override deadline (diaudit)' : 'Terkunci setelah deadline')
-                    : 'Input normal'),
+                    : ($isVerifiedCorrection ? 'Koreksi nilai terverifikasi (diaudit)' : 'Input normal')),
             'returned_reason' => $revisionAssignment->returned_reason,
             'returned_at' => $revisionAssignment->returned_at?->format('d/m/Y H:i'),
             'returned_by' => $revisionAssignment->returner?->name
@@ -511,9 +514,12 @@ abstract class AssessmentScoreEntryPage extends AssessmentPage
             $this->dispatch('assessment-draft-cleared', key: $this->draftKey());
             $this->loadAssignment();
             if ($notify) {
+                $isVerifiedCorrection = (bool) data_get($this->assignmentMeta, 'is_verified_correction');
                 Notification::make()
-                    ->title('Draf nilai tersimpan')
-                    ->body('Satu batch kelas berhasil disimpan. Nilai belum dikirim untuk verifikasi.')
+                    ->title($isVerifiedCorrection ? 'Koreksi nilai tersimpan dan tercatat audit' : 'Draf nilai tersimpan')
+                    ->body($isVerifiedCorrection
+                        ? 'Perubahan nilai terverifikasi berhasil disimpan, dihitung ulang, dan dicatat pada audit penilaian.'
+                        : 'Satu batch kelas berhasil disimpan. Nilai belum dikirim untuk verifikasi.')
                     ->success()
                     ->send();
             }

@@ -17,9 +17,11 @@ use App\Enums\Assessment\AssessmentType;
 use App\Enums\Assessment\AssignmentStatus;
 use App\Enums\Assessment\ReportGenerationStatus;
 use App\Enums\Assessment\ScoreSource;
+use App\Filament\Pages\Assessment\AstsInputScores;
 use App\Models\Assessment\AcademicYear;
 use App\Models\Assessment\AssessmentComponent;
 use App\Models\Assessment\AssessmentPeriod;
+use App\Models\Assessment\AuditLog;
 use App\Models\Assessment\AssessmentScheme;
 use App\Models\Assessment\AssessmentScore;
 use App\Models\Assessment\ClassReportArtifact;
@@ -42,6 +44,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Livewire\Livewire;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\Feature\Concerns\BootstrapsStudentAndTeacherTables;
 use Tests\Feature\Concerns\BootstrapsUserAndPermissionTables;
@@ -161,6 +164,152 @@ class AssessmentWorkflowTest extends TestCase
             ]],
             1,
         );
+    }
+
+    public function test_admin_or_curriculum_can_correct_verified_scores_with_audit_while_teachers_remain_blocked(): void
+    {
+        $context = $this->createContext();
+        $period = $this->createOpenedPeriod($context, AssessmentType::ASTS);
+        $assignment = $period->assignments()->firstOrFail();
+        $student = $period->students()->firstOrFail();
+        $component = $period->schemes()->firstOrFail()->components()->firstOrFail();
+        $save = app(SaveAssessmentScoresAction::class);
+
+        $assignment = $save->execute($context['teacher_user'], $assignment, [[
+            'assessment_period_student_id' => $student->getKey(),
+            'scores' => [$component->getKey() => 80],
+        ]], $assignment->lock_version);
+        $assignment->forceFill(['status' => AssignmentStatus::VERIFIED])->save();
+        $period->forceFill(['status' => AssessmentPeriodStatus::VERIFICATION])->save();
+
+        try {
+            $save->execute($context['teacher_user'], $assignment->fresh(), [[
+                'assessment_period_student_id' => $student->getKey(),
+                'scores' => [$component->getKey() => null],
+            ]], $assignment->lock_version);
+            $this->fail('Guru pemilik tidak boleh mengosongkan nilai terverifikasi.');
+        } catch (AuthorizationException) {
+            $this->assertSame(80.0, (float) AssessmentScore::query()->value('score'));
+        }
+
+        $unrelated = User::query()->create([
+            'name' => 'Guru Lain', 'username' => 'guru-lain-assessment', 'password' => 'secret123',
+        ]);
+        $unrelated->assignRole('guru_mapel');
+        try {
+            $save->execute($unrelated, $assignment->fresh(), [[
+                'assessment_period_student_id' => $student->getKey(),
+                'scores' => [$component->getKey() => 81],
+            ]], $assignment->lock_version);
+            $this->fail('Guru yang tidak ditugaskan tidak boleh mengubah nilai.');
+        } catch (AuthorizationException) {
+            $this->assertSame(80.0, (float) AssessmentScore::query()->value('score'));
+        }
+
+        $verifiedLockVersion = (int) $assignment->fresh()->lock_version;
+        $corrected = $save->execute($context['curriculum_user'], $assignment->fresh(), [[
+            'assessment_period_student_id' => $student->getKey(),
+            'scores' => [$component->getKey() => 92],
+        ]], $verifiedLockVersion);
+
+        $this->assertSame(92.0, (float) AssessmentScore::query()->value('score'));
+        $this->assertSame(92.0, (float) StudentSubjectResult::query()->value('final_score'));
+        $this->assertDatabaseHas('assessment_audit_logs', [
+            'event' => 'score.verified_corrected',
+            'actor_id' => $context['curriculum_user']->getKey(),
+            'subject_id' => AssessmentScore::query()->value('id'),
+        ]);
+        $audit = AuditLog::query()->where('event', 'score.verified_corrected')->latest('id')->firstOrFail();
+        $this->assertSame(80.0, (float) $audit->old_values['score']);
+        $this->assertSame(92.0, (float) $audit->new_values['score']);
+        $this->assertSame((int) $assignment->getKey(), $audit->new_values['assignment_id']);
+        $this->assertSame((int) $student->getKey(), $audit->new_values['student_id']);
+        $this->assertSame('kurikulum', $audit->new_values['actor_role_context']);
+        $this->assertSame($verifiedLockVersion + 1, $corrected->lock_version);
+
+        $cleared = $save->execute($context['curriculum_user'], $corrected, [[
+            'assessment_period_student_id' => $student->getKey(),
+            'scores' => [$component->getKey() => null],
+        ]], $corrected->lock_version);
+        $this->assertNull(AssessmentScore::query()->value('score'));
+        $this->assertNull(StudentSubjectResult::query()->value('final_score'));
+        $clearAudit = AuditLog::query()->where('event', 'score.verified_corrected')->latest('id')->firstOrFail();
+        $this->assertSame(92.0, (float) $clearAudit->old_values['score']);
+        $this->assertNull($clearAudit->new_values['score']);
+        $this->assertSame($corrected->lock_version + 1, $cleared->lock_version);
+    }
+
+    public function test_admin_can_clear_verified_score_and_audit_incomplete_result(): void
+    {
+        $context = $this->createContext();
+        $period = $this->createOpenedPeriod($context, AssessmentType::ASTS);
+        $assignment = $period->assignments()->firstOrFail();
+        $student = $period->students()->firstOrFail();
+        $component = $period->schemes()->firstOrFail()->components()->firstOrFail();
+        $save = app(SaveAssessmentScoresAction::class);
+
+        $assignment = $save->execute($context['teacher_user'], $assignment, [[
+            'assessment_period_student_id' => $student->getKey(),
+            'scores' => [$component->getKey() => 88],
+        ]], $assignment->lock_version);
+        $assignment->forceFill(['status' => AssignmentStatus::VERIFIED])->save();
+        $period->forceFill(['status' => AssessmentPeriodStatus::VERIFICATION])->save();
+        $admin = User::query()->create([
+            'name' => 'Admin Nilai', 'username' => 'admin-nilai-assessment', 'password' => 'secret123',
+        ]);
+        $admin->assignRole('admin');
+
+        $corrected = $save->execute($admin, $assignment->fresh(), [[
+            'assessment_period_student_id' => $student->getKey(),
+            'scores' => [$component->getKey() => ''],
+        ]], $assignment->fresh()->lock_version);
+
+        $this->assertNull(AssessmentScore::query()->value('score'));
+        $result = StudentSubjectResult::query()->firstOrFail();
+        $this->assertNull($result->final_score);
+        $this->assertNull($result->predicate);
+        $this->assertFalse((bool) data_get($result->calculation_detail, 'complete'));
+        $this->assertSame([(int) $component->getKey()], array_map('intval', data_get($result->calculation_detail, 'missing_required_component_ids')));
+        $this->assertSame(3, $corrected->lock_version);
+
+        $scoreAudit = AuditLog::query()->where('event', 'score.verified_corrected')->latest('id')->firstOrFail();
+        $this->assertSame(88.0, (float) $scoreAudit->old_values['score']);
+        $this->assertNull($scoreAudit->new_values['score']);
+        $this->assertSame('admin', $scoreAudit->new_values['actor_role_context']);
+        $resultAudit = AuditLog::query()
+            ->where('event', 'result.verified_corrected')
+            ->where('subject_id', $result->getKey())
+            ->firstOrFail();
+        $this->assertSame(88.0, (float) $resultAudit->old_values['final_score']);
+        $this->assertNull($resultAudit->new_values['final_score']);
+        $this->assertNull($resultAudit->new_values['predicate']);
+        $this->assertFalse($resultAudit->new_values['is_complete']);
+        $this->assertSame([(int) $component->getKey()], array_map('intval', $resultAudit->new_values['missing_required_component_ids']));
+    }
+
+    public function test_verified_correction_confirmation_is_rendered_only_for_curriculum(): void
+    {
+        $context = $this->createContext();
+        $period = $this->createOpenedPeriod($context, AssessmentType::ASTS);
+        $assignment = $period->assignments()->firstOrFail();
+        $assignment->forceFill(['status' => AssignmentStatus::VERIFIED])->save();
+        $period->forceFill(['status' => AssessmentPeriodStatus::VERIFICATION])->save();
+
+        Livewire::actingAs($context['curriculum_user'])
+            ->test(AstsInputScores::class)
+            ->set('periodId', $period->getKey())
+            ->set('assignmentId', $assignment->getKey())
+            ->call('loadAssignment')
+            ->assertSee('Apakah yakin ingin mengubah atau mengosongkan nilai yang sudah diverifikasi?')
+            ->assertSee('Simpan Koreksi Nilai');
+
+        Livewire::actingAs($context['teacher_user'])
+            ->test(AstsInputScores::class)
+            ->set('periodId', $period->getKey())
+            ->set('assignmentId', $assignment->getKey())
+            ->call('loadAssignment')
+            ->assertDontSee('Simpan Koreksi Nilai')
+            ->assertDontSee('Apakah yakin ingin mengubah atau mengosongkan nilai yang sudah diverifikasi?');
     }
 
     public function test_null_range_authorization_submit_return_and_lock_workflow_are_enforced(): void

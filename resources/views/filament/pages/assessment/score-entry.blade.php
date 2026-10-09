@@ -69,7 +69,13 @@
                     <span class="assessment-score-pill">Akses: {{ $assignmentMeta['access_mode'] }}</span>
                     <span class="assessment-score-pill">Versi {{ $lockVersion }}</span>
                 </div>
-                @if ($assignmentMeta['deadline_passed'])
+                @if ($assignmentMeta['is_verified_correction'])
+                    <section class="mt-3 rounded-xl border border-warning-300 bg-warning-50 p-4 text-sm text-warning-900 dark:border-warning-500/30 dark:bg-warning-950/20 dark:text-warning-100">
+                        <strong>Koreksi nilai terverifikasi</strong>
+                        <p class="mt-1">Admin/Kurikulum dapat mengubah atau mengosongkan nilai. Perubahan dihitung ulang dan dicatat dalam audit penilaian. Simpan hanya setelah nilai diperiksa.</p>
+                    </section>
+                @endif
+                @if ($assignmentMeta['deadline_passed'] && ! $assignmentMeta['is_verified_correction'])
                     <section @class([
                         'mt-3 rounded-xl border p-4 text-sm',
                         'border-warning-300 bg-warning-50 text-warning-900 dark:border-warning-500/30 dark:bg-warning-950/20 dark:text-warning-100' => $assignmentMeta['can_override_deadline'],
@@ -466,10 +472,16 @@
 
                 @if ($assignmentMeta['editable'])
                     <div class="assessment-actionbar">
-                        <x-filament::button wire:click="saveDraft" wire:loading.attr="disabled" icon="heroicon-o-cloud-arrow-up">
-                            Simpan Draf
-                        </x-filament::button>
                         <x-filament::button
+                            wire:click="saveDraft"
+                            wire:confirm="{{ $assignmentMeta['is_verified_correction'] ? 'Apakah yakin ingin mengubah atau mengosongkan nilai yang sudah diverifikasi? Perubahan akan dihitung ulang dan tercatat pada audit penilaian.' : null }}"
+                            wire:loading.attr="disabled"
+                            icon="heroicon-o-cloud-arrow-up"
+                        >
+                            {{ $assignmentMeta['is_verified_correction'] ? 'Simpan Koreksi Nilai' : 'Simpan Draf' }}
+                        </x-filament::button>
+                        @if (! $assignmentMeta['is_verified_correction'])
+                            <x-filament::button
                             wire:click="submitAssignment"
                             wire:confirm="{{ $assignmentMeta['deadline_passed'] && $assignmentMeta['can_override_deadline'] ? 'Kirim dengan override deadline? Aksi ini dicatat pada audit penilaian.' : 'Kirim seluruh nilai kelas ini untuk verifikasi? Setelah dikirim, nilai tidak dapat diedit sampai dikembalikan.' }}"
                             wire:loading.attr="disabled"
@@ -477,7 +489,8 @@
                             icon="heroicon-o-paper-airplane"
                         >
                             {{ $assignmentMeta['deadline_passed'] && $assignmentMeta['can_override_deadline'] ? 'Kirim dengan Override Deadline' : 'Kirim untuk Verifikasi' }}
-                        </x-filament::button>
+                            </x-filament::button>
+                        @endif
                     </div>
                 @else
                     <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300">
